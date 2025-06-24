@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, ReceiptText, CalendarIcon } from "lucide-react";
+import { Plus, Minus, X, CreditCard, ReceiptText, CalendarIcon, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -82,6 +82,7 @@ export default function SalesPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
+  const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -90,6 +91,7 @@ export default function SalesPage() {
   // State for the reservation payment dialog
   const [guestName, setGuestName] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
 
   const handleConfirmBooking = (status: Reservation['status']) => {
     const roomItem = orderItems.find(item => item.product.category === 'Room');
@@ -188,6 +190,8 @@ export default function SalesPage() {
   );
   const tax = subtotal * 0.08;
   const total = subtotal + tax;
+  const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
+  const remainingBalance = total - totalPaid;
 
   const handlePayment = () => {
     if (orderItems.length === 0) {
@@ -204,12 +208,8 @@ export default function SalesPage() {
     if (hasRoom) {
         setIsReservationPaymentDialogOpen(true);
     } else {
-        // Mock payment processing for non-room items
-        toast({
-          title: "Payment Successful",
-          description: `Order total: $${total.toFixed(2)}.`,
-        });
-        setOrderItems([]);
+        setPayments([]); // Clear previous payments
+        setIsSplitPaymentDialogOpen(true);
     }
   };
 
@@ -249,6 +249,46 @@ export default function SalesPage() {
     setIsCreditDialogOpen(false);
     setSelectedCustomerId(null);
   };
+
+  const handleAddPayment = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const method = formData.get("paymentMethod") as string;
+    const amount = parseFloat(formData.get("paymentAmount") as string);
+
+    if (isNaN(amount) || amount <= 0) {
+        toast({ title: "Invalid Amount", description: "Please enter a valid payment amount.", variant: "destructive"});
+        return;
+    }
+
+    if (amount > remainingBalance + 0.001) { // Add epsilon for float comparison
+         toast({ title: "Amount Exceeds Balance", description: `Cannot pay more than the remaining $${remainingBalance.toFixed(2)}.`, variant: "destructive"});
+        return;
+    }
+
+    setPayments([...payments, { method, amount: Math.min(amount, remainingBalance) }]);
+    (event.target as HTMLFormElement).reset();
+  };
+
+  const handleRemovePayment = (index: number) => {
+      setPayments(payments.filter((_, i) => i !== index));
+  };
+
+  const handleCompleteSale = () => {
+    if (remainingBalance > 0.001) {
+        toast({ title: "Payment Incomplete", description: `There is still a remaining balance of $${remainingBalance.toFixed(2)}.`, variant: "destructive" });
+        return;
+    }
+
+    toast({
+        title: "Payment Successful",
+        description: `Order total: $${total.toFixed(2)}.`,
+    });
+    setOrderItems([]);
+    setPayments([]);
+    setIsSplitPaymentDialogOpen(false);
+  };
+
 
   return (
     <>
@@ -445,6 +485,94 @@ export default function SalesPage() {
                 <Button onClick={() => handleConfirmBooking('Checked-in')}>Pay & Check-in Now</Button>
             </DialogFooter>
           </DialogContent>
+        </Dialog>
+        <Dialog open={isSplitPaymentDialogOpen} onOpenChange={(isOpen) => {
+            setIsSplitPaymentDialogOpen(isOpen);
+            if (!isOpen) {
+                setPayments([]);
+            }
+        }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Complete Payment</DialogTitle>
+                    <DialogDescription>
+                        Split the payment across multiple methods if needed.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-6">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-lg font-bold">
+                        <div className="text-muted-foreground">Total Due:</div>
+                        <div className="text-right">${total.toFixed(2)}</div>
+                        <div className="text-primary">Remaining:</div>
+                        <div className="text-right text-primary">${remainingBalance.toFixed(2)}</div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                        <Label>Payments Added</Label>
+                        {payments.length === 0 ? (
+                            <div className="flex items-center justify-center h-16 rounded-md border border-dashed">
+                                <p className="text-sm text-muted-foreground">No payments yet</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {payments.map((payment, index) => (
+                                    <div key={index} className="flex items-center justify-between p-2 bg-secondary rounded-md">
+                                        <div className="flex items-center gap-2">
+                                            {payment.method === 'Cash' ? <DollarSign className="h-5 w-5 text-green-500" /> : <CreditCard className="h-5 w-5 text-blue-500" />}
+                                            <span className="font-medium">{payment.method}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold">${payment.amount.toFixed(2)}</span>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemovePayment(index)}>
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {remainingBalance > 0.001 && (
+                        <form onSubmit={handleAddPayment} className="flex gap-2 items-end">
+                             <div className="flex-1">
+                                <Label htmlFor="paymentAmount">Amount</Label>
+                                <Input 
+                                    id="paymentAmount" 
+                                    name="paymentAmount" 
+                                    type="number" 
+                                    step="0.01" 
+                                    required 
+                                    placeholder={`Max $${remainingBalance.toFixed(2)}`} 
+                                    min="0.01"
+                                    max={remainingBalance.toFixed(2)}
+                                />
+                            </div>
+                            <div className="w-40">
+                                <Label htmlFor="paymentMethod">Method</Label>
+                                <Select name="paymentMethod" required defaultValue="Cash">
+                                    <SelectTrigger id="paymentMethod">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Cash">Cash</SelectItem>
+                                        <SelectItem value="Card">Card</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <Button type="submit">Add</Button>
+                        </form>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsSplitPaymentDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleCompleteSale} disabled={Math.abs(remainingBalance) > 0.001}>
+                        Complete Sale
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
         </Dialog>
     </>
   );
