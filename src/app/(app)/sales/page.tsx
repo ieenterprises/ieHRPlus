@@ -187,14 +187,14 @@ export default function SalesPage() {
                 <CardDescription>Order #105</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                <ScrollArea className="h-64">
-                  <div className="p-6 pt-0 space-y-4">
-                    {orderItems.length === 0 ? (
-                      <div className="flex items-center justify-center h-full text-muted-foreground">
-                        No items in order
-                      </div>
-                    ) : (
-                      orderItems.map((item) => (
+                {orderItems.length === 0 ? (
+                  <div className="flex items-center justify-center p-6 h-48 text-muted-foreground">
+                    No items in order
+                  </div>
+                ) : (
+                  <ScrollArea className="max-h-64">
+                    <div className="p-6 pt-0 space-y-4">
+                      {orderItems.map((item) => (
                         <div key={item.product.id} className="flex items-center">
                           <div className="flex-1">
                             <p className="font-medium">{item.product.name}</p>
@@ -233,10 +233,10 @@ export default function SalesPage() {
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </ScrollArea>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
               </CardContent>
               {orderItems.length > 0 && (
                 <CardFooter className="flex-col !items-stretch p-4 space-y-4 border-t">
