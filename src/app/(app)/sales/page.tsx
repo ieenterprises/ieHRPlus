@@ -92,6 +92,7 @@ export default function SalesPage() {
   const [guestName, setGuestName] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
+  const [splitPaymentMethod, setSplitPaymentMethod] = useState("Cash");
 
   const handleConfirmBooking = (status: Reservation['status']) => {
     const roomItem = orderItems.find(item => item.product.category === 'Room');
@@ -254,6 +255,34 @@ export default function SalesPage() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const method = formData.get("paymentMethod") as string;
+
+    if (method === "Credit") {
+      const creditCustomerId = formData.get("creditCustomer") as string;
+      if (!creditCustomerId) {
+        toast({ title: "Customer Required", description: "Please select a customer.", variant: "destructive" });
+        return;
+      }
+      const customer = customers.find(c => c.id === creditCustomerId);
+      const creditAmount = remainingBalance;
+
+      let toastDescription = `Order total: $${total.toFixed(2)}.`;
+      if (totalPaid > 0) {
+        toastDescription += ` $${totalPaid.toFixed(2)} paid.`;
+      }
+      toastDescription += ` $${creditAmount.toFixed(2)} recorded as debt for ${customer?.name}.`;
+      
+      toast({
+        title: "Sale Completed",
+        description: toastDescription,
+      });
+
+      setOrderItems([]);
+      setPayments([]);
+      setIsSplitPaymentDialogOpen(false);
+      setSplitPaymentMethod("Cash");
+      return;
+    }
+
     const amount = parseFloat(formData.get("paymentAmount") as string);
 
     if (isNaN(amount) || amount <= 0) {
@@ -268,7 +297,9 @@ export default function SalesPage() {
 
     setPayments([...payments, { method, amount: Math.min(amount, remainingBalance) }]);
     (event.target as HTMLFormElement).reset();
+    setSplitPaymentMethod("Cash");
   };
+
 
   const handleRemovePayment = (index: number) => {
       setPayments(payments.filter((_, i) => i !== index));
@@ -490,6 +521,7 @@ export default function SalesPage() {
             setIsSplitPaymentDialogOpen(isOpen);
             if (!isOpen) {
                 setPayments([]);
+                setSplitPaymentMethod("Cash");
             }
         }}>
             <DialogContent className="sm:max-w-md">
@@ -536,33 +568,56 @@ export default function SalesPage() {
                     </div>
 
                     {remainingBalance > 0.001 && (
-                        <form onSubmit={handleAddPayment} className="flex gap-2 items-end">
-                             <div className="flex-1">
-                                <Label htmlFor="paymentAmount">Amount</Label>
-                                <Input 
-                                    id="paymentAmount" 
-                                    name="paymentAmount" 
-                                    type="number" 
-                                    step="0.01" 
-                                    required 
-                                    placeholder={`Max $${remainingBalance.toFixed(2)}`} 
-                                    min="0.01"
-                                    max={remainingBalance.toFixed(2)}
-                                />
+                        <form onSubmit={handleAddPayment} className="space-y-4">
+                            <div className="flex gap-2 items-end">
+                                <div className="flex-1">
+                                    <Label htmlFor="paymentAmount">Amount</Label>
+                                    <Input 
+                                        id="paymentAmount" 
+                                        name="paymentAmount" 
+                                        type="number" 
+                                        step="0.01" 
+                                        required={splitPaymentMethod !== 'Credit'}
+                                        placeholder={`Max $${remainingBalance.toFixed(2)}`}
+                                        min="0.01"
+                                        max={remainingBalance.toFixed(2)}
+                                        disabled={splitPaymentMethod === 'Credit'}
+                                        value={splitPaymentMethod === 'Credit' ? remainingBalance.toFixed(2) : undefined}
+                                        onChange={splitPaymentMethod === 'Credit' ? () => {} : undefined}
+                                    />
+                                </div>
+                                <div className="w-40">
+                                    <Label htmlFor="paymentMethod">Method</Label>
+                                    <Select name="paymentMethod" required value={splitPaymentMethod} onValueChange={setSplitPaymentMethod}>
+                                        <SelectTrigger id="paymentMethod">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Cash">Cash</SelectItem>
+                                            <SelectItem value="Card">Card</SelectItem>
+                                            <SelectItem value="Credit">Credit</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <Button type="submit">{splitPaymentMethod === 'Credit' ? 'Record' : 'Add'}</Button>
                             </div>
-                            <div className="w-40">
-                                <Label htmlFor="paymentMethod">Method</Label>
-                                <Select name="paymentMethod" required defaultValue="Cash">
-                                    <SelectTrigger id="paymentMethod">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Cash">Cash</SelectItem>
-                                        <SelectItem value="Card">Card</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Button type="submit">Add</Button>
+                             {splitPaymentMethod === 'Credit' && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="creditCustomer">Customer</Label>
+                                    <Select name="creditCustomer" required>
+                                        <SelectTrigger id="creditCustomer">
+                                        <SelectValue placeholder="Select a customer" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                        {customers.map((customer) => (
+                                            <SelectItem key={customer.id} value={customer.id}>
+                                            {customer.name}
+                                            </SelectItem>
+                                        ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
                         </form>
                     )}
                 </div>
