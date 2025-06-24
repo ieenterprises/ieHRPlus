@@ -167,108 +167,106 @@ export default function SalesPage() {
 
   return (
     <>
-      <div className="h-[calc(100vh-4rem)] flex flex-col">
+      <div className="space-y-8">
         <PageHeader title="Sales" description="Create a new order." />
-        <div className="flex-1 grid md:grid-cols-3 gap-8 mt-8 overflow-hidden">
-          <div className="md:col-span-2 overflow-hidden">
-            <ScrollArea className="h-full pr-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {products.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onAddToCart={handleAddToCart}
-                  />
-                ))}
-              </div>
-            </ScrollArea>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {products.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAddToCart={handleAddToCart}
+              />
+            ))}
           </div>
-          <Card className="flex flex-col h-full">
-            <CardHeader>
-              <CardTitle>Current Order</CardTitle>
-              <CardDescription>Order #105</CardDescription>
-            </CardHeader>
-            <ScrollArea className="flex-1">
-              <CardContent className="pr-6">
-                {orderItems.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    No items in order
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {orderItems.map((item) => (
-                      <div key={item.product.id} className="flex items-center">
-                        <div className="flex-1">
-                          <p className="font-medium">{item.product.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            ${item.product.price.toFixed(2)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleUpdateQuantity(item.product.id, -1)}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span>{item.quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleUpdateQuantity(item.product.id, 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        <p className="w-16 text-right font-medium">
-                          ${(item.product.price * item.quantity).toFixed(2)}
-                        </p>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 ml-2"
-                          onClick={() => handleRemoveItem(item.product.id)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
+
+          <div className="lg:sticky lg:top-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>Current Order</CardTitle>
+                <CardDescription>Order #105</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="h-64">
+                  <div className="p-6 pt-0 space-y-4">
+                    {orderItems.length === 0 ? (
+                      <div className="flex items-center justify-center h-full text-muted-foreground">
+                        No items in order
                       </div>
-                    ))}
+                    ) : (
+                      orderItems.map((item) => (
+                        <div key={item.product.id} className="flex items-center">
+                          <div className="flex-1">
+                            <p className="font-medium">{item.product.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              ${item.product.price.toFixed(2)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleUpdateQuantity(item.product.id, -1)}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span>{item.quantity}</span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleUpdateQuantity(item.product.id, 1)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <p className="w-16 text-right font-medium">
+                            ${(item.product.price * item.quantity).toFixed(2)}
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 ml-2"
+                            onClick={() => handleRemoveItem(item.product.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </div>
-                )}
+                </ScrollArea>
               </CardContent>
-            </ScrollArea>
-            {orderItems.length > 0 && (
-              <CardFooter className="flex-col !items-stretch mt-auto p-4 space-y-4">
-                <Separator />
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Subtotal</span>
-                    <span>${subtotal.toFixed(2)}</span>
+              {orderItems.length > 0 && (
+                <CardFooter className="flex-col !items-stretch p-4 space-y-4 border-t">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span>Subtotal</span>
+                      <span>${subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Tax (8%)</span>
+                      <span>${tax.toFixed(2)}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between font-bold text-lg">
+                      <span>Total</span>
+                      <span>${total.toFixed(2)}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Tax (8%)</span>
-                    <span>${tax.toFixed(2)}</span>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button size="lg" variant="secondary" className="w-full" onClick={() => setIsCreditDialogOpen(true)}>
+                      <ReceiptText className="mr-2 h-5 w-5" /> Record as Credit
+                    </Button>
+                    <Button size="lg" className="w-full" onClick={handlePayment}>
+                      <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
+                    </Button>
                   </div>
-                  <Separator />
-                  <div className="flex justify-between font-bold text-lg">
-                    <span>Total</span>
-                    <span>${total.toFixed(2)}</span>
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Button size="lg" variant="secondary" className="w-full" onClick={() => setIsCreditDialogOpen(true)}>
-                    <ReceiptText className="mr-2 h-5 w-5" /> Record as Credit
-                  </Button>
-                  <Button size="lg" className="w-full" onClick={handlePayment}>
-                    <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
-                  </Button>
-                </div>
-              </CardFooter>
-            )}
-          </Card>
+                </CardFooter>
+              )}
+            </Card>
+          </div>
         </div>
       </div>
       <Dialog open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen}>

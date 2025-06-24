@@ -59,7 +59,7 @@ export default function DebtsPage() {
               <TableRow>
                 <TableHead>Order #</TableHead>
                 <TableHead>Customer</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead className="hidden md:table-cell">Date</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Action</TableHead>
@@ -70,7 +70,7 @@ export default function DebtsPage() {
                 <TableRow key={debt.id}>
                   <TableCell className="font-medium">{debt.orderNumber}</TableCell>
                   <TableCell>{debt.customerName}</TableCell>
-                  <TableCell>{format(debt.date, "LLL dd, y")}</TableCell>
+                  <TableCell className="hidden md:table-cell">{format(debt.date, "LLL dd, y")}</TableCell>
                   <TableCell className="text-right">${debt.amount.toFixed(2)}</TableCell>
                   <TableCell>
                     <Badge variant={debt.status === "Paid" ? "secondary" : "destructive"}>
