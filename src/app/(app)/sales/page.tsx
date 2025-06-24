@@ -1,9 +1,13 @@
+
 "use client";
 
 import { useState } from "react";
 import Image from "next/image";
+import { format } from "date-fns";
+import { type DateRange } from "react-day-picker";
+
 import { PageHeader } from "@/components/page-header";
-import { products, type Product, customers } from "@/lib/data";
+import { products, type Product, customers, rooms, type Reservation, reservations as initialReservations } from "@/lib/data";
 import {
   Card,
   CardContent,
@@ -15,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, ReceiptText } from "lucide-react";
+import { Plus, Minus, X, CreditCard, ReceiptText, CalendarCheck, CalendarIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -32,6 +36,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 
 
 type OrderItem = {
@@ -74,6 +83,48 @@ export default function SalesPage() {
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
+  const [isReservationDialogOpen, setIsReservationDialogOpen] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [roomId, setRoomId] = useState<string>("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  const handleAddReservation = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!guestName || !roomId || !dateRange?.from || !dateRange?.to) {
+        toast({
+            title: "Missing Information",
+            description: "Please fill out all fields to create a reservation.",
+            variant: "destructive",
+        });
+        return;
+    }
+
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
+
+    const newReservation: Reservation = {
+      id: (reservations.length + 1).toString(),
+      guestName,
+      roomName: room.name,
+      checkIn: dateRange.from,
+      checkOut: dateRange.to,
+      status: "Confirmed",
+    };
+
+    setReservations([newReservation, ...reservations]);
+    setIsReservationDialogOpen(false);
+    
+    setGuestName("");
+    setRoomId("");
+    setDateRange(undefined);
+
+    toast({
+      title: "Reservation Created",
+      description: `Booking for ${guestName} has been confirmed.`,
+    });
+  };
 
   const handleAddToCart = (product: Product) => {
     setOrderItems((prevItems) => {
@@ -168,7 +219,13 @@ export default function SalesPage() {
   return (
     <>
       <div className="space-y-8">
-        <PageHeader title="Sales" description="Create a new order." />
+        <div className="flex items-center justify-between">
+            <PageHeader title="Sales" description="Create a new order." />
+            <Button variant="outline" onClick={() => setIsReservationDialogOpen(true)}>
+                <CalendarCheck className="mr-2 h-4 w-4" />
+                Book a Room
+            </Button>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {products.map((product) => (
@@ -297,6 +354,86 @@ export default function SalesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={isReservationDialogOpen} onOpenChange={setIsReservationDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <form onSubmit={handleAddReservation}>
+              <DialogHeader>
+                <DialogTitle>New Reservation</DialogTitle>
+                <DialogDescription>
+                  Fill in the details to book a room for a guest.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="guestName" className="text-right">
+                    Guest Name
+                  </Label>
+                  <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} className="col-span-3" required />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="room" className="text-right">
+                    Room
+                  </Label>
+                  <Select onValueChange={setRoomId} value={roomId} required>
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select a room" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rooms.map((room) => (
+                        <SelectItem key={room.id} value={room.id}>
+                          {room.name} (${room.pricePerNight}/night)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                     <Label className="text-right">Dates</Label>
+                     <div className="col-span-3">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                variant={"outline"}
+                                className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !dateRange && "text-muted-foreground"
+                                )}
+                                >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {dateRange?.from ? (
+                                    dateRange.to ? (
+                                    <>
+                                        {format(dateRange.from, "LLL dd, y")} -{" "}
+                                        {format(dateRange.to, "LLL dd, y")}
+                                    </>
+                                    ) : (
+                                    format(dateRange.from, "LLL dd, y")
+                                    )
+                                ) : (
+                                    <span>Pick check-in and check-out dates</span>
+                                )}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                initialFocus
+                                mode="range"
+                                defaultMonth={dateRange?.from}
+                                selected={dateRange}
+                                onSelect={setDateRange}
+                                numberOfMonths={1}
+                                />
+                            </PopoverContent>
+                        </Popover>
+                     </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit">Confirm Reservation</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
     </>
   );
 }
