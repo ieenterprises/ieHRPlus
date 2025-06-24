@@ -20,6 +20,7 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  ReceiptText,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
@@ -30,6 +31,7 @@ const navItems = [
   { href: "/kitchen", icon: CookingPot, label: "Kitchen" },
   { href: "/reports", icon: BarChart3, label: "Reports" },
   { href: "/team", icon: Users, label: "Team" },
+  { href: "/debts", icon: ReceiptText, label: "Debts" },
 ];
 
 export function AppSidebar() {

@@ -74,3 +74,52 @@ export const salesByEmployee = [
     { name: "Charlie B.", sales: 9870 },
     { name: "Diana P.", sales: 11500 },
 ];
+
+export type Customer = {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+};
+
+export const customers: Customer[] = [
+    { id: "1", name: "John Doe", email: "john.d@example.com", phone: "555-1234" },
+    { id: "2", name: "Jane Smith", email: "jane.s@example.com", phone: "555-5678" },
+    { id: "3", name: "Peter Jones", email: "peter.j@example.com", phone: "555-9012" },
+];
+
+export type Debt = {
+  id: string;
+  orderNumber: number;
+  customerName: string;
+  amount: number;
+  date: Date;
+  status: "Unpaid" | "Paid";
+};
+
+export const debts: Debt[] = [
+  {
+    id: "1",
+    orderNumber: 106,
+    customerName: "John Doe",
+    amount: 8.25,
+    date: new Date("2024-05-20"),
+    status: "Unpaid",
+  },
+  {
+    id: "2",
+    orderNumber: 107,
+    customerName: "Jane Smith",
+    amount: 12.50,
+    date: new Date("2024-05-21"),
+    status: "Unpaid",
+  },
+  {
+    id: "3",
+    orderNumber: 108,
+    customerName: "Peter Jones",
+    amount: 5.75,
+    date: new Date("2024-05-18"),
+    status: "Paid",
+  },
+];
