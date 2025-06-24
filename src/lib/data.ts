@@ -123,3 +123,33 @@ export const debts: Debt[] = [
     status: "Paid",
   },
 ];
+
+export type Room = {
+    id: string;
+    name: string;
+    type: 'Single' | 'Double' | 'Suite';
+    pricePerNight: number;
+};
+
+export const rooms: Room[] = [
+    { id: '101', name: 'Room 101', type: 'Single', pricePerNight: 80 },
+    { id: '102', name: 'Room 102', type: 'Single', pricePerNight: 80 },
+    { id: '201', name: 'Room 201', type: 'Double', pricePerNight: 120 },
+    { id: '202', name: 'Room 202', type: 'Double', pricePerNight: 120 },
+    { id: '301', name: 'Suite 301', type: 'Suite', pricePerNight: 200 },
+];
+
+export type Reservation = {
+    id: string;
+    guestName: string;
+    roomName: string;
+    checkIn: Date;
+    checkOut: Date;
+    status: 'Confirmed' | 'Checked-in' | 'Checked-out';
+};
+
+export const reservations: Reservation[] = [
+    { id: '1', guestName: 'Clark Kent', roomName: 'Room 101', checkIn: new Date('2024-08-01'), checkOut: new Date('2024-08-05'), status: 'Confirmed' },
+    { id: '2', guestName: 'Lois Lane', roomName: 'Room 201', checkIn: new Date('2024-08-03'), checkOut: new Date('2024-08-07'), status: 'Confirmed' },
+    { id: '3', guestName: 'Bruce Wayne', roomName: 'Suite 301', checkIn: new Date('2024-07-28'), checkOut: new Date('2024-08-02'), status: 'Checked-in' },
+];
