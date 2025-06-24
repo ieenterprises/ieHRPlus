@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
-import { products, type Product, customers, type Reservation, reservations as initialReservations } from "@/lib/data";
+import { products as initialProducts, type Product, customers, type Reservation, reservations as initialReservations, categories } from "@/lib/data";
 import {
   Card,
   CardContent,
@@ -41,6 +41,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 
 type OrderItem = {
@@ -55,18 +56,26 @@ function ProductCard({
   product: Product;
   onAddToCart: (product: Product) => void;
 }) {
+  const category = categories.find(c => c.id === product.category);
+
   return (
     <Card
-      className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow duration-300"
-      onClick={() => onAddToCart(product)}
+      className={cn(
+        "overflow-hidden transition-shadow duration-300 relative",
+        product.stock > 0 || product.category === 'room' ? "cursor-pointer hover:shadow-lg" : "opacity-50 cursor-not-allowed"
+      )}
+      onClick={product.stock > 0 || product.category === 'room' ? () => onAddToCart(product) : undefined}
     >
+      {product.stock === 0 && product.category !== 'room' && (
+        <Badge variant="destructive" className="absolute top-2 right-2 z-10">Out of Stock</Badge>
+      )}
       <Image
         src={product.imageUrl}
         alt={product.name}
         width={300}
         height={200}
         className="w-full h-32 object-cover"
-        data-ai-hint={product.category === 'Room' ? "hotel room" : "food beverage"}
+        data-ai-hint={product.category === 'room' ? "hotel room" : "food beverage"}
       />
       <CardContent className="p-4">
         <h3 className="font-semibold truncate">{product.name}</h3>
@@ -80,6 +89,7 @@ function ProductCard({
 
 export default function SalesPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [products, setProducts] = useState<Product[]>(initialProducts);
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
   const { toast } = useToast();
@@ -93,7 +103,7 @@ export default function SalesPage() {
   const [splitPaymentMethod, setSplitPaymentMethod] = useState("Cash");
 
   const handleConfirmBooking = (status: Reservation['status']) => {
-    const roomItem = orderItems.find(item => item.product.category === 'Room');
+    const roomItem = orderItems.find(item => item.product.category === 'room');
     if (!roomItem || !guestName || !dateRange?.from || !dateRange?.to) {
         toast({
             title: "Missing Information",
@@ -128,9 +138,15 @@ export default function SalesPage() {
 
 
   const handleAddToCart = (product: Product) => {
+    const productInStock = products.find(p => p.id === product.id);
+
+    if (!productInStock || (productInStock.stock <= 0 && productInStock.category !== 'room')) {
+      toast({ title: "Out of Stock", description: `${product.name} is currently unavailable.`, variant: "destructive" });
+      return;
+    }
+
     setOrderItems((prevItems) => {
-      // Prevent adding more than one room to the cart for simplicity
-      if (product.category === 'Room' && prevItems.some(item => item.product.category === 'Room')) {
+      if (product.category === 'room' && prevItems.some(item => item.product.category === 'room')) {
         toast({
             title: "One Room at a Time",
             description: "You can only book one room per transaction.",
@@ -143,15 +159,11 @@ export default function SalesPage() {
         (item) => item.product.id === product.id
       );
       if (existingItem) {
-        // Prevent increasing quantity of a room
-        if (existingItem.product.category === 'Room') {
-            toast({
-                title: "One Room at a Time",
-                description: "You can only book one room per transaction.",
-                variant: "destructive"
-            });
-            return prevItems;
+        if (productInStock.category !== 'room' && existingItem.quantity + 1 > productInStock.stock) {
+          toast({ title: "Stock Limit Reached", description: `Only ${productInStock.stock} ${productInStock.name} in stock.`, variant: "destructive" });
+          return prevItems;
         }
+
         return prevItems.map((item) =>
           item.product.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
@@ -164,10 +176,22 @@ export default function SalesPage() {
 
   const handleUpdateQuantity = (productId: string, amount: number) => {
     setOrderItems((prevItems) => {
+      const itemToUpdate = prevItems.find(item => item.product.id === productId);
+      const productInStock = products.find(p => p.id === productId);
+
+      if (!itemToUpdate || !productInStock) return prevItems;
+
+      const newQuantity = itemToUpdate.quantity + amount;
+
+      if (newQuantity > 0 && productInStock.category !== 'room' && newQuantity > productInStock.stock) {
+        toast({ title: "Stock Limit Reached", description: `Only ${productInStock.stock} ${productInStock.name} in stock.`, variant: "destructive" });
+        return prevItems;
+      }
+      
       const updatedItems = prevItems
         .map((item) => {
           if (item.product.id === productId) {
-             if (item.product.category === 'Room') return item; // Don't change room quantity
+             if (item.product.category === 'room') return item;
             return { ...item, quantity: item.quantity + amount };
           }
           return item;
@@ -202,12 +226,12 @@ export default function SalesPage() {
       return;
     }
 
-    const hasRoom = orderItems.some(item => item.product.category === 'Room');
+    const hasRoom = orderItems.some(item => item.product.category === 'room');
 
     if (hasRoom) {
         setIsReservationPaymentDialogOpen(true);
     } else {
-        setPayments([]); // Clear previous payments
+        setPayments([]);
         setIsSplitPaymentDialogOpen(true);
     }
   };
@@ -237,6 +261,16 @@ export default function SalesPage() {
         description: toastDescription,
       });
 
+      setProducts(prevProducts =>
+        prevProducts.map(p => {
+          const orderItem = orderItems.find(item => item.product.id === p.id);
+          if (orderItem && p.category !== 'room') {
+            return { ...p, stock: p.stock - orderItem.quantity };
+          }
+          return p;
+        })
+      );
+
       setOrderItems([]);
       setPayments([]);
       setIsSplitPaymentDialogOpen(false);
@@ -251,7 +285,7 @@ export default function SalesPage() {
         return;
     }
 
-    if (amount > remainingBalance + 0.001) { // Add epsilon for float comparison
+    if (amount > remainingBalance + 0.001) { 
          toast({ title: "Amount Exceeds Balance", description: `Cannot pay more than the remaining $${remainingBalance.toFixed(2)}.`, variant: "destructive"});
         return;
     }
@@ -276,6 +310,17 @@ export default function SalesPage() {
         title: "Payment Successful",
         description: `Order total: $${total.toFixed(2)}.`,
     });
+
+    setProducts(prevProducts =>
+        prevProducts.map(p => {
+            const orderItem = orderItems.find(item => item.product.id === p.id);
+            if (orderItem && p.category !== 'room') {
+                return { ...p, stock: p.stock - orderItem.quantity };
+            }
+            return p;
+        })
+    );
+
     setOrderItems([]);
     setPayments([]);
     setIsSplitPaymentDialogOpen(false);
@@ -325,7 +370,7 @@ export default function SalesPage() {
                               size="icon"
                               className="h-6 w-6"
                               onClick={() => handleUpdateQuantity(item.product.id, -1)}
-                              disabled={item.product.category === 'Room'}
+                              disabled={item.product.category === 'room'}
                             >
                               <Minus className="h-3 w-3" />
                             </Button>
@@ -335,7 +380,7 @@ export default function SalesPage() {
                               size="icon"
                               className="h-6 w-6"
                               onClick={() => handleUpdateQuantity(item.product.id, 1)}
-                              disabled={item.product.category === 'Room'}
+                              disabled={item.product.category === 'room'}
                             >
                               <Plus className="h-3 w-3" />
                             </Button>

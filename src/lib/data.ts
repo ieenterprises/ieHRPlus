@@ -1,27 +1,40 @@
+export type Category = {
+  id: string;
+  name: string;
+};
+
+export const categories: Category[] = [
+  { id: "food", name: "Food" },
+  { id: "drink", name: "Drink" },
+  { id: "snack", name: "Snack" },
+  { id: "room", name: "Room" },
+];
+
 export type Product = {
   id: string;
   name: string;
-  category: "Food" | "Drink" | "Snack" | "Room";
+  category: string;
   price: number;
   imageUrl: string;
+  stock: number;
 };
 
 export const products: Product[] = [
-  { id: "room-101", name: "Single Room", category: "Room", price: 80, imageUrl: "https://placehold.co/300x200.png" },
-  { id: "room-201", name: "Double Room", category: "Room", price: 120, imageUrl: "https://placehold.co/300x200.png" },
-  { id: "room-301", name: "Suite", category: "Room", price: 200, imageUrl: "https://placehold.co/300x200.png" },
-  { id: "1", name: "Espresso", category: "Drink", price: 2.5, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "2", name: "Latte", category: "Drink", price: 3.5, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "3", name: "Cappuccino", category: "Drink", price: 3.5, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "4", name: "Croissant", category: "Food", price: 2.75, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "5", name: "Muffin", category: "Food", price: 2.25, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "6", name: "Avocado Toast", category: "Food", price: 8.5, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "7", name: "Iced Tea", category: "Drink", price: 3.0, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "8", name: "Orange Juice", category: "Drink", price: 4.0, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "9", name: "Bagel", category: "Food", price: 4.5, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "10", name: "Cookie", category: "Snack", price: 1.5, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "11", name: "Granola Bar", category: "Snack", price: 2.0, imageUrl: "https://placehold.co/300x200.png", },
-  { id: "12", name: "Fruit Salad", category: "Food", price: 6.0, imageUrl: "https://placehold.co/300x200.png", },
+  { id: "room-101", name: "Single Room", category: "room", price: 80, imageUrl: "https://placehold.co/300x200.png", stock: 5 },
+  { id: "room-201", name: "Double Room", category: "room", price: 120, imageUrl: "https://placehold.co/300x200.png", stock: 3 },
+  { id: "room-301", name: "Suite", category: "room", price: 200, imageUrl: "https://placehold.co/300x200.png", stock: 2 },
+  { id: "1", name: "Espresso", category: "drink", price: 2.5, imageUrl: "https://placehold.co/300x200.png", stock: 100 },
+  { id: "2", name: "Latte", category: "drink", price: 3.5, imageUrl: "https://placehold.co/300x200.png", stock: 80 },
+  { id: "3", name: "Cappuccino", category: "drink", price: 3.5, imageUrl: "https://placehold.co/300x200.png", stock: 75 },
+  { id: "4", name: "Croissant", category: "food", price: 2.75, imageUrl: "https://placehold.co/300x200.png", stock: 40 },
+  { id: "5", name: "Muffin", category: "food", price: 2.25, imageUrl: "https://placehold.co/300x200.png", stock: 50 },
+  { id: "6", name: "Avocado Toast", category: "food", price: 8.5, imageUrl: "https://placehold.co/300x200.png", stock: 20 },
+  { id: "7", name: "Iced Tea", category: "drink", price: 3.0, imageUrl: "https://placehold.co/300x200.png", stock: 60 },
+  { id: "8", name: "Orange Juice", category: "drink", price: 4.0, imageUrl: "https://placehold.co/300x200.png", stock: 0 },
+  { id: "9", name: "Bagel", category: "food", price: 4.5, imageUrl: "https://placehold.co/300x200.png", stock: 30 },
+  { id: "10", name: "Cookie", category: "snack", price: 1.5, imageUrl: "https://placehold.co/300x200.png", stock: 120 },
+  { id: "11", name: "Granola Bar", category: "snack", price: 2.0, imageUrl: "https://placehold.co/300x200.png", stock: 150 },
+  { id: "12", name: "Fruit Salad", category: "food", price: 6.0, imageUrl: "https://placehold.co/300x200.png", stock: 15 },
 ];
 
 export type User = {
