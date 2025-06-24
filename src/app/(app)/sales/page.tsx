@@ -255,7 +255,7 @@ export default function SalesPage() {
                       <span>${total.toFixed(2)}</span>
                     </div>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex flex-col gap-2">
                     <Button size="lg" className="w-full" onClick={handlePayment}>
                       <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
                     </Button>
@@ -269,7 +269,7 @@ export default function SalesPage() {
           </div>
         </div>
       </div>
-      <Dialog open={isCreditDialogOpen} onOpenchange={setIsCreditDialogOpen}>
+      <Dialog open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Record Credit Sale</DialogTitle>
