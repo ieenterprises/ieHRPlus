@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
-import { products, type Product, customers, rooms, type Reservation, reservations as initialReservations } from "@/lib/data";
+import { products, type Product, customers, type Reservation, reservations as initialReservations } from "@/lib/data";
 import {
   Card,
   CardContent,
@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, ReceiptText, CalendarCheck, CalendarIcon } from "lucide-react";
+import { Plus, Minus, X, CreditCard, ReceiptText, CalendarIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -66,7 +66,7 @@ function ProductCard({
         width={300}
         height={200}
         className="w-full h-32 object-cover"
-        data-ai-hint="food beverage"
+        data-ai-hint={product.category === 'Room' ? "hotel room" : "food beverage"}
       />
       <CardContent className="p-4">
         <h3 className="font-semibold truncate">{product.name}</h3>
@@ -81,57 +81,76 @@ function ProductCard({
 export default function SalesPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
+  const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
-  const [isReservationDialogOpen, setIsReservationDialogOpen] = useState(false);
+  
+  // State for the reservation payment dialog
   const [guestName, setGuestName] = useState("");
-  const [roomId, setRoomId] = useState<string>("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
-  const handleAddReservation = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!guestName || !roomId || !dateRange?.from || !dateRange?.to) {
+  const handleConfirmBooking = (status: Reservation['status']) => {
+    const roomItem = orderItems.find(item => item.product.category === 'Room');
+    if (!roomItem || !guestName || !dateRange?.from || !dateRange?.to) {
         toast({
             title: "Missing Information",
-            description: "Please fill out all fields to create a reservation.",
+            description: "Please provide guest name and reservation dates.",
             variant: "destructive",
         });
         return;
     }
 
-    const room = rooms.find(r => r.id === roomId);
-    if (!room) return;
-
     const newReservation: Reservation = {
       id: (reservations.length + 1).toString(),
       guestName,
-      roomName: room.name,
+      roomName: roomItem.product.name,
       checkIn: dateRange.from,
       checkOut: dateRange.to,
-      status: "Confirmed",
+      status: status,
     };
 
     setReservations([newReservation, ...reservations]);
-    setIsReservationDialogOpen(false);
     
+    // Clear form and close dialog
+    setIsReservationPaymentDialogOpen(false);
     setGuestName("");
-    setRoomId("");
     setDateRange(undefined);
+    setOrderItems([]); // Clear cart
 
     toast({
-      title: "Reservation Created",
-      description: `Booking for ${guestName} has been confirmed.`,
+      title: status === 'Checked-in' ? "Room Checked In" : "Room Reserved",
+      description: `Booking for ${guestName} in ${roomItem.product.name} has been confirmed.`,
     });
   };
 
+
   const handleAddToCart = (product: Product) => {
     setOrderItems((prevItems) => {
+      // Prevent adding more than one room to the cart for simplicity
+      if (product.category === 'Room' && prevItems.some(item => item.product.category === 'Room')) {
+        toast({
+            title: "One Room at a Time",
+            description: "You can only book one room per transaction.",
+            variant: "destructive"
+        });
+        return prevItems;
+      }
+
       const existingItem = prevItems.find(
         (item) => item.product.id === product.id
       );
       if (existingItem) {
+        // Prevent increasing quantity of a room
+        if (existingItem.product.category === 'Room') {
+            toast({
+                title: "One Room at a Time",
+                description: "You can only book one room per transaction.",
+                variant: "destructive"
+            });
+            return prevItems;
+        }
         return prevItems.map((item) =>
           item.product.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
@@ -147,6 +166,7 @@ export default function SalesPage() {
       const updatedItems = prevItems
         .map((item) => {
           if (item.product.id === productId) {
+             if (item.product.category === 'Room') return item; // Don't change room quantity
             return { ...item, quantity: item.quantity + amount };
           }
           return item;
@@ -179,12 +199,18 @@ export default function SalesPage() {
       return;
     }
 
-    // Mock payment processing
-    toast({
-      title: "Payment Successful",
-      description: `Order total: $${total.toFixed(2)}.`,
-    });
-    setOrderItems([]);
+    const hasRoom = orderItems.some(item => item.product.category === 'Room');
+
+    if (hasRoom) {
+        setIsReservationPaymentDialogOpen(true);
+    } else {
+        // Mock payment processing for non-room items
+        toast({
+          title: "Payment Successful",
+          description: `Order total: $${total.toFixed(2)}.`,
+        });
+        setOrderItems([]);
+    }
   };
 
   const handleCreditSale = () => {
@@ -195,6 +221,14 @@ export default function SalesPage() {
         variant: "destructive",
       });
       return;
+    }
+    if (orderItems.some(item => item.product.category === 'Room')) {
+        toast({
+            title: "Credit Not Allowed for Rooms",
+            description: "Room bookings cannot be recorded as credit sales.",
+            variant: "destructive",
+        });
+        return;
     }
     if (!selectedCustomerId) {
       toast({
@@ -219,13 +253,7 @@ export default function SalesPage() {
   return (
     <>
       <div className="space-y-8">
-        <div className="flex items-center justify-between">
-            <PageHeader title="Sales" description="Create a new order." />
-            <Button variant="outline" onClick={() => setIsReservationDialogOpen(true)}>
-                <CalendarCheck className="mr-2 h-4 w-4" />
-                Book a Room
-            </Button>
-        </div>
+        <PageHeader title="Sales" description="Create a new order for products or room bookings." />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {products.map((product) => (
@@ -265,6 +293,7 @@ export default function SalesPage() {
                               size="icon"
                               className="h-6 w-6"
                               onClick={() => handleUpdateQuantity(item.product.id, -1)}
+                              disabled={item.product.category === 'Room'}
                             >
                               <Minus className="h-3 w-3" />
                             </Button>
@@ -274,6 +303,7 @@ export default function SalesPage() {
                               size="icon"
                               className="h-6 w-6"
                               onClick={() => handleUpdateQuantity(item.product.id, 1)}
+                              disabled={item.product.category === 'Room'}
                             >
                               <Plus className="h-3 w-3" />
                             </Button>
@@ -354,42 +384,24 @@ export default function SalesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={isReservationDialogOpen} onOpenChange={setIsReservationDialogOpen}>
+      <Dialog open={isReservationPaymentDialogOpen} onOpenChange={setIsReservationPaymentDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
-            <form onSubmit={handleAddReservation}>
-              <DialogHeader>
-                <DialogTitle>New Reservation</DialogTitle>
+            <DialogHeader>
+                <DialogTitle>Room Booking</DialogTitle>
                 <DialogDescription>
-                  Fill in the details to book a room for a guest.
+                    Enter guest details and select dates for the room booking.
                 </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="guestName" className="text-right">
+                    <Label htmlFor="guestName" className="text-right">
                     Guest Name
-                  </Label>
-                  <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} className="col-span-3" required />
+                    </Label>
+                    <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} className="col-span-3" required />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="room" className="text-right">
-                    Room
-                  </Label>
-                  <Select onValueChange={setRoomId} value={roomId} required>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select a room" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rooms.map((room) => (
-                        <SelectItem key={room.id} value={room.id}>
-                          {room.name} (${room.pricePerNight}/night)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                     <Label className="text-right">Dates</Label>
-                     <div className="col-span-3">
+                        <Label className="text-right">Dates</Label>
+                        <div className="col-span-3">
                         <Popover>
                             <PopoverTrigger asChild>
                                 <Button
@@ -425,13 +437,13 @@ export default function SalesPage() {
                                 />
                             </PopoverContent>
                         </Popover>
-                     </div>
+                        </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit">Confirm Reservation</Button>
-              </DialogFooter>
-            </form>
+            </div>
+            <DialogFooter className="grid grid-cols-2 gap-2">
+                <Button variant="secondary" onClick={() => handleConfirmBooking('Confirmed')}>Reserve for Later</Button>
+                <Button onClick={() => handleConfirmBooking('Checked-in')}>Pay & Check-in Now</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
     </>

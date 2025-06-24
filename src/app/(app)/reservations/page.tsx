@@ -46,7 +46,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { rooms, reservations as initialReservations, type Reservation } from "@/lib/data";
@@ -98,9 +98,9 @@ export default function ReservationsPage() {
   
    const getStatusVariant = (status: Reservation['status']) => {
     switch (status) {
-      case 'Confirmed':
-        return 'default';
       case 'Checked-in':
+        return 'default';
+      case 'Confirmed':
         return 'secondary';
       case 'Checked-out':
         return 'outline';

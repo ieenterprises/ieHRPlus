@@ -1,12 +1,15 @@
 export type Product = {
   id: string;
   name: string;
-  category: "Food" | "Drink" | "Snack";
+  category: "Food" | "Drink" | "Snack" | "Room";
   price: number;
   imageUrl: string;
 };
 
 export const products: Product[] = [
+  { id: "room-101", name: "Single Room", category: "Room", price: 80, imageUrl: "https://placehold.co/300x200.png" },
+  { id: "room-201", name: "Double Room", category: "Room", price: 120, imageUrl: "https://placehold.co/300x200.png" },
+  { id: "room-301", name: "Suite", category: "Room", price: 200, imageUrl: "https://placehold.co/300x200.png" },
   { id: "1", name: "Espresso", category: "Drink", price: 2.5, imageUrl: "https://placehold.co/300x200.png", },
   { id: "2", name: "Latte", category: "Drink", price: 3.5, imageUrl: "https://placehold.co/300x200.png", },
   { id: "3", name: "Cappuccino", category: "Drink", price: 3.5, imageUrl: "https://placehold.co/300x200.png", },
@@ -67,6 +70,7 @@ export const salesByCategory = [
     { name: "Food", sales: 9170 },
     { name: "Drink", sales: 12080 },
     { name: "Snack", sales: 3890 },
+    { name: "Room", sales: 15200 },
 ];
 
 export const salesByEmployee = [
