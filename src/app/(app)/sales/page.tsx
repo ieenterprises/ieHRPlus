@@ -256,11 +256,11 @@ export default function SalesPage() {
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
-                    <Button size="lg" variant="secondary" className="w-full" onClick={() => setIsCreditDialogOpen(true)}>
-                      <ReceiptText className="mr-2 h-5 w-5" /> Record as Credit
-                    </Button>
                     <Button size="lg" className="w-full" onClick={handlePayment}>
                       <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
+                    </Button>
+                    <Button size="lg" variant="secondary" className="w-full" onClick={() => setIsCreditDialogOpen(true)}>
+                      <ReceiptText className="mr-2 h-5 w-5" /> Record as Credit
                     </Button>
                   </div>
                 </CardFooter>
@@ -269,7 +269,7 @@ export default function SalesPage() {
           </div>
         </div>
       </div>
-      <Dialog open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen}>
+      <Dialog open={isCreditDialogOpen} onOpenchange={setIsCreditDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Record Credit Sale</DialogTitle>
