@@ -502,18 +502,18 @@ export default function SalesPage() {
                             <div className="flex gap-2 items-end">
                                 <div className="flex-1">
                                     <Label htmlFor="paymentAmount">Amount</Label>
-                                    <Input 
-                                        id="paymentAmount" 
-                                        name="paymentAmount" 
-                                        type="number" 
-                                        step="0.01" 
+                                    <Input
+                                        key={splitPaymentMethod}
+                                        id="paymentAmount"
+                                        name="paymentAmount"
+                                        type="number"
+                                        step="0.01"
                                         required={splitPaymentMethod !== 'Credit'}
                                         placeholder={`Max $${remainingBalance.toFixed(2)}`}
                                         min="0.01"
                                         max={remainingBalance.toFixed(2)}
                                         disabled={splitPaymentMethod === 'Credit'}
-                                        value={splitPaymentMethod === 'Credit' ? remainingBalance.toFixed(2) : undefined}
-                                        onChange={splitPaymentMethod === 'Credit' ? () => {} : undefined}
+                                        defaultValue={splitPaymentMethod === 'Credit' ? remainingBalance.toFixed(2) : ''}
                                     />
                                 </div>
                                 <div className="w-40">
