@@ -80,10 +80,8 @@ function ProductCard({
 
 export default function SalesPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
@@ -212,43 +210,6 @@ export default function SalesPage() {
         setPayments([]); // Clear previous payments
         setIsSplitPaymentDialogOpen(true);
     }
-  };
-
-  const handleCreditSale = () => {
-    if (orderItems.length === 0) {
-      toast({
-        title: "Empty Order",
-        description: "Cannot record an empty credit sale.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (orderItems.some(item => item.product.category === 'Room')) {
-        toast({
-            title: "Credit Not Allowed for Rooms",
-            description: "Room bookings cannot be recorded as credit sales.",
-            variant: "destructive",
-        });
-        return;
-    }
-    if (!selectedCustomerId) {
-      toast({
-        title: "No Customer Selected",
-        description: "Please select a customer for the credit sale.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const customer = customers.find(c => c.id === selectedCustomerId);
-
-    toast({
-      title: "Credit Sale Recorded",
-      description: `Order for ${customer?.name} of $${total.toFixed(2)} has been recorded as a debt.`,
-    });
-    setOrderItems([]);
-    setIsCreditDialogOpen(false);
-    setSelectedCustomerId(null);
   };
 
   const handleAddPayment = (event: React.FormEvent<HTMLFormElement>) => {
@@ -417,9 +378,6 @@ export default function SalesPage() {
                     <Button size="lg" className="w-full" onClick={handlePayment}>
                       <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
                     </Button>
-                    <Button size="lg" variant="secondary" className="w-full" onClick={() => setIsCreditDialogOpen(true)}>
-                      <ReceiptText className="mr-2 h-5 w-5" /> Record as Credit
-                    </Button>
                   </div>
                 </CardFooter>
               )}
@@ -427,34 +385,6 @@ export default function SalesPage() {
           </div>
         </div>
       </div>
-      <Dialog open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Record Credit Sale</DialogTitle>
-            <DialogDescription>
-              Select a customer to associate with this credit sale. The order will be added to their debts.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Select onValueChange={setSelectedCustomerId} defaultValue={selectedCustomerId || undefined}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a customer" />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreditDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreditSale}>Confirm Credit Sale</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       <Dialog open={isReservationPaymentDialogOpen} onOpenChange={setIsReservationPaymentDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
