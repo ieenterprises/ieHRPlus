@@ -59,6 +59,7 @@ export default function DebtsPage() {
               <TableRow>
                 <TableHead>Order #</TableHead>
                 <TableHead>Customer</TableHead>
+                <TableHead className="hidden sm:table-cell">Employee</TableHead>
                 <TableHead className="hidden md:table-cell">Date</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Status</TableHead>
@@ -70,6 +71,7 @@ export default function DebtsPage() {
                 <TableRow key={debt.id}>
                   <TableCell className="font-medium">{debt.orderNumber}</TableCell>
                   <TableCell>{debt.customerName}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{debt.employeeName}</TableCell>
                   <TableCell className="hidden md:table-cell">{format(debt.date, "LLL dd, y")}</TableCell>
                   <TableCell className="text-right">${debt.amount.toFixed(2)}</TableCell>
                   <TableCell>
@@ -89,7 +91,7 @@ export default function DebtsPage() {
               ))}
                {debts.filter(d => d.status === 'Unpaid').length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
                         No unpaid debts.
                     </TableCell>
                 </TableRow>

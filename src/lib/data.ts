@@ -114,6 +114,7 @@ export type Debt = {
   id: string;
   orderNumber: number;
   customerName: string;
+  employeeName: string;
   amount: number;
   date: Date;
   status: "Unpaid" | "Paid";
@@ -124,6 +125,7 @@ export const debts: Debt[] = [
     id: "1",
     orderNumber: 106,
     customerName: "John Doe",
+    employeeName: "Diana Prince",
     amount: 8.25,
     date: new Date("2024-05-20"),
     status: "Unpaid",
@@ -132,6 +134,7 @@ export const debts: Debt[] = [
     id: "2",
     orderNumber: 107,
     customerName: "Jane Smith",
+    employeeName: "Charlie Brown",
     amount: 12.50,
     date: new Date("2024-05-21"),
     status: "Unpaid",
@@ -140,6 +143,7 @@ export const debts: Debt[] = [
     id: "3",
     orderNumber: 108,
     customerName: "Peter Jones",
+    employeeName: "Diana Prince",
     amount: 5.75,
     date: new Date("2024-05-18"),
     status: "Paid",
