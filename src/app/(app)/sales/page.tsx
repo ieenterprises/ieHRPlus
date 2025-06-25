@@ -42,6 +42,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 
 type OrderItem = {
@@ -101,6 +106,7 @@ export default function SalesPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState("Cash");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   const handleConfirmBooking = (status: Reservation['status']) => {
     const roomItem = orderItems.find(item => item.product.category === 'room');
@@ -325,21 +331,44 @@ export default function SalesPage() {
     setPayments([]);
     setIsSplitPaymentDialogOpen(false);
   };
-
+  
+  const filteredProducts = products.filter(
+    (product) => categoryFilter === "all" || product.category === categoryFilter
+  );
 
   return (
     <>
       <div className="space-y-8">
         <PageHeader title="Sales" description="Create a new order for products or room bookings." />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {products.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onAddToCart={handleAddToCart}
-              />
-            ))}
+          <div className="lg:col-span-2 space-y-4">
+             <Tabs defaultValue="all" onValueChange={setCategoryFilter}>
+              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
+                <TabsTrigger value="all">All</TabsTrigger>
+                {categories.map((category) => (
+                  <TabsTrigger key={category.id} value={category.id}>
+                    {category.name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {filteredProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onAddToCart={handleAddToCart}
+                />
+              ))}
+               {filteredProducts.length === 0 && (
+                <Card className="col-span-full flex items-center justify-center h-64">
+                    <CardContent className="text-center text-muted-foreground p-6">
+                        <p className="text-lg font-medium">No products found</p>
+                        <p>There are no products in the selected category.</p>
+                    </CardContent>
+                </Card>
+            )}
+            </div>
           </div>
 
           <div className="lg:sticky lg:top-8">
@@ -607,3 +636,5 @@ export default function SalesPage() {
     </>
   );
 }
+
+    
