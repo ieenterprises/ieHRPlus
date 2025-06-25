@@ -23,6 +23,7 @@ import {
   ReceiptText,
   CalendarCheck,
   Package,
+  BookUser,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
@@ -35,6 +36,7 @@ const navItems = [
   { href: "/reservations", icon: CalendarCheck, label: "Reservations" },
   { href: "/reports", icon: BarChart3, label: "Reports" },
   { href: "/team", icon: Users, label: "Team" },
+  { href: "/customers", icon: BookUser, label: "Customers" },
   { href: "/debts", icon: ReceiptText, label: "Debts" },
 ];
 
