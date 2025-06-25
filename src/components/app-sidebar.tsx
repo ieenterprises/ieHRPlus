@@ -14,7 +14,7 @@ import {
 import {
   LayoutDashboard,
   ShoppingCart,
-  CookingPot,
+  ClipboardList,
   BarChart3,
   Users,
   Settings,
@@ -31,7 +31,7 @@ import { Button } from "./ui/button";
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/sales", icon: ShoppingCart, label: "Sales" },
-  { href: "/kitchen", icon: CookingPot, label: "Kitchen" },
+  { href: "/kitchen", icon: ClipboardList, label: "Orders" },
   { href: "/inventory", icon: Package, label: "Inventory" },
   { href: "/reservations", icon: CalendarCheck, label: "Reservations" },
   { href: "/reports", icon: BarChart3, label: "Reports" },

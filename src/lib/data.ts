@@ -179,3 +179,64 @@ export const reservations: Reservation[] = [
     { id: '2', guestName: 'Lois Lane', roomName: 'Room 201', checkIn: new Date('2024-08-03'), checkOut: new Date('2024-08-07'), status: 'Confirmed' },
     { id: '3', guestName: 'Bruce Wayne', roomName: 'Suite 301', checkIn: new Date('2024-07-28'), checkOut: new Date('2024-08-02'), status: 'Checked-in' },
 ];
+
+export type Sale = {
+  id: string;
+  orderNumber: number;
+  items: {
+    name:string;
+    quantity: number;
+  }[];
+  total: number;
+  paymentMethods: string[];
+  customerName: string;
+  date: Date;
+};
+
+export const sales: Sale[] = [
+    {
+        id: "sale-1",
+        orderNumber: 105,
+        items: [ { name: "Espresso", quantity: 1 }, { name: "Muffin", quantity: 1 } ],
+        total: 4.75,
+        paymentMethods: ["Cash"],
+        customerName: "Walk-in",
+        date: new Date("2024-07-29T10:30:00Z"),
+    },
+    {
+        id: "sale-2",
+        orderNumber: 106,
+        items: [ { name: "Avocado Toast", quantity: 1 } ],
+        total: 8.50,
+        paymentMethods: ["Credit"],
+        customerName: "John Doe",
+        date: new Date("2024-07-29T10:35:00Z"),
+    },
+    {
+        id: "sale-3",
+        orderNumber: 107,
+        items: [ { name: "Latte", quantity: 2 }, { name: "Croissant", quantity: 2 } ],
+        total: 12.50,
+        paymentMethods: ["Card"],
+        customerName: "Jane Smith",
+        date: new Date("2024-07-29T10:40:00Z"),
+    },
+    {
+        id: "sale-4",
+        orderNumber: 108,
+        items: [ { name: "Suite", quantity: 1 } ],
+        total: 200,
+        paymentMethods: ["Card"],
+        customerName: "Bruce Wayne",
+        date: new Date("2024-07-29T11:00:00Z"),
+    },
+    {
+        id: "sale-5",
+        orderNumber: 109,
+        items: [ { name: "Iced Tea", quantity: 1 }, { name: "Cookie", quantity: 2 } ],
+        total: 6.00,
+        paymentMethods: ["Cash", "Card"],
+        customerName: "Walk-in",
+        date: new Date("2024-07-29T11:15:00Z"),
+    },
+];
