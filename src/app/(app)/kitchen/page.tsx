@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
+import { type DateRange } from "react-day-picker";
 import { PageHeader } from "@/components/page-header";
 import {
   Table,
@@ -23,7 +24,23 @@ import { sales as initialSales, type Sale, products as initialProducts, categori
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Calendar as CalendarIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+
 
 const getPaymentBadgeVariant = (method: string) => {
     switch (method.toLowerCase()) {
@@ -56,6 +73,14 @@ export default function KitchenPage() {
   const [sales, setSales] = useState<Sale[]>(initialSales);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
+  
+  const [filters, setFilters] = useState({
+    searchTerm: "",
+    category: "all",
+    paymentMethod: "all",
+    status: "all",
+  });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   useEffect(() => {
     setIsClient(true);
@@ -72,6 +97,37 @@ export default function KitchenPage() {
       description: "The order has been marked as fulfilled.",
     });
   };
+  
+  const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const filteredSales = sales.filter((sale) => {
+    const searchTermLower = filters.searchTerm.toLowerCase();
+    
+    const searchMatch =
+      filters.searchTerm === "" ||
+      sale.orderNumber.toString().includes(searchTermLower) ||
+      sale.customerName.toLowerCase().includes(searchTermLower) ||
+      sale.employeeName.toLowerCase().includes(searchTermLower) ||
+      sale.items.some((item) => item.name.toLowerCase().includes(searchTermLower));
+    
+    const saleCategories = getSaleCategoryNames(sale.items);
+    const categoryMatch = filters.category === "all" || saleCategories.includes(filters.category);
+    
+    const paymentMatch =
+      filters.paymentMethod === "all" ||
+      sale.paymentMethods.some(pm => pm === filters.paymentMethod);
+
+    const statusMatch = filters.status === "all" || sale.status === filters.status;
+    
+    const dateMatch =
+      !dateRange?.from ||
+      (sale.date >= dateRange.from &&
+        (!dateRange.to || sale.date <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
+
+    return searchMatch && categoryMatch && paymentMatch && statusMatch && dateMatch;
+  });
 
   return (
     <div className="space-y-8">
@@ -87,6 +143,79 @@ export default function KitchenPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <Input
+              placeholder="Search by order, customer, item..."
+              value={filters.searchTerm}
+              onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
+              className="max-w-xs"
+            />
+            <Select value={filters.category} onValueChange={(value) => handleFilterChange('category', value)}>
+                <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by category" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {initialCategories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
+             <Select value={filters.paymentMethod} onValueChange={(value) => handleFilterChange('paymentMethod', value)}>
+                <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by payment" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Payment Methods</SelectItem>
+                    <SelectItem value="Cash">Cash</SelectItem>
+                    <SelectItem value="Card">Card</SelectItem>
+                    <SelectItem value="Credit">Credit</SelectItem>
+                </SelectContent>
+            </Select>
+             <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
+                <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Fulfilled">Fulfilled</SelectItem>
+                </SelectContent>
+            </Select>
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button
+                    id="date"
+                    variant={"outline"}
+                    className={cn(
+                        "w-[260px] justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
+                    )}
+                    >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                        dateRange.to ? (
+                        <>
+                            {format(dateRange.from, "LLL dd, y")} -{" "}
+                            {format(dateRange.to, "LLL dd, y")}
+                        </>
+                        ) : (
+                        format(dateRange.from, "LLL dd, y")
+                        )
+                    ) : (
+                        <span>Pick a date range</span>
+                    )}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                    initialFocus
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                    />
+                </PopoverContent>
+            </Popover>
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -103,7 +232,7 @@ export default function KitchenPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sales.map((sale) => (
+              {filteredSales.map((sale) => (
                 <TableRow key={sale.id}>
                   <TableCell className="font-medium">#{sale.orderNumber}</TableCell>
                   <TableCell>{isClient ? format(sale.date, "LLL dd, y HH:mm") : null}</TableCell>
@@ -144,10 +273,10 @@ export default function KitchenPage() {
                   </TableCell>
                 </TableRow>
               ))}
-               {sales.length === 0 && (
+               {filteredSales.length === 0 && (
                 <TableRow>
                     <TableCell colSpan={10} className="text-center text-muted-foreground h-24">
-                        No sales recorded yet.
+                        No sales found for the selected filters.
                     </TableCell>
                 </TableRow>
               )}
