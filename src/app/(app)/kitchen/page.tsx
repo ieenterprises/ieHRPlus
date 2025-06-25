@@ -155,6 +155,27 @@ export default function KitchenPage() {
       (isNaN(maxAmount) || totalForAmountCheck <= maxAmount);
 
     return searchMatch && categoryMatch && paymentMatch && statusMatch && dateMatch && amountMatch;
+  }).map(sale => {
+      const displayItems = filters.category === 'all'
+        ? sale.items
+        : sale.items.filter(item => {
+            const product = initialProducts.find(p => p.name === item.name);
+            if (!product) return false;
+            const category = getCategoryFromId(product.category);
+            const filterCategory = getCategoryFromName(filters.category);
+            return category?.id === filterCategory?.id;
+        });
+
+    const displayTotal = displayItems.reduce((acc, item) => {
+        const product = initialProducts.find(p => p.name === item.name);
+        return acc + (product ? product.price * item.quantity : 0);
+    }, 0);
+
+    return {
+        ...sale,
+        displayItems,
+        displayTotal,
+    };
   });
 
   return (
@@ -275,23 +296,7 @@ export default function KitchenPage() {
             </TableHeader>
             <TableBody>
               {filteredSales.map((sale) => {
-                const itemsToDisplay =
-                  filters.category === "all"
-                    ? sale.items
-                    : sale.items.filter((item) => {
-                        const product = initialProducts.find((p) => p.name === item.name);
-                        if (!product) return false;
-                        const category = getCategoryFromId(product.category);
-                        const filterCategory = getCategoryFromName(filters.category);
-                        return category?.id === filterCategory?.id;
-                      });
-
-                const totalForDisplay = itemsToDisplay.reduce((acc, item) => {
-                  const product = initialProducts.find((p) => p.name === item.name);
-                  return acc + (product ? product.price * item.quantity : 0);
-                }, 0);
-                
-                const categoriesForDisplay = getSaleCategoryNames(itemsToDisplay);
+                const categoriesForDisplay = getSaleCategoryNames(sale.displayItems);
 
                 return (
                 <TableRow key={sale.id}>
@@ -300,7 +305,7 @@ export default function KitchenPage() {
                   <TableCell className="hidden sm:table-cell">{sale.customerName}</TableCell>
                   <TableCell className="hidden md:table-cell">{sale.employeeName}</TableCell>
                    <TableCell>
-                     {itemsToDisplay.map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                     {sale.displayItems.map(item => `${item.name} (x${item.quantity})`).join(', ')}
                    </TableCell>
                    <TableCell>
                      <div className="flex flex-wrap gap-1">
@@ -309,7 +314,7 @@ export default function KitchenPage() {
                         ))}
                      </div>
                    </TableCell>
-                  <TableCell className="text-right">${totalForDisplay.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">${sale.displayTotal.toFixed(2)}</TableCell>
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-1">
                         {sale.paymentMethods.map(method => (
