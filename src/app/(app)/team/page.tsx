@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -18,10 +19,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { users, type User } from "@/lib/data";
+import { users as initialUsers, type User } from "@/lib/data";
+import { posPermissions, backOfficePermissions, AnyPermission } from "@/lib/permissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Edit, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +38,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -48,92 +49,106 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+
+
+const EMPTY_USER: Partial<User> = {
+  name: "",
+  email: "",
+  role: "Cashier",
+  avatarUrl: "https://placehold.co/100x100.png",
+  permissions: [],
+};
+
 
 export default function TeamPage() {
-  const [team, setTeam] = useState<User[]>(users);
+  const [team, setTeam] = useState<User[]>(initialUsers);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+  const [selectedPermissions, setSelectedPermissions] = useState<Set<AnyPermission>>(new Set());
   const { toast } = useToast();
 
-  const handleAddUser = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleOpenDialog = (user: Partial<User> | null) => {
+    if (user && 'permissions' in user) {
+      setEditingUser(user);
+      setSelectedPermissions(new Set(user.permissions));
+    } else {
+      setEditingUser(EMPTY_USER);
+      setSelectedPermissions(new Set());
+    }
+    setIsDialogOpen(true);
+  };
+  
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      setEditingUser(null);
+      setSelectedPermissions(new Set());
+    }
+    setIsDialogOpen(open);
+  }
+
+  const handlePermissionToggle = (permission: AnyPermission, checked: boolean) => {
+    setSelectedPermissions(prev => {
+        const newPermissions = new Set(prev);
+        if (checked) {
+            newPermissions.add(permission);
+        } else {
+            newPermissions.delete(permission);
+        }
+        return newPermissions;
+    });
+  };
+
+  const handleSaveUser = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const newUser: User = {
-      id: (team.length + 1).toString(),
+    
+    const userData: Partial<User> = {
+      id: editingUser?.id,
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       role: formData.get("role") as "Manager" | "Cashier",
-      avatarUrl: "https://placehold.co/100x100.png",
+      permissions: Array.from(selectedPermissions),
     };
-    setTeam([...team, newUser]);
-    setIsDialogOpen(false);
-    toast({
-      title: "User Added",
-      description: `${newUser.name} has been added to the team.`,
-    });
+
+    if (userData.id) {
+        setTeam(team.map(u => u.id === userData.id ? { ...u, ...userData } as User : u));
+        toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
+    } else {
+        const newUser: User = {
+            id: `user-${Date.now()}`,
+            avatarUrl: EMPTY_USER.avatarUrl!,
+            ...userData
+        } as User;
+        setTeam([newUser, ...team]);
+        toast({ title: "User Added", description: `${newUser.name} has been added to the team.` });
+    }
+    
+    handleDialogClose(false);
   };
+
+  const handleDeleteUser = (userId: string) => {
+    setTeam(team.filter(u => u.id !== userId));
+    toast({
+        title: "User Deleted",
+        description: "The user has been removed from the team.",
+        variant: "destructive"
+    });
+  }
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <PageHeader
           title="Team Management"
-          description="Manage your cashiers and managers."
+          description="Manage your cashiers, managers, and their permissions."
         />
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add User
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <form onSubmit={handleAddUser}>
-              <DialogHeader>
-                <DialogTitle>Add New User</DialogTitle>
-                <DialogDescription>
-                  Fill in the details to add a new member to your team.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Name
-                  </Label>
-                  <Input id="name" name="name" className="col-span-3" required />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="email" className="text-right">
-                    Email
-                  </Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="role" className="text-right">
-                    Role
-                  </Label>
-                  <Select name="role" required defaultValue="Cashier">
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select a role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Cashier">Cashier</SelectItem>
-                      <SelectItem value="Manager">Manager</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit">Add User</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => handleOpenDialog(null)}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add User
+        </Button>
       </div>
 
       <Card>
@@ -187,9 +202,11 @@ export default function TeamPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                          Delete
+                        <DropdownMenuItem onClick={() => handleOpenDialog(user)}>
+                            <Edit className="mr-2 h-4 w-4" /> Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteUser(user.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -200,6 +217,87 @@ export default function TeamPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
+          <DialogContent className="sm:max-w-xl">
+            <form onSubmit={handleSaveUser}>
+              <DialogHeader>
+                <DialogTitle>{editingUser?.id ? 'Edit User' : 'Add New User'}</DialogTitle>
+                <DialogDescription>
+                  {editingUser?.id ? "Update the user's details and permissions." : "Fill in the details to add a new member to your team."}
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input id="name" name="name" defaultValue={editingUser?.name} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" name="email" type="email" defaultValue={editingUser?.email} required />
+                </div>
+                <div className="space-y-2">
+                   <Label htmlFor="role">Role</Label>
+                   <Select name="role" required defaultValue={editingUser?.role}>
+                    <SelectTrigger id="role">
+                      <SelectValue placeholder="Select a role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cashier">Cashier</SelectItem>
+                      <SelectItem value="Manager">Manager</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <Accordion type="multiple" className="w-full" defaultValue={['pos', 'back-office']}>
+                <AccordionItem value="pos">
+                    <AccordionTrigger className="text-lg font-semibold">POS Permissions</AccordionTrigger>
+                    <AccordionContent>
+                        <ScrollArea className="h-48">
+                            <div className="space-y-4 p-1 pr-4">
+                                {(Object.keys(posPermissions) as (keyof typeof posPermissions)[]).map((key) => (
+                                    <div key={key} className="flex items-center justify-between">
+                                        <Label htmlFor={key} className="flex-1 pr-4">{posPermissions[key].label}</Label>
+                                        <Switch
+                                            id={key}
+                                            checked={selectedPermissions.has(key)}
+                                            onCheckedChange={(checked) => handlePermissionToggle(key, checked)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </AccordionContent>
+                </AccordionItem>
+                 <AccordionItem value="back-office">
+                    <AccordionTrigger className="text-lg font-semibold">Back Office Permissions</AccordionTrigger>
+                    <AccordionContent>
+                         <ScrollArea className="h-48">
+                            <div className="space-y-4 p-1 pr-4">
+                                {(Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[]).map((key) => (
+                                    <div key={key} className="flex items-center justify-between">
+                                        <Label htmlFor={key} className="flex-1 pr-4">{backOfficePermissions[key].label}</Label>
+                                        <Switch
+                                            id={key}
+                                            checked={selectedPermissions.has(key)}
+                                            onCheckedChange={(checked) => handlePermissionToggle(key, checked)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+              
+              <DialogFooter className="pt-4">
+                <Button type="submit">Save Changes</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }
