@@ -121,6 +121,9 @@ export default function SalesPage() {
 
   useEffect(() => {
     async function fetchData() {
+        if (!supabase) {
+            return;
+        }
         const [productsRes, categoriesRes, customersRes, usersRes] = await Promise.all([
             supabase.from('products').select('*').order('name'),
             supabase.from('categories').select('*').order('name'),

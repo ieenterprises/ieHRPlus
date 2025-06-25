@@ -57,6 +57,10 @@ export default function CustomersPage() {
   useEffect(() => {
     const fetchCustomers = async () => {
       setLoading(true);
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
       const { data, error } = await supabase.from("customers").select("*").order('created_at', { ascending: false });
       if (error) {
         toast({ title: "Error fetching customers", description: error.message, variant: "destructive" });
@@ -108,7 +112,6 @@ export default function CustomersPage() {
 
   const handleDeleteCustomer = async (customerId: string) => {
     try {
-      // TODO: Add a check here if the customer has outstanding debts
       await deleteCustomer(customerId);
       setCustomers(customers.filter(c => c.id !== customerId));
       toast({

@@ -34,6 +34,10 @@ export default function DebtsPage() {
   useEffect(() => {
     async function fetchDebts() {
       setLoading(true);
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
       const { data, error } = await supabase
         .from("debts")
         .select(`

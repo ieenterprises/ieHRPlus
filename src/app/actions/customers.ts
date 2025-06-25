@@ -3,7 +3,14 @@
 import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 
+const checkSupabase = () => {
+    if (!supabase) {
+        throw new Error("Supabase client is not initialized. Please check your environment variables.");
+    }
+}
+
 export async function addCustomer(customerData: { name: string, email: string, phone: string | null }) {
+    checkSupabase();
     const { data, error } = await supabase
         .from('customers')
         .insert([customerData])
@@ -19,6 +26,7 @@ export async function addCustomer(customerData: { name: string, email: string, p
 }
 
 export async function updateCustomer(id: string, customerData: { name: string, email: string, phone: string | null }) {
+    checkSupabase();
     const { data, error } = await supabase
         .from('customers')
         .update(customerData)
@@ -33,6 +41,8 @@ export async function updateCustomer(id: string, customerData: { name: string, e
 }
 
 export async function deleteCustomer(id: string) {
+    checkSupabase();
+    // TODO: Add a check here if the customer has outstanding debts
     const { data, error } = await supabase
         .from('customers')
         .delete()

@@ -4,6 +4,12 @@ import { supabase } from '@/lib/supabase';
 import type { SaleItem } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 
+const checkSupabase = () => {
+    if (!supabase) {
+        throw new Error("Supabase client is not initialized. Please check your environment variables.");
+    }
+}
+
 export async function addSale(
     saleData: {
         items: SaleItem[];
@@ -15,6 +21,7 @@ export async function addSale(
     },
     creditInfo?: { customerId: string, amount: number }
 ) {
+    checkSupabase();
     const { data: newSale, error: saleError } = await supabase
         .from('sales')
         .insert([saleData])
@@ -49,6 +56,7 @@ export async function addSale(
 
 
 export async function updateProductStock(stockUpdates: { id: string; stock: number }[]) {
+    checkSupabase();
     const updates = stockUpdates.map(({ id, stock }) =>
         supabase.from('products').update({ stock }).eq('id', id)
     );
@@ -62,6 +70,7 @@ export async function updateProductStock(stockUpdates: { id: string; stock: numb
 
 
 export async function fulfillOrder(saleId: string) {
+    checkSupabase();
     const { data, error } = await supabase
         .from('sales')
         .update({ status: 'Fulfilled' })

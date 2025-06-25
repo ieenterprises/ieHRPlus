@@ -76,8 +76,12 @@ export default function ReportsPage() {
   useEffect(() => {
     async function fetchReportData() {
         if (!date?.from) return;
-
         setLoading(true);
+        if (!supabase) {
+            setLoading(false);
+            return;
+        }
+
         const { data: sales, error } = await supabase
             .from('sales')
             .select('*, users(name), items')

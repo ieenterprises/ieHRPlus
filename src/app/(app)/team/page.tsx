@@ -76,6 +76,10 @@ export default function TeamPage() {
   useEffect(() => {
     async function fetchUsers() {
         setLoading(true);
+        if (!supabase) {
+            setLoading(false);
+            return;
+        }
         const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
         if(error) {
             toast({ title: "Error fetching users", description: error.message, variant: 'destructive' });

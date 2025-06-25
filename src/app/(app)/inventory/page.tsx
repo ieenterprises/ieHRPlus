@@ -79,6 +79,10 @@ export default function InventoryPage() {
   useEffect(() => {
     const fetchData = async () => {
         setLoading(true);
+        if (!supabase) {
+            setLoading(false);
+            return;
+        }
         const [productsRes, categoriesRes] = await Promise.all([
             supabase.from('products').select('*').order('created_at', { ascending: false }),
             supabase.from('categories').select('*').order('name')

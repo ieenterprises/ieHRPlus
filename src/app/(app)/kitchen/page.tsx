@@ -79,6 +79,10 @@ export default function KitchenPage() {
   useEffect(() => {
     async function fetchData() {
         setLoading(true);
+        if (!supabase) {
+            setLoading(false);
+            return;
+        }
         const [salesRes, productsRes, categoriesRes, usersRes] = await Promise.all([
             supabase.from('sales').select('*, customers ( name ), users ( name )').order('created_at', { ascending: false }),
             supabase.from('products').select('*'),

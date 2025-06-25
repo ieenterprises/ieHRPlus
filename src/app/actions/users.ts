@@ -4,9 +4,16 @@ import { supabase } from '@/lib/supabase';
 import type { UserRole } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 
+const checkSupabase = () => {
+    if (!supabase) {
+        throw new Error("Supabase client is not initialized. Please check your environment variables.");
+    }
+}
+
 export async function addUser(userData: {
     name: string; email: string; role: UserRole; pin: string | null; permissions: string[]; avatar_url: string;
 }) {
+    checkSupabase();
     const { data, error } = await supabase
         .from('users')
         .insert([userData])
@@ -21,6 +28,7 @@ export async function addUser(userData: {
 export async function updateUser(id: string, userData: {
     name: string; email: string; role: UserRole; pin: string | null; permissions: string[];
 }) {
+    checkSupabase();
     const { data, error } = await supabase
         .from('users')
         .update(userData)
@@ -32,6 +40,7 @@ export async function updateUser(id: string, userData: {
 }
 
 export async function deleteUser(id: string) {
+    checkSupabase();
     const { data, error } = await supabase
         .from('users')
         .delete()

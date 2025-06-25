@@ -30,6 +30,10 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
 
       const today = new Date();
       const lastMonth = subMonths(today, 1);

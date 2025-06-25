@@ -67,6 +67,10 @@ export default function ReservationsPage() {
   useEffect(() => {
     async function fetchData() {
         setLoading(true);
+        if (!supabase) {
+            setLoading(false);
+            return;
+        }
         const [reservationsRes, roomsRes, categoriesRes] = await Promise.all([
             supabase.from('reservations').select('*, products ( name )').order('check_in', { ascending: true }),
             supabase.from('products').select('*, categories ( name )'),

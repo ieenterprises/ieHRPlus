@@ -3,7 +3,14 @@
 import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 
+const checkSupabase = () => {
+    if (!supabase) {
+        throw new Error("Supabase client is not initialized. Please check your environment variables.");
+    }
+}
+
 export async function markDebtAsPaid(debtId: string) {
+    checkSupabase();
     const { data, error } = await supabase
         .from('debts')
         .update({ status: 'Paid' })

@@ -11,7 +11,14 @@ type NewReservationData = {
   status: 'Confirmed' | 'Checked-in';
 };
 
+const checkSupabase = () => {
+    if (!supabase) {
+        throw new Error("Supabase client is not initialized. Please check your environment variables.");
+    }
+}
+
 export async function addReservation(reservationData: NewReservationData) {
+    checkSupabase();
     const { data, error } = await supabase
         .from('reservations')
         .insert([reservationData])
