@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -37,6 +37,11 @@ const getPaymentBadgeVariant = (method: string) => {
 
 export default function KitchenPage() {
   const [sales, setSales] = useState<Sale[]>(initialSales);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -67,7 +72,7 @@ export default function KitchenPage() {
               {sales.map((sale) => (
                 <TableRow key={sale.id}>
                   <TableCell className="font-medium">#{sale.orderNumber}</TableCell>
-                  <TableCell>{format(sale.date, "LLL dd, y HH:mm")}</TableCell>
+                  <TableCell>{isClient ? format(sale.date, "LLL dd, y HH:mm") : null}</TableCell>
                   <TableCell className="hidden sm:table-cell">{sale.customerName}</TableCell>
                    <TableCell>
                      {sale.items.map(item => `${item.name} (x${item.quantity})`).join(', ')}
