@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { sales as initialSales, type Sale, products as initialProducts, categories as initialCategories } from "@/lib/data";
+import { sales as initialSales, type Sale, products as initialProducts, categories as initialCategories, users as initialUsers } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -79,6 +79,7 @@ export default function KitchenPage() {
     category: "all",
     paymentMethod: "all",
     status: "all",
+    employee: "all",
     minAmount: "",
     maxAmount: "",
   });
@@ -125,6 +126,7 @@ export default function KitchenPage() {
       sale.paymentMethods.some(pm => pm === filters.paymentMethod);
 
     const statusMatch = filters.status === "all" || sale.status === filters.status;
+    const employeeMatch = filters.employee === "all" || sale.employeeName === filters.employee;
     
     const dateMatch =
       !dateRange?.from ||
@@ -154,7 +156,7 @@ export default function KitchenPage() {
       (isNaN(minAmount) || totalForAmountCheck >= minAmount) &&
       (isNaN(maxAmount) || totalForAmountCheck <= maxAmount);
 
-    return searchMatch && categoryMatch && paymentMatch && statusMatch && dateMatch && amountMatch;
+    return searchMatch && categoryMatch && paymentMatch && statusMatch && dateMatch && amountMatch && employeeMatch;
   }).map(sale => {
       const displayItems = filters.category === 'all'
         ? sale.items
@@ -227,6 +229,15 @@ export default function KitchenPage() {
                     <SelectItem value="all">All Statuses</SelectItem>
                     <SelectItem value="Pending">Pending</SelectItem>
                     <SelectItem value="Fulfilled">Fulfilled</SelectItem>
+                </SelectContent>
+            </Select>
+            <Select value={filters.employee} onValueChange={(value) => handleFilterChange('employee', value)}>
+                <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by employee" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Employees</SelectItem>
+                    {initialUsers.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
                 </SelectContent>
             </Select>
             <Input
