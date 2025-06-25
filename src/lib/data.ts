@@ -47,14 +47,15 @@ export type User = {
   email: string;
   role: UserRole;
   avatarUrl: string;
+  pin: string;
   permissions: AnyPermission[];
 };
 
 export const users: User[] = [
-  { id: "1", name: "Alice Johnson", email: "alice@orderflow.com", role: "Owner", avatarUrl: "https://placehold.co/100x100.png", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
-  { id: "2", name: "Bob Williams", email: "bob@orderflow.com", role: "Administrator", avatarUrl: "https://placehold.co/100x100.png", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
-  { id: "3", name: "Charlie Brown", email: "charlie@orderflow.com", role: "Manager", avatarUrl: "https://placehold.co/100x100.png", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_EMPLOYEES"] },
-  { id: "4", name: "Diana Prince", email: "diana@orderflow.com", role: "Cashier", avatarUrl: "https://placehold.co/100x100.png", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS"] },
+  { id: "1", name: "Alice Johnson", email: "alice@orderflow.com", role: "Owner", avatarUrl: "https://placehold.co/100x100.png", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[], pin: "1111" },
+  { id: "2", name: "Bob Williams", email: "bob@orderflow.com", role: "Administrator", avatarUrl: "https://placehold.co/100x100.png", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[], pin: "2222" },
+  { id: "3", name: "Charlie Brown", email: "charlie@orderflow.com", role: "Manager", avatarUrl: "https://placehold.co/100x100.png", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_EMPLOYEES"], pin: "3333" },
+  { id: "4", name: "Diana Prince", email: "diana@orderflow.com", role: "Cashier", avatarUrl: "https://placehold.co/100x100.png", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS"], pin: "4444" },
 ];
 
 export type KitchenOrder = {

@@ -60,6 +60,7 @@ const EMPTY_USER: Partial<User> = {
   role: "Cashier",
   avatarUrl: "https://placehold.co/100x100.png",
   permissions: [],
+  pin: "",
 };
 
 
@@ -110,6 +111,7 @@ export default function TeamPage() {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       role: formData.get("role") as UserRole,
+      pin: formData.get("pin") as string,
       permissions: Array.from(selectedPermissions),
     };
 
@@ -243,7 +245,7 @@ export default function TeamPage() {
                 </DialogDescription>
               </DialogHeader>
               
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 py-4">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
                   <Input id="name" name="name" defaultValue={editingUser?.name} required />
@@ -265,6 +267,19 @@ export default function TeamPage() {
                       <SelectItem value="Cashier">Cashier</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                 <div className="space-y-2">
+                  <Label htmlFor="pin">POS PIN</Label>
+                  <Input 
+                    id="pin" 
+                    name="pin" 
+                    type="password" 
+                    defaultValue={editingUser?.pin} 
+                    required 
+                    pattern="\d{4}" 
+                    maxLength={4} 
+                    title="PIN must be 4 digits."
+                  />
                 </div>
               </div>
               
