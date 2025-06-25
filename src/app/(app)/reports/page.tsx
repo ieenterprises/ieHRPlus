@@ -4,7 +4,6 @@ import { PageHeader } from "@/components/page-header";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -14,7 +13,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { salesByItem, salesByCategory, salesByEmployee } from "@/lib/data";
 import {
   BarChart,
   Bar,
@@ -29,9 +27,11 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
-import { useState } from "react";
-import { addDays, format } from "date-fns";
+import { useState, useEffect } from "react";
+import { subDays, format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import type { Sale, Product, Category, User } from "@/lib/types";
 
 type SalesData = {
     name: string;
@@ -64,9 +64,70 @@ function SalesChart({ data, title }: { data: SalesData[], title: string }) {
 
 export default function ReportsPage() {
   const [date, setDate] = useState<DateRange | undefined>({
-    from: new Date(2024, 0, 20),
-    to: addDays(new Date(2024, 0, 20), 30),
+    from: subDays(new Date(), 30),
+    to: new Date(),
   });
+  
+  const [salesByItem, setSalesByItem] = useState<SalesData[]>([]);
+  const [salesByCategory, setSalesByCategory] = useState<SalesData[]>([]);
+  const [salesByEmployee, setSalesByEmployee] = useState<SalesData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchReportData() {
+        if (!date?.from) return;
+
+        setLoading(true);
+        const { data: sales, error } = await supabase
+            .from('sales')
+            .select('*, users(name), items')
+            .gte('created_at', date.from.toISOString())
+            .lte('created_at', date.to ? date.to.toISOString() : new Date().toISOString());
+
+        const { data: products, error: productsError } = await supabase.from('products').select('*, categories(name)');
+        const { data: categories, error: categoriesError } = await supabase.from('categories').select('*');
+
+        if (error || productsError || categoriesError) {
+            console.error(error || productsError || categoriesError);
+            setLoading(false);
+            return;
+        }
+
+        // Sales by Item
+        const itemSales: { [key: string]: number } = {};
+        sales.forEach(sale => {
+            (sale.items as any[]).forEach(item => {
+                itemSales[item.name] = (itemSales[item.name] || 0) + (item.price * item.quantity);
+            });
+        });
+        setSalesByItem(Object.entries(itemSales).map(([name, sales]) => ({ name, sales })).sort((a,b) => b.sales - a.sales));
+
+        // Sales by Category
+        const categorySales: { [key: string]: number } = {};
+        sales.forEach(sale => {
+            (sale.items as any[]).forEach(item => {
+                const product = (products as any[]).find(p => p.id === item.id);
+                if (product && product.categories) {
+                    const categoryName = product.categories.name;
+                    categorySales[categoryName] = (categorySales[categoryName] || 0) + (item.price * item.quantity);
+                }
+            });
+        });
+        setSalesByCategory(Object.entries(categorySales).map(([name, sales]) => ({ name, sales })).sort((a,b) => b.sales - a.sales));
+
+        // Sales by Employee
+        const employeeSales: { [key: string]: number } = {};
+        sales.forEach(sale => {
+            if (sale.users?.name) {
+                employeeSales[sale.users.name] = (employeeSales[sale.users.name] || 0) + sale.total;
+            }
+        });
+        setSalesByEmployee(Object.entries(employeeSales).map(([name, sales]) => ({ name, sales })).sort((a,b) => b.sales - a.sales));
+
+        setLoading(false);
+    }
+    fetchReportData();
+  }, [date]);
 
   return (
     <div className="space-y-8">
@@ -120,13 +181,13 @@ export default function ReportsPage() {
           <TabsTrigger value="employee">By Employee</TabsTrigger>
         </TabsList>
         <TabsContent value="item" className="pt-4">
-          <SalesChart data={salesByItem} title="Sales by Item" />
+            {loading ? <p>Loading report...</p> : <SalesChart data={salesByItem} title="Sales by Item" />}
         </TabsContent>
         <TabsContent value="category" className="pt-4">
-          <SalesChart data={salesByCategory} title="Sales by Category" />
+            {loading ? <p>Loading report...</p> : <SalesChart data={salesByCategory} title="Sales by Category" />}
         </TabsContent>
         <TabsContent value="employee" className="pt-4">
-          <SalesChart data={salesByEmployee} title="Sales by Employee" />
+            {loading ? <p>Loading report...</p> : <SalesChart data={salesByEmployee} title="Sales by Employee" />}
         </TabsContent>
       </Tabs>
     </div>

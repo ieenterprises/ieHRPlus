@@ -12,26 +12,89 @@ import {
   Tooltip,
 } from "recharts";
 import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+import { subMonths, format, startOfMonth, endOfMonth } from "date-fns";
+
+type MonthlySales = { name: string; total: number };
 
 export default function DashboardPage() {
-  const [data, setData] = useState<any[]>([]);
+  const [salesData, setSalesData] = useState<MonthlySales[]>([]);
+  const [stats, setStats] = useState({
+    totalRevenue: 0,
+    ordersToday: 0,
+    totalSales: 0,
+    activeStaff: 0,
+  });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setData([
-      { name: "Jan", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "Feb", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "Mar", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "Apr", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "May", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "Jun", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "Jul", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "Aug", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "Sep", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "Oct", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "Nov", total: Math.floor(Math.random() * 5000) + 1000 },
-      { name: "Dec", total: Math.floor(Math.random() * 5000) + 1000 },
-    ]);
+    async function fetchData() {
+      setLoading(true);
+
+      const today = new Date();
+      const lastMonth = subMonths(today, 1);
+      
+      const { data: sales, error: salesError } = await supabase.from('sales').select('total, created_at');
+      const { count: userCount, error: userError } = await supabase.from('users').select('*', { count: 'exact' });
+      
+      if (salesError || userError) {
+        console.error("Error fetching dashboard data:", salesError || userError);
+        setLoading(false);
+        return;
+      }
+      
+      const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
+      const totalSales = sales.length;
+
+      const salesToday = sales.filter(sale => new Date(sale.created_at!).toDateString() === today.toDateString());
+      const ordersToday = salesToday.length;
+      
+      const salesLastMonth = sales.filter(sale => {
+        const saleDate = new Date(sale.created_at!);
+        return saleDate >= startOfMonth(lastMonth) && saleDate <= endOfMonth(lastMonth);
+      });
+      const revenueLastMonth = salesLastMonth.reduce((sum, sale) => sum + sale.total, 0);
+
+      const revenueThisMonth = sales
+        .filter(sale => new Date(sale.created_at!).getMonth() === today.getMonth())
+        .reduce((sum, sale) => sum + sale.total, 0);
+        
+      const revenueGrowth = revenueLastMonth > 0 ? ((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100 : 0;
+
+      setStats({
+        totalRevenue: totalRevenue,
+        ordersToday: ordersToday,
+        totalSales: totalSales,
+        activeStaff: userCount ?? 0,
+      });
+      
+      // Prepare chart data for last 12 months
+      const monthlySales: MonthlySales[] = [];
+      for (let i = 11; i >= 0; i--) {
+          const date = subMonths(today, i);
+          const monthName = format(date, "MMM");
+          const monthStart = startOfMonth(date);
+          const monthEnd = endOfMonth(date);
+
+          const totalForMonth = sales
+              .filter(sale => {
+                  const saleDate = new Date(sale.created_at!);
+                  return saleDate >= monthStart && saleDate <= monthEnd;
+              })
+              .reduce((sum, sale) => sum + sale.total, 0);
+          
+          monthlySales.push({ name: monthName, total: totalForMonth });
+      }
+
+      setSalesData(monthlySales);
+      setLoading(false);
+    }
+    fetchData();
   }, []);
+
+  if (loading) {
+    return <div>Loading dashboard...</div>;
+  }
 
   return (
     <div className="space-y-8">
@@ -43,8 +106,8 @@ export default function DashboardPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$45,231.89</div>
-            <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+            <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+            {/* <p className="text-xs text-muted-foreground">+20.1% from last month</p> */}
           </CardContent>
         </Card>
         <Card>
@@ -53,8 +116,8 @@ export default function DashboardPage() {
             <Utensils className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+235</div>
-            <p className="text-xs text-muted-foreground">+180.1% from last month</p>
+            <div className="text-2xl font-bold">+{stats.ordersToday}</div>
+            {/* <p className="text-xs text-muted-foreground">+180.1% from last month</p> */}
           </CardContent>
         </Card>
         <Card>
@@ -63,8 +126,8 @@ export default function DashboardPage() {
             <BarChart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+12,234</div>
-            <p className="text-xs text-muted-foreground">+19% from last month</p>
+            <div className="text-2xl font-bold">+{stats.totalSales}</div>
+            {/* <p className="text-xs text-muted-foreground">+19% from last month</p> */}
           </CardContent>
         </Card>
         <Card>
@@ -73,8 +136,8 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+4</div>
-            <p className="text-xs text-muted-foreground">All staff currently active</p>
+            <div className="text-2xl font-bold">+{stats.activeStaff}</div>
+            <p className="text-xs text-muted-foreground">Total registered users</p>
           </CardContent>
         </Card>
       </div>
@@ -85,7 +148,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent className="pl-2">
           <ResponsiveContainer width="100%" height={350}>
-            <RechartsBarChart data={data}>
+            <RechartsBarChart data={salesData}>
               <XAxis
                 dataKey="name"
                 stroke="#888888"

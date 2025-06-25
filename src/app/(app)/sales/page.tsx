@@ -1,13 +1,12 @@
-
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
-import { products as initialProducts, type Product, customers, type Reservation, reservations as initialReservations, categories, users, type User } from "@/lib/data";
+import { type Product, type Customer, type Reservation, type Category, type User, type SaleItem } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -19,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, ReceiptText, CalendarIcon, DollarSign, LogOut } from "lucide-react";
+import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -47,7 +46,10 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { supabase } from "@/lib/supabase";
+import { addSale, updateProductStock } from "@/app/actions/sales";
+import { addReservation } from "@/app/actions/reservations";
 
 
 type OrderItem = {
@@ -58,30 +60,32 @@ type OrderItem = {
 function ProductCard({
   product,
   onAddToCart,
+  categoryName
 }: {
   product: Product;
   onAddToCart: (product: Product) => void;
+  categoryName: string;
 }) {
-  const category = categories.find(c => c.id === product.category);
+  const isRoom = categoryName === 'Room';
 
   return (
     <Card
       className={cn(
         "overflow-hidden transition-shadow duration-300 relative",
-        product.stock > 0 || product.category === 'room' ? "cursor-pointer hover:shadow-lg" : "opacity-50 cursor-not-allowed"
+        product.stock > 0 || isRoom ? "cursor-pointer hover:shadow-lg" : "opacity-50 cursor-not-allowed"
       )}
-      onClick={product.stock > 0 || product.category === 'room' ? () => onAddToCart(product) : undefined}
+      onClick={product.stock > 0 || isRoom ? () => onAddToCart(product) : undefined}
     >
-      {product.stock === 0 && product.category !== 'room' && (
+      {product.stock === 0 && !isRoom && (
         <Badge variant="destructive" className="absolute top-2 right-2 z-10">Out of Stock</Badge>
       )}
       <Image
-        src={product.imageUrl}
+        src={product.image_url || 'https://placehold.co/300x200.png'}
         alt={product.name}
         width={300}
         height={200}
         className="w-full h-32 object-cover"
-        data-ai-hint={product.category === 'room' ? "hotel room" : "food beverage"}
+        data-ai-hint={isRoom ? "hotel room" : "food beverage"}
       />
       <CardContent className="p-4">
         <h3 className="font-semibold truncate">{product.name}</h3>
@@ -95,12 +99,14 @@ function ProductCard({
 
 export default function SalesPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
   const { toast } = useToast();
-
-  const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
   
   // State for the reservation payment dialog
   const [guestName, setGuestName] = useState("");
@@ -112,6 +118,23 @@ export default function SalesPage() {
   // Clock-in state
   const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
   const [pin, setPin] = useState("");
+
+  useEffect(() => {
+    async function fetchData() {
+        const [productsRes, categoriesRes, customersRes, usersRes] = await Promise.all([
+            supabase.from('products').select('*').order('name'),
+            supabase.from('categories').select('*').order('name'),
+            supabase.from('customers').select('*').order('name'),
+            supabase.from('users').select('*'),
+        ]);
+
+        if (productsRes.data) setProducts(productsRes.data);
+        if (categoriesRes.data) setCategories(categoriesRes.data);
+        if (customersRes.data) setCustomers(customersRes.data);
+        if (usersRes.data) setUsers(usersRes.data);
+    }
+    fetchData();
+  }, []);
 
   const handleClockIn = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -141,8 +164,8 @@ export default function SalesPage() {
     setLoggedInUser(null);
   };
 
-  const handleConfirmBooking = (status: Reservation['status']) => {
-    const roomItem = orderItems.find(item => item.product.category === 'room');
+  const handleConfirmBooking = async (status: 'Confirmed' | 'Checked-in') => {
+    const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
     if (!roomItem || !guestName || !dateRange?.from || !dateRange?.to) {
         toast({
             title: "Missing Information",
@@ -152,40 +175,47 @@ export default function SalesPage() {
         return;
     }
 
-    const newReservation: Reservation = {
-      id: (reservations.length + 1).toString(),
-      guestName,
-      roomName: roomItem.product.name,
-      checkIn: dateRange.from,
-      checkOut: dateRange.to,
+    const newReservationData = {
+      guest_name: guestName,
+      product_id: roomItem.product.id,
+      check_in: dateRange.from.toISOString(),
+      check_out: dateRange.to.toISOString(),
       status: status,
     };
-
-    setReservations([newReservation, ...reservations]);
     
-    // Clear form and close dialog
-    setIsReservationPaymentDialogOpen(false);
-    setGuestName("");
-    setDateRange(undefined);
-    setOrderItems([]); // Clear cart
+    try {
+        await addReservation(newReservationData);
+        if(status === 'Checked-in') {
+            await handleCompleteSale(true);
+        }
 
-    toast({
-      title: status === 'Checked-in' ? "Room Checked In" : "Room Reserved",
-      description: `Booking for ${guestName} in ${roomItem.product.name} has been confirmed.`,
-    });
+        setIsReservationPaymentDialogOpen(false);
+        setGuestName("");
+        setDateRange(undefined);
+        setOrderItems([]);
+
+        toast({
+          title: status === 'Checked-in' ? "Room Checked In" : "Room Reserved",
+          description: `Booking for ${guestName} in ${roomItem.product.name} has been confirmed.`,
+        });
+
+    } catch(error: any) {
+         toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
   };
 
 
   const handleAddToCart = (product: Product) => {
+    const categoryName = getCategoryName(product.category_id);
     const productInStock = products.find(p => p.id === product.id);
 
-    if (!productInStock || (productInStock.stock <= 0 && productInStock.category !== 'room')) {
+    if (!productInStock || (productInStock.stock <= 0 && categoryName !== 'Room')) {
       toast({ title: "Out of Stock", description: `${product.name} is currently unavailable.`, variant: "destructive" });
       return;
     }
 
     setOrderItems((prevItems) => {
-      if (product.category === 'room' && prevItems.some(item => item.product.category === 'room')) {
+      if (categoryName === 'Room' && prevItems.some(item => getCategoryName(item.product.category_id) === 'Room')) {
         toast({
             title: "One Room at a Time",
             description: "You can only book one room per transaction.",
@@ -198,7 +228,7 @@ export default function SalesPage() {
         (item) => item.product.id === product.id
       );
       if (existingItem) {
-        if (productInStock.category !== 'room' && existingItem.quantity + 1 > productInStock.stock) {
+        if (categoryName !== 'Room' && existingItem.quantity + 1 > productInStock.stock) {
           toast({ title: "Stock Limit Reached", description: `Only ${productInStock.stock} ${productInStock.name} in stock.`, variant: "destructive" });
           return prevItems;
         }
@@ -219,10 +249,11 @@ export default function SalesPage() {
       const productInStock = products.find(p => p.id === productId);
 
       if (!itemToUpdate || !productInStock) return prevItems;
-
+      
+      const categoryName = getCategoryName(itemToUpdate.product.category_id);
       const newQuantity = itemToUpdate.quantity + amount;
 
-      if (newQuantity > 0 && productInStock.category !== 'room' && newQuantity > productInStock.stock) {
+      if (newQuantity > 0 && categoryName !== 'Room' && newQuantity > productInStock.stock) {
         toast({ title: "Stock Limit Reached", description: `Only ${productInStock.stock} ${productInStock.name} in stock.`, variant: "destructive" });
         return prevItems;
       }
@@ -230,7 +261,7 @@ export default function SalesPage() {
       const updatedItems = prevItems
         .map((item) => {
           if (item.product.id === productId) {
-             if (item.product.category === 'room') return item;
+             if (categoryName === 'Room') return item;
             return { ...item, quantity: item.quantity + amount };
           }
           return item;
@@ -265,7 +296,7 @@ export default function SalesPage() {
       return;
     }
 
-    const hasRoom = orderItems.some(item => item.product.category === 'room');
+    const hasRoom = orderItems.some(item => getCategoryName(item.product.category_id) === 'Room');
 
     if (hasRoom) {
         setIsReservationPaymentDialogOpen(true);
@@ -286,34 +317,7 @@ export default function SalesPage() {
         toast({ title: "Customer Required", description: "Please select a customer.", variant: "destructive" });
         return;
       }
-      const customer = customers.find(c => c.id === creditCustomerId);
-      const creditAmount = remainingBalance;
-
-      let toastDescription = `Order total: $${total.toFixed(2)}.`;
-      if (totalPaid > 0) {
-        toastDescription += ` $${totalPaid.toFixed(2)} paid.`;
-      }
-      toastDescription += ` $${creditAmount.toFixed(2)} recorded as debt for ${customer?.name}.`;
-      
-      toast({
-        title: "Sale Completed",
-        description: toastDescription,
-      });
-
-      setProducts(prevProducts =>
-        prevProducts.map(p => {
-          const orderItem = orderItems.find(item => item.product.id === p.id);
-          if (orderItem && p.category !== 'room') {
-            return { ...p, stock: p.stock - orderItem.quantity };
-          }
-          return p;
-        })
-      );
-
-      setOrderItems([]);
-      setPayments([]);
-      setIsSplitPaymentDialogOpen(false);
-      setSplitPaymentMethod("Cash");
+      handleCompleteSale(false, { customerId: creditCustomerId, amount: remainingBalance });
       return;
     }
 
@@ -339,40 +343,73 @@ export default function SalesPage() {
       setPayments(payments.filter((_, i) => i !== index));
   };
 
-  const handleCompleteSale = () => {
-    if (remainingBalance > 0.001) {
+  const handleCompleteSale = async (isRoomCheckout = false, creditInfo?: { customerId: string, amount: number }) => {
+    if (remainingBalance > 0.001 && !creditInfo && !isRoomCheckout) {
         toast({ title: "Payment Incomplete", description: `There is still a remaining balance of $${remainingBalance.toFixed(2)}.`, variant: "destructive" });
         return;
     }
+    
+    const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
+    
+    let allPayments = [...payments];
+    if (creditInfo) {
+        allPayments.push({ method: 'Credit', amount: creditInfo.amount });
+    }
 
-    toast({
-        title: "Payment Successful",
-        description: `Order total: $${total.toFixed(2)}.`,
-    });
+    const saleData = {
+        items: saleItems,
+        total,
+        payment_methods: allPayments.map(p => p.method),
+        customer_id: creditInfo?.customerId ?? null,
+        employee_id: loggedInUser?.id ?? null,
+        status: 'Pending'
+    };
 
-    setProducts(prevProducts =>
-        prevProducts.map(p => {
-            const orderItem = orderItems.find(item => item.product.id === p.id);
-            if (orderItem && p.category !== 'room') {
-                return { ...p, stock: p.stock - orderItem.quantity };
-            }
-            return p;
-        })
-    );
+    try {
+        const newSale = await addSale(saleData, creditInfo);
+        
+        const stockUpdates = orderItems
+            .filter(item => getCategoryName(item.product.category_id) !== 'Room')
+            .map(item => ({ id: item.product.id, stock: item.product.stock - item.quantity }));
+        
+        await updateProductStock(stockUpdates);
 
-    setOrderItems([]);
-    setPayments([]);
-    setIsSplitPaymentDialogOpen(false);
+        setProducts(prevProducts =>
+            prevProducts.map(p => {
+                const update = stockUpdates.find(u => u.id === p.id);
+                return update ? { ...p, stock: update.stock } : p;
+            })
+        );
+        
+        let toastDescription = `Order #${newSale.order_number} complete. Total: $${total.toFixed(2)}.`;
+        if (creditInfo) {
+            const customer = customers.find(c => c.id === creditInfo.customerId);
+            toastDescription += ` $${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
+        }
+
+        toast({
+            title: "Sale Completed",
+            description: toastDescription,
+        });
+
+        setOrderItems([]);
+        setPayments([]);
+        setIsSplitPaymentDialogOpen(false);
+    } catch (error: any) {
+        toast({ title: "Error completing sale", description: error.message, variant: "destructive" });
+    }
   };
   
+  const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
+  
   const filteredProducts = products.filter(
-    (product) => categoryFilter === "all" || product.category === categoryFilter
+    (product) => categoryFilter === "all" || product.category_id === categoryFilter
   );
 
-  const canAcceptPayment = loggedInUser?.permissions.includes("ACCEPT_PAYMENTS") ?? false;
+  const canAcceptPayment = loggedInUser?.permissions ? (loggedInUser.permissions as string[]).includes("ACCEPT_PAYMENTS") : false;
 
   return (
-    <>
+    <TooltipProvider>
       {!loggedInUser && (
         <Dialog open={!loggedInUser} onOpenChange={() => {}}>
             <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
@@ -434,9 +471,10 @@ export default function SalesPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {filteredProducts.map((product) => (
                     <ProductCard
-                    key={product.id}
-                    product={product}
-                    onAddToCart={handleAddToCart}
+                        key={product.id}
+                        product={product}
+                        onAddToCart={handleAddToCart}
+                        categoryName={getCategoryName(product.category_id) || ''}
                     />
                 ))}
                 {filteredProducts.length === 0 && (
@@ -454,7 +492,6 @@ export default function SalesPage() {
                 <Card>
                 <CardHeader>
                     <CardTitle>Current Order</CardTitle>
-                    <CardDescription>Order #105</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                     {orderItems.length === 0 ? (
@@ -478,7 +515,7 @@ export default function SalesPage() {
                                 size="icon"
                                 className="h-6 w-6"
                                 onClick={() => handleUpdateQuantity(item.product.id, -1)}
-                                disabled={item.product.category === 'room'}
+                                disabled={getCategoryName(item.product.category_id) === 'Room'}
                                 >
                                 <Minus className="h-3 w-3" />
                                 </Button>
@@ -488,7 +525,7 @@ export default function SalesPage() {
                                 size="icon"
                                 className="h-6 w-6"
                                 onClick={() => handleUpdateQuantity(item.product.id, 1)}
-                                disabled={item.product.category === 'room'}
+                                disabled={getCategoryName(item.product.category_id) === 'Room'}
                                 >
                                 <Plus className="h-3 w-3" />
                                 </Button>
@@ -718,14 +755,12 @@ export default function SalesPage() {
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setIsSplitPaymentDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleCompleteSale} disabled={Math.abs(remainingBalance) > 0.001}>
+                    <Button onClick={() => handleCompleteSale()} disabled={Math.abs(remainingBalance) > 0.001}>
                         Complete Sale
                     </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    </>
+    </TooltipProvider>
   );
 }
-
-    

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -20,7 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { sales as initialSales, type Sale, products as initialProducts, categories as initialCategories, users as initialUsers } from "@/lib/data";
+import { type Sale, type Product, type Category, type User } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +39,8 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { fulfillOrder } from "@/app/actions/sales";
 
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -55,23 +56,13 @@ const getPaymentBadgeVariant = (method: string) => {
     }
 }
 
-const getSaleCategoryNames = (saleItems: Sale['items']): string[] => {
-    const categoryIds = new Set(
-        saleItems.map(item => {
-            const product = initialProducts.find(p => p.name === item.name);
-            return product?.category;
-        }).filter((id): id is string => !!id)
-    );
-
-    return Array.from(categoryIds).map(id =>
-        initialCategories.find(c => c.id === id)?.name || 'Unknown'
-    );
-};
-
-
 export default function KitchenPage() {
-  const [sales, setSales] = useState<Sale[]>(initialSales);
-  const [isClient, setIsClient] = useState(false);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const { toast } = useToast();
   
   const [filters, setFilters] = useState({
@@ -86,52 +77,92 @@ export default function KitchenPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
+    async function fetchData() {
+        setLoading(true);
+        const [salesRes, productsRes, categoriesRes, usersRes] = await Promise.all([
+            supabase.from('sales').select('*, customers ( name ), users ( name )').order('created_at', { ascending: false }),
+            supabase.from('products').select('*'),
+            supabase.from('categories').select('*'),
+            supabase.from('users').select('*'),
+        ]);
+
+        if (salesRes.error) toast({ title: "Error", description: salesRes.error.message, variant: "destructive" });
+        else setSales(salesRes.data as Sale[]);
+
+        if (productsRes.error) toast({ title: "Error", description: productsRes.error.message, variant: "destructive" });
+        else setProducts(productsRes.data as Product[]);
+
+        if (categoriesRes.error) toast({ title: "Error", description: categoriesRes.error.message, variant: "destructive" });
+        else setCategories(categoriesRes.data as Category[]);
+        
+        if (usersRes.error) toast({ title: "Error", description: usersRes.error.message, variant: "destructive" });
+        else setUsers(usersRes.data as User[]);
+
+        setLoading(false);
+    }
+    fetchData();
+  }, [toast]);
   
-  const handleFulfillOrder = (saleId: string) => {
-    setSales((prevSales) =>
-      prevSales.map((sale) =>
-        sale.id === saleId ? { ...sale, status: "Fulfilled" } : sale
-      )
-    );
-    toast({
-      title: "Order Fulfilled",
-      description: "The order has been marked as fulfilled.",
-    });
+  const handleFulfillOrder = async (saleId: string) => {
+    try {
+        await fulfillOrder(saleId);
+        setSales((prevSales) =>
+            prevSales.map((sale) =>
+                sale.id === saleId ? { ...sale, status: "Fulfilled" } : sale
+            )
+        );
+        toast({
+            title: "Order Fulfilled",
+            description: "The order has been marked as fulfilled.",
+        });
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
   };
   
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
-  const getCategoryFromId = (id: string) => initialCategories.find(c => c.id === id);
-  const getCategoryFromName = (name: string) => initialCategories.find(c => c.name === name);
+  const getCategoryFromId = (id: string) => categories.find(c => c.id === id);
+
+  const getSaleCategoryNames = (saleItems: Sale['items']): string[] => {
+    const categoryIds = new Set(
+        saleItems.map(item => {
+            const product = products.find(p => p.id === item.id);
+            return product?.category_id;
+        }).filter((id): id is string => !!id)
+    );
+
+    return Array.from(categoryIds).map(id =>
+        categories.find(c => c.id === id)?.name || 'Unknown'
+    );
+};
 
   const filteredSales = sales.filter((sale) => {
     const searchTermLower = filters.searchTerm.toLowerCase();
     
     const searchMatch =
       filters.searchTerm === "" ||
-      sale.orderNumber.toString().includes(searchTermLower) ||
-      sale.customerName.toLowerCase().includes(searchTermLower) ||
-      sale.employeeName.toLowerCase().includes(searchTermLower) ||
+      sale.order_number.toString().includes(searchTermLower) ||
+      (sale.customers?.name ?? 'Walk-in').toLowerCase().includes(searchTermLower) ||
+      (sale.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
       sale.items.some((item) => item.name.toLowerCase().includes(searchTermLower));
     
     const saleCategories = getSaleCategoryNames(sale.items);
-    const categoryMatch = filters.category === "all" || saleCategories.includes(filters.category);
+    const categoryMatch = filters.category === "all" || saleCategories.some(catName => getCategoryFromId(categories.find(c=>c.name === filters.category)?.id ?? "")?.name === catName);
     
     const paymentMatch =
       filters.paymentMethod === "all" ||
-      sale.paymentMethods.some(pm => pm === filters.paymentMethod);
+      sale.payment_methods.some(pm => pm === filters.paymentMethod);
 
     const statusMatch = filters.status === "all" || sale.status === filters.status;
-    const employeeMatch = filters.employee === "all" || sale.employeeName === filters.employee;
+    const employeeMatch = filters.employee === "all" || sale.users?.name === filters.employee;
     
     const dateMatch =
       !dateRange?.from ||
-      (sale.date >= dateRange.from &&
-        (!dateRange.to || sale.date <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
+      (new Date(sale.created_at!) >= dateRange.from &&
+        (!dateRange.to || new Date(sale.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
 
     const minAmount = parseFloat(filters.minAmount);
     const maxAmount = parseFloat(filters.maxAmount);
@@ -140,15 +171,15 @@ export default function KitchenPage() {
       filters.category === "all"
         ? sale.items
         : sale.items.filter((item) => {
-            const product = initialProducts.find((p) => p.name === item.name);
+            const product = products.find((p) => p.id === item.id);
             if (!product) return false;
-            const category = getCategoryFromId(product.category);
-            const filterCategory = getCategoryFromName(filters.category);
+            const category = getCategoryFromId(product.category_id!);
+            const filterCategory = categories.find(c => c.name === filters.category);
             return category?.id === filterCategory?.id;
           });
     
     const totalForAmountCheck = itemsForAmountCheck.reduce((acc, item) => {
-        const product = initialProducts.find((p) => p.name === item.name);
+        const product = products.find((p) => p.id === item.id);
         return acc + (product ? product.price * item.quantity : 0);
     }, 0);
 
@@ -161,15 +192,15 @@ export default function KitchenPage() {
       const displayItems = filters.category === 'all'
         ? sale.items
         : sale.items.filter(item => {
-            const product = initialProducts.find(p => p.name === item.name);
+            const product = products.find(p => p.id === item.id);
             if (!product) return false;
-            const category = getCategoryFromId(product.category);
-            const filterCategory = getCategoryFromName(filters.category);
+            const category = getCategoryFromId(product.category_id!);
+            const filterCategory = categories.find(c => c.name === filters.category);
             return category?.id === filterCategory?.id;
         });
 
     const displayTotal = displayItems.reduce((acc, item) => {
-        const product = initialProducts.find(p => p.name === item.name);
+        const product = products.find(p => p.id === item.id);
         return acc + (product ? product.price * item.quantity : 0);
     }, 0);
 
@@ -207,7 +238,7 @@ export default function KitchenPage() {
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="all">All Categories</SelectItem>
-                    {initialCategories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
+                    {categories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
                 </SelectContent>
             </Select>
              <Select value={filters.paymentMethod} onValueChange={(value) => handleFilterChange('paymentMethod', value)}>
@@ -237,7 +268,7 @@ export default function KitchenPage() {
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="all">All Employees</SelectItem>
-                    {initialUsers.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
+                    {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
                 </SelectContent>
             </Select>
             <Input
@@ -306,51 +337,54 @@ export default function KitchenPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredSales.map((sale) => {
-                const categoriesForDisplay = getSaleCategoryNames(sale.displayItems);
-
-                return (
-                <TableRow key={sale.id}>
-                  <TableCell className="font-medium">#{sale.orderNumber}</TableCell>
-                  <TableCell>{isClient ? format(sale.date, "LLL dd, y HH:mm") : null}</TableCell>
-                  <TableCell className="hidden sm:table-cell">{sale.customerName}</TableCell>
-                  <TableCell className="hidden md:table-cell">{sale.employeeName}</TableCell>
-                   <TableCell>
-                     {sale.displayItems.map(item => `${item.name} (x${item.quantity})`).join(', ')}
-                   </TableCell>
-                   <TableCell>
-                     <div className="flex flex-wrap gap-1">
-                        {categoriesForDisplay.map(category => (
-                            <Badge key={category} variant="outline" className="whitespace-nowrap">{category}</Badge>
-                        ))}
-                     </div>
-                   </TableCell>
-                  <TableCell className="text-right">${sale.displayTotal.toFixed(2)}</TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                        {sale.paymentMethods.map(method => (
-                             <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">
-                                {method}
-                            </Badge>
-                        ))}
-                    </div>
-                  </TableCell>
-                   <TableCell>
-                    <Badge variant={sale.status === 'Fulfilled' ? 'secondary' : 'default'}>
-                      {sale.status}
-                    </Badge>
-                  </TableCell>
-                   <TableCell>
-                    {sale.status === 'Pending' && (
-                      <Button variant="outline" size="sm" onClick={() => handleFulfillOrder(sale.id)}>
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Fulfill
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              )})}
-               {filteredSales.length === 0 && (
+              {loading ? (
+                <TableRow><TableCell colSpan={10} className="h-24 text-center">Loading...</TableCell></TableRow>
+              ) : filteredSales.length > 0 ? (
+                filteredSales.map((sale) => {
+                  const categoriesForDisplay = getSaleCategoryNames(sale.displayItems);
+  
+                  return (
+                  <TableRow key={sale.id}>
+                    <TableCell className="font-medium">#{sale.order_number}</TableCell>
+                    <TableCell>{format(new Date(sale.created_at!), "LLL dd, y HH:mm")}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{sale.customers?.name ?? 'Walk-in'}</TableCell>
+                    <TableCell className="hidden md:table-cell">{sale.users?.name}</TableCell>
+                     <TableCell>
+                       {sale.displayItems.map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                     </TableCell>
+                     <TableCell>
+                       <div className="flex flex-wrap gap-1">
+                          {categoriesForDisplay.map(category => (
+                              <Badge key={category} variant="outline" className="whitespace-nowrap">{category}</Badge>
+                          ))}
+                       </div>
+                     </TableCell>
+                    <TableCell className="text-right">${sale.displayTotal.toFixed(2)}</TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                          {sale.payment_methods.map((method: string) => (
+                               <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">
+                                  {method}
+                              </Badge>
+                          ))}
+                      </div>
+                    </TableCell>
+                     <TableCell>
+                      <Badge variant={sale.status === 'Fulfilled' ? 'secondary' : 'default'}>
+                        {sale.status}
+                      </Badge>
+                    </TableCell>
+                     <TableCell>
+                      {sale.status === 'Pending' && (
+                        <Button variant="outline" size="sm" onClick={() => handleFulfillOrder(sale.id)}>
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Fulfill
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )})
+              ) : (
                 <TableRow>
                     <TableCell colSpan={10} className="text-center text-muted-foreground h-24">
                         No sales found for the selected filters.

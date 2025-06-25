@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,16 +44,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { products as initialProducts, categories as initialCategories, type Product, type Category } from "@/lib/data";
+import { type Product, type Category } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/lib/supabase";
+import { addProduct, updateProduct, deleteProduct, addCategory, updateCategory, deleteCategory } from "@/app/actions/inventory";
 
 
 const EMPTY_PRODUCT: Partial<Product> = {
   name: "",
-  category: "",
+  category_id: "",
   price: 0,
   stock: 0,
-  imageUrl: "https://placehold.co/300x200.png",
+  image_url: "https://placehold.co/300x200.png",
 };
 
 const EMPTY_CATEGORY: Partial<Category> = {
@@ -63,8 +64,9 @@ const EMPTY_CATEGORY: Partial<Category> = {
 
 
 export default function InventoryPage() {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
@@ -74,7 +76,28 @@ export default function InventoryPage() {
   
   const { toast } = useToast();
 
-  const getCategoryName = (categoryId: string) => {
+  useEffect(() => {
+    const fetchData = async () => {
+        setLoading(true);
+        const [productsRes, categoriesRes] = await Promise.all([
+            supabase.from('products').select('*').order('created_at', { ascending: false }),
+            supabase.from('categories').select('*').order('name')
+        ]);
+
+        if (productsRes.error) toast({ title: "Error fetching products", description: productsRes.error.message, variant: "destructive" });
+        else setProducts(productsRes.data as Product[]);
+
+        if (categoriesRes.error) toast({ title: "Error fetching categories", description: categoriesRes.error.message, variant: "destructive" });
+        else setCategories(categoriesRes.data as Category[]);
+
+        setLoading(false);
+    };
+    fetchData();
+  }, [toast]);
+
+
+  const getCategoryName = (categoryId: string | null) => {
+    if (!categoryId) return "N/A";
     return categories.find(c => c.id === categoryId)?.name || "N/A";
   };
   
@@ -89,9 +112,14 @@ export default function InventoryPage() {
     setIsProductDialogOpen(true);
   }
   
-  const handleDeleteProduct = (productId: string) => {
-    setProducts(products.filter(p => p.id !== productId));
-    toast({ title: "Product Deleted", description: "The product has been removed from inventory." });
+  const handleDeleteProduct = async (productId: string) => {
+    try {
+      await deleteProduct(productId);
+      setProducts(products.filter(p => p.id !== productId));
+      toast({ title: "Product Deleted", description: "The product has been removed from inventory." });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
   };
   
   const handleProductDialogClose = (open: boolean) => {
@@ -101,31 +129,30 @@ export default function InventoryPage() {
     setIsProductDialogOpen(open);
   }
 
-  const handleProductFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleProductFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const productData: Partial<Product> = {
-        id: editingProduct?.id,
+    const productData = {
         name: formData.get("name") as string,
-        category: formData.get("category") as string,
+        category_id: formData.get("category") as string,
         price: parseFloat(formData.get("price") as string),
         stock: parseInt(formData.get("stock") as string, 10),
     };
 
-    if (productData.id && productData.id !== '') {
-        setProducts(products.map(p => p.id === productData.id ? { ...p, ...productData } as Product : p));
-        toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
-    } else {
-        const newProduct: Product = {
-            id: `prod-${Date.now()}`,
-            ...EMPTY_PRODUCT,
-            ...productData
-        } as Product;
-        setProducts([newProduct, ...products]);
-        toast({ title: "Product Added", description: `${newProduct.name} has been added to inventory.` });
+    try {
+        if (editingProduct?.id) {
+            await updateProduct(editingProduct.id, productData);
+            setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...productData } as Product : p));
+            toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
+        } else {
+            const newProduct = await addProduct(productData);
+            setProducts([newProduct as Product, ...products]);
+            toast({ title: "Product Added", description: `${newProduct.name} has been added to inventory.` });
+        }
+        handleProductDialogClose(false);
+    } catch (error: any) {
+         toast({ title: "Error", description: error.message, variant: "destructive" });
     }
-    
-    handleProductDialogClose(false);
   };
 
   // Category Handlers
@@ -139,8 +166,8 @@ export default function InventoryPage() {
     setIsCategoryDialogOpen(true);
   };
 
-  const handleDeleteCategory = (categoryId: string) => {
-    if (products.some((p) => p.category === categoryId)) {
+  const handleDeleteCategory = async (categoryId: string) => {
+    if (products.some((p) => p.category_id === categoryId)) {
       toast({
         title: "Cannot Delete Category",
         description: "This category is in use by one or more products.",
@@ -148,8 +175,13 @@ export default function InventoryPage() {
       });
       return;
     }
-    setCategories(categories.filter((c) => c.id !== categoryId));
-    toast({ title: "Category Deleted" });
+    try {
+        await deleteCategory(categoryId);
+        setCategories(categories.filter((c) => c.id !== categoryId));
+        toast({ title: "Category Deleted" });
+    } catch(error: any) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
   };
 
   const handleCategoryDialogClose = (open: boolean) => {
@@ -159,30 +191,27 @@ export default function InventoryPage() {
     setIsCategoryDialogOpen(open);
   };
 
-  const handleCategoryFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleCategoryFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const categoryData: Partial<Category> = {
-      id: editingCategory?.id,
+    const categoryData = {
       name: formData.get("name") as string,
     };
 
-    if (categoryData.id) {
-      setCategories(
-        categories.map((c) =>
-          c.id === categoryData.id ? ({ ...c, ...categoryData } as Category) : c
-        )
-      );
-      toast({ title: "Category Updated" });
-    } else {
-      const newCategory: Category = {
-        id: `cat-${Date.now()}`,
-        name: categoryData.name!,
-      };
-      setCategories([...categories, newCategory]);
-      toast({ title: "Category Added" });
+    try {
+        if (editingCategory?.id) {
+            await updateCategory(editingCategory.id, categoryData);
+            setCategories(categories.map((c) => c.id === editingCategory.id ? ({ ...c, ...categoryData } as Category) : c));
+            toast({ title: "Category Updated" });
+        } else {
+            const newCategory = await addCategory(categoryData);
+            setCategories([...categories, newCategory as Category]);
+            toast({ title: "Category Added" });
+        }
+        handleCategoryDialogClose(false);
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
     }
-    handleCategoryDialogClose(false);
   };
 
 
@@ -225,32 +254,38 @@ export default function InventoryPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {products.map((product) => (
-                                    <TableRow key={product.id}>
-                                    <TableCell className="font-medium">{product.name}</TableCell>
-                                    <TableCell>{getCategoryName(product.category)}</TableCell>
-                                    <TableCell className="text-right">${product.price.toFixed(2)}</TableCell>
-                                    <TableCell className="text-right">{product.category === 'room' ? 'N/A' : product.stock}</TableCell>
-                                    <TableCell className="text-right">
-                                        <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                            <MoreHorizontal className="h-4 w-4" />
-                                            <span className="sr-only">Toggle menu</span>
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                            <DropdownMenuItem onClick={() => handleEditProduct(product)}>Edit</DropdownMenuItem>
-                                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            Delete
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                    </TableRow>
-                                ))}
+                                {loading ? (
+                                    <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                ) : products.length > 0 ? (
+                                    products.map((product) => (
+                                        <TableRow key={product.id}>
+                                        <TableCell className="font-medium">{product.name}</TableCell>
+                                        <TableCell>{getCategoryName(product.category_id)}</TableCell>
+                                        <TableCell className="text-right">${product.price.toFixed(2)}</TableCell>
+                                        <TableCell className="text-right">{getCategoryName(product.category_id) === 'Room' ? 'N/A' : product.stock}</TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                <MoreHorizontal className="h-4 w-4" />
+                                                <span className="sr-only">Toggle menu</span>
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                <DropdownMenuItem onClick={() => handleEditProduct(product)}>Edit</DropdownMenuItem>
+                                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Delete
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow><TableCell colSpan={5} className="h-24 text-center">No products found.</TableCell></TableRow>
+                                )}
                             </TableBody>
                         </Table>
                     </CardContent>
@@ -280,16 +315,19 @@ export default function InventoryPage() {
                                 </TableRow>
                             </TableHeader>
                              <TableBody>
-                                {categories.filter(c => c.id !== 'room').map((category) => (
-                                    <TableRow key={category.id}>
-                                        <TableCell className="font-medium">{category.name}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" onClick={() => handleEditCategory(category)}><Edit className="h-4 w-4" /></Button>
-                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(category.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {categories.filter(c => c.id !== 'room').length === 0 && (
+                                {loading ? (
+                                     <TableRow><TableCell colSpan={2} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                ) : categories.filter(c => getCategoryName(c.id) !== 'Room').length > 0 ? (
+                                    categories.filter(c => getCategoryName(c.id) !== 'Room').map((category) => (
+                                        <TableRow key={category.id}>
+                                            <TableCell className="font-medium">{category.name}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="ghost" size="icon" onClick={() => handleEditCategory(category)}><Edit className="h-4 w-4" /></Button>
+                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(category.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
                                   <TableRow>
                                     <TableCell colSpan={2} className="text-center text-muted-foreground h-24">
                                       No categories created yet.
@@ -320,13 +358,13 @@ export default function InventoryPage() {
                 </div>
                  <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="category" className="text-right">Category</Label>
-                    <Select name="category" required defaultValue={editingProduct?.category}>
+                    <Select name="category" required defaultValue={editingProduct?.category_id ?? ""}>
                         <SelectTrigger className="col-span-3">
                             <SelectValue placeholder="Select a category" />
                         </SelectTrigger>
                         <SelectContent>
                             {categories.map((category) => (
-                                <SelectItem key={category.id} value={category.id} disabled={category.id === 'room'}>
+                                <SelectItem key={category.id} value={category.id} disabled={getCategoryName(category.id) === 'Room'}>
                                     {category.name}
                                 </SelectItem>
                             ))}
@@ -374,5 +412,3 @@ export default function InventoryPage() {
     </div>
   );
 }
-
-    

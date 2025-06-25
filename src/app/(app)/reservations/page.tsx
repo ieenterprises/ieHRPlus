@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, PlusCircle } from "lucide-react";
 import { type DateRange } from "react-day-picker";
@@ -46,21 +46,49 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Badge, badgeVariants } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { rooms, reservations as initialReservations, type Reservation } from "@/lib/data";
+import { type Reservation, type Product } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
+import { addReservation } from "@/app/actions/reservations";
 
 export default function ReservationsPage() {
-  const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [rooms, setRooms] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const [guestName, setGuestName] = useState("");
   const [roomId, setRoomId] = useState<string>("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  
+  useEffect(() => {
+    async function fetchData() {
+        setLoading(true);
+        const [reservationsRes, roomsRes, categoriesRes] = await Promise.all([
+            supabase.from('reservations').select('*, products ( name )').order('check_in', { ascending: true }),
+            supabase.from('products').select('*, categories ( name )'),
+            supabase.from('categories').select('id, name').eq('name', 'Room').single()
+        ]);
+        
+        if (reservationsRes.error) toast({title: "Error", description: reservationsRes.error.message, variant: "destructive"});
+        else setReservations(reservationsRes.data as Reservation[]);
 
-  const handleAddReservation = (event: React.FormEvent<HTMLFormElement>) => {
+        if (roomsRes.error) toast({title: "Error", description: roomsRes.error.message, variant: "destructive"});
+        else {
+            const roomCategory = categoriesRes.data;
+            if (roomCategory) {
+                setRooms((roomsRes.data as any[]).filter(p => p.category_id === roomCategory.id));
+            }
+        }
+        setLoading(false);
+    }
+    fetchData();
+  }, [toast]);
+
+  const handleAddReservation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!guestName || !roomId || !dateRange?.from || !dateRange?.to) {
         toast({
@@ -71,29 +99,36 @@ export default function ReservationsPage() {
         return;
     }
 
-    const room = rooms.find(r => r.id === roomId);
-    if (!room) return;
-
-    const newReservation: Reservation = {
-      id: (reservations.length + 1).toString(),
-      guestName,
-      roomName: room.name,
-      checkIn: dateRange.from,
-      checkOut: dateRange.to,
+    const newReservationData = {
+      guest_name: guestName,
+      product_id: roomId,
+      check_in: dateRange.from.toISOString(),
+      check_out: dateRange.to.toISOString(),
       status: "Confirmed",
     };
 
-    setReservations([newReservation, ...reservations]);
-    setIsDialogOpen(false);
-    
-    setGuestName("");
-    setRoomId("");
-    setDateRange(undefined);
+    try {
+        const newReservation = await addReservation(newReservationData);
+        // Manually add room name for UI until re-fetch
+        const room = rooms.find(r => r.id === roomId);
+        setReservations([{ ...newReservation, products: { name: room?.name || '' } } as Reservation, ...reservations]);
+        setIsDialogOpen(false);
+        
+        setGuestName("");
+        setRoomId("");
+        setDateRange(undefined);
 
-    toast({
-      title: "Reservation Created",
-      description: `Booking for ${guestName} has been confirmed.`,
-    });
+        toast({
+          title: "Reservation Created",
+          description: `Booking for ${guestName} has been confirmed.`,
+        });
+    } catch (error: any) {
+        toast({
+            title: "Error creating reservation",
+            description: error.message,
+            variant: "destructive",
+        });
+    }
   };
   
    const getStatusVariant = (status: Reservation['status']) => {
@@ -150,7 +185,7 @@ export default function ReservationsPage() {
                     <SelectContent>
                       {rooms.map((room) => (
                         <SelectItem key={room.id} value={room.id}>
-                          {room.name} (${room.pricePerNight}/night)
+                          {room.name} (${room.price}/night)
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -224,20 +259,27 @@ export default function ReservationsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {reservations.map((reservation) => (
-                <TableRow key={reservation.id}>
-                  <TableCell className="font-medium">{reservation.guestName}</TableCell>
-                  <TableCell>{reservation.roomName}</TableCell>
-                  <TableCell className="hidden md:table-cell">{format(reservation.checkIn, "LLL dd, y")}</TableCell>
-                  <TableCell className="hidden md:table-cell">{format(reservation.checkOut, "LLL dd, y")}</TableCell>
-                   <TableCell>
-                    <Badge variant={getStatusVariant(reservation.status)}>
-                      {reservation.status}
-                    </Badge>
-                  </TableCell>
+              {loading ? (
+                 <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
+                        Loading...
+                    </TableCell>
                 </TableRow>
-              ))}
-               {reservations.length === 0 && (
+              ) : reservations.length > 0 ? (
+                reservations.map((reservation) => (
+                    <TableRow key={reservation.id}>
+                    <TableCell className="font-medium">{reservation.guest_name}</TableCell>
+                    <TableCell>{reservation.products?.name}</TableCell>
+                    <TableCell className="hidden md:table-cell">{format(new Date(reservation.check_in), "LLL dd, y")}</TableCell>
+                    <TableCell className="hidden md:table-cell">{format(new Date(reservation.check_out), "LLL dd, y")}</TableCell>
+                    <TableCell>
+                        <Badge variant={getStatusVariant(reservation.status as any)}>
+                        {reservation.status}
+                        </Badge>
+                    </TableCell>
+                    </TableRow>
+                ))
+               ) : (
                 <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
                         No reservations found.

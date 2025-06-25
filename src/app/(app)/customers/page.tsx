@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,8 +18,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { customers as initialCustomers, type Customer } from "@/lib/data";
-import { MoreHorizontal, PlusCircle, Trash2, Edit, BookUser } from "lucide-react";
+import type { Customer } from "@/lib/types";
+import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +38,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
+import { addCustomer, updateCustomer, deleteCustomer } from "@/app/actions/customers";
 
 const EMPTY_CUSTOMER: Partial<Customer> = {
   name: "",
@@ -46,10 +48,25 @@ const EMPTY_CUSTOMER: Partial<Customer> = {
 };
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Partial<Customer> | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setLoading(true);
+      const { data, error } = await supabase.from("customers").select("*").order('created_at', { ascending: false });
+      if (error) {
+        toast({ title: "Error fetching customers", description: error.message, variant: "destructive" });
+      } else {
+        setCustomers(data as Customer[]);
+      }
+      setLoading(false);
+    };
+    fetchCustomers();
+  }, [toast]);
 
   const handleOpenDialog = (customer: Partial<Customer> | null) => {
     setEditingCustomer(customer ? customer : EMPTY_CUSTOMER);
@@ -63,40 +80,45 @@ export default function CustomersPage() {
     setIsDialogOpen(open);
   };
 
-  const handleSaveCustomer = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveCustomer = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     
-    const customerData: Partial<Customer> = {
-      id: editingCustomer?.id,
+    const customerData = {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       phone: formData.get("phone") as string,
     };
 
-    if (customerData.id) {
-        setCustomers(customers.map(c => c.id === customerData.id ? { ...c, ...customerData } as Customer : c));
+    try {
+      if (editingCustomer?.id) {
+        await updateCustomer(editingCustomer.id, customerData);
+        setCustomers(customers.map(c => c.id === editingCustomer.id ? { ...c, ...customerData } as Customer : c));
         toast({ title: "Customer Updated", description: `${customerData.name}'s details have been updated.` });
-    } else {
-        const newCustomer: Customer = {
-            id: `cust-${Date.now()}`,
-            ...customerData,
-        } as Customer;
-        setCustomers([newCustomer, ...customers]);
-        toast({ title: "Customer Added", description: `${newCustomer.name} has been added.` });
+      } else {
+        const newCustomer = await addCustomer(customerData);
+        setCustomers([newCustomer as Customer, ...customers]);
+        toast({ title: "Customer Added", description: `${customerData.name} has been added.` });
+      }
+      handleDialogClose(false);
+    } catch (error: any) {
+        toast({ title: "Error saving customer", description: error.message, variant: "destructive" });
     }
-    
-    handleDialogClose(false);
   };
 
-  const handleDeleteCustomer = (customerId: string) => {
-    // TODO: Add a check here if the customer has outstanding debts
-    setCustomers(customers.filter(c => c.id !== customerId));
-    toast({
-        title: "Customer Deleted",
-        description: "The customer has been removed.",
-        variant: "destructive"
-    });
+  const handleDeleteCustomer = async (customerId: string) => {
+    try {
+      // TODO: Add a check here if the customer has outstanding debts
+      await deleteCustomer(customerId);
+      setCustomers(customers.filter(c => c.id !== customerId));
+      toast({
+          title: "Customer Deleted",
+          description: "The customer has been removed.",
+          variant: "destructive"
+      });
+    } catch (error: any) {
+        toast({ title: "Error deleting customer", description: error.message, variant: "destructive" });
+    }
   }
 
   return (
@@ -132,33 +154,40 @@ export default function CustomersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {customers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableCell className="font-medium">{customer.name}</TableCell>
-                  <TableCell className="hidden md:table-cell">{customer.email}</TableCell>
-                  <TableCell className="hidden sm:table-cell">{customer.phone}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button aria-haspopup="true" size="icon" variant="ghost">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Toggle menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => handleOpenDialog(customer)}>
-                            <Edit className="mr-2 h-4 w-4" /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteCustomer(customer.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+              {loading ? (
+                <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground h-24">
+                        Loading...
+                    </TableCell>
                 </TableRow>
-              ))}
-              {customers.length === 0 && (
+              ) : customers.length > 0 ? (
+                customers.map((customer) => (
+                  <TableRow key={customer.id}>
+                    <TableCell className="font-medium">{customer.name}</TableCell>
+                    <TableCell className="hidden md:table-cell">{customer.email}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{customer.phone}</TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button aria-haspopup="true" size="icon" variant="ghost">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Toggle menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => handleOpenDialog(customer)}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteCustomer(customer.id)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
                 <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground h-24">
                         No customers found.
@@ -191,7 +220,7 @@ export default function CustomersPage() {
                 </div>
                 <div className="space-y-2">
                    <Label htmlFor="phone">Phone</Label>
-                   <Input id="phone" name="phone" type="tel" defaultValue={editingCustomer?.phone} />
+                   <Input id="phone" name="phone" type="tel" defaultValue={editingCustomer?.phone ?? ''} />
                 </div>
               </div>
               
