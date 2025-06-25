@@ -79,6 +79,8 @@ export default function KitchenPage() {
     category: "all",
     paymentMethod: "all",
     status: "all",
+    minAmount: "",
+    maxAmount: "",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
@@ -126,7 +128,13 @@ export default function KitchenPage() {
       (sale.date >= dateRange.from &&
         (!dateRange.to || sale.date <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
 
-    return searchMatch && categoryMatch && paymentMatch && statusMatch && dateMatch;
+    const minAmount = parseFloat(filters.minAmount);
+    const maxAmount = parseFloat(filters.maxAmount);
+    const amountMatch =
+      (isNaN(minAmount) || sale.total >= minAmount) &&
+      (isNaN(maxAmount) || sale.total <= maxAmount);
+
+    return searchMatch && categoryMatch && paymentMatch && statusMatch && dateMatch && amountMatch;
   });
 
   return (
@@ -180,6 +188,20 @@ export default function KitchenPage() {
                     <SelectItem value="Fulfilled">Fulfilled</SelectItem>
                 </SelectContent>
             </Select>
+            <Input
+              placeholder="Min Amount"
+              type="number"
+              value={filters.minAmount}
+              onChange={(e) => handleFilterChange("minAmount", e.target.value)}
+              className="w-32"
+            />
+            <Input
+              placeholder="Max Amount"
+              type="number"
+              value={filters.maxAmount}
+              onChange={(e) => handleFilterChange("maxAmount", e.target.value)}
+              className="w-32"
+            />
             <Popover>
                 <PopoverTrigger asChild>
                     <Button
