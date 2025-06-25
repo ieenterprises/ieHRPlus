@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { sales as initialSales, type Sale, type SaleItem, products as initialProducts, categories as initialCategories } from "@/lib/data";
+import { sales as initialSales, type Sale, products as initialProducts, categories as initialCategories } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -104,6 +104,9 @@ export default function KitchenPage() {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
+  const getCategoryFromId = (id: string) => initialCategories.find(c => c.id === id);
+  const getCategoryFromName = (name: string) => initialCategories.find(c => c.name === name);
+
   const filteredSales = sales.filter((sale) => {
     const searchTermLower = filters.searchTerm.toLowerCase();
     
@@ -130,9 +133,26 @@ export default function KitchenPage() {
 
     const minAmount = parseFloat(filters.minAmount);
     const maxAmount = parseFloat(filters.maxAmount);
+
+    const itemsForAmountCheck =
+      filters.category === "all"
+        ? sale.items
+        : sale.items.filter((item) => {
+            const product = initialProducts.find((p) => p.name === item.name);
+            if (!product) return false;
+            const category = getCategoryFromId(product.category);
+            const filterCategory = getCategoryFromName(filters.category);
+            return category?.id === filterCategory?.id;
+          });
+    
+    const totalForAmountCheck = itemsForAmountCheck.reduce((acc, item) => {
+        const product = initialProducts.find((p) => p.name === item.name);
+        return acc + (product ? product.price * item.quantity : 0);
+    }, 0);
+
     const amountMatch =
-      (isNaN(minAmount) || sale.total >= minAmount) &&
-      (isNaN(maxAmount) || sale.total <= maxAmount);
+      (isNaN(minAmount) || totalForAmountCheck >= minAmount) &&
+      (isNaN(maxAmount) || totalForAmountCheck <= maxAmount);
 
     return searchMatch && categoryMatch && paymentMatch && statusMatch && dateMatch && amountMatch;
   });
@@ -261,10 +281,9 @@ export default function KitchenPage() {
                     : sale.items.filter((item) => {
                         const product = initialProducts.find((p) => p.name === item.name);
                         if (!product) return false;
-                        const category = initialCategories.find(
-                          (c) => c.id === product.category
-                        );
-                        return category?.name === filters.category;
+                        const category = getCategoryFromId(product.category);
+                        const filterCategory = getCategoryFromName(filters.category);
+                        return category?.id === filterCategory?.id;
                       });
 
                 const totalForDisplay = itemsToDisplay.reduce((acc, item) => {
@@ -329,4 +348,3 @@ export default function KitchenPage() {
     </div>
   );
 }
-
