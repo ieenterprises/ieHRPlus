@@ -192,6 +192,7 @@ export type Sale = {
   customerName: string;
   employeeName: string;
   date: Date;
+  status: 'Pending' | 'Fulfilled';
 };
 
 export const sales: Sale[] = [
@@ -204,6 +205,7 @@ export const sales: Sale[] = [
         customerName: "Walk-in",
         employeeName: "Diana Prince",
         date: new Date("2024-07-29T10:30:00Z"),
+        status: "Pending",
     },
     {
         id: "sale-2",
@@ -214,6 +216,7 @@ export const sales: Sale[] = [
         customerName: "John Doe",
         employeeName: "Charlie Brown",
         date: new Date("2024-07-29T10:35:00Z"),
+        status: "Pending",
     },
     {
         id: "sale-3",
@@ -224,6 +227,7 @@ export const sales: Sale[] = [
         customerName: "Jane Smith",
         employeeName: "Diana Prince",
         date: new Date("2024-07-29T10:40:00Z"),
+        status: "Pending",
     },
     {
         id: "sale-4",
@@ -234,6 +238,7 @@ export const sales: Sale[] = [
         customerName: "Bruce Wayne",
         employeeName: "Bob Williams",
         date: new Date("2024-07-29T11:00:00Z"),
+        status: "Fulfilled",
     },
     {
         id: "sale-5",
@@ -244,5 +249,6 @@ export const sales: Sale[] = [
         customerName: "Walk-in",
         employeeName: "Charlie Brown",
         date: new Date("2024-07-29T11:15:00Z"),
+        status: "Pending",
     },
 ];

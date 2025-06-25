@@ -20,6 +20,9 @@ import {
 } from "@/components/ui/card";
 import { sales as initialSales, type Sale } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { CheckCircle2 } from "lucide-react";
 
 const getPaymentBadgeVariant = (method: string) => {
     switch (method.toLowerCase()) {
@@ -38,10 +41,23 @@ const getPaymentBadgeVariant = (method: string) => {
 export default function KitchenPage() {
   const [sales, setSales] = useState<Sale[]>(initialSales);
   const [isClient, setIsClient] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     setIsClient(true);
   }, []);
+  
+  const handleFulfillOrder = (saleId: string) => {
+    setSales((prevSales) =>
+      prevSales.map((sale) =>
+        sale.id === saleId ? { ...sale, status: "Fulfilled" } : sale
+      )
+    );
+    toast({
+      title: "Order Fulfilled",
+      description: "The order has been marked as fulfilled.",
+    });
+  };
 
   return (
     <div className="space-y-8">
@@ -67,6 +83,8 @@ export default function KitchenPage() {
                 <TableHead>Items</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-center">Payment</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -89,11 +107,24 @@ export default function KitchenPage() {
                         ))}
                     </div>
                   </TableCell>
+                   <TableCell>
+                    <Badge variant={sale.status === 'Fulfilled' ? 'secondary' : 'default'}>
+                      {sale.status}
+                    </Badge>
+                  </TableCell>
+                   <TableCell>
+                    {sale.status === 'Pending' && (
+                      <Button variant="outline" size="sm" onClick={() => handleFulfillOrder(sale.id)}>
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Fulfill
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
                {sales.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
                         No sales recorded yet.
                     </TableCell>
                 </TableRow>
