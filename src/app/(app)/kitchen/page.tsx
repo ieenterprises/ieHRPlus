@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -18,7 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { sales as initialSales, type Sale } from "@/lib/data";
+import { sales as initialSales, type Sale, products as initialProducts, categories as initialCategories } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +37,19 @@ const getPaymentBadgeVariant = (method: string) => {
             return 'outline';
     }
 }
+
+const getSaleCategoryNames = (saleItems: Sale['items']): string[] => {
+    const categoryIds = new Set(
+        saleItems.map(item => {
+            const product = initialProducts.find(p => p.name === item.name);
+            return product?.category;
+        }).filter((id): id is string => !!id)
+    );
+
+    return Array.from(categoryIds).map(id =>
+        initialCategories.find(c => c.id === id)?.name || 'Unknown'
+    );
+};
 
 
 export default function KitchenPage() {
@@ -81,6 +95,7 @@ export default function KitchenPage() {
                 <TableHead className="hidden sm:table-cell">Customer</TableHead>
                 <TableHead className="hidden md:table-cell">Employee</TableHead>
                 <TableHead>Items</TableHead>
+                <TableHead>Category</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-center">Payment</TableHead>
                 <TableHead>Status</TableHead>
@@ -96,6 +111,13 @@ export default function KitchenPage() {
                   <TableCell className="hidden md:table-cell">{sale.employeeName}</TableCell>
                    <TableCell>
                      {sale.items.map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                   </TableCell>
+                   <TableCell>
+                     <div className="flex flex-wrap gap-1">
+                        {getSaleCategoryNames(sale.items).map(category => (
+                            <Badge key={category} variant="outline" className="whitespace-nowrap">{category}</Badge>
+                        ))}
+                     </div>
                    </TableCell>
                   <TableCell className="text-right">${sale.total.toFixed(2)}</TableCell>
                   <TableCell className="text-center">
@@ -124,7 +146,7 @@ export default function KitchenPage() {
               ))}
                {sales.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
+                    <TableCell colSpan={10} className="text-center text-muted-foreground h-24">
                         No sales recorded yet.
                     </TableCell>
                 </TableRow>
