@@ -19,10 +19,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { users as initialUsers, type User } from "@/lib/data";
+import { users as initialUsers, type User, type UserRole } from "@/lib/data";
 import { posPermissions, backOfficePermissions, AnyPermission } from "@/lib/permissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { MoreHorizontal, PlusCircle, Edit, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -109,7 +109,7 @@ export default function TeamPage() {
       id: editingUser?.id,
       name: formData.get("name") as string,
       email: formData.get("email") as string,
-      role: formData.get("role") as "Manager" | "Cashier",
+      role: formData.get("role") as UserRole,
       permissions: Array.from(selectedPermissions),
     };
 
@@ -137,6 +137,21 @@ export default function TeamPage() {
         variant: "destructive"
     });
   }
+
+  const getRoleBadgeVariant = (role: UserRole): BadgeProps['variant'] => {
+    switch (role) {
+      case "Owner":
+        return "destructive";
+      case "Administrator":
+        return "default";
+      case "Manager":
+        return "secondary";
+      case "Cashier":
+        return "outline";
+      default:
+        return "outline";
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -185,7 +200,7 @@ export default function TeamPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={user.role === "Manager" ? "default" : "secondary"}>
+                    <Badge variant={getRoleBadgeVariant(user.role)}>
                       {user.role}
                     </Badge>
                   </TableCell>
@@ -244,8 +259,10 @@ export default function TeamPage() {
                       <SelectValue placeholder="Select a role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Cashier">Cashier</SelectItem>
+                      <SelectItem value="Owner">Owner</SelectItem>
+                      <SelectItem value="Administrator">Administrator</SelectItem>
                       <SelectItem value="Manager">Manager</SelectItem>
+                      <SelectItem value="Cashier">Cashier</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
