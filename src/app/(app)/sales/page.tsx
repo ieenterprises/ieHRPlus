@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
-import { products as initialProducts, type Product, customers, type Reservation, reservations as initialReservations, categories } from "@/lib/data";
+import { products as initialProducts, type Product, customers, type Reservation, reservations as initialReservations, categories, users, type User } from "@/lib/data";
 import {
   Card,
   CardContent,
@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, ReceiptText, CalendarIcon, DollarSign } from "lucide-react";
+import { Plus, Minus, X, CreditCard, ReceiptText, CalendarIcon, DollarSign, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -47,6 +47,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 type OrderItem = {
@@ -107,6 +108,38 @@ export default function SalesPage() {
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState("Cash");
   const [categoryFilter, setCategoryFilter] = useState("all");
+
+  // Clock-in state
+  const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
+  const [pin, setPin] = useState("");
+
+  const handleClockIn = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const user = users.find(u => u.pin === pin);
+    if (user) {
+        setLoggedInUser(user);
+        setPin("");
+        toast({
+            title: "Clocked In",
+            description: `Welcome, ${user.name}!`,
+        });
+    } else {
+        toast({
+            title: "Invalid PIN",
+            description: "The PIN you entered is incorrect. Please try again.",
+            variant: "destructive",
+        });
+        setPin("");
+    }
+  };
+
+  const handleClockOut = () => {
+    toast({
+        title: "Clocked Out",
+        description: `Goodbye, ${loggedInUser?.name}!`,
+    });
+    setLoggedInUser(null);
+  };
 
   const handleConfirmBooking = (status: Reservation['status']) => {
     const roomItem = orderItems.find(item => item.product.category === 'room');
@@ -336,127 +369,185 @@ export default function SalesPage() {
     (product) => categoryFilter === "all" || product.category === categoryFilter
   );
 
+  const canAcceptPayment = loggedInUser?.permissions.includes("ACCEPT_PAYMENTS") ?? false;
+
   return (
     <>
-      <div className="space-y-8">
-        <PageHeader title="Sales" description="Create a new order for products or room bookings." />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          <div className="lg:col-span-2 space-y-4">
-             <Tabs defaultValue="all" onValueChange={setCategoryFilter}>
-              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
-                <TabsTrigger value="all">All</TabsTrigger>
-                {categories.map((category) => (
-                  <TabsTrigger key={category.id} value={category.id}>
-                    {category.name}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {filteredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onAddToCart={handleAddToCart}
-                />
-              ))}
-               {filteredProducts.length === 0 && (
-                <Card className="col-span-full flex items-center justify-center h-64">
-                    <CardContent className="text-center text-muted-foreground p-6">
-                        <p className="text-lg font-medium">No products found</p>
-                        <p>There are no products in the selected category.</p>
-                    </CardContent>
+      {!loggedInUser && (
+        <Dialog open={!loggedInUser} onOpenChange={() => {}}>
+            <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+                <form onSubmit={handleClockIn}>
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl">Clock In</DialogTitle>
+                        <DialogDescription>
+                            Enter your 4-digit PIN to start a new sales session.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Label htmlFor="pin" className="sr-only">PIN</Label>
+                        <Input 
+                            id="pin" 
+                            type="password" 
+                            value={pin}
+                            onChange={(e) => setPin(e.target.value)}
+                            maxLength={4}
+                            required
+                            className="text-center text-4xl tracking-[1rem] font-bold h-16"
+                            autoFocus
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button type="submit" className="w-full" size="lg">Clock In</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+      )}
+
+      <div className={cn(!loggedInUser && "opacity-25 pointer-events-none blur-sm transition-all duration-300")}>
+        <div className="space-y-8">
+            {loggedInUser && (
+                <Card className="flex items-center justify-between p-4 bg-secondary">
+                    <div>
+                        <p className="text-sm text-secondary-foreground">Logged in as</p>
+                        <p className="font-bold text-lg text-secondary-foreground">{loggedInUser.name} ({loggedInUser.role})</p>
+                    </div>
+                    <Button variant="outline" onClick={handleClockOut}>
+                        <LogOut className="mr-2 h-4 w-4" /> Clock Out
+                    </Button>
                 </Card>
             )}
-            </div>
-          </div>
 
-          <div className="lg:sticky lg:top-8">
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Order</CardTitle>
-                <CardDescription>Order #105</CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                {orderItems.length === 0 ? (
-                  <div className="flex items-center justify-center p-6 h-48 text-muted-foreground">
-                    No items in order
-                  </div>
-                ) : (
-                  <ScrollArea className="max-h-64">
-                    <div className="p-6 pt-0 space-y-4">
-                      {orderItems.map((item) => (
-                        <div key={item.product.id} className="flex items-center">
-                          <div className="flex-1">
-                            <p className="font-medium">{item.product.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              ${item.product.price.toFixed(2)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleUpdateQuantity(item.product.id, -1)}
-                              disabled={item.product.category === 'room'}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span>{item.quantity}</span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleUpdateQuantity(item.product.id, 1)}
-                              disabled={item.product.category === 'room'}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <p className="w-16 text-right font-medium">
-                            ${(item.product.price * item.quantity).toFixed(2)}
-                          </p>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 ml-2"
-                            onClick={() => handleRemoveItem(item.product.id)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+            <PageHeader title="Sales" description="Create a new order for products or room bookings." />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            <div className="lg:col-span-2 space-y-4">
+                <Tabs defaultValue="all" onValueChange={setCategoryFilter}>
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
+                    <TabsTrigger value="all">All</TabsTrigger>
+                    {categories.map((category) => (
+                    <TabsTrigger key={category.id} value={category.id}>
+                        {category.name}
+                    </TabsTrigger>
+                    ))}
+                </TabsList>
+                </Tabs>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {filteredProducts.map((product) => (
+                    <ProductCard
+                    key={product.id}
+                    product={product}
+                    onAddToCart={handleAddToCart}
+                    />
+                ))}
+                {filteredProducts.length === 0 && (
+                    <Card className="col-span-full flex items-center justify-center h-64">
+                        <CardContent className="text-center text-muted-foreground p-6">
+                            <p className="text-lg font-medium">No products found</p>
+                            <p>There are no products in the selected category.</p>
+                        </CardContent>
+                    </Card>
                 )}
-              </CardContent>
-              {orderItems.length > 0 && (
-                <CardFooter className="flex-col !items-stretch p-4 space-y-4 border-t">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span>${subtotal.toFixed(2)}</span>
+                </div>
+            </div>
+
+            <div className="lg:sticky lg:top-8">
+                <Card>
+                <CardHeader>
+                    <CardTitle>Current Order</CardTitle>
+                    <CardDescription>Order #105</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {orderItems.length === 0 ? (
+                    <div className="flex items-center justify-center p-6 h-48 text-muted-foreground">
+                        No items in order
                     </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Tax (8%)</span>
-                      <span>${tax.toFixed(2)}</span>
+                    ) : (
+                    <ScrollArea className="max-h-64">
+                        <div className="p-6 pt-0 space-y-4">
+                        {orderItems.map((item) => (
+                            <div key={item.product.id} className="flex items-center">
+                            <div className="flex-1">
+                                <p className="font-medium">{item.product.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                ${item.product.price.toFixed(2)}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleUpdateQuantity(item.product.id, -1)}
+                                disabled={item.product.category === 'room'}
+                                >
+                                <Minus className="h-3 w-3" />
+                                </Button>
+                                <span>{item.quantity}</span>
+                                <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleUpdateQuantity(item.product.id, 1)}
+                                disabled={item.product.category === 'room'}
+                                >
+                                <Plus className="h-3 w-3" />
+                                </Button>
+                            </div>
+                            <p className="w-16 text-right font-medium">
+                                ${(item.product.price * item.quantity).toFixed(2)}
+                            </p>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 ml-2"
+                                onClick={() => handleRemoveItem(item.product.id)}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                            </div>
+                        ))}
+                        </div>
+                    </ScrollArea>
+                    )}
+                </CardContent>
+                {orderItems.length > 0 && (
+                    <CardFooter className="flex-col !items-stretch p-4 space-y-4 border-t">
+                    <div className="space-y-2">
+                        <div className="flex justify-between">
+                        <span>Subtotal</span>
+                        <span>${subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                        <span>Tax (8%)</span>
+                        <span>${tax.toFixed(2)}</span>
+                        </div>
+                        <Separator />
+                        <div className="flex justify-between font-bold text-lg">
+                        <span>Total</span>
+                        <span>${total.toFixed(2)}</span>
+                        </div>
                     </div>
-                    <Separator />
-                    <div className="flex justify-between font-bold text-lg">
-                      <span>Total</span>
-                      <span>${total.toFixed(2)}</span>
+                    <div className="flex flex-col gap-2">
+                         <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="w-full">
+                                    <Button size="lg" className="w-full" onClick={handlePayment} disabled={!canAcceptPayment}>
+                                        <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
+                                    </Button>
+                                </div>
+                            </TooltipTrigger>
+                            {!canAcceptPayment && (
+                                <TooltipContent>
+                                    <p>You don't have permission to accept payments.</p>
+                                </TooltipContent>
+                            )}
+                        </Tooltip>
                     </div>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button size="lg" className="w-full" onClick={handlePayment}>
-                      <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
-                    </Button>
-                  </div>
-                </CardFooter>
-              )}
-            </Card>
-          </div>
+                    </CardFooter>
+                )}
+                </Card>
+            </div>
+            </div>
         </div>
       </div>
       <Dialog open={isReservationPaymentDialogOpen} onOpenChange={setIsReservationPaymentDialogOpen}>

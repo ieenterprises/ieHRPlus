@@ -56,6 +56,7 @@ export const users: User[] = [
   { id: "2", name: "Bob Williams", email: "bob@orderflow.com", role: "Administrator", avatarUrl: "https://placehold.co/100x100.png", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[], pin: "2222" },
   { id: "3", name: "Charlie Brown", email: "charlie@orderflow.com", role: "Manager", avatarUrl: "https://placehold.co/100x100.png", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_EMPLOYEES"], pin: "3333" },
   { id: "4", name: "Diana Prince", email: "diana@orderflow.com", role: "Cashier", avatarUrl: "https://placehold.co/100x100.png", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS"], pin: "4444" },
+  { id: "5", name: "Eve Adams", email: "eve@orderflow.com", role: "Cashier", avatarUrl: "https://placehold.co/100x100.png", permissions: ["LOGIN_WITH_PIN", "VIEW_ALL_RECEIPTS"], pin: "5555" },
 ];
 
 export type KitchenOrder = {
@@ -253,3 +254,4 @@ export const sales: Sale[] = [
         status: "Pending",
     },
 ];
+
