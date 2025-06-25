@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { sales as initialSales, type Sale, products as initialProducts, categories as initialCategories } from "@/lib/data";
+import { sales as initialSales, type Sale, type SaleItem, products as initialProducts, categories as initialCategories } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -254,23 +254,43 @@ export default function KitchenPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredSales.map((sale) => (
+              {filteredSales.map((sale) => {
+                const itemsToDisplay =
+                  filters.category === "all"
+                    ? sale.items
+                    : sale.items.filter((item) => {
+                        const product = initialProducts.find((p) => p.name === item.name);
+                        if (!product) return false;
+                        const category = initialCategories.find(
+                          (c) => c.id === product.category
+                        );
+                        return category?.name === filters.category;
+                      });
+
+                const totalForDisplay = itemsToDisplay.reduce((acc, item) => {
+                  const product = initialProducts.find((p) => p.name === item.name);
+                  return acc + (product ? product.price * item.quantity : 0);
+                }, 0);
+                
+                const categoriesForDisplay = getSaleCategoryNames(itemsToDisplay);
+
+                return (
                 <TableRow key={sale.id}>
                   <TableCell className="font-medium">#{sale.orderNumber}</TableCell>
                   <TableCell>{isClient ? format(sale.date, "LLL dd, y HH:mm") : null}</TableCell>
                   <TableCell className="hidden sm:table-cell">{sale.customerName}</TableCell>
                   <TableCell className="hidden md:table-cell">{sale.employeeName}</TableCell>
                    <TableCell>
-                     {sale.items.map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                     {itemsToDisplay.map(item => `${item.name} (x${item.quantity})`).join(', ')}
                    </TableCell>
                    <TableCell>
                      <div className="flex flex-wrap gap-1">
-                        {getSaleCategoryNames(sale.items).map(category => (
+                        {categoriesForDisplay.map(category => (
                             <Badge key={category} variant="outline" className="whitespace-nowrap">{category}</Badge>
                         ))}
                      </div>
                    </TableCell>
-                  <TableCell className="text-right">${sale.total.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">${totalForDisplay.toFixed(2)}</TableCell>
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-1">
                         {sale.paymentMethods.map(method => (
@@ -294,7 +314,7 @@ export default function KitchenPage() {
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
                {filteredSales.length === 0 && (
                 <TableRow>
                     <TableCell colSpan={10} className="text-center text-muted-foreground h-24">
@@ -309,3 +329,4 @@ export default function KitchenPage() {
     </div>
   );
 }
+
