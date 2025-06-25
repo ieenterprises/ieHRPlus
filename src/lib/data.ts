@@ -190,6 +190,7 @@ export type Sale = {
   total: number;
   paymentMethods: string[];
   customerName: string;
+  employeeName: string;
   date: Date;
 };
 
@@ -201,6 +202,7 @@ export const sales: Sale[] = [
         total: 4.75,
         paymentMethods: ["Cash"],
         customerName: "Walk-in",
+        employeeName: "Diana Prince",
         date: new Date("2024-07-29T10:30:00Z"),
     },
     {
@@ -210,6 +212,7 @@ export const sales: Sale[] = [
         total: 8.50,
         paymentMethods: ["Credit"],
         customerName: "John Doe",
+        employeeName: "Charlie Brown",
         date: new Date("2024-07-29T10:35:00Z"),
     },
     {
@@ -219,6 +222,7 @@ export const sales: Sale[] = [
         total: 12.50,
         paymentMethods: ["Card"],
         customerName: "Jane Smith",
+        employeeName: "Diana Prince",
         date: new Date("2024-07-29T10:40:00Z"),
     },
     {
@@ -228,6 +232,7 @@ export const sales: Sale[] = [
         total: 200,
         paymentMethods: ["Card"],
         customerName: "Bruce Wayne",
+        employeeName: "Bob Williams",
         date: new Date("2024-07-29T11:00:00Z"),
     },
     {
@@ -237,6 +242,7 @@ export const sales: Sale[] = [
         total: 6.00,
         paymentMethods: ["Cash", "Card"],
         customerName: "Walk-in",
+        employeeName: "Charlie Brown",
         date: new Date("2024-07-29T11:15:00Z"),
     },
 ];

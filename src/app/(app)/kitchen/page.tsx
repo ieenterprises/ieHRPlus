@@ -63,6 +63,7 @@ export default function KitchenPage() {
                 <TableHead>Order #</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead className="hidden sm:table-cell">Customer</TableHead>
+                <TableHead className="hidden md:table-cell">Employee</TableHead>
                 <TableHead>Items</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-center">Payment</TableHead>
@@ -74,6 +75,7 @@ export default function KitchenPage() {
                   <TableCell className="font-medium">#{sale.orderNumber}</TableCell>
                   <TableCell>{isClient ? format(sale.date, "LLL dd, y HH:mm") : null}</TableCell>
                   <TableCell className="hidden sm:table-cell">{sale.customerName}</TableCell>
+                  <TableCell className="hidden md:table-cell">{sale.employeeName}</TableCell>
                    <TableCell>
                      {sale.items.map(item => `${item.name} (x${item.quantity})`).join(', ')}
                    </TableCell>
@@ -91,7 +93,7 @@ export default function KitchenPage() {
               ))}
                {sales.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
                         No sales recorded yet.
                     </TableCell>
                 </TableRow>
