@@ -19,7 +19,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { type User, type UserRole } from "@/lib/types";
-import { posPermissions, backOfficePermissions, AnyPermission } from "@/lib/permissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { MoreHorizontal, PlusCircle, Edit, Trash2 } from "lucide-react";
@@ -48,9 +47,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { supabase } from "@/lib/supabase";
 import { addUser, updateUser, deleteUser } from "@/app/actions/users";
 
@@ -60,7 +56,6 @@ const EMPTY_USER: Partial<User> = {
   email: "",
   role: "Cashier",
   avatar_url: "https://placehold.co/100x100.png",
-  permissions: [],
   pin: "",
 };
 
@@ -70,7 +65,6 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
-  const [selectedPermissions, setSelectedPermissions] = useState<Set<AnyPermission>>(new Set());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -92,35 +86,16 @@ export default function TeamPage() {
   }, [toast]);
 
   const handleOpenDialog = (user: Partial<User> | null) => {
-    if (user && 'permissions' in user) {
-      setEditingUser(user);
-      setSelectedPermissions(new Set(user.permissions as AnyPermission[]));
-    } else {
-      setEditingUser(EMPTY_USER);
-      setSelectedPermissions(new Set());
-    }
+    setEditingUser(user ? user : EMPTY_USER);
     setIsDialogOpen(true);
   };
   
   const handleDialogClose = (open: boolean) => {
     if (!open) {
       setEditingUser(null);
-      setSelectedPermissions(new Set());
     }
     setIsDialogOpen(open);
   }
-
-  const handlePermissionToggle = (permission: AnyPermission, checked: boolean) => {
-    setSelectedPermissions(prev => {
-        const newPermissions = new Set(prev);
-        if (checked) {
-            newPermissions.add(permission);
-        } else {
-            newPermissions.delete(permission);
-        }
-        return newPermissions;
-    });
-  };
 
   const handleSaveUser = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -131,13 +106,13 @@ export default function TeamPage() {
       email: formData.get("email") as string,
       role: formData.get("role") as UserRole,
       pin: formData.get("pin") as string,
-      permissions: Array.from(selectedPermissions),
+      permissions: [], // Permissions handled by role for now
     };
 
     try {
         if (editingUser?.id) {
             await updateUser(editingUser.id, userData);
-            setTeam(team.map(u => u.id === editingUser.id ? { ...u, ...userData } as User : u));
+            setTeam(team.map(u => u.id === editingUser.id ? { ...u, ...userData, permissions: u.permissions } as User : u));
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
             const newUser = await addUser({ ...userData, avatar_url: EMPTY_USER.avatar_url! });
@@ -266,7 +241,7 @@ export default function TeamPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
-          <DialogContent className="sm:max-w-xl">
+          <DialogContent className="sm:max-w-md">
             <form onSubmit={handleSaveUser}>
               <DialogHeader>
                 <DialogTitle>{editingUser?.id ? 'Edit User' : 'Add New User'}</DialogTitle>
@@ -275,7 +250,7 @@ export default function TeamPage() {
                 </DialogDescription>
               </DialogHeader>
               
-              <div className="grid grid-cols-2 gap-x-4 gap-y-4 py-4">
+              <div className="grid gap-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
                   <Input id="name" name="name" defaultValue={editingUser?.name} required />
@@ -306,54 +281,13 @@ export default function TeamPage() {
                     type="password" 
                     defaultValue={editingUser?.pin || ''} 
                     required 
-                    pattern="\d{4}" 
+                    pattern="\\d{4}" 
                     maxLength={4} 
                     title="PIN must be 4 digits."
                   />
                 </div>
               </div>
-              
-              <Accordion type="multiple" className="w-full" defaultValue={['pos', 'back-office']}>
-                <AccordionItem value="pos">
-                    <AccordionTrigger className="text-lg font-semibold">POS Permissions</AccordionTrigger>
-                    <AccordionContent>
-                        <ScrollArea className="h-48">
-                            <div className="space-y-4 p-1 pr-4">
-                                {(Object.keys(posPermissions) as (keyof typeof posPermissions)[]).map((key) => (
-                                    <div key={key} className="flex items-center justify-between">
-                                        <Label htmlFor={key} className="flex-1 pr-4">{posPermissions[key].label}</Label>
-                                        <Switch
-                                            id={key}
-                                            checked={selectedPermissions.has(key)}
-                                            onCheckedChange={(checked) => handlePermissionToggle(key, checked)}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </ScrollArea>
-                    </AccordionContent>
-                </AccordionItem>
-                 <AccordionItem value="back-office">
-                    <AccordionTrigger className="text-lg font-semibold">Back Office Permissions</AccordionTrigger>
-                    <AccordionContent>
-                         <ScrollArea className="h-48">
-                            <div className="space-y-4 p-1 pr-4">
-                                {(Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[]).map((key) => (
-                                    <div key={key} className="flex items-center justify-between">
-                                        <Label htmlFor={key} className="flex-1 pr-4">{backOfficePermissions[key].label}</Label>
-                                        <Switch
-                                            id={key}
-                                            checked={selectedPermissions.has(key)}
-                                            onCheckedChange={(checked) => handlePermissionToggle(key, checked)}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </ScrollArea>
-                    </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-              
+                            
               <DialogFooter className="pt-4">
                 <Button type="submit">Save Changes</Button>
               </DialogFooter>

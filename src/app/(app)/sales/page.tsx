@@ -103,9 +103,12 @@ export default function SalesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
 
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
+  const [isClockInDialogOpen, setIsClockInDialogOpen] = useState(true);
+
   const { toast } = useToast();
   
   // State for the reservation payment dialog
@@ -114,10 +117,6 @@ export default function SalesPage() {
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState("Cash");
   const [categoryFilter, setCategoryFilter] = useState("all");
-
-  // Clock-in state
-  const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
-  const [pin, setPin] = useState("");
 
   useEffect(() => {
     async function fetchData() {
@@ -139,12 +138,21 @@ export default function SalesPage() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if(users.length > 0) {
+      setIsClockInDialogOpen(!loggedInUser)
+    }
+  }, [loggedInUser, users]);
+
+
   const handleClockIn = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const pin = formData.get("pin");
     const user = users.find(u => u.pin === pin);
     if (user) {
         setLoggedInUser(user);
-        setPin("");
+        setIsClockInDialogOpen(false);
         toast({
             title: "Clocked In",
             description: `Welcome, ${user.name}!`,
@@ -155,17 +163,9 @@ export default function SalesPage() {
             description: "The PIN you entered is incorrect. Please try again.",
             variant: "destructive",
         });
-        setPin("");
     }
   };
 
-  const handleClockOut = () => {
-    toast({
-        title: "Clocked Out",
-        description: `Goodbye, ${loggedInUser?.name}!`,
-    });
-    setLoggedInUser(null);
-  };
 
   const handleConfirmBooking = async (status: 'Confirmed' | 'Checked-in') => {
     const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
@@ -409,45 +409,6 @@ export default function SalesPage() {
     (product) => categoryFilter === "all" || product.category_id === categoryFilter
   );
 
-  const canAcceptPayment = loggedInUser?.permissions ? (loggedInUser.permissions as string[]).includes("ACCEPT_PAYMENTS") : false;
-
-  if (!loggedInUser) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
-        <Card className="w-full max-w-sm">
-          <form onSubmit={handleClockIn}>
-            <CardHeader>
-              <CardTitle className="text-2xl">Clock In</CardTitle>
-              <CardDescription>
-                Enter your 4-digit PIN to start a new sales session.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Label htmlFor="pin" className="sr-only">
-                PIN
-              </Label>
-              <Input
-                id="pin"
-                type="password"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                maxLength={4}
-                required
-                className="text-center text-4xl tracking-[1rem] font-bold h-16"
-                autoFocus
-              />
-            </CardContent>
-            <CardFooter>
-              <Button type="submit" className="w-full" size="lg">
-                Clock In
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <TooltipProvider>
         <div className="space-y-8">
@@ -457,7 +418,7 @@ export default function SalesPage() {
                         <p className="text-sm text-secondary-foreground">Logged in as</p>
                         <p className="font-bold text-lg text-secondary-foreground">{loggedInUser.name} ({loggedInUser.role})</p>
                     </div>
-                    <Button variant="outline" onClick={handleClockOut}>
+                    <Button variant="outline" onClick={() => setLoggedInUser(null)}>
                         <LogOut className="mr-2 h-4 w-4" /> Clock Out
                     </Button>
                 </Card>
@@ -576,16 +537,11 @@ export default function SalesPage() {
                          <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className="w-full">
-                                    <Button size="lg" className="w-full" onClick={handlePayment} disabled={!canAcceptPayment}>
+                                    <Button size="lg" className="w-full" onClick={handlePayment}>
                                         <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
                                     </Button>
                                 </div>
                             </TooltipTrigger>
-                            {!canAcceptPayment && (
-                                <TooltipContent>
-                                    <p>You don't have permission to accept payments.</p>
-                                </TooltipContent>
-                            )}
                         </Tooltip>
                     </div>
                     </CardFooter>
@@ -766,6 +722,33 @@ export default function SalesPage() {
                         Complete Sale
                     </Button>
                 </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        <Dialog open={isClockInDialogOpen} onOpenChange={setIsClockInDialogOpen}>
+            <DialogContent className="sm:max-w-sm">
+                 <form onSubmit={handleClockIn}>
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl">Clock In</DialogTitle>
+                        <DialogDescription>
+                            Enter your 4-digit PIN to start a new sales session.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-8">
+                        <Label htmlFor="pin" className="sr-only">PIN</Label>
+                        <Input
+                            id="pin"
+                            name="pin"
+                            type="password"
+                            maxLength={4}
+                            required
+                            className="text-center text-4xl tracking-[1rem] font-bold h-16"
+                            autoFocus
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button type="submit" className="w-full" size="lg">Clock In</Button>
+                    </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     </TooltipProvider>
