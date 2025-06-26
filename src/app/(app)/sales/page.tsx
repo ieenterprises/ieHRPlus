@@ -411,40 +411,45 @@ export default function SalesPage() {
 
   const canAcceptPayment = loggedInUser?.permissions ? (loggedInUser.permissions as string[]).includes("ACCEPT_PAYMENTS") : false;
 
+  if (!loggedInUser) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
+        <Card className="w-full max-w-sm">
+          <form onSubmit={handleClockIn}>
+            <CardHeader>
+              <CardTitle className="text-2xl">Clock In</CardTitle>
+              <CardDescription>
+                Enter your 4-digit PIN to start a new sales session.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Label htmlFor="pin" className="sr-only">
+                PIN
+              </Label>
+              <Input
+                id="pin"
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                maxLength={4}
+                required
+                className="text-center text-4xl tracking-[1rem] font-bold h-16"
+                autoFocus
+              />
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" className="w-full" size="lg">
+                Clock In
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <TooltipProvider>
-      {!loggedInUser && (
-        <Dialog open={!loggedInUser} onOpenChange={() => {}}>
-            <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
-                <form onSubmit={handleClockIn}>
-                    <DialogHeader>
-                        <DialogTitle className="text-2xl">Clock In</DialogTitle>
-                        <DialogDescription>
-                            Enter your 4-digit PIN to start a new sales session.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                        <Label htmlFor="pin" className="sr-only">PIN</Label>
-                        <Input 
-                            id="pin" 
-                            type="password" 
-                            value={pin}
-                            onChange={(e) => setPin(e.target.value)}
-                            maxLength={4}
-                            required
-                            className="text-center text-4xl tracking-[1rem] font-bold h-16"
-                            autoFocus
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button type="submit" className="w-full" size="lg">Clock In</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-      )}
-
-      <div className={cn(!loggedInUser && "opacity-25 pointer-events-none blur-sm transition-all duration-300")}>
         <div className="space-y-8">
             {loggedInUser && (
                 <Card className="flex items-center justify-between p-4 bg-secondary">
@@ -589,7 +594,6 @@ export default function SalesPage() {
             </div>
             </div>
         </div>
-      </div>
       <Dialog open={isReservationPaymentDialogOpen} onOpenChange={setIsReservationPaymentDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>

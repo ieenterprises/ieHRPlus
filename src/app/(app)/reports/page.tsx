@@ -75,12 +75,9 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function fetchReportData() {
-        if (!date?.from) return;
+        if (!date?.from || !supabase) return;
         setLoading(true);
-        if (!supabase) {
-            setLoading(false);
-            return;
-        }
+        
 
         const { data: sales, error } = await supabase
             .from('sales')
@@ -89,10 +86,9 @@ export default function ReportsPage() {
             .lte('created_at', date.to ? date.to.toISOString() : new Date().toISOString());
 
         const { data: products, error: productsError } = await supabase.from('products').select('*, categories(name)');
-        const { data: categories, error: categoriesError } = await supabase.from('categories').select('*');
-
-        if (error || productsError || categoriesError) {
-            console.error(error || productsError || categoriesError);
+        
+        if (error || productsError) {
+            console.error(error || productsError);
             setLoading(false);
             return;
         }
