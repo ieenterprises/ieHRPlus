@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,8 +38,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
-import { addCustomer, updateCustomer, deleteCustomer } from "@/app/actions/customers";
 
 const EMPTY_CUSTOMER: Partial<Customer> = {
   name: "",
@@ -47,30 +45,19 @@ const EMPTY_CUSTOMER: Partial<Customer> = {
   phone: "",
 };
 
+const MOCK_CUSTOMERS: Customer[] = [
+    { id: "cust_1", name: "Walk-in Customer", email: "walkin@example.com", phone: null, created_at: "2023-01-01T10:00:00Z" },
+    { id: "cust_2", name: "Alice Johnson", email: "alice.j@email.com", phone: "111-222-3333", created_at: "2023-05-10T11:30:00Z" },
+    { id: "cust_3", name: "Bob Williams", email: "bob.w@email.com", phone: "444-555-6666", created_at: "2023-06-15T14:00:00Z" },
+];
+
+
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
+  const [loading, setLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Partial<Customer> | null>(null);
   const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      setLoading(true);
-      if (!supabase) {
-        setLoading(false);
-        return;
-      }
-      const { data, error } = await supabase.from("customers").select("*").order('created_at', { ascending: false });
-      if (error) {
-        toast({ title: "Error fetching customers", description: error.message, variant: "destructive" });
-      } else {
-        setCustomers(data as Customer[]);
-      }
-      setLoading(false);
-    };
-    fetchCustomers();
-  }, [toast]);
 
   const handleOpenDialog = (customer: Partial<Customer> | null) => {
     setEditingCustomer(customer ? customer : EMPTY_CUSTOMER);
@@ -96,23 +83,25 @@ export default function CustomersPage() {
 
     try {
       if (editingCustomer?.id) {
-        await updateCustomer(editingCustomer.id, customerData);
         setCustomers(customers.map(c => c.id === editingCustomer.id ? { ...c, ...customerData } as Customer : c));
         toast({ title: "Customer Updated", description: `${customerData.name}'s details have been updated.` });
       } else {
-        const newCustomer = await addCustomer(customerData);
-        setCustomers([newCustomer as Customer, ...customers]);
+        const newCustomer: Customer = { 
+            id: `cust_${new Date().getTime()}`, 
+            created_at: new Date().toISOString(),
+            ...customerData 
+        };
+        setCustomers([newCustomer, ...customers]);
         toast({ title: "Customer Added", description: `${customerData.name} has been added.` });
       }
       handleDialogClose(false);
     } catch (error: any) {
-        toast({ title: "Error saving customer", description: error.message, variant: "destructive" });
+        toast({ title: "Error saving customer", description: "An unexpected error occurred.", variant: "destructive" });
     }
   };
 
   const handleDeleteCustomer = async (customerId: string) => {
     try {
-      await deleteCustomer(customerId);
       setCustomers(customers.filter(c => c.id !== customerId));
       toast({
           title: "Customer Deleted",
@@ -120,7 +109,7 @@ export default function CustomersPage() {
           variant: "destructive"
       });
     } catch (error: any) {
-        toast({ title: "Error deleting customer", description: error.message, variant: "destructive" });
+        toast({ title: "Error deleting customer", description: "An unexpected error occurred.", variant: "destructive" });
     }
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,8 +46,6 @@ import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Product, type Category } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { supabase } from "@/lib/supabase";
-import { addProduct, updateProduct, deleteProduct, addCategory, updateCategory, deleteCategory } from "@/app/actions/inventory";
 
 
 const EMPTY_PRODUCT: Partial<Product> = {
@@ -62,11 +60,26 @@ const EMPTY_CATEGORY: Partial<Category> = {
   name: "",
 };
 
+const MOCK_CATEGORIES: Category[] = [
+    { id: 'cat_1', name: 'Food', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'cat_2', name: 'Beverages', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'cat_3', name: 'Merchandise', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'cat_4', name: 'Room', created_at: "2023-01-01T10:00:00Z" },
+];
+
+const MOCK_PRODUCTS: Product[] = [
+    { id: 'prod_1', name: 'Cheeseburger', price: 12.99, stock: 50, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_2', name: 'Fries', price: 4.50, stock: 100, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_3', name: 'Cola', price: 2.50, stock: 200, category_id: 'cat_2', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_4', name: 'T-Shirt', price: 25.00, stock: 30, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_5', name: 'King Suite', price: 299.99, stock: 5, category_id: 'cat_4', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+];
+
 
 export default function InventoryPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
+  const [loading, setLoading] = useState(false);
 
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
@@ -75,30 +88,6 @@ export default function InventoryPage() {
   const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
   
   const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchData = async () => {
-        setLoading(true);
-        if (!supabase) {
-            setLoading(false);
-            return;
-        }
-        const [productsRes, categoriesRes] = await Promise.all([
-            supabase.from('products').select('*').order('created_at', { ascending: false }),
-            supabase.from('categories').select('*').order('name')
-        ]);
-
-        if (productsRes.error) toast({ title: "Error fetching products", description: productsRes.error.message, variant: "destructive" });
-        else setProducts(productsRes.data as Product[]);
-
-        if (categoriesRes.error) toast({ title: "Error fetching categories", description: categoriesRes.error.message, variant: "destructive" });
-        else setCategories(categoriesRes.data as Category[]);
-
-        setLoading(false);
-    };
-    fetchData();
-  }, [toast]);
-
 
   const getCategoryName = (categoryId: string | null) => {
     if (!categoryId) return "N/A";
@@ -118,11 +107,10 @@ export default function InventoryPage() {
   
   const handleDeleteProduct = async (productId: string) => {
     try {
-      await deleteProduct(productId);
       setProducts(products.filter(p => p.id !== productId));
       toast({ title: "Product Deleted", description: "The product has been removed from inventory." });
     } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Error", description: "Could not delete product.", variant: "destructive" });
     }
   };
   
@@ -145,17 +133,21 @@ export default function InventoryPage() {
 
     try {
         if (editingProduct?.id) {
-            await updateProduct(editingProduct.id, productData);
             setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...productData } as Product : p));
             toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
         } else {
-            const newProduct = await addProduct(productData);
-            setProducts([newProduct as Product, ...products]);
+            const newProduct: Product = { 
+                id: `prod_${new Date().getTime()}`,
+                image_url: EMPTY_PRODUCT.image_url!,
+                created_at: new Date().toISOString(),
+                ...productData 
+            };
+            setProducts([newProduct, ...products]);
             toast({ title: "Product Added", description: `${newProduct.name} has been added to inventory.` });
         }
         handleProductDialogClose(false);
     } catch (error: any) {
-         toast({ title: "Error", description: error.message, variant: "destructive" });
+         toast({ title: "Error", description: "Could not save product.", variant: "destructive" });
     }
   };
 
@@ -180,11 +172,10 @@ export default function InventoryPage() {
       return;
     }
     try {
-        await deleteCategory(categoryId);
         setCategories(categories.filter((c) => c.id !== categoryId));
         toast({ title: "Category Deleted" });
     } catch(error: any) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+        toast({ title: "Error", description: "Could not delete category.", variant: "destructive" });
     }
   };
 
@@ -204,17 +195,20 @@ export default function InventoryPage() {
 
     try {
         if (editingCategory?.id) {
-            await updateCategory(editingCategory.id, categoryData);
             setCategories(categories.map((c) => c.id === editingCategory.id ? ({ ...c, ...categoryData } as Category) : c));
             toast({ title: "Category Updated" });
         } else {
-            const newCategory = await addCategory(categoryData);
-            setCategories([...categories, newCategory as Category]);
+            const newCategory: Category = { 
+                id: `cat_${new Date().getTime()}`,
+                created_at: new Date().toISOString(),
+                ...categoryData
+            };
+            setCategories([...categories, newCategory]);
             toast({ title: "Category Added" });
         }
         handleCategoryDialogClose(false);
     } catch (error: any) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+        toast({ title: "Error", description: "Could not save category.", variant: "destructive" });
     }
   };
 

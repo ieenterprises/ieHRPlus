@@ -30,13 +30,32 @@ import { DateRange } from "react-day-picker";
 import { useState, useEffect } from "react";
 import { subDays, format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/lib/supabase";
-import type { Sale, Product, Category, User } from "@/lib/types";
 
 type SalesData = {
     name: string;
     sales: number;
 };
+
+// Mock Data
+const MOCK_SALES_BY_ITEM: SalesData[] = [
+    { name: "Cheeseburger", sales: 4500.50 },
+    { name: "Fries", sales: 2200.00 },
+    { name: "Cola", sales: 1800.75 },
+    { name: "T-Shirt", sales: 3200.00 },
+    { name: "King Suite", sales: 15000.00 },
+];
+
+const MOCK_SALES_BY_CATEGORY: SalesData[] = [
+    { name: "Room", sales: 15000.00 },
+    { name: "Food", sales: 6700.50 },
+    { name: "Merchandise", sales: 3200.00 },
+    { name: "Beverages", sales: 1800.75 },
+];
+
+const MOCK_SALES_BY_EMPLOYEE: SalesData[] = [
+    { name: "Admin", sales: 20500.25 },
+    { name: "John Cashier", sales: 16201.00 },
+];
 
 function SalesChart({ data, title }: { data: SalesData[], title: string }) {
   return (
@@ -74,59 +93,14 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchReportData() {
-        if (!date?.from || !supabase) return;
-        setLoading(true);
-        
-
-        const { data: sales, error } = await supabase
-            .from('sales')
-            .select('*, users(name), items')
-            .gte('created_at', date.from.toISOString())
-            .lte('created_at', date.to ? date.to.toISOString() : new Date().toISOString());
-
-        const { data: products, error: productsError } = await supabase.from('products').select('*, categories(name)');
-        
-        if (error || productsError) {
-            console.error(error || productsError);
-            setLoading(false);
-            return;
-        }
-
-        // Sales by Item
-        const itemSales: { [key: string]: number } = {};
-        sales.forEach(sale => {
-            (sale.items as any[]).forEach(item => {
-                itemSales[item.name] = (itemSales[item.name] || 0) + (item.price * item.quantity);
-            });
-        });
-        setSalesByItem(Object.entries(itemSales).map(([name, sales]) => ({ name, sales })).sort((a,b) => b.sales - a.sales));
-
-        // Sales by Category
-        const categorySales: { [key: string]: number } = {};
-        sales.forEach(sale => {
-            (sale.items as any[]).forEach(item => {
-                const product = (products as any[]).find(p => p.id === item.id);
-                if (product && product.categories) {
-                    const categoryName = product.categories.name;
-                    categorySales[categoryName] = (categorySales[categoryName] || 0) + (item.price * item.quantity);
-                }
-            });
-        });
-        setSalesByCategory(Object.entries(categorySales).map(([name, sales]) => ({ name, sales })).sort((a,b) => b.sales - a.sales));
-
-        // Sales by Employee
-        const employeeSales: { [key: string]: number } = {};
-        sales.forEach(sale => {
-            if (sale.users?.name) {
-                employeeSales[sale.users.name] = (employeeSales[sale.users.name] || 0) + sale.total;
-            }
-        });
-        setSalesByEmployee(Object.entries(employeeSales).map(([name, sales]) => ({ name, sales })).sort((a,b) => b.sales - a.sales));
-
+    setLoading(true);
+    // Simulate fetching and processing report data
+    setTimeout(() => {
+        setSalesByItem(MOCK_SALES_BY_ITEM);
+        setSalesByCategory(MOCK_SALES_BY_CATEGORY);
+        setSalesByEmployee(MOCK_SALES_BY_EMPLOYEE);
         setLoading(false);
-    }
-    fetchReportData();
+    }, 500);
   }, [date]);
 
   return (

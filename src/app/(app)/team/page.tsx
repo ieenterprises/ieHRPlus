@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,8 +47,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
-import { addUser, updateUser, deleteUser } from "@/app/actions/users";
 
 
 const EMPTY_USER: Partial<User> = {
@@ -59,31 +57,19 @@ const EMPTY_USER: Partial<User> = {
   pin: "",
 };
 
+const MOCK_USERS: User[] = [
+    { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_3", name: "Jane Manager", email: "jane.m@orderflow.com", role: "Manager", pin: "4321", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+];
+
 
 export default function TeamPage() {
-  const [team, setTeam] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [team, setTeam] = useState<User[]>(MOCK_USERS);
+  const [loading, setLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
   const { toast } = useToast();
-
-  useEffect(() => {
-    async function fetchUsers() {
-        setLoading(true);
-        if (!supabase) {
-            setLoading(false);
-            return;
-        }
-        const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
-        if(error) {
-            toast({ title: "Error fetching users", description: error.message, variant: 'destructive' });
-        } else {
-            setTeam(data as User[]);
-        }
-        setLoading(false);
-    }
-    fetchUsers();
-  }, [toast]);
 
   const handleOpenDialog = (user: Partial<User> | null) => {
     setEditingUser(user ? user : EMPTY_USER);
@@ -111,23 +97,26 @@ export default function TeamPage() {
 
     try {
         if (editingUser?.id) {
-            await updateUser(editingUser.id, userData);
             setTeam(team.map(u => u.id === editingUser.id ? { ...u, ...userData, permissions: u.permissions } as User : u));
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
-            const newUser = await addUser({ ...userData, avatar_url: EMPTY_USER.avatar_url! });
-            setTeam([newUser as User, ...team]);
+            const newUser: User = { 
+                id: `user_${new Date().getTime()}`,
+                avatar_url: EMPTY_USER.avatar_url!,
+                created_at: new Date().toISOString(),
+                ...userData, 
+            };
+            setTeam([newUser, ...team]);
             toast({ title: "User Added", description: `${newUser.name} has been added to the team.` });
         }
         handleDialogClose(false);
     } catch(error: any) {
-        toast({ title: "Error saving user", description: error.message, variant: "destructive" });
+        toast({ title: "Error saving user", description: "An unexpected error occurred", variant: "destructive" });
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
     try {
-        await deleteUser(userId);
         setTeam(team.filter(u => u.id !== userId));
         toast({
             title: "User Deleted",
@@ -135,7 +124,7 @@ export default function TeamPage() {
             variant: "destructive"
         });
     } catch (error: any) {
-        toast({ title: "Error deleting user", description: error.message, variant: "destructive" });
+        toast({ title: "Error deleting user", description: "An unexpected error occurred", variant: "destructive" });
     }
   }
 

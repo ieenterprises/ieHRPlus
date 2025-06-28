@@ -12,10 +12,25 @@ import {
   Tooltip,
 } from "recharts";
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
-import { subMonths, format, startOfMonth, endOfMonth } from "date-fns";
+import { subMonths, format } from "date-fns";
 
 type MonthlySales = { name: string; total: number };
+
+// Mock Data
+const MOCK_SALES_DATA: MonthlySales[] = [
+  { name: "Jan", total: 1200 }, { name: "Feb", total: 1800 }, { name: "Mar", total: 2200 },
+  { name: "Apr", total: 2500 }, { name: "May", total: 3100 }, { name: "Jun", total: 2900 },
+  { name: "Jul", total: 3500 }, { name: "Aug", total: 3300 }, { name: "Sep", total: 4000 },
+  { name: "Oct", total: 4200 }, { name: "Nov", total: 4800 }, { name: "Dec", total: 5500 },
+];
+
+const MOCK_STATS = {
+    totalRevenue: 54231.89,
+    ordersToday: 25,
+    totalSales: 1234,
+    activeStaff: 4
+};
+
 
 export default function DashboardPage() {
   const [salesData, setSalesData] = useState<MonthlySales[]>([]);
@@ -28,76 +43,33 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      if (!supabase) {
-        setLoading(false);
-        return;
-      }
-
-      const today = new Date();
-      const lastMonth = subMonths(today, 1);
-      
-      const { data: sales, error: salesError } = await supabase.from('sales').select('total, created_at');
-      const { count: userCount, error: userError } = await supabase.from('users').select('*', { count: 'exact' });
-      
-      if (salesError || userError) {
-        console.error("Error fetching dashboard data:", salesError || userError);
-        setLoading(false);
-        return;
-      }
-      
-      const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
-      const totalSales = sales.length;
-
-      const salesToday = sales.filter(sale => new Date(sale.created_at!).toDateString() === today.toDateString());
-      const ordersToday = salesToday.length;
-      
-      const salesLastMonth = sales.filter(sale => {
-        const saleDate = new Date(sale.created_at!);
-        return saleDate >= startOfMonth(lastMonth) && saleDate <= endOfMonth(lastMonth);
-      });
-      const revenueLastMonth = salesLastMonth.reduce((sum, sale) => sum + sale.total, 0);
-
-      const revenueThisMonth = sales
-        .filter(sale => new Date(sale.created_at!).getMonth() === today.getMonth())
-        .reduce((sum, sale) => sum + sale.total, 0);
-        
-      const revenueGrowth = revenueLastMonth > 0 ? ((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100 : 0;
-
-      setStats({
-        totalRevenue: totalRevenue,
-        ordersToday: ordersToday,
-        totalSales: totalSales,
-        activeStaff: userCount ?? 0,
-      });
-      
-      // Prepare chart data for last 12 months
-      const monthlySales: MonthlySales[] = [];
-      for (let i = 11; i >= 0; i--) {
-          const date = subMonths(today, i);
-          const monthName = format(date, "MMM");
-          const monthStart = startOfMonth(date);
-          const monthEnd = endOfMonth(date);
-
-          const totalForMonth = sales
-              .filter(sale => {
-                  const saleDate = new Date(sale.created_at!);
-                  return saleDate >= monthStart && saleDate <= monthEnd;
-              })
-              .reduce((sum, sale) => sum + sale.total, 0);
-          
-          monthlySales.push({ name: monthName, total: totalForMonth });
-      }
-
-      setSalesData(monthlySales);
+    setLoading(true);
+    // Simulate fetching data
+    setTimeout(() => {
+      setSalesData(MOCK_SALES_DATA);
+      setStats(MOCK_STATS);
       setLoading(false);
-    }
-    fetchData();
+    }, 500);
   }, []);
 
   if (loading) {
-    return <div>Loading dashboard...</div>;
+    return (
+        <div className="space-y-8">
+            <PageHeader title="Dashboard" description="Loading dashboard data..." />
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card><CardHeader><CardTitle>Loading...</CardTitle></CardHeader><CardContent>...</CardContent></Card>
+                <Card><CardHeader><CardTitle>Loading...</CardTitle></CardHeader><CardContent>...</CardContent></Card>
+                <Card><CardHeader><CardTitle>Loading...</CardTitle></CardHeader><CardContent>...</CardContent></Card>
+                <Card><CardHeader><CardTitle>Loading...</CardTitle></CardHeader><CardContent>...</CardContent></Card>
+            </div>
+             <Card>
+                <CardHeader><CardTitle>Sales Overview</CardTitle></CardHeader>
+                <CardContent className="pl-2 h-[350px] flex items-center justify-center">
+                    <p>Loading chart...</p>
+                </CardContent>
+            </Card>
+        </div>
+    )
   }
 
   return (

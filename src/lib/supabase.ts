@@ -14,7 +14,7 @@ if (supabaseUrl && supabaseAnonKey) {
   }
 } else {
   console.warn(
-    "Supabase URL and Anon Key must be provided. Please create a .env.local file in the project root (you can copy .env.local.example) and add your NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY. The app will run in a disconnected, read-only mode."
+    "Supabase integration is disconnected. The app is running in a local development mode with mock data. To connect to a database, provide Supabase credentials in your environment variables."
   );
 }
 

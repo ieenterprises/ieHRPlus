@@ -56,10 +56,38 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { supabase } from "@/lib/supabase";
-import { addSale, updateProductStock } from "@/app/actions/sales";
-import { addReservation } from "@/app/actions/reservations";
-import { saveTicket, getOpenTickets, deleteTicket } from "@/app/actions/tickets";
+
+// Mock Data
+const MOCK_CATEGORIES: Category[] = [
+    { id: 'cat_1', name: 'Food', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'cat_2', name: 'Beverages', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'cat_3', name: 'Merchandise', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'cat_4', name: 'Room', created_at: "2023-01-01T10:00:00Z" },
+];
+
+const MOCK_PRODUCTS: Product[] = [
+    { id: 'prod_1', name: 'Cheeseburger', price: 12.99, stock: 50, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_2', name: 'Fries', price: 4.50, stock: 100, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_3', name: 'Cola', price: 2.50, stock: 200, category_id: 'cat_2', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_4', name: 'T-Shirt', price: 25.00, stock: 30, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_5', name: 'King Suite', price: 299.99, stock: 5, category_id: 'cat_4', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_6', name: 'Queen Room', price: 199.99, stock: 10, category_id: 'cat_4', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+];
+
+const MOCK_CUSTOMERS: Customer[] = [
+    { id: "cust_1", name: "Walk-in Customer", email: "walkin@example.com", phone: null, created_at: "2023-01-01T10:00:00Z" },
+    { id: "cust_2", name: "Alice Johnson", email: "alice.j@email.com", phone: "111-222-3333", created_at: "2023-05-10T11:30:00Z" },
+    { id: "cust_3", name: "Bob Williams", email: "bob.w@email.com", phone: "444-555-6666", created_at: "2023-06-15T14:00:00Z" },
+];
+
+const MOCK_USERS: User[] = [
+    { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: [], avatar_url: '', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: [], avatar_url: '', created_at: "2023-01-01T10:00:00Z" },
+];
+
+const MOCK_OPEN_TICKETS: (OpenTicket & { users: {name: string | null}, customers: {name: string | null} })[] = [
+    { id: "ticket_1", ticket_name: "Table 5", total: 45.98, created_at: new Date(Date.now() - 60*60*1000).toISOString(), employee_id: 'user_2', customer_id: null, items: [{id: 'prod_1', name: 'Cheeseburger', quantity: 2, price: 12.99}], users: { name: 'John Cashier'}, customers: null, notes: "No onions" },
+];
 
 
 type OrderItem = {
@@ -109,13 +137,13 @@ function ProductCard({
 
 export default function SalesPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
+  const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
+  const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
 
-  const [openTickets, setOpenTickets] = useState<(OpenTicket & { users: {name: string | null}, customers: {name: string | null} })[]>([]);
+  const [openTickets, setOpenTickets] = useState<(OpenTicket & { users: {name: string | null}, customers: {name: string | null} })[]>(MOCK_OPEN_TICKETS);
   const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
 
@@ -131,28 +159,6 @@ export default function SalesPage() {
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState("Cash");
   const [categoryFilter, setCategoryFilter] = useState("all");
-
-  useEffect(() => {
-    async function fetchData() {
-        if (!supabase) {
-            return;
-        }
-        const [productsRes, categoriesRes, customersRes, usersRes, ticketsRes] = await Promise.all([
-            supabase.from('products').select('*').order('name'),
-            supabase.from('categories').select('*').order('name'),
-            supabase.from('customers').select('*').order('name'),
-            supabase.from('users').select('*'),
-            getOpenTickets()
-        ]);
-
-        if (productsRes.data) setProducts(productsRes.data);
-        if (categoriesRes.data) setCategories(categoriesRes.data);
-        if (customersRes.data) setCustomers(customersRes.data);
-        if (usersRes.data) setUsers(usersRes.data);
-        if (ticketsRes) setOpenTickets(ticketsRes as any);
-    }
-    fetchData();
-  }, []);
 
   useEffect(() => {
     if(users.length > 0) {
@@ -193,20 +199,11 @@ export default function SalesPage() {
         });
         return;
     }
-
-    const newReservationData = {
-      guest_name: guestName,
-      product_id: roomItem.product.id,
-      check_in: dateRange.from.toISOString(),
-      check_out: dateRange.to.toISOString(),
-      status: status,
-    };
     
     try {
         if (activeTicketId) {
-            await deleteTicket(activeTicketId);
+            handleDeleteTicket(activeTicketId, true);
         }
-        await addReservation(newReservationData);
         if(status === 'Checked-in') {
             await handleCompleteSale(true);
         }
@@ -222,7 +219,7 @@ export default function SalesPage() {
         });
 
     } catch(error: any) {
-         toast({ title: "Error", description: error.message, variant: "destructive" });
+         toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
     }
   };
 
@@ -371,43 +368,23 @@ export default function SalesPage() {
         return;
     }
     
-    const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
-    
-    let allPayments = [...payments];
-    if (creditInfo) {
-        allPayments.push({ method: 'Credit', amount: creditInfo.amount });
-    }
-
-    const saleData = {
-        items: saleItems,
-        total,
-        payment_methods: allPayments.map(p => p.method),
-        customer_id: creditInfo?.customerId ?? null,
-        employee_id: loggedInUser?.id ?? null,
-        status: 'Pending'
-    };
-
     try {
         if (activeTicketId) {
-            await deleteTicket(activeTicketId);
+            handleDeleteTicket(activeTicketId, true);
         }
 
-        const newSale = await addSale(saleData, creditInfo);
-        
         const stockUpdates = orderItems
             .filter(item => getCategoryName(item.product.category_id) !== 'Room')
-            .map(item => ({ id: item.product.id, stock: item.product.stock - item.quantity }));
+            .map(item => ({ id: item.product.id, newStock: item.product.stock - item.quantity }));
         
-        await updateProductStock(stockUpdates);
-
         setProducts(prevProducts =>
             prevProducts.map(p => {
                 const update = stockUpdates.find(u => u.id === p.id);
-                return update ? { ...p, stock: update.stock } : p;
+                return update ? { ...p, stock: update.newStock } : p;
             })
         );
         
-        let toastDescription = `Order #${newSale.order_number} complete. Total: $${total.toFixed(2)}.`;
+        let toastDescription = `Order complete. Total: $${total.toFixed(2)}.`;
         if (creditInfo) {
             const customer = customers.find(c => c.id === creditInfo.customerId);
             toastDescription += ` $${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
@@ -422,7 +399,7 @@ export default function SalesPage() {
         setPayments([]);
         setIsSplitPaymentDialogOpen(false);
     } catch (error: any) {
-        toast({ title: "Error completing sale", description: error.message, variant: "destructive" });
+        toast({ title: "Error completing sale", description: "An unexpected error occurred.", variant: "destructive" });
     }
   };
   
@@ -445,24 +422,32 @@ export default function SalesPage() {
 
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
-    const ticketData = {
-        items: saleItems,
-        total: total,
-        employee_id: loggedInUser?.id ?? null,
-        ticket_name: `Ticket @ ${format(new Date(), 'HH:mm')}`,
-    };
-
     try {
         if (activeTicketId) {
-            await deleteTicket(activeTicketId);
+            // Update existing ticket
+            setOpenTickets(prev => prev.map(t => t.id === activeTicketId ? { ...t, items: saleItems, total } : t));
+            toast({ title: "Order Updated", description: "The open ticket has been updated." });
+        } else {
+            // Save new ticket
+            const newTicket = {
+                id: `ticket_${new Date().getTime()}`,
+                items: saleItems,
+                total: total,
+                employee_id: loggedInUser?.id ?? null,
+                users: { name: loggedInUser?.name ?? 'N/A' },
+                customers: null,
+                customer_id: null,
+                ticket_name: `Ticket @ ${format(new Date(), 'HH:mm')}`,
+                created_at: new Date().toISOString(),
+                notes: null,
+            };
+            setOpenTickets(prev => [newTicket, ...prev]);
+            toast({ title: "Order Saved", description: "The order has been saved as an open ticket." });
         }
-
-        const newTicket = await saveTicket(ticketData);
-        setOpenTickets(prev => [newTicket as any, ...prev.filter(t => t.id !== activeTicketId)]);
+        
         handleClearOrder();
-        toast({ title: "Order Saved", description: "The order has been saved as an open ticket." });
     } catch (error: any) {
-        toast({ title: "Error Saving Order", description: error.message, variant: "destructive" });
+        toast({ title: "Error Saving Order", description: "An unexpected error occurred.", variant: "destructive" });
     }
   };
 
@@ -487,19 +472,18 @@ export default function SalesPage() {
     setIsTicketsDialogOpen(false);
   };
 
-  const handleDeleteTicket = async (ticketId: string) => {
-    if (!window.confirm("Are you sure you want to permanently delete this saved order?")) {
+  const handleDeleteTicket = async (ticketId: string, silent = false) => {
+    if (!silent && !window.confirm("Are you sure you want to permanently delete this saved order?")) {
       return;
     }
     try {
-      await deleteTicket(ticketId);
       setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
       if (activeTicketId === ticketId) {
         handleClearOrder();
       }
-      toast({ title: "Ticket Deleted", variant: "destructive" });
+      if (!silent) toast({ title: "Ticket Deleted", variant: "destructive" });
     } catch (error: any) {
-      toast({ title: "Error Deleting Ticket", description: error.message, variant: "destructive" });
+      if (!silent) toast({ title: "Error Deleting Ticket", description: "An unexpected error occurred.", variant: "destructive" });
     }
   };
 
@@ -646,11 +630,12 @@ export default function SalesPage() {
                          <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className="w-full">
-                                    <Button size="lg" className="w-full" onClick={handlePayment}>
+                                    <Button size="lg" className="w-full" onClick={handlePayment} disabled={!loggedInUser}>
                                         <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
                                     </Button>
                                 </div>
                             </TooltipTrigger>
+                            {!loggedInUser && <TooltipContent><p>Please clock in to process payments.</p></TooltipContent>}
                         </Tooltip>
                     </div>
                     </CardFooter>

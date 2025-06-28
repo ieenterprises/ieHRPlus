@@ -39,8 +39,6 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/lib/supabase";
-import { fulfillOrder } from "@/app/actions/sales";
 
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -56,12 +54,38 @@ const getPaymentBadgeVariant = (method: string) => {
     }
 }
 
+const MOCK_CATEGORIES: Category[] = [
+    { id: 'cat_1', name: 'Food', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'cat_2', name: 'Beverages', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'cat_3', name: 'Merchandise', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'cat_4', name: 'Room', created_at: "2023-01-01T10:00:00Z" },
+];
+
+const MOCK_PRODUCTS: Product[] = [
+    { id: 'prod_1', name: 'Cheeseburger', price: 12.99, stock: 50, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_2', name: 'Fries', price: 4.50, stock: 100, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_3', name: 'Cola', price: 2.50, stock: 200, category_id: 'cat_2', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_4', name: 'T-Shirt', price: 25.00, stock: 30, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+];
+
+const MOCK_USERS: User[] = [
+    { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: [], avatar_url: '', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: [], avatar_url: '', created_at: "2023-01-01T10:00:00Z" },
+];
+
+const MOCK_SALES: Sale[] = [
+    { id: 'sale_1', order_number: 1001, total: 17.49, status: 'Pending', created_at: new Date().toISOString(), employee_id: 'user_2', customer_id: 'cust_1', items: [{id: 'prod_1', name: 'Cheeseburger', quantity: 1, price: 12.99}, {id: 'prod_2', name: 'Fries', quantity: 1, price: 4.50}], payment_methods: ['Cash'], customers: {name: 'Walk-in'}, users: {name: 'John Cashier'} },
+    { id: 'sale_2', order_number: 1002, total: 27.50, status: 'Fulfilled', created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(), employee_id: 'user_2', customer_id: 'cust_2', items: [{id: 'prod_4', name: 'T-Shirt', quantity: 1, price: 25.00}, {id: 'prod_3', name: 'Cola', quantity: 1, price: 2.50}], payment_methods: ['Card'], customers: {name: 'Alice Johnson'}, users: {name: 'John Cashier'} },
+    { id: 'sale_3', order_number: 1003, total: 2.50, status: 'Pending', created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(), employee_id: 'user_2', customer_id: 'cust_1', items: [{id: 'prod_3', name: 'Cola', quantity: 1, price: 2.50}], payment_methods: ['Cash'], customers: {name: 'Walk-in'}, users: {name: 'John Cashier'} },
+];
+
+
 export default function KitchenPage() {
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sales, setSales] = useState<Sale[]>(MOCK_SALES);
+  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
+  const [users, setUsers] = useState<User[]>(MOCK_USERS);
+  const [loading, setLoading] = useState(false);
 
   const { toast } = useToast();
   
@@ -76,40 +100,8 @@ export default function KitchenPage() {
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
-  useEffect(() => {
-    async function fetchData() {
-        setLoading(true);
-        if (!supabase) {
-            setLoading(false);
-            return;
-        }
-        const [salesRes, productsRes, categoriesRes, usersRes] = await Promise.all([
-            supabase.from('sales').select('*, customers ( name ), users ( name )').order('created_at', { ascending: false }),
-            supabase.from('products').select('*'),
-            supabase.from('categories').select('*'),
-            supabase.from('users').select('*'),
-        ]);
-
-        if (salesRes.error) toast({ title: "Error", description: salesRes.error.message, variant: "destructive" });
-        else setSales(salesRes.data as Sale[]);
-
-        if (productsRes.error) toast({ title: "Error", description: productsRes.error.message, variant: "destructive" });
-        else setProducts(productsRes.data as Product[]);
-
-        if (categoriesRes.error) toast({ title: "Error", description: categoriesRes.error.message, variant: "destructive" });
-        else setCategories(categoriesRes.data as Category[]);
-        
-        if (usersRes.error) toast({ title: "Error", description: usersRes.error.message, variant: "destructive" });
-        else setUsers(usersRes.data as User[]);
-
-        setLoading(false);
-    }
-    fetchData();
-  }, [toast]);
-  
   const handleFulfillOrder = async (saleId: string) => {
     try {
-        await fulfillOrder(saleId);
         setSales((prevSales) =>
             prevSales.map((sale) =>
                 sale.id === saleId ? { ...sale, status: "Fulfilled" } : sale
@@ -120,7 +112,7 @@ export default function KitchenPage() {
             description: "The order has been marked as fulfilled.",
         });
     } catch (error: any) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+        toast({ title: "Error", description: "Could not fulfill order.", variant: "destructive" });
     }
   };
   

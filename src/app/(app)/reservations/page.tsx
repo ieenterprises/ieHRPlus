@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 import { Calendar as CalendarIcon, PlusCircle } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 
@@ -49,14 +49,28 @@ import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { type Reservation, type Product } from "@/lib/types";
-import { supabase } from "@/lib/supabase";
-import { addReservation } from "@/app/actions/reservations";
+import { type Reservation, type Product, type Category } from "@/lib/types";
+
+const MOCK_CATEGORIES: Category[] = [
+    { id: 'cat_4', name: 'Room', created_at: "2023-01-01T10:00:00Z" },
+];
+
+const MOCK_ROOM_PRODUCTS: Product[] = [
+    { id: 'prod_5', name: 'King Suite', price: 299.99, stock: 5, category_id: 'cat_4', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: 'prod_6', name: 'Queen Room', price: 199.99, stock: 10, category_id: 'cat_4', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
+];
+
+const MOCK_RESERVATIONS: Reservation[] = [
+    { id: "res_1", product_id: 'prod_5', guest_name: "Charlie Davis", check_in: new Date().toISOString(), check_out: addDays(new Date(), 3).toISOString(), status: "Checked-in", created_at: "2023-08-10T12:00:00Z", products: { name: "King Suite" } },
+    { id: "res_2", product_id: 'prod_6', guest_name: "Dana White", check_in: addDays(new Date(), 1).toISOString(), check_out: addDays(new Date(), 5).toISOString(), status: "Confirmed", created_at: "2023-08-09T15:00:00Z", products: { name: "Queen Room" } },
+    { id: "res_3", product_id: 'prod_5', guest_name: "Eve Black", check_in: addDays(new Date(), -5).toISOString(), check_out: addDays(new Date(), -2).toISOString(), status: "Checked-out", created_at: "2023-08-01T11:00:00Z", products: { name: "King Suite" } },
+];
+
 
 export default function ReservationsPage() {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [rooms, setRooms] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [reservations, setReservations] = useState<Reservation[]>(MOCK_RESERVATIONS);
+  const [rooms, setRooms] = useState<Product[]>(MOCK_ROOM_PRODUCTS);
+  const [loading, setLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
@@ -64,34 +78,6 @@ export default function ReservationsPage() {
   const [roomId, setRoomId] = useState<string>("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   
-  useEffect(() => {
-    async function fetchData() {
-        setLoading(true);
-        if (!supabase) {
-            setLoading(false);
-            return;
-        }
-        const [reservationsRes, roomsRes, categoriesRes] = await Promise.all([
-            supabase.from('reservations').select('*, products ( name )').order('check_in', { ascending: true }),
-            supabase.from('products').select('*, categories ( name )'),
-            supabase.from('categories').select('id, name').eq('name', 'Room').single()
-        ]);
-        
-        if (reservationsRes.error) toast({title: "Error", description: reservationsRes.error.message, variant: "destructive"});
-        else setReservations(reservationsRes.data as Reservation[]);
-
-        if (roomsRes.error) toast({title: "Error", description: roomsRes.error.message, variant: "destructive"});
-        else {
-            const roomCategory = categoriesRes.data;
-            if (roomCategory) {
-                setRooms((roomsRes.data as any[]).filter(p => p.category_id === roomCategory.id));
-            }
-        }
-        setLoading(false);
-    }
-    fetchData();
-  }, [toast]);
-
   const handleAddReservation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!guestName || !roomId || !dateRange?.from || !dateRange?.to) {
@@ -112,10 +98,15 @@ export default function ReservationsPage() {
     };
 
     try {
-        const newReservation = await addReservation(newReservationData);
-        // Manually add room name for UI until re-fetch
         const room = rooms.find(r => r.id === roomId);
-        setReservations([{ ...newReservation, products: { name: room?.name || '' } } as Reservation, ...reservations]);
+        const newReservation: Reservation = {
+            id: `res_${new Date().getTime()}`,
+            created_at: new Date().toISOString(),
+            products: { name: room?.name || '' },
+            ...newReservationData
+        };
+
+        setReservations([newReservation, ...reservations]);
         setIsDialogOpen(false);
         
         setGuestName("");
@@ -129,7 +120,7 @@ export default function ReservationsPage() {
     } catch (error: any) {
         toast({
             title: "Error creating reservation",
-            description: error.message,
+            description: "An unexpected error occurred.",
             variant: "destructive",
         });
     }
