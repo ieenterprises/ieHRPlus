@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
-import { type Product, type Customer, type Reservation, type Category, type User, type SaleItem } from "@/lib/types";
+import { type Product, type Customer, type Reservation, type Category, type User, type SaleItem, type OpenTicket } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, LogOut } from "lucide-react";
+import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, LogOut, Save, Ticket, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -47,10 +47,19 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/lib/supabase";
 import { addSale, updateProductStock } from "@/app/actions/sales";
 import { addReservation } from "@/app/actions/reservations";
+import { saveTicket, getOpenTickets, deleteTicket } from "@/app/actions/tickets";
 
 
 type OrderItem = {
@@ -106,6 +115,10 @@ export default function SalesPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
 
+  const [openTickets, setOpenTickets] = useState<(OpenTicket & { users: {name: string | null}, customers: {name: string | null} })[]>([]);
+  const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
+  const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
   const [isClockInDialogOpen, setIsClockInDialogOpen] = useState(true);
@@ -124,17 +137,19 @@ export default function SalesPage() {
         if (!supabase) {
             return;
         }
-        const [productsRes, categoriesRes, customersRes, usersRes] = await Promise.all([
+        const [productsRes, categoriesRes, customersRes, usersRes, ticketsRes] = await Promise.all([
             supabase.from('products').select('*').order('name'),
             supabase.from('categories').select('*').order('name'),
             supabase.from('customers').select('*').order('name'),
             supabase.from('users').select('*'),
+            getOpenTickets()
         ]);
 
         if (productsRes.data) setProducts(productsRes.data);
         if (categoriesRes.data) setCategories(categoriesRes.data);
         if (customersRes.data) setCustomers(customersRes.data);
         if (usersRes.data) setUsers(usersRes.data);
+        if (ticketsRes) setOpenTickets(ticketsRes as any);
     }
     fetchData();
   }, []);
@@ -188,6 +203,9 @@ export default function SalesPage() {
     };
     
     try {
+        if (activeTicketId) {
+            await deleteTicket(activeTicketId);
+        }
         await addReservation(newReservationData);
         if(status === 'Checked-in') {
             await handleCompleteSale(true);
@@ -196,7 +214,7 @@ export default function SalesPage() {
         setIsReservationPaymentDialogOpen(false);
         setGuestName("");
         setDateRange(undefined);
-        setOrderItems([]);
+        handleClearOrder();
 
         toast({
           title: status === 'Checked-in' ? "Room Checked In" : "Room Reserved",
@@ -370,6 +388,10 @@ export default function SalesPage() {
     };
 
     try {
+        if (activeTicketId) {
+            await deleteTicket(activeTicketId);
+        }
+
         const newSale = await addSale(saleData, creditInfo);
         
         const stockUpdates = orderItems
@@ -396,7 +418,7 @@ export default function SalesPage() {
             description: toastDescription,
         });
 
-        setOrderItems([]);
+        handleClearOrder();
         setPayments([]);
         setIsSplitPaymentDialogOpen(false);
     } catch (error: any) {
@@ -409,6 +431,77 @@ export default function SalesPage() {
   const filteredProducts = products.filter(
     (product) => categoryFilter === "all" || product.category_id === categoryFilter
   );
+
+  const handleClearOrder = () => {
+    setOrderItems([]);
+    setActiveTicketId(null);
+  };
+
+  const handleSaveOrder = async () => {
+    if (orderItems.length === 0) {
+      toast({ title: "Empty Order", description: "Cannot save an empty order.", variant: "destructive" });
+      return;
+    }
+
+    const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
+    
+    const ticketData = {
+        items: saleItems,
+        total: total,
+        employee_id: loggedInUser?.id ?? null,
+        ticket_name: `Ticket @ ${format(new Date(), 'HH:mm')}`,
+    };
+
+    try {
+        if (activeTicketId) {
+            await deleteTicket(activeTicketId);
+        }
+
+        const newTicket = await saveTicket(ticketData);
+        setOpenTickets(prev => [newTicket as any, ...prev.filter(t => t.id !== activeTicketId)]);
+        handleClearOrder();
+        toast({ title: "Order Saved", description: "The order has been saved as an open ticket." });
+    } catch (error: any) {
+        toast({ title: "Error Saving Order", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleLoadTicket = (ticket: OpenTicket) => {
+    if (orderItems.length > 0 && !activeTicketId) {
+      if (!window.confirm("Loading this ticket will replace your current unsaved order. Are you sure?")) {
+        return;
+      }
+    }
+
+    const newOrderItems: OrderItem[] = (ticket.items as SaleItem[]).map(item => {
+        const product = products.find(p => p.id === item.id);
+        return product ? { product, quantity: item.quantity } : null;
+    }).filter((item): item is OrderItem => item !== null);
+    
+    if (newOrderItems.length !== (ticket.items as SaleItem[]).length) {
+        toast({ title: "Error Loading Ticket", description: "Some items in this ticket no longer exist and were removed.", variant: "destructive" });
+    }
+
+    setOrderItems(newOrderItems);
+    setActiveTicketId(ticket.id);
+    setIsTicketsDialogOpen(false);
+  };
+
+  const handleDeleteTicket = async (ticketId: string) => {
+    if (!window.confirm("Are you sure you want to permanently delete this saved order?")) {
+      return;
+    }
+    try {
+      await deleteTicket(ticketId);
+      setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
+      if (activeTicketId === ticketId) {
+        handleClearOrder();
+      }
+      toast({ title: "Ticket Deleted", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: "Error Deleting Ticket", description: error.message, variant: "destructive" });
+    }
+  };
 
   return (
     <TooltipProvider>
@@ -425,7 +518,13 @@ export default function SalesPage() {
                 </Card>
             )}
 
-            <PageHeader title="Sales" description="Create a new order for products or room bookings." />
+            <div className="flex items-center justify-between">
+                <PageHeader title="Sales" description="Create a new order for products or room bookings." />
+                <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
+                    <Ticket className="mr-2 h-4 w-4" />
+                    Open Tickets ({openTickets.length})
+                </Button>
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             <div className="lg:col-span-2 space-y-4">
                 <Tabs defaultValue="all" onValueChange={setCategoryFilter}>
@@ -461,7 +560,8 @@ export default function SalesPage() {
             <div className="lg:sticky lg:top-8">
                 <Card>
                 <CardHeader>
-                    <CardTitle>Current Order</CardTitle>
+                    <CardTitle>{activeTicketId ? "Saved Order" : "Current Order"}</CardTitle>
+                    {activeTicketId && <CardDescription>Now editing a saved ticket.</CardDescription>}
                 </CardHeader>
                 <CardContent className="p-0">
                     {orderItems.length === 0 ? (
@@ -533,6 +633,14 @@ export default function SalesPage() {
                         <span>Total</span>
                         <span>${total.toFixed(2)}</span>
                         </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                         <Button variant="secondary" onClick={handleSaveOrder}>
+                            <Save className="mr-2 h-4 w-4" /> {activeTicketId ? "Update" : "Save"} Order
+                        </Button>
+                         <Button variant="outline" onClick={handleClearOrder}>
+                            <X className="mr-2 h-4 w-4" /> {activeTicketId ? "Cancel" : "Clear"}
+                        </Button>
                     </div>
                     <div className="flex flex-col gap-2">
                          <Tooltip>
@@ -750,6 +858,57 @@ export default function SalesPage() {
                         <Button type="submit" className="w-full" size="lg">Clock In</Button>
                     </DialogFooter>
                 </form>
+            </DialogContent>
+        </Dialog>
+        <Dialog open={isTicketsDialogOpen} onOpenChange={setIsTicketsDialogOpen}>
+            <DialogContent className="sm:max-w-3xl">
+                <DialogHeader>
+                    <DialogTitle>Open Tickets</DialogTitle>
+                    <DialogDescription>
+                        Select a saved ticket to load it, or delete it.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <ScrollArea className="h-[60vh]">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Ticket Name</TableHead>
+                                    <TableHead>Employee</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {openTickets.length > 0 ? (
+                                    openTickets.map(ticket => (
+                                        <TableRow key={ticket.id}>
+                                            <TableCell className="font-medium">{ticket.ticket_name}</TableCell>
+                                            <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
+                                            <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
+                                            <TableCell className="text-right">${ticket.total.toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as any)}>Load</Button>
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDeleteTicket(ticket.id)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                                            No open tickets found.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </ScrollArea>
+                </div>
             </DialogContent>
         </Dialog>
     </TooltipProvider>

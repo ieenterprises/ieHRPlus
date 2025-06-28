@@ -17,6 +17,11 @@ export type Debt = Database['public']['Tables']['debts']['Row'] & {
 export type Reservation = Database['public']['Tables']['reservations']['Row'] & {
   products: { name: string | null } | null;
 };
+export type OpenTicket = Database['public']['Tables']['open_tickets']['Row'] & {
+  users: { name: string | null } | null;
+  customers: { name: string | null } | null;
+};
+
 
 export type SaleItem = {
   id: string;
@@ -120,6 +125,54 @@ export type Database = {
             columns: ["sale_id"]
             isOneToOne: false
             referencedRelation: "sales"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      open_tickets: {
+        Row: {
+          id: string
+          created_at: string | null
+          employee_id: string | null
+          customer_id: string | null
+          items: Json
+          total: number
+          notes: string | null
+          ticket_name: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string | null
+          employee_id?: string | null
+          customer_id?: string | null
+          items: Json
+          total: number
+          notes?: string | null
+          ticket_name?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string | null
+          employee_id?: string | null
+          customer_id?: string | null
+          items?: Json
+          total?: number
+          notes?: string | null
+          ticket_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "open_tickets_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "open_tickets_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           }
         ]
