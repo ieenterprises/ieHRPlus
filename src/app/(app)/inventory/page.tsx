@@ -321,8 +321,8 @@ export default function InventoryPage() {
                              <TableBody>
                                 {loading ? (
                                      <TableRow><TableCell colSpan={2} className="h-24 text-center">Loading...</TableCell></TableRow>
-                                ) : categories.filter(c => getCategoryName(c.id) !== 'Room').length > 0 ? (
-                                    categories.filter(c => getCategoryName(c.id) !== 'Room').map((category) => (
+                                ) : categories.length > 0 ? (
+                                    categories.map((category) => (
                                         <TableRow key={category.id}>
                                             <TableCell className="font-medium">{category.name}</TableCell>
                                             <TableCell className="text-right">
@@ -368,7 +368,7 @@ export default function InventoryPage() {
                         </SelectTrigger>
                         <SelectContent>
                             {categories.map((category) => (
-                                <SelectItem key={category.id} value={category.id} disabled={getCategoryName(category.id) === 'Room'}>
+                                <SelectItem key={category.id} value={category.id}>
                                     {category.name}
                                 </SelectItem>
                             ))}
