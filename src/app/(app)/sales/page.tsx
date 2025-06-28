@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -405,9 +406,7 @@ export default function SalesPage() {
   
   const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
   
-  const productsForSale = products.filter(p => getCategoryName(p.category_id) !== 'Room');
-
-  const filteredProducts = productsForSale.filter(
+  const filteredProducts = products.filter(
     (product) => categoryFilter === "all" || product.category_id === categoryFilter
   );
 
@@ -432,7 +431,7 @@ export default function SalesPage() {
                 <Tabs defaultValue="all" onValueChange={setCategoryFilter}>
                 <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
                     <TabsTrigger value="all">All</TabsTrigger>
-                    {categories.filter(c => c.name !== 'Room').map((category) => (
+                    {categories.map((category) => (
                     <TabsTrigger key={category.id} value={category.id}>
                         {category.name}
                     </TabsTrigger>
