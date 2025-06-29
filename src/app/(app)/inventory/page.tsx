@@ -1,6 +1,8 @@
+
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,6 +85,7 @@ export default function InventoryPage() {
 
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
@@ -97,11 +100,13 @@ export default function InventoryPage() {
   // Product Handlers
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product);
+    setImagePreview(product.image_url);
     setIsProductDialogOpen(true);
   };
   
   const handleAddProduct = () => {
     setEditingProduct(EMPTY_PRODUCT);
+    setImagePreview(EMPTY_PRODUCT.image_url!);
     setIsProductDialogOpen(true);
   }
   
@@ -117,9 +122,21 @@ export default function InventoryPage() {
   const handleProductDialogClose = (open: boolean) => {
     if (!open) {
       setEditingProduct(null);
+      setImagePreview(null);
     }
     setIsProductDialogOpen(open);
   }
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    }
+  };
 
   const handleProductFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -131,16 +148,20 @@ export default function InventoryPage() {
         stock: parseInt(formData.get("stock") as string, 10),
     };
 
+    const finalProductData = {
+        ...productData,
+        image_url: imagePreview || EMPTY_PRODUCT.image_url!,
+    };
+
     try {
         if (editingProduct?.id) {
-            setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...productData } as Product : p));
-            toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
+            setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...finalProductData } as Product : p));
+            toast({ title: "Product Updated", description: `${finalProductData.name} has been updated.` });
         } else {
             const newProduct: Product = { 
                 id: `prod_${new Date().getTime()}`,
-                image_url: EMPTY_PRODUCT.image_url!,
                 created_at: new Date().toISOString(),
-                ...productData 
+                ...finalProductData
             };
             setProducts([newProduct, ...products]);
             toast({ title: "Product Added", description: `${newProduct.name} has been added to inventory.` });
@@ -244,6 +265,7 @@ export default function InventoryPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-[80px] hidden sm:table-cell">Image</TableHead>
                                     <TableHead>Name</TableHead>
                                     <TableHead>Category</TableHead>
                                     <TableHead className="text-right">Price</TableHead>
@@ -253,10 +275,19 @@ export default function InventoryPage() {
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
-                                    <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
                                 ) : products.length > 0 ? (
                                     products.map((product) => (
                                         <TableRow key={product.id}>
+                                        <TableCell className="hidden sm:table-cell">
+                                            <Image
+                                                src={product.image_url || 'https://placehold.co/80x80.png'}
+                                                alt={product.name}
+                                                width={40}
+                                                height={40}
+                                                className="rounded-md object-cover"
+                                            />
+                                        </TableCell>
                                         <TableCell className="font-medium">{product.name}</TableCell>
                                         <TableCell>{getCategoryName(product.category_id)}</TableCell>
                                         <TableCell className="text-right">${product.price.toFixed(2)}</TableCell>
@@ -282,7 +313,7 @@ export default function InventoryPage() {
                                         </TableRow>
                                     ))
                                 ) : (
-                                    <TableRow><TableCell colSpan={5} className="h-24 text-center">No products found.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={6} className="h-24 text-center">No products found.</TableCell></TableRow>
                                 )}
                             </TableBody>
                         </Table>
@@ -350,6 +381,27 @@ export default function InventoryPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
+                 <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="image" className="text-right">Image</Label>
+                    <div className="col-span-3 space-y-2">
+                        {imagePreview && (
+                            <Image
+                                src={imagePreview}
+                                alt="Product preview"
+                                width={80}
+                                height={80}
+                                className="rounded-md object-cover"
+                            />
+                        )}
+                        <Input
+                            id="image"
+                            name="image"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageChange}
+                        />
+                    </div>
+                </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="name" className="text-right">Name</Label>
                   <Input id="name" name="name" defaultValue={editingProduct?.name} className="col-span-3" required />
@@ -409,4 +461,5 @@ export default function InventoryPage() {
 
     </div>
   );
-}
+
+    
