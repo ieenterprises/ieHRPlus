@@ -19,11 +19,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type Sale, type Product, type Category, type User } from "@/lib/types";
+import { type Sale, type Product, type Category, type User, type OpenTicket } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -77,11 +78,19 @@ const MOCK_SALES: Sale[] = [
     { id: 'sale_1', order_number: 1001, total: 17.49, status: 'Pending', created_at: new Date().toISOString(), employee_id: 'user_2', customer_id: 'cust_1', items: [{id: 'prod_1', name: 'Cheeseburger', quantity: 1, price: 12.99}, {id: 'prod_2', name: 'Fries', quantity: 1, price: 4.50}], payment_methods: ['Cash'], customers: {name: 'Walk-in'}, users: {name: 'John Cashier'} },
     { id: 'sale_2', order_number: 1002, total: 27.50, status: 'Fulfilled', created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(), employee_id: 'user_2', customer_id: 'cust_2', items: [{id: 'prod_4', name: 'T-Shirt', quantity: 1, price: 25.00}, {id: 'prod_3', name: 'Cola', quantity: 1, price: 2.50}], payment_methods: ['Card'], customers: {name: 'Alice Johnson'}, users: {name: 'John Cashier'} },
     { id: 'sale_3', order_number: 1003, total: 2.50, status: 'Pending', created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(), employee_id: 'user_2', customer_id: 'cust_1', items: [{id: 'prod_3', name: 'Cola', quantity: 1, price: 2.50}], payment_methods: ['Cash'], customers: {name: 'Walk-in'}, users: {name: 'John Cashier'} },
+    { id: 'sale_4', order_number: 1004, total: 5.00, status: 'Fulfilled', created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), employee_id: 'user_1', customer_id: 'cust_1', items: [{id: 'prod_3', name: 'Cola', quantity: 2, price: 2.50}], payment_methods: ['Cash'], customers: {name: 'Walk-in'}, users: {name: 'Admin'} },
+];
+
+const MOCK_OPEN_TICKETS: (OpenTicket & { users: {name: string | null}, customers: {name: string | null} })[] = [
+    { id: "ticket_1", ticket_name: "Table 5", total: 17.49, created_at: new Date(Date.now() - 60*60*1000).toISOString(), employee_id: 'user_2', customer_id: null, items: [{id: 'prod_1', name: 'Cheeseburger', quantity: 1, price: 12.99}, {id: 'prod_2', name: 'Fries', quantity: 1, price: 4.50}], users: { name: 'John Cashier'}, customers: null, notes: "No onions" },
+    { id: "ticket_2", ticket_name: "Bar Seat 2", total: 27.50, created_at: new Date(Date.now() - 30*60*1000).toISOString(), employee_id: 'user_1', customer_id: null, items: [{id: 'prod_4', name: 'T-Shirt', quantity: 1, price: 25.00}, {id: 'prod_3', name: 'Cola', quantity: 1, price: 2.50}], users: { name: 'Admin'}, customers: null, notes: "Size L" },
+    { id: "ticket_3", ticket_name: "Takeout #12", total: 5.00, created_at: new Date(Date.now() - 10*60*1000).toISOString(), employee_id: 'user_2', customer_id: null, items: [{id: 'prod_3', name: 'Cola', quantity: 2, price: 2.50}], users: { name: 'John Cashier'}, customers: null, notes: "" },
 ];
 
 
 export default function KitchenPage() {
   const [sales, setSales] = useState<Sale[]>(MOCK_SALES);
+  const [openTickets, setOpenTickets] = useState<(OpenTicket & { users: {name: string | null}, customers: {name: string | null} })[]>(MOCK_OPEN_TICKETS);
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
@@ -93,28 +102,11 @@ export default function KitchenPage() {
     searchTerm: "",
     category: "all",
     paymentMethod: "all",
-    status: "all",
     employee: "all",
     minAmount: "",
     maxAmount: "",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-
-  const handleFulfillOrder = async (saleId: string) => {
-    try {
-        setSales((prevSales) =>
-            prevSales.map((sale) =>
-                sale.id === saleId ? { ...sale, status: "Fulfilled" } : sale
-            )
-        );
-        toast({
-            title: "Order Fulfilled",
-            description: "The order has been marked as fulfilled.",
-        });
-    } catch (error: any) {
-        toast({ title: "Error", description: "Could not fulfill order.", variant: "destructive" });
-    }
-  };
   
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -135,7 +127,9 @@ export default function KitchenPage() {
     );
 };
 
-  const filteredSales = sales.filter((sale) => {
+  const filteredReceipts = sales.filter((sale) => {
+    if (sale.status !== 'Fulfilled') return false;
+
     const searchTermLower = filters.searchTerm.toLowerCase();
     
     const searchMatch =
@@ -152,7 +146,6 @@ export default function KitchenPage() {
       filters.paymentMethod === "all" ||
       sale.payment_methods.some(pm => pm === filters.paymentMethod);
 
-    const statusMatch = filters.status === "all" || sale.status === filters.status;
     const employeeMatch = filters.employee === "all" || sale.users?.name === filters.employee;
     
     const dateMatch =
@@ -183,7 +176,7 @@ export default function KitchenPage() {
       (isNaN(minAmount) || totalForAmountCheck >= minAmount) &&
       (isNaN(maxAmount) || totalForAmountCheck <= maxAmount);
 
-    return searchMatch && categoryMatch && paymentMatch && statusMatch && dateMatch && amountMatch && employeeMatch;
+    return searchMatch && categoryMatch && paymentMatch && dateMatch && amountMatch && employeeMatch;
   }).map(sale => {
       const displayItems = filters.category === 'all'
         ? sale.items
@@ -210,187 +203,214 @@ export default function KitchenPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Live Sales Feed"
-        description="A real-time feed of all completed sales transactions."
+        title="Orders"
+        description="View open tickets and completed receipts."
       />
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Transactions</CardTitle>
-          <CardDescription>
-            Showing the latest sales from all channels.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <Input
-              placeholder="Search by order, customer, item..."
-              value={filters.searchTerm}
-              onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
-              className="max-w-xs"
-            />
-            <Select value={filters.category} onValueChange={(value) => handleFilterChange('category', value)}>
-                <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Filter by category" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {categories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
-                </SelectContent>
-            </Select>
-             <Select value={filters.paymentMethod} onValueChange={(value) => handleFilterChange('paymentMethod', value)}>
-                <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Filter by payment" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Payment Methods</SelectItem>
-                    <SelectItem value="Cash">Cash</SelectItem>
-                    <SelectItem value="Card">Card</SelectItem>
-                    <SelectItem value="Credit">Credit</SelectItem>
-                </SelectContent>
-            </Select>
-             <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Fulfilled">Fulfilled</SelectItem>
-                </SelectContent>
-            </Select>
-            <Select value={filters.employee} onValueChange={(value) => handleFilterChange('employee', value)}>
-                <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Filter by employee" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Employees</SelectItem>
-                    {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
-                </SelectContent>
-            </Select>
-            <Input
-              placeholder="Min Amount"
-              type="number"
-              value={filters.minAmount}
-              onChange={(e) => handleFilterChange("minAmount", e.target.value)}
-              className="w-32"
-            />
-            <Input
-              placeholder="Max Amount"
-              type="number"
-              value={filters.maxAmount}
-              onChange={(e) => handleFilterChange("maxAmount", e.target.value)}
-              className="w-32"
-            />
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button
-                    id="date"
-                    variant={"outline"}
-                    className={cn(
-                        "w-[260px] justify-start text-left font-normal",
-                        !dateRange && "text-muted-foreground"
-                    )}
-                    >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange?.from ? (
-                        dateRange.to ? (
-                        <>
-                            {format(dateRange.from, "LLL dd, y")} -{" "}
-                            {format(dateRange.to, "LLL dd, y")}
-                        </>
-                        ) : (
-                        format(dateRange.from, "LLL dd, y")
-                        )
-                    ) : (
-                        <span>Pick a date range</span>
-                    )}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                    initialFocus
-                    mode="range"
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
+      <Tabs defaultValue="receipts">
+        <TabsList>
+            <TabsTrigger value="open_tickets">Open Tickets</TabsTrigger>
+            <TabsTrigger value="receipts">Receipts</TabsTrigger>
+        </TabsList>
+        <TabsContent value="open_tickets" className="pt-4">
+             <Card>
+                <CardHeader>
+                    <CardTitle>Open Tickets</CardTitle>
+                    <CardDescription>
+                        A list of all saved orders pending payment.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Ticket Name</TableHead>
+                                <TableHead>Employee</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Items</TableHead>
+                                <TableHead className="text-right">Total</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                           {loading ? (
+                                <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell></TableRow>
+                            ) : openTickets.length > 0 ? (
+                                openTickets.map(ticket => (
+                                    <TableRow key={ticket.id}>
+                                        <TableCell className="font-medium">{ticket.ticket_name}</TableCell>
+                                        <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
+                                        <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
+                                        <TableCell>{(ticket.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
+                                        <TableCell className="text-right">${ticket.total.toFixed(2)}</TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                                        No open tickets found.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        </TabsContent>
+        <TabsContent value="receipts" className="pt-4">
+             <Card>
+                <CardHeader>
+                <CardTitle>Receipts</CardTitle>
+                <CardDescription>
+                    Showing all fulfilled sales transactions.
+                </CardDescription>
+                </CardHeader>
+                <CardContent>
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <Input
+                    placeholder="Search by order, customer, item..."
+                    value={filters.searchTerm}
+                    onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
+                    className="max-w-xs"
                     />
-                </PopoverContent>
-            </Popover>
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Order #</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="hidden sm:table-cell">Customer</TableHead>
-                <TableHead className="hidden md:table-cell">Employee</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-center">Payment</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={10} className="h-24 text-center">Loading...</TableCell></TableRow>
-              ) : filteredSales.length > 0 ? (
-                filteredSales.map((sale) => {
-                  const categoriesForDisplay = getSaleCategoryNames(sale.displayItems);
-  
-                  return (
-                  <TableRow key={sale.id}>
-                    <TableCell className="font-medium">#{sale.order_number}</TableCell>
-                    <TableCell>{format(new Date(sale.created_at!), "LLL dd, y HH:mm")}</TableCell>
-                    <TableCell className="hidden sm:table-cell">{sale.customers?.name ?? 'Walk-in'}</TableCell>
-                    <TableCell className="hidden md:table-cell">{sale.users?.name}</TableCell>
-                     <TableCell>
-                       {sale.displayItems.map(item => `${item.name} (x${item.quantity})`).join(', ')}
-                     </TableCell>
-                     <TableCell>
-                       <div className="flex flex-wrap gap-1">
-                          {categoriesForDisplay.map(category => (
-                              <Badge key={category} variant="outline" className="whitespace-nowrap">{category}</Badge>
-                          ))}
-                       </div>
-                     </TableCell>
-                    <TableCell className="text-right">${sale.displayTotal.toFixed(2)}</TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                          {sale.payment_methods.map((method: string) => (
-                               <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">
-                                  {method}
-                              </Badge>
-                          ))}
-                      </div>
-                    </TableCell>
-                     <TableCell>
-                      <Badge variant={sale.status === 'Fulfilled' ? 'secondary' : 'default'}>
-                        {sale.status}
-                      </Badge>
-                    </TableCell>
-                     <TableCell>
-                      {sale.status === 'Pending' && (
-                        <Button variant="outline" size="sm" onClick={() => handleFulfillOrder(sale.id)}>
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Fulfill
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )})
-              ) : (
-                <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground h-24">
-                        No sales found for the selected filters.
-                    </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    <Select value={filters.category} onValueChange={(value) => handleFilterChange('category', value)}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Filter by category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Categories</SelectItem>
+                            {categories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Select value={filters.paymentMethod} onValueChange={(value) => handleFilterChange('paymentMethod', value)}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Filter by payment" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Payment Methods</SelectItem>
+                            <SelectItem value="Cash">Cash</SelectItem>
+                            <SelectItem value="Card">Card</SelectItem>
+                            <SelectItem value="Credit">Credit</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select value={filters.employee} onValueChange={(value) => handleFilterChange('employee', value)}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Filter by employee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Employees</SelectItem>
+                            {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Input
+                    placeholder="Min Amount"
+                    type="number"
+                    value={filters.minAmount}
+                    onChange={(e) => handleFilterChange("minAmount", e.target.value)}
+                    className="w-32"
+                    />
+                    <Input
+                    placeholder="Max Amount"
+                    type="number"
+                    value={filters.maxAmount}
+                    onChange={(e) => handleFilterChange("maxAmount", e.target.value)}
+                    className="w-32"
+                    />
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button
+                            id="date"
+                            variant={"outline"}
+                            className={cn(
+                                "w-[260px] justify-start text-left font-normal",
+                                !dateRange && "text-muted-foreground"
+                            )}
+                            >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateRange?.from ? (
+                                dateRange.to ? (
+                                <>
+                                    {format(dateRange.from, "LLL dd, y")} -{" "}
+                                    {format(dateRange.to, "LLL dd, y")}
+                                </>
+                                ) : (
+                                format(dateRange.from, "LLL dd, y")
+                                )
+                            ) : (
+                                <span>Pick a date range</span>
+                            )}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                            initialFocus
+                            mode="range"
+                            selected={dateRange}
+                            onSelect={setDateRange}
+                            numberOfMonths={2}
+                            />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Order #</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="hidden sm:table-cell">Customer</TableHead>
+                        <TableHead className="hidden md:table-cell">Employee</TableHead>
+                        <TableHead>Items</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-center">Payment</TableHead>
+                    </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {loading ? (
+                        <TableRow><TableCell colSpan={8} className="h-24 text-center">Loading...</TableCell></TableRow>
+                    ) : filteredReceipts.length > 0 ? (
+                        filteredReceipts.map((sale) => {
+                        const categoriesForDisplay = getSaleCategoryNames(sale.displayItems);
+        
+                        return (
+                        <TableRow key={sale.id}>
+                            <TableCell className="font-medium">#{sale.order_number}</TableCell>
+                            <TableCell>{format(new Date(sale.created_at!), "LLL dd, y HH:mm")}</TableCell>
+                            <TableCell className="hidden sm:table-cell">{sale.customers?.name ?? 'Walk-in'}</TableCell>
+                            <TableCell className="hidden md:table-cell">{sale.users?.name}</TableCell>
+                            <TableCell>
+                                {sale.displayItems.map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                            </TableCell>
+                            <TableCell>
+                                <div className="flex flex-wrap gap-1">
+                                    {categoriesForDisplay.map(category => (
+                                        <Badge key={category} variant="outline" className="whitespace-nowrap">{category}</Badge>
+                                    ))}
+                                </div>
+                            </TableCell>
+                            <TableCell className="text-right">${sale.displayTotal.toFixed(2)}</TableCell>
+                            <TableCell className="text-center">
+                            <div className="flex items-center justify-center gap-1">
+                                {sale.payment_methods.map((method: string) => (
+                                    <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">
+                                        {method}
+                                    </Badge>
+                                ))}
+                            </div>
+                            </TableCell>
+                        </TableRow>
+                        )})
+                    ) : (
+                        <TableRow>
+                            <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
+                                No receipts found for the selected filters.
+                            </TableCell>
+                        </TableRow>
+                    )}
+                    </TableBody>
+                </Table>
+                </CardContent>
+            </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
