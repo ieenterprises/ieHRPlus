@@ -242,6 +242,24 @@ export default function InventoryPage() {
   };
 
   // Bulk Actions Handlers
+  const handleDownloadSample = () => {
+    const sampleData = [
+      { name: "Margherita Pizza", category_name: "Food", price: "14.99", stock: "50" },
+      { name: "Iced Latte", category_name: "Beverages", price: "4.50", stock: "100" },
+      { name: "Branded Cap", category_name: "Merchandise", price: "19.99", stock: "30" },
+    ];
+    const csv = Papa.unparse(sampleData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "product_import_sample.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleImportSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!importFile) {
@@ -260,7 +278,7 @@ export default function InventoryPage() {
                 results.data.forEach((row: any) => {
                     const { name, category_name, price, stock } = row;
                     if (!name || !category_name || !price || !stock) {
-                        throw new Error("CSV is missing required columns: name, category_name, price, stock");
+                        throw new Error("Import failed. A row in your CSV might be missing data, or the file is missing a required column header. Please ensure your CSV has these columns: name, category_name, price, stock.");
                     }
 
                     let category = newCategories.find(c => c.name.toLowerCase() === category_name.toLowerCase());
@@ -624,6 +642,7 @@ export default function InventoryPage() {
                     <Input id="import-file" type="file" accept=".csv" onChange={(e) => setImportFile(e.target.files?.[0] || null)} />
                 </div>
                 <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={handleDownloadSample}>Download Sample</Button>
                     <Button type="submit" disabled={!importFile}>Import Products</Button>
                 </DialogFooter>
             </form>
