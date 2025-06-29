@@ -42,12 +42,14 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Product, type Category } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Papa from "papaparse";
 
 
 const EMPTY_PRODUCT: Partial<Product> = {
@@ -89,6 +91,12 @@ export default function InventoryPage() {
 
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
+
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  
+  const [isStockUpdateDialogOpen, setIsStockUpdateDialogOpen] = useState(false);
+  const [stockUpdateFile, setStockUpdateFile] = useState<File | null>(null);
   
   const { toast } = useToast();
 
@@ -233,6 +241,128 @@ export default function InventoryPage() {
     }
   };
 
+  // Bulk Actions Handlers
+  const handleImportSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!importFile) {
+        toast({ title: "No file selected", description: "Please select a CSV file to import.", variant: "destructive" });
+        return;
+    }
+
+    Papa.parse(importFile, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+            try {
+                const newProducts: Product[] = [];
+                let newCategories: Category[] = [...categories];
+
+                results.data.forEach((row: any) => {
+                    const { name, category_name, price, stock } = row;
+                    if (!name || !category_name || !price || !stock) {
+                        throw new Error("CSV is missing required columns: name, category_name, price, stock");
+                    }
+
+                    let category = newCategories.find(c => c.name.toLowerCase() === category_name.toLowerCase());
+                    if (!category) {
+                        const newCategory: Category = {
+                            id: `cat_${new Date().getTime()}_${Math.random()}`,
+                            name: category_name,
+                            created_at: new Date().toISOString()
+                        };
+                        newCategories = [...newCategories, newCategory];
+                        category = newCategory;
+                    }
+                    
+                    const newProduct: Product = {
+                        id: `prod_${new Date().getTime()}_${Math.random()}`,
+                        name,
+                        category_id: category.id,
+                        price: parseFloat(price),
+                        stock: parseInt(stock, 10),
+                        image_url: "https://placehold.co/300x200.png",
+                        created_at: new Date().toISOString()
+                    };
+                    newProducts.push(newProduct);
+                });
+
+                setProducts(prev => [...newProducts, ...prev]);
+                setCategories(newCategories);
+                toast({ title: "Import Successful", description: `${newProducts.length} products have been added.` });
+                setIsImportDialogOpen(false);
+                setImportFile(null);
+            } catch (error: any) {
+                toast({ title: "Import Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+            }
+        },
+        error: (error: any) => {
+            toast({ title: "Import Error", description: error.message, variant: "destructive" });
+        }
+    });
+  };
+
+  const handleStockUpdateSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!stockUpdateFile) {
+        toast({ title: "No file selected", description: "Please select a CSV file to update stock.", variant: "destructive" });
+        return;
+    }
+
+    Papa.parse(stockUpdateFile, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+            try {
+                let updatedCount = 0;
+                const updatedProducts = products.map(product => {
+                    const row: any = results.data.find((r: any) => r.name === product.name);
+                    if (row) {
+                        const { new_stock } = row;
+                        if (new_stock !== undefined && !isNaN(parseInt(new_stock, 10))) {
+                            updatedCount++;
+                            return { ...product, stock: parseInt(new_stock, 10) };
+                        }
+                    }
+                    return product;
+                });
+                
+                setProducts(updatedProducts);
+                toast({ title: "Stock Updated", description: `${updatedCount} products have been updated.` });
+                setIsStockUpdateDialogOpen(false);
+                setStockUpdateFile(null);
+
+            } catch (error: any) {
+                toast({ title: "Stock Update Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+            }
+        },
+        error: (error: any) => {
+            toast({ title: "Stock Update Error", description: error.message, variant: "destructive" });
+        }
+    });
+  };
+
+  const handleExportInventory = () => {
+    const reportData = products.map(p => ({
+        "Product Name": p.name,
+        "Category": getCategoryName(p.category_id),
+        "Price": p.price.toFixed(2),
+        "Stock": getCategoryName(p.category_id) === 'Room' ? 'N/A' : p.stock,
+    }));
+    
+    const csv = Papa.unparse(reportData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "inventory_report.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({ title: "Export Started", description: "Your inventory report is downloading." });
+  };
+
 
   return (
     <div className="space-y-8">
@@ -254,7 +384,28 @@ export default function InventoryPage() {
                         <CardDescription>
                             A list of all products in your inventory.
                         </CardDescription>
-                        <div className="absolute top-6 right-6">
+                        <div className="absolute top-6 right-6 flex items-center gap-2">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline">
+                                  <Download className="mr-2 h-4 w-4" />
+                                  Bulk Actions
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Bulk Management</DropdownMenuLabel>
+                                <DropdownMenuItem onSelect={() => setIsImportDialogOpen(true)}>
+                                  Import Products
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => setIsStockUpdateDialogOpen(true)}>
+                                  Update Stock
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onSelect={handleExportInventory}>
+                                  Export Inventory Report
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             <Button onClick={handleAddProduct}>
                                 <PlusCircle className="mr-2 h-4 w-4" />
                                 Add Product
@@ -459,7 +610,46 @@ export default function InventoryPage() {
           </DialogContent>
       </Dialog>
 
+       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent>
+            <form onSubmit={handleImportSubmit}>
+                <DialogHeader>
+                    <DialogTitle>Import Products from CSV</DialogTitle>
+                    <DialogDescription>
+                        Upload a CSV file with columns: `name`, `category_name`, `price`, `stock`. The file must have a header row. New categories will be created automatically.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="import-file">CSV File</Label>
+                    <Input id="import-file" type="file" accept=".csv" onChange={(e) => setImportFile(e.target.files?.[0] || null)} />
+                </div>
+                <DialogFooter>
+                    <Button type="submit" disabled={!importFile}>Import Products</Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isStockUpdateDialogOpen} onOpenChange={setIsStockUpdateDialogOpen}>
+        <DialogContent>
+            <form onSubmit={handleStockUpdateSubmit}>
+                <DialogHeader>
+                    <DialogTitle>Bulk Update Stock from CSV</DialogTitle>
+                    <DialogDescription>
+                        Upload a CSV file with columns: `name`, `new_stock`. This will update the stock for existing products based on their name.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="stock-update-file">CSV File</Label>
+                    <Input id="stock-update-file" type="file" accept=".csv" onChange={(e) => setStockUpdateFile(e.target.files?.[0] || null)} />
+                </div>
+                <DialogFooter>
+                    <Button type="submit" disabled={!stockUpdateFile}>Update Stock</Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
-
-    
+}
