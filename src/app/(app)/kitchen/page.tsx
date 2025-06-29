@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -40,6 +41,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePos } from "@/hooks/use-pos";
 
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -81,16 +83,10 @@ const MOCK_SALES: Sale[] = [
     { id: 'sale_4', order_number: 1004, total: 5.00, status: 'Fulfilled', created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), employee_id: 'user_1', customer_id: 'cust_1', items: [{id: 'prod_3', name: 'Cola', quantity: 2, price: 2.50}], payment_methods: ['Cash'], customers: {name: 'Walk-in'}, users: {name: 'Admin'} },
 ];
 
-const MOCK_OPEN_TICKETS: (OpenTicket & { users: {name: string | null}, customers: {name: string | null} })[] = [
-    { id: "ticket_1", ticket_name: "Table 5", total: 17.49, created_at: new Date(Date.now() - 60*60*1000).toISOString(), employee_id: 'user_2', customer_id: null, items: [{id: 'prod_1', name: 'Cheeseburger', quantity: 1, price: 12.99}, {id: 'prod_2', name: 'Fries', quantity: 1, price: 4.50}], users: { name: 'John Cashier'}, customers: null, notes: "No onions" },
-    { id: "ticket_2", ticket_name: "Bar Seat 2", total: 27.50, created_at: new Date(Date.now() - 30*60*1000).toISOString(), employee_id: 'user_1', customer_id: null, items: [{id: 'prod_4', name: 'T-Shirt', quantity: 1, price: 25.00}, {id: 'prod_3', name: 'Cola', quantity: 1, price: 2.50}], users: { name: 'Admin'}, customers: null, notes: "Size L" },
-    { id: "ticket_3", ticket_name: "Takeout #12", total: 5.00, created_at: new Date(Date.now() - 10*60*1000).toISOString(), employee_id: 'user_2', customer_id: null, items: [{id: 'prod_3', name: 'Cola', quantity: 2, price: 2.50}], users: { name: 'John Cashier'}, customers: null, notes: "" },
-];
-
 
 export default function KitchenPage() {
   const [sales, setSales] = useState<Sale[]>(MOCK_SALES);
-  const [openTickets, setOpenTickets] = useState<(OpenTicket & { users: {name: string | null}, customers: {name: string | null} })[]>(MOCK_OPEN_TICKETS);
+  const { openTickets } = usePos();
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
   const [users, setUsers] = useState<User[]>(MOCK_USERS);

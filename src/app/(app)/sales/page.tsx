@@ -56,6 +56,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { usePos } from "@/hooks/use-pos";
 
 // Mock Data
 const MOCK_CATEGORIES: Category[] = [
@@ -83,10 +84,6 @@ const MOCK_CUSTOMERS: Customer[] = [
 const MOCK_USERS: User[] = [
     { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: [], avatar_url: '', created_at: "2023-01-01T10:00:00Z" },
     { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: [], avatar_url: '', created_at: "2023-01-01T10:00:00Z" },
-];
-
-const MOCK_OPEN_TICKETS: (OpenTicket & { users: {name: string | null}, customers: {name: string | null} })[] = [
-    { id: "ticket_1", ticket_name: "Table 5", total: 45.98, created_at: new Date(Date.now() - 60*60*1000).toISOString(), employee_id: 'user_2', customer_id: null, items: [{id: 'prod_1', name: 'Cheeseburger', quantity: 2, price: 12.99}], users: { name: 'John Cashier'}, customers: null, notes: "No onions" },
 ];
 
 
@@ -143,7 +140,7 @@ export default function SalesPage() {
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
 
-  const [openTickets, setOpenTickets] = useState<(OpenTicket & { users: {name: string | null}, customers: {name: string | null} })[]>(MOCK_OPEN_TICKETS);
+  const { openTickets, saveOrUpdateTicket, deleteTicket } = usePos();
   const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
 
@@ -424,11 +421,13 @@ export default function SalesPage() {
     
     try {
         if (activeTicketId) {
-            // Update existing ticket
-            setOpenTickets(prev => prev.map(t => t.id === activeTicketId ? { ...t, items: saleItems, total } : t));
-            toast({ title: "Order Updated", description: "The open ticket has been updated." });
+            const existingTicket = openTickets.find(t => t.id === activeTicketId);
+            if (existingTicket) {
+                const updatedTicket = { ...existingTicket, items: saleItems, total };
+                saveOrUpdateTicket(updatedTicket, true);
+                toast({ title: "Order Updated", description: "The open ticket has been updated." });
+            }
         } else {
-            // Save new ticket
             const newTicket = {
                 id: `ticket_${new Date().getTime()}`,
                 items: saleItems,
@@ -441,7 +440,7 @@ export default function SalesPage() {
                 created_at: new Date().toISOString(),
                 notes: null,
             };
-            setOpenTickets(prev => [newTicket, ...prev]);
+            saveOrUpdateTicket(newTicket as any, false);
             toast({ title: "Order Saved", description: "The order has been saved as an open ticket." });
         }
         
@@ -477,7 +476,7 @@ export default function SalesPage() {
       return;
     }
     try {
-      setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
+      deleteTicket(ticketId);
       if (activeTicketId === ticketId) {
         handleClearOrder();
       }
