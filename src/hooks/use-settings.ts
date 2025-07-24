@@ -3,7 +3,7 @@
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, StoreType, PosDeviceType, PaymentType, Role } from '@/lib/types';
+import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
@@ -11,32 +11,6 @@ import { useRouter } from 'next/navigation';
 export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
 
 export type FeatureSettings = Record<string, boolean>;
-
-export type PrinterType = {
-    id: string;
-    name: string;
-    connection_type: 'Network' | 'Bluetooth' | 'Cable';
-    ip_address?: string | null;
-    pos_device_id: string;
-};
-
-export type ReceiptSettings = {
-  emailedLogo: string | null;
-  printedLogo: string | null;
-  header: string;
-  footer: string;
-  showCustomerInfo: boolean;
-  showComments: boolean;
-  language: string;
-};
-
-export type Tax = {
-    id: string;
-    name: string;
-    rate: number;
-    is_default: boolean;
-    type: 'Included' | 'Added';
-};
 
 export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier";
 
@@ -106,7 +80,7 @@ const MOCK_PAYMENT_TYPES: PaymentType[] = [
 ];
 
 const MOCK_TAXES: Tax[] = [
-    { id: 'tax_1', name: 'VAT', rate: 8, is_default: true, type: 'Included' },
+    { id: 'tax_1', name: 'VAT', rate: 8, is_default: true, type: 'Added' },
     { id: 'tax_2', name: 'Service Charge', rate: 10, is_default: false, type: 'Added' },
 ];
 
@@ -137,6 +111,8 @@ type SettingsContextType = {
     setSelectedStore: React.Dispatch<React.SetStateAction<StoreType | null>>;
     selectedDevice: PosDeviceType | null;
     setSelectedDevice: React.Dispatch<React.SetStateAction<PosDeviceType | null>>;
+    currency: string;
+    setCurrency: React.Dispatch<React.SetStateAction<string>>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -179,6 +155,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [loadingUser, setLoadingUser] = useState(true);
     const [selectedStore, setSelectedStore] = useState<StoreType | null>(() => getFromLocalStorage('selectedStore', null));
     const [selectedDevice, setSelectedDevice] = useState<PosDeviceType | null>(() => getFromLocalStorage('selectedDevice', null));
+    const [currency, setCurrency] = useState<string>(() => getFromLocalStorage('currency', 'USD'));
     const router = useRouter();
 
 
@@ -192,6 +169,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     useEffect(() => { setInLocalStorage('roles', roles); }, [roles]);
     useEffect(() => { setInLocalStorage('selectedStore', selectedStore); }, [selectedStore]);
     useEffect(() => { setInLocalStorage('selectedDevice', selectedDevice); }, [selectedDevice]);
+    useEffect(() => { setInLocalStorage('currency', currency); }, [currency]);
 
 
     const fetchUser = useCallback(async () => {
@@ -259,6 +237,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         logout,
         selectedStore, setSelectedStore,
         selectedDevice, setSelectedDevice,
+        currency, setCurrency,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);

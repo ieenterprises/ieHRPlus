@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Bell, Percent, SlidersHorizontal, Package, Building, CreditCard, Shield, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, X } from "lucide-react";
+import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Bell, Percent, SlidersHorizontal, Package, Building, CreditCard, Shield, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, X, Receipt, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -26,6 +26,9 @@ const settingsNav = [
   { id: "features", label: "Features", icon: SlidersHorizontal },
   { id: "stores", label: "Stores", icon: Store },
   { id: "pos_devices", label: "POS devices", icon: HardDrive },
+  { id: "printers", label: "Printers", icon: Printer },
+  { id: "receipt", label: "Receipt", icon: Receipt },
+  { id: "taxes", label: "Taxes & Currency", icon: Percent },
 ];
 
 const featureToggles = [
@@ -40,41 +43,84 @@ const featureToggles = [
 
 const EMPTY_STORE: Partial<StoreType> = { name: '', address: '' };
 const EMPTY_POS_DEVICE: Partial<PosDeviceType> = { name: '', store_id: '' };
+const EMPTY_PRINTER: Partial<PrinterType> = { name: '', connection_type: 'Network', pos_device_id: ''};
+const EMPTY_TAX: Partial<Tax> = { name: '', rate: 0, type: 'Added', is_default: false };
 
 export default function SettingsPage() {
   const { 
     featureSettings, 
     stores,
     posDevices,
+    printers,
+    receiptSettings,
+    taxes,
+    currency,
     setFeatureSettings,
     setStores,
     setPosDevices,
+    setPrinters,
+    setReceiptSettings,
+    setTaxes,
+    setCurrency,
   } = useSettings();
   
   const [activeSection, setActiveSection] = useState("features");
-
-  const [initialFeatureSettings, setInitialFeatureSettings] = useState<FeatureSettings>(featureSettings);
-  const hasChanges = JSON.stringify(featureSettings) !== JSON.stringify(initialFeatureSettings);
+  const [initialSettings, setInitialSettings] = useState({});
 
   const { toast } = useToast();
+
+  useEffect(() => {
+    setInitialSettings({
+        featureSettings,
+        stores,
+        posDevices,
+        printers,
+        receiptSettings,
+        taxes,
+        currency,
+    });
+  }, []); // Capture initial state on mount
+
+  const hasChanges = JSON.stringify({
+    featureSettings,
+    stores,
+    posDevices,
+    printers,
+    receiptSettings,
+    taxes,
+    currency,
+  }) !== JSON.stringify(initialSettings);
 
   const [isStoreDialogOpen, setIsStoreDialogOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Partial<StoreType> | null>(null);
   
   const [isDeviceDialogOpen, setIsDeviceDialogOpen] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Partial<PosDeviceType> | null>(null);
+
+  const [isPrinterDialogOpen, setIsPrinterDialogOpen] = useState(false);
+  const [editingPrinter, setEditingPrinter] = useState<Partial<PrinterType> | null>(null);
+
+  const [isTaxDialogOpen, setIsTaxDialogOpen] = useState(false);
+  const [editingTax, setEditingTax] = useState<Partial<Tax> | null>(null);
   
   const handleToggle = (id: string, checked: boolean) => {
     setFeatureSettings(prev => ({ ...prev, [id]: checked }));
   };
 
   const handleSaveChanges = () => {
-    setInitialFeatureSettings(featureSettings);
-    toast({ title: "Settings Saved", description: "Your feature changes have been successfully saved." });
+    setInitialSettings({ featureSettings, stores, posDevices, printers, receiptSettings, taxes, currency }); // Update baseline
+    toast({ title: "Settings Saved", description: "Your changes have been successfully saved." });
   };
 
   const handleCancelChanges = () => {
-    setFeatureSettings(initialFeatureSettings);
+    const s = initialSettings as any;
+    setFeatureSettings(s.featureSettings);
+    setStores(s.stores);
+    setPosDevices(s.posDevices);
+    setPrinters(s.printers);
+    setReceiptSettings(s.receiptSettings);
+    setTaxes(s.taxes);
+    setCurrency(s.currency);
     toast({ title: "Changes Discarded", description: "Your changes have been discarded." });
   };
   
@@ -105,7 +151,9 @@ export default function SettingsPage() {
           setStores(stores.map(s => s.id === editingStore.id ? { ...s, ...storeData } : s));
           toast({ title: "Store Updated" });
       } else {
-          setStores([...stores, { id: `store_${new Date().getTime()}`, ...storeData }]);
+          const newId = `store_${new Date().getTime()}`;
+          setStores([...stores, { id: newId, ...storeData }]);
+          setReceiptSettings(prev => ({ ...prev, [newId]: { header: '', footer: '' } as ReceiptSettings }));
           toast({ title: "Store Added" });
       }
       setIsStoreDialogOpen(false);
@@ -118,7 +166,10 @@ export default function SettingsPage() {
   }
   
   const handleDeleteDevice = (deviceId: string) => {
-      // Add check if device is in use by a printer later
+      if (printers.some(p => p.pos_device_id === deviceId)) {
+          toast({ title: "Cannot Delete Device", description: "This POS device has printers assigned to it.", variant: "destructive" });
+          return;
+      }
       setPosDevices(posDevices.filter(d => d.id !== deviceId));
       toast({ title: "POS Device Deleted" });
   }
@@ -140,8 +191,82 @@ export default function SettingsPage() {
       }
       setIsDeviceDialogOpen(false);
   }
+
+  // Printer Handlers
+  const handleOpenPrinterDialog = (printer: Partial<PrinterType> | null) => {
+      setEditingPrinter(printer ? { ...printer } : EMPTY_PRINTER);
+      setIsPrinterDialogOpen(true);
+  }
+
+  const handleDeletePrinter = (printerId: string) => {
+      setPrinters(printers.filter(p => p.id !== printerId));
+      toast({ title: "Printer Deleted" });
+  }
+
+  const handlePrinterFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      const formData = new FormData(e.currentTarget);
+      const printerData = {
+          name: formData.get('name') as string,
+          connection_type: formData.get('connection_type') as 'Network' | 'Bluetooth' | 'Cable',
+          ip_address: formData.get('ip_address') as string | null,
+          pos_device_id: formData.get('pos_device_id') as string,
+      };
+
+      if (editingPrinter?.id) {
+          setPrinters(printers.map(p => p.id === editingPrinter.id ? { ...p, ...printerData } : p));
+          toast({ title: "Printer Updated" });
+      } else {
+          setPrinters([...printers, { id: `printer_${new Date().getTime()}`, ...printerData }]);
+          toast({ title: "Printer Added" });
+      }
+      setIsPrinterDialogOpen(false);
+  }
+
+  // Receipt Settings Handler
+  const handleReceiptSettingChange = (storeId: string, field: keyof ReceiptSettings, value: string | boolean) => {
+      setReceiptSettings(prev => ({
+          ...prev,
+          [storeId]: {
+              ...prev[storeId],
+              [field]: value
+          }
+      }));
+  }
+
+  // Tax Handlers
+  const handleOpenTaxDialog = (tax: Partial<Tax> | null) => {
+      setEditingTax(tax ? { ...tax } : EMPTY_TAX);
+      setIsTaxDialogOpen(true);
+  }
+
+  const handleDeleteTax = (taxId: string) => {
+      setTaxes(taxes.filter(t => t.id !== taxId));
+      toast({ title: "Tax Deleted" });
+  }
+  
+  const handleTaxFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const taxData = {
+        name: formData.get('name') as string,
+        rate: parseFloat(formData.get('rate') as string),
+        type: formData.get('type') as 'Added' | 'Included',
+        is_default: (formData.get('is_default') as string) === 'on',
+    };
+
+    if (editingTax?.id) {
+        setTaxes(taxes.map(t => t.id === editingTax.id ? { ...t, ...taxData } : t));
+        toast({ title: "Tax Updated" });
+    } else {
+        setTaxes([...taxes, { id: `tax_${new Date().getTime()}`, ...taxData }]);
+        toast({ title: "Tax Added" });
+    }
+    setIsTaxDialogOpen(false);
+  }
   
   const getStoreName = (storeId: string) => stores.find(s => s.id === storeId)?.name || 'N/A';
+  const getDeviceName = (deviceId: string) => posDevices.find(d => d.id === deviceId)?.name || 'N/A';
   
   return (
     <div className="space-y-8">
@@ -150,7 +275,7 @@ export default function SettingsPage() {
           title="Settings"
           description="Configure the features and behavior of your POS system."
         />
-        {activeSection === 'features' && hasChanges && (
+        {hasChanges && (
             <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={handleCancelChanges}>Cancel</Button>
                 <Button onClick={handleSaveChanges}>Save Changes</Button>
@@ -238,7 +363,6 @@ export default function SettingsPage() {
                                                 <DropdownMenuTrigger asChild>
                                                 <Button aria-haspopup="true" size="icon" variant="ghost">
                                                     <MoreHorizontal className="h-4 w-4" />
-                                                    <span className="sr-only">Toggle menu</span>
                                                 </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
@@ -288,7 +412,6 @@ export default function SettingsPage() {
                                                 <DropdownMenuTrigger asChild>
                                                 <Button aria-haspopup="true" size="icon" variant="ghost">
                                                     <MoreHorizontal className="h-4 w-4" />
-                                                    <span className="sr-only">Toggle menu</span>
                                                 </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
@@ -309,9 +432,166 @@ export default function SettingsPage() {
                     </CardContent>
                 </Card>
             )}
+
+             {activeSection === 'printers' && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Printers</CardTitle>
+                        <CardDescription>Manage your kitchen and receipt printers.</CardDescription>
+                         <Button className="absolute top-6 right-6" onClick={() => handleOpenPrinterDialog(null)}>
+                            <PlusCircle className="mr-2 h-4 w-4"/> Add Printer
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Printer Name</TableHead>
+                                    <TableHead>Connection</TableHead>
+                                    <TableHead>IP Address</TableHead>
+                                    <TableHead>Assigned To</TableHead>
+                                    <TableHead><span className="sr-only">Actions</span></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {printers.map(printer => (
+                                    <TableRow key={printer.id}>
+                                        <TableCell className="font-medium">{printer.name}</TableCell>
+                                        <TableCell><Badge variant="outline">{printer.connection_type}</Badge></TableCell>
+                                        <TableCell>{printer.ip_address || 'N/A'}</TableCell>
+                                        <TableCell>{getDeviceName(printer.pos_device_id)}</TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => handleOpenPrinterDialog(printer)}>
+                                                        <Edit className="mr-2 h-4 w-4" /> Edit
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeletePrinter(printer.id)}>
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
+            
+            {activeSection === 'receipt' && (
+                <div className="space-y-6">
+                    {stores.map(store => (
+                        <Card key={store.id}>
+                            <CardHeader>
+                                <CardTitle>Receipt Settings: {store.name}</CardTitle>
+                                <CardDescription>Customize the printed and emailed receipts for this store.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                 <div className="space-y-2">
+                                    <Label>Header Text</Label>
+                                    <Textarea
+                                        value={receiptSettings[store.id]?.header || ''}
+                                        onChange={(e) => handleReceiptSettingChange(store.id, 'header', e.target.value)}
+                                        placeholder="E.g., Welcome to our store!"
+                                    />
+                                 </div>
+                                 <div className="space-y-2">
+                                    <Label>Footer Text</Label>
+                                    <Textarea
+                                        value={receiptSettings[store.id]?.footer || ''}
+                                        onChange={(e) => handleReceiptSettingChange(store.id, 'footer', e.target.value)}
+                                        placeholder="E.g., Thank you for your business!"
+                                    />
+                                 </div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
+            
+            {activeSection === 'taxes' && (
+                 <div className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Taxes</CardTitle>
+                            <CardDescription>Manage taxes applied to sales.</CardDescription>
+                            <Button className="absolute top-6 right-6" onClick={() => handleOpenTaxDialog(null)}>
+                                <PlusCircle className="mr-2 h-4 w-4"/> Add Tax
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Tax Name</TableHead>
+                                        <TableHead>Rate (%)</TableHead>
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Default</TableHead>
+                                        <TableHead><span className="sr-only">Actions</span></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {taxes.map(tax => (
+                                        <TableRow key={tax.id}>
+                                            <TableCell className="font-medium">{tax.name}</TableCell>
+                                            <TableCell>{tax.rate.toFixed(2)}%</TableCell>
+                                            <TableCell><Badge variant="outline">{tax.type}</Badge></TableCell>
+                                            <TableCell>{tax.is_default ? 'Yes' : 'No'}</TableCell>
+                                            <TableCell className="text-right">
+                                                 <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                        <DropdownMenuItem onClick={() => handleOpenTaxDialog(tax)}>
+                                                            <Edit className="mr-2 h-4 w-4" /> Edit
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteTax(tax.id)}>
+                                                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Currency</CardTitle>
+                            <CardDescription>Set the default currency symbol for your POS.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="max-w-xs space-y-2">
+                                <Label htmlFor="currency">Currency Symbol</Label>
+                                <Input 
+                                    id="currency" 
+                                    value={currency} 
+                                    onChange={(e) => setCurrency(e.target.value)}
+                                    placeholder="$"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+                 </div>
+            )}
         </main>
       </div>
 
+      {/* Dialogs */}
       <Dialog open={isStoreDialogOpen} onOpenChange={setIsStoreDialogOpen}>
         <DialogContent>
             <form onSubmit={handleStoreFormSubmit}>
@@ -329,9 +609,7 @@ export default function SettingsPage() {
                         <Input id="address" name="address" defaultValue={editingStore?.address} required />
                     </div>
                 </div>
-                <DialogFooter>
-                    <Button type="submit">Save</Button>
-                </DialogFooter>
+                <DialogFooter><Button type="submit">Save</Button></DialogFooter>
             </form>
         </DialogContent>
       </Dialog>
@@ -362,9 +640,87 @@ export default function SettingsPage() {
                         </Select>
                     </div>
                 </div>
-                <DialogFooter>
-                    <Button type="submit">Save</Button>
-                </DialogFooter>
+                <DialogFooter><Button type="submit">Save</Button></DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
+      
+       <Dialog open={isPrinterDialogOpen} onOpenChange={setIsPrinterDialogOpen}>
+        <DialogContent>
+            <form onSubmit={handlePrinterFormSubmit}>
+                <DialogHeader>
+                    <DialogTitle>{editingPrinter?.id ? 'Edit Printer' : 'Add Printer'}</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 grid gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Printer Name</Label>
+                        <Input id="name" name="name" defaultValue={editingPrinter?.name} required />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="connection_type">Connection Type</Label>
+                        <Select name="connection_type" required defaultValue={editingPrinter?.connection_type}>
+                            <SelectTrigger><SelectValue/></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Network">Network (IP)</SelectItem>
+                                <SelectItem value="Bluetooth">Bluetooth</SelectItem>
+                                <SelectItem value="Cable">Cable (USB/Serial)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {editingPrinter?.connection_type === 'Network' && (
+                         <div className="space-y-2">
+                            <Label htmlFor="ip_address">IP Address</Label>
+                            <Input id="ip_address" name="ip_address" defaultValue={editingPrinter?.ip_address || ''} placeholder="e.g., 192.168.1.100" />
+                        </div>
+                    )}
+                    <div className="space-y-2">
+                        <Label htmlFor="pos_device_id">POS Device</Label>
+                        <Select name="pos_device_id" required defaultValue={editingPrinter?.pos_device_id}>
+                            <SelectTrigger><SelectValue placeholder="Assign to a device" /></SelectTrigger>
+                            <SelectContent>
+                                {posDevices.map(device => (
+                                    <SelectItem key={device.id} value={device.id}>{device.name} ({getStoreName(device.store_id)})</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter><Button type="submit">Save</Button></DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isTaxDialogOpen} onOpenChange={setIsTaxDialogOpen}>
+        <DialogContent>
+            <form onSubmit={handleTaxFormSubmit}>
+                <DialogHeader>
+                    <DialogTitle>{editingTax?.id ? 'Edit Tax' : 'Add Tax'}</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 grid gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Tax Name</Label>
+                        <Input id="name" name="name" defaultValue={editingTax?.name} required />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="rate">Rate (%)</Label>
+                        <Input id="rate" name="rate" type="number" step="0.01" defaultValue={editingTax?.rate} required />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="type">Tax Type</Label>
+                        <Select name="type" required defaultValue={editingTax?.type}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Added">Added to price</SelectItem>
+                                <SelectItem value="Included">Included in price</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <Switch id="is_default" name="is_default" defaultChecked={editingTax?.is_default} />
+                        <Label htmlFor="is_default">Set as default tax</Label>
+                    </div>
+                </div>
+                <DialogFooter><Button type="submit">Save</Button></DialogFooter>
             </form>
         </DialogContent>
       </Dialog>

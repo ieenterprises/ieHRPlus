@@ -33,7 +33,32 @@ export type PaymentType = {
     name: string;
     type: 'Cash' | 'Card' | 'Credit' | 'Other';
 };
+export type PrinterType = {
+    id: string;
+    name: string;
+    connection_type: 'Network' | 'Bluetooth' | 'Cable';
+    ip_address?: string | null;
+    pos_device_id: string;
+};
 
+export type ReceiptSettings = {
+  header: string;
+  footer: string;
+  // These were removed for simplicity but can be added back
+  // emailedLogo: string | null;
+  // printedLogo: string | null;
+  // showCustomerInfo: boolean;
+  // showComments: boolean;
+  // language: string;
+};
+
+export type Tax = {
+    id: string;
+    name: string;
+    rate: number;
+    is_default: boolean;
+    type: 'Included' | 'Added';
+};
 
 export type SaleItem = {
   id: string;
