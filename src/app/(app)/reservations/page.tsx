@@ -69,10 +69,10 @@ export default function ReservationsPage() {
     const fetchData = async () => {
       if (!supabase) return;
       setLoading(true);
-      const [reservationsRes, roomsRes, categoriesRes] = await Promise.all([
+      const [reservationsRes, productsRes, categoriesRes] = await Promise.all([
         supabase.from('reservations').select('*, products(name)').order('check_in', { ascending: false }),
         supabase.from('products').select('*'),
-        supabase.from('categories').select('id').eq('name', 'Room').single(),
+        supabase.from('categories').select('id').eq('name', 'Room').limit(1),
       ]);
 
       if (reservationsRes.error) {
@@ -81,11 +81,18 @@ export default function ReservationsPage() {
         setReservations(reservationsRes.data || []);
       }
 
-      if (roomsRes.error || categoriesRes.error) {
-        toast({ title: "Error fetching room data", description: roomsRes.error?.message || categoriesRes.error?.message, variant: "destructive" });
+      if (productsRes.error) {
+         toast({ title: "Error fetching room data", description: productsRes.error.message, variant: "destructive" });
+      } else if (categoriesRes.error) {
+          // This check handles potential RLS or other access errors for categories table
+         toast({ title: "Error fetching room categories", description: categoriesRes.error.message, variant: "destructive" });
       } else {
-        const roomCategoryId = categoriesRes.data?.id;
-        setRooms(roomsRes.data?.filter(p => p.category_id === roomCategoryId) || []);
+        const roomCategoryId = categoriesRes.data?.[0]?.id;
+        if (roomCategoryId) {
+            setRooms(productsRes.data?.filter(p => p.category_id === roomCategoryId) || []);
+        } else {
+            setRooms([]); // No "Room" category found, so no rooms to show.
+        }
       }
       setLoading(false);
     };
