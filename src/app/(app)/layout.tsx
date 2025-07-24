@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
@@ -11,14 +11,19 @@ import { SettingsProvider, useSettings } from "@/hooks/use-settings";
 function AppLayoutContent({ children }: { children: React.ReactNode }) {
   const { loggedInUser } = useSettings();
   const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    if (loggedInUser === null) {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (isClient && loggedInUser === null) {
       router.push("/sign-in");
     }
-  }, [loggedInUser, router]);
+  }, [loggedInUser, router, isClient]);
 
-  if (!loggedInUser) {
+  if (!isClient || !loggedInUser) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <p>Loading...</p>
