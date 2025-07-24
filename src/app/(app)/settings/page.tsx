@@ -1,14 +1,14 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Bell, Percent, SlidersHorizontal, Package, Building, CreditCard, Shield, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, X, Receipt, DollarSign } from "lucide-react";
+import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Percent, SlidersHorizontal, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -117,6 +117,9 @@ export default function SettingsPage() {
   const [editingTax, setEditingTax] = useState<Partial<Tax> | null>(null);
 
   const [selectedStoreForReceipt, setSelectedStoreForReceipt] = useState<string>(stores[0]?.id || '');
+
+  const emailedLogoInputRef = useRef<HTMLInputElement>(null);
+  const printedLogoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!selectedStoreForReceipt && stores.length > 0) {
@@ -248,11 +251,22 @@ export default function SettingsPage() {
       setReceiptSettings(prev => ({
           ...prev,
           [storeId]: {
-              ...prev[storeId],
+              ...(prev[storeId] || {}),
               [field]: value
           }
       }));
   }
+  
+  const handleLogoChange = (storeId: string, field: 'emailedLogo' | 'printedLogo', event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        handleReceiptSettingChange(storeId, field, reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Tax Handlers
   const handleOpenTaxDialog = (tax: Partial<Tax> | null) => {
@@ -288,7 +302,7 @@ export default function SettingsPage() {
   const getStoreName = (storeId: string) => stores.find(s => s.id === storeId)?.name || 'N/A';
   const getDeviceName = (deviceId: string) => posDevices.find(d => d.id === deviceId)?.name || 'N/A';
   
-  const currentReceiptSettings = receiptSettings[selectedStoreForReceipt];
+  const currentReceiptSettings = receiptSettings[selectedStoreForReceipt] || {};
 
   return (
     <div className="space-y-8">
@@ -522,7 +536,7 @@ export default function SettingsPage() {
                                 <CardTitle>Receipt settings</CardTitle>
                                 <CardDescription>Customize the printed and emailed receipts for this store.</CardDescription>
                             </div>
-                            <Select value={selectedStoreForReceipt} onValueChange={setSelectedStoreForReceipt}>
+                            <Select value={selectedStoreForReceipt} onValueChange={setSelectedStoreForReceipt} disabled={!stores.length}>
                                 <SelectTrigger className="w-[200px]">
                                     <SelectValue placeholder="Select a store" />
                                 </SelectTrigger>
@@ -538,14 +552,42 @@ export default function SettingsPage() {
                           <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1">
                                 <span className="text-sm text-muted-foreground">Emailed receipt</span>
-                                <div className="h-24 w-full border rounded-md flex items-center justify-center bg-muted/50 cursor-pointer">
-                                  <Image src="https://placehold.co/150x150.png" width={80} height={80} alt="Emailed receipt logo" data-ai-hint="logo company" />
+                                <Input
+                                  type="file"
+                                  ref={emailedLogoInputRef}
+                                  className="hidden"
+                                  accept="image/*"
+                                  onChange={(e) => handleLogoChange(selectedStoreForReceipt, 'emailedLogo', e)}
+                                />
+                                <div
+                                  className="h-24 w-full border rounded-md flex items-center justify-center bg-muted/50 cursor-pointer"
+                                  onClick={() => emailedLogoInputRef.current?.click()}
+                                >
+                                  {currentReceiptSettings.emailedLogo ? (
+                                    <Image src={currentReceiptSettings.emailedLogo} width={80} height={80} alt="Emailed receipt logo" />
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">Click to upload</span>
+                                  )}
                                 </div>
                               </div>
                                <div className="space-y-1">
                                 <span className="text-sm text-muted-foreground">Printed receipt</span>
-                                <div className="h-24 w-full border rounded-md flex items-center justify-center bg-muted/50 cursor-pointer">
-                                   <Image src="https://placehold.co/150x150.png" width={80} height={80} alt="Printed receipt logo" data-ai-hint="logo company" />
+                                <Input
+                                  type="file"
+                                  ref={printedLogoInputRef}
+                                  className="hidden"
+                                  accept="image/*"
+                                  onChange={(e) => handleLogoChange(selectedStoreForReceipt, 'printedLogo', e)}
+                                />
+                                <div
+                                  className="h-24 w-full border rounded-md flex items-center justify-center bg-muted/50 cursor-pointer"
+                                  onClick={() => printedLogoInputRef.current?.click()}
+                                >
+                                  {currentReceiptSettings.printedLogo ? (
+                                    <Image src={currentReceiptSettings.printedLogo} width={80} height={80} alt="Printed receipt logo" />
+                                  ) : (
+                                     <span className="text-xs text-muted-foreground">Click to upload</span>
+                                  )}
                                 </div>
                               </div>
                           </div>
@@ -558,6 +600,7 @@ export default function SettingsPage() {
                                 onChange={(e) => handleReceiptSettingChange(selectedStoreForReceipt, 'header', e.target.value)}
                                 placeholder="E.g., Welcome to our store!"
                                 maxLength={500}
+                                disabled={!selectedStoreForReceipt}
                             />
                              <p className="text-xs text-muted-foreground text-right">{currentReceiptSettings?.header?.length || 0}/500</p>
                          </div>
@@ -569,6 +612,7 @@ export default function SettingsPage() {
                                 onChange={(e) => handleReceiptSettingChange(selectedStoreForReceipt, 'footer', e.target.value)}
                                 placeholder="E.g., Thank you for your business!"
                                 maxLength={500}
+                                disabled={!selectedStoreForReceipt}
                             />
                             <p className="text-xs text-muted-foreground text-right">{currentReceiptSettings?.footer?.length || 0}/500</p>
                          </div>
@@ -579,6 +623,7 @@ export default function SettingsPage() {
                              id="showCustomerInfo"
                              checked={currentReceiptSettings?.showCustomerInfo}
                              onCheckedChange={(checked) => handleReceiptSettingChange(selectedStoreForReceipt, 'showCustomerInfo', checked)}
+                             disabled={!selectedStoreForReceipt}
                            />
                          </div>
 
@@ -588,6 +633,7 @@ export default function SettingsPage() {
                              id="showComments"
                              checked={currentReceiptSettings?.showComments}
                              onCheckedChange={(checked) => handleReceiptSettingChange(selectedStoreForReceipt, 'showComments', checked)}
+                             disabled={!selectedStoreForReceipt}
                            />
                          </div>
                          
@@ -596,6 +642,7 @@ export default function SettingsPage() {
                             <Select
                               value={currentReceiptSettings?.language}
                               onValueChange={(value) => handleReceiptSettingChange(selectedStoreForReceipt, 'language', value)}
+                              disabled={!selectedStoreForReceipt}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Select language" />
