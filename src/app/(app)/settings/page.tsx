@@ -350,10 +350,12 @@ export default function SettingsPage() {
 
             {activeSection === 'stores' && (
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Stores</CardTitle>
-                        <CardDescription>Manage your physical store locations.</CardDescription>
-                        <Button className="absolute top-6 right-6" onClick={() => handleOpenStoreDialog(null)}>
+                    <CardHeader className="flex flex-row items-start justify-between">
+                        <div>
+                            <CardTitle>Stores</CardTitle>
+                            <CardDescription>Manage your physical store locations.</CardDescription>
+                        </div>
+                        <Button onClick={() => handleOpenStoreDialog(null)}>
                             <PlusCircle className="mr-2 h-4 w-4"/> Add Store
                         </Button>
                     </CardHeader>
@@ -399,10 +401,12 @@ export default function SettingsPage() {
 
             {activeSection === 'pos_devices' && (
                  <Card>
-                    <CardHeader>
-                        <CardTitle>POS Devices</CardTitle>
-                        <CardDescription>Manage the devices used to make sales.</CardDescription>
-                         <Button className="absolute top-6 right-6" onClick={() => handleOpenDeviceDialog(null)}>
+                    <CardHeader className="flex flex-row items-start justify-between">
+                        <div>
+                            <CardTitle>POS Devices</CardTitle>
+                            <CardDescription>Manage the devices used to make sales.</CardDescription>
+                        </div>
+                         <Button onClick={() => handleOpenDeviceDialog(null)}>
                             <PlusCircle className="mr-2 h-4 w-4"/> Add Device
                         </Button>
                     </CardHeader>
@@ -448,10 +452,12 @@ export default function SettingsPage() {
 
              {activeSection === 'printers' && (
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Printers</CardTitle>
-                        <CardDescription>Manage your kitchen and receipt printers.</CardDescription>
-                         <Button className="absolute top-6 right-6" onClick={() => handleOpenPrinterDialog(null)}>
+                    <CardHeader className="flex flex-row items-start justify-between">
+                        <div>
+                            <CardTitle>Printers</CardTitle>
+                            <CardDescription>Manage your kitchen and receipt printers.</CardDescription>
+                        </div>
+                         <Button onClick={() => handleOpenPrinterDialog(null)}>
                             <PlusCircle className="mr-2 h-4 w-4"/> Add Printer
                         </Button>
                     </CardHeader>
@@ -533,10 +539,12 @@ export default function SettingsPage() {
             {activeSection === 'taxes' && (
                  <div className="space-y-6">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Taxes</CardTitle>
-                            <CardDescription>Manage taxes applied to sales.</CardDescription>
-                            <Button className="absolute top-6 right-6" onClick={() => handleOpenTaxDialog(null)}>
+                        <CardHeader className="flex flex-row items-start justify-between">
+                            <div>
+                                <CardTitle>Taxes</CardTitle>
+                                <CardDescription>Manage taxes applied to sales.</CardDescription>
+                            </div>
+                            <Button onClick={() => handleOpenTaxDialog(null)}>
                                 <PlusCircle className="mr-2 h-4 w-4"/> Add Tax
                             </Button>
                         </CardHeader>
