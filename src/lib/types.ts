@@ -3,7 +3,7 @@ import type { AnyPermission } from "./permissions";
 export type Category = Database['public']['Tables']['categories']['Row']
 export type Product = Database['public']['Tables']['products']['Row']
 export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions'> & {
-    permissions: AnyPermission[] | null;
+    permissions: AnyPermission[];
 }
 export type Customer = Database['public']['Tables']['customers']['Row']
 export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 'payment_methods'> & {
@@ -31,6 +31,12 @@ export type SaleItem = {
   quantity: number;
   price: number;
 }
+
+export type Role = {
+  id: string;
+  name: string;
+  permissions: AnyPermission[];
+};
 
 export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier";
 

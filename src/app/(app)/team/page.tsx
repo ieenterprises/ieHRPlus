@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -18,7 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type User, type UserRole } from "@/lib/types";
+import { type User, type UserRole, type Role } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Store } from "lucide-react";
@@ -51,6 +52,7 @@ import { posPermissions, backOfficePermissions, type AnyPermission } from "@/lib
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 const EMPTY_USER: Partial<User> = {
@@ -62,11 +64,10 @@ const EMPTY_USER: Partial<User> = {
   permissions: [],
 };
 
-const MOCK_USERS: User[] = [
-    { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS"], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: "user_3", name: "Jane Manager", email: "jane.m@orderflow.com", role: "Manager", pin: "4321", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO"], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
-];
+const EMPTY_ROLE: Partial<Role> = {
+  name: "",
+  permissions: [],
+};
 
 const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermissions)[];
 const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
@@ -85,38 +86,68 @@ const getPermissionsForRole = (role: UserRole): AnyPermission[] => {
     }
 }
 
+const MOCK_ROLES: Role[] = [
+  { id: "role_owner", name: "Owner", permissions: getPermissionsForRole("Owner") },
+  { id: "role_admin", name: "Administrator", permissions: getPermissionsForRole("Administrator") },
+  { id: "role_manager", name: "Manager", permissions: getPermissionsForRole("Manager") },
+  { id: "role_cashier", name: "Cashier", permissions: getPermissionsForRole("Cashier") },
+];
+
+const MOCK_USERS: User[] = [
+    { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: getPermissionsForRole("Owner"), avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: getPermissionsForRole("Cashier"), avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_3", name: "Jane Manager", email: "jane.m@orderflow.com", role: "Manager", pin: "4321", permissions: getPermissionsForRole("Manager"), avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+];
+
+const systemRoles = ["Owner", "Administrator"];
+
 
 export default function TeamPage() {
   const [team, setTeam] = useState<User[]>(MOCK_USERS);
+  const [roles, setRoles] = useState<Role[]>(MOCK_ROLES);
+
   const [loading, setLoading] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
-  const [selectedPermissions, setSelectedPermissions] = useState<AnyPermission[]>([]);
   
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+  const [selectedUserPermissions, setSelectedUserPermissions] = useState<AnyPermission[]>([]);
+  
+  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+  const [editingRole, setEditingRole] = useState<Partial<Role> | null>(null);
+  const [selectedRolePermissions, setSelectedRolePermissions] = useState<AnyPermission[]>([]);
+
   const { toast } = useToast();
 
   useEffect(() => {
-    if (editingUser?.role) {
-      if (editingUser.role === 'Owner' || editingUser.role === 'Administrator') {
-        setSelectedPermissions(getPermissionsForRole(editingUser.role as UserRole));
-      } else {
-        setSelectedPermissions((editingUser.permissions as AnyPermission[] | null) || getPermissionsForRole(editingUser.role as UserRole));
-      }
+    if (editingUser) {
+        setSelectedUserPermissions(editingUser.permissions || []);
     }
   }, [editingUser]);
+  
+  useEffect(() => {
+    if (editingRole) {
+        setSelectedRolePermissions(editingRole.permissions || []);
+    }
+  }, [editingRole]);
 
-  const handleOpenDialog = (user: Partial<User> | null) => {
-    const targetUser = user ? user : EMPTY_USER;
+
+  // User Handlers
+  const handleOpenUserDialog = (user: Partial<User> | null) => {
+    const targetUser = user ? { ...user } : { ...EMPTY_USER };
+    if (!user) {
+        const defaultRole = roles.find(r => r.name === 'Cashier');
+        targetUser.permissions = defaultRole?.permissions || [];
+    }
     setEditingUser(targetUser);
-    setIsDialogOpen(true);
+    setIsUserDialogOpen(true);
   };
   
-  const handleDialogClose = (open: boolean) => {
+  const handleUserDialogClose = (open: boolean) => {
     if (!open) {
       setEditingUser(null);
-      setSelectedPermissions([]);
+      setSelectedUserPermissions([]);
     }
-    setIsDialogOpen(open);
+    setIsUserDialogOpen(open);
   }
 
   const handleSaveUser = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -130,7 +161,7 @@ export default function TeamPage() {
       email: formData.get("email") as string,
       role: formData.get("role") as UserRole,
       pin: formData.get("pin") as string,
-      permissions: selectedPermissions,
+      permissions: selectedUserPermissions,
     };
 
     try {
@@ -147,7 +178,7 @@ export default function TeamPage() {
             setTeam([newUser, ...team]);
             toast({ title: "User Added", description: `${newUser.name} has been added to the team.` });
         }
-        handleDialogClose(false);
+        handleUserDialogClose(false);
     } catch(error: any) {
         toast({ title: "Error saving user", description: "An unexpected error occurred", variant: "destructive" });
     }
@@ -166,17 +197,94 @@ export default function TeamPage() {
     }
   }
 
-  const handleRoleChange = (role: UserRole) => {
-    setEditingUser(prev => ({ ...prev, role }));
-    setSelectedPermissions(getPermissionsForRole(role));
+  const handleUserRoleChange = (roleName: string) => {
+    const role = roles.find(r => r.name === roleName);
+    if(role) {
+      setEditingUser(prev => ({ ...prev, role: role.name as UserRole }));
+      setSelectedUserPermissions(role.permissions);
+    }
   }
   
-  const handlePermissionToggle = (permission: AnyPermission, checked: boolean) => {
-    setSelectedPermissions(prev =>
+  const handleUserPermissionToggle = (permission: AnyPermission, checked: boolean) => {
+    setSelectedUserPermissions(prev =>
         checked ? [...prev, permission] : prev.filter(p => p !== permission)
     );
   }
 
+  // Role Handlers
+  const handleOpenRoleDialog = (role: Partial<Role> | null) => {
+    setEditingRole(role ? { ...role } : { ...EMPTY_ROLE });
+    setIsRoleDialogOpen(true);
+  };
+  
+  const handleRoleDialogClose = (open: boolean) => {
+    if (!open) {
+      setEditingRole(null);
+      setSelectedRolePermissions([]);
+    }
+    setIsRoleDialogOpen(open);
+  }
+  
+  const handleSaveRole = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingRole) return;
+
+    const formData = new FormData(event.currentTarget);
+    const roleData = {
+      name: formData.get("name") as string,
+      permissions: selectedRolePermissions,
+    };
+
+    try {
+        if (editingRole.id) {
+            setRoles(roles.map(r => r.id === editingRole.id ? { ...r, ...roleData } as Role : r));
+            toast({ title: "Role Updated", description: `${roleData.name} has been updated.` });
+        } else {
+            const newRole: Role = {
+                id: `role_${new Date().getTime()}`,
+                ...roleData,
+            };
+            setRoles([...roles, newRole]);
+            toast({ title: "Role Added", description: `${newRole.name} has been added.` });
+        }
+        handleRoleDialogClose(false);
+    } catch(error: any) {
+        toast({ title: "Error saving role", description: "An unexpected error occurred", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteRole = async (roleId: string) => {
+    const roleToDelete = roles.find(r => r.id === roleId);
+    if (!roleToDelete) return;
+    
+    if (team.some(user => user.role === roleToDelete.name)) {
+        toast({
+            title: "Cannot Delete Role",
+            description: "This role is currently assigned to one or more users. Please reassign them before deleting the role.",
+            variant: "destructive",
+        });
+        return;
+    }
+
+    try {
+        setRoles(roles.filter(r => r.id !== roleId));
+        toast({
+            title: "Role Deleted",
+            description: `The "${roleToDelete.name}" role has been removed.`,
+            variant: "destructive",
+        });
+    } catch(error: any) {
+        toast({ title: "Error deleting role", description: "An unexpected error occurred", variant: "destructive" });
+    }
+  };
+  
+  const handleRolePermissionToggle = (permission: AnyPermission, checked: boolean) => {
+    setSelectedRolePermissions(prev =>
+        checked ? [...prev, permission] : prev.filter(p => p !== permission)
+    );
+  }
+
+  // Common UI Helpers
   const getRoleBadgeVariant = (role: UserRole): BadgeProps['variant'] => {
     switch (role) {
       case "Owner":
@@ -192,96 +300,216 @@ export default function TeamPage() {
     }
   };
 
-  const isPermissionLocked = editingUser?.role === 'Owner' || editingUser?.role === 'Administrator';
+  const isUserPermissionLocked = systemRoles.includes(editingUser?.role || "");
+  const isRolePermissionLocked = systemRoles.includes(editingRole?.name || "");
 
+  const renderPermissions = (
+    permissions: AnyPermission[], 
+    onToggle: (permission: AnyPermission, checked: boolean) => void,
+    isLocked: boolean
+    ) => (
+    <ScrollArea className="h-72 p-4 border rounded-md">
+        <div className="space-y-6">
+            <div>
+                <h4 className="flex items-center gap-2 text-md font-semibold mb-2">
+                    <Store className="h-5 w-5" />
+                    Point of Sale
+                </h4>
+                <div className="space-y-2">
+                    {allPosPermissions.map(permission => (
+                        <div key={permission} className="flex items-center justify-between">
+                            <Label htmlFor={permission} className="font-normal text-sm">{posPermissions[permission].label}</Label>
+                            <Switch
+                                id={permission}
+                                checked={permissions.includes(permission)}
+                                onCheckedChange={(checked) => onToggle(permission, checked)}
+                                disabled={isLocked}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <Separator />
+
+            <div>
+                <h4 className="flex items-center gap-2 text-md font-semibold mb-2">
+                    <ShieldCheck className="h-5 w-5" />
+                    Back Office
+                </h4>
+                <div className="space-y-2">
+                    {allBackOfficePermissions.map(permission => (
+                        <div key={permission} className="flex items-center justify-between">
+                            <Label htmlFor={permission} className="font-normal text-sm">{backOfficePermissions[permission].label}</Label>
+                            <Switch
+                                id={permission}
+                                checked={permissions.includes(permission)}
+                                onCheckedChange={(checked) => onToggle(permission, checked)}
+                                disabled={isLocked}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    </ScrollArea>
+  );
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <PageHeader
-          title="Team Management"
-          description="Manage your cashiers, managers, and their permissions."
-        />
-        <Button onClick={() => handleOpenDialog(null)}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add User
-        </Button>
-      </div>
+      <PageHeader
+        title="Team Management"
+        description="Manage your team members and their roles and permissions."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Users</CardTitle>
-          <CardDescription>
-            A list of all users in your system.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead className="hidden md:table-cell">Email</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading...</TableCell></TableRow>
-              ) : team.length > 0 ? (
-                team.map((user) => (
-                    <TableRow key={user.id}>
-                    <TableCell>
-                        <div className="flex items-center gap-3">
-                        <Avatar>
-                            <AvatarImage src={user.avatar_url || ''} alt={user.name} data-ai-hint="person portrait" />
-                            <AvatarFallback>
-                            {user.name.charAt(0)}
-                            </AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium">{user.name}</span>
-                        </div>
-                    </TableCell>
-                    <TableCell>
-                        <Badge variant={getRoleBadgeVariant(user.role as UserRole)}>
-                        {user.role}
-                        </Badge>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                        {user.email}
-                    </TableCell>
-                    <TableCell>
-                        <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Toggle menu</span>
+      <Tabs defaultValue="users">
+            <TabsList className="mb-4">
+                <TabsTrigger value="users">Users</TabsTrigger>
+                <TabsTrigger value="roles">Roles</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="users">
+                <Card>
+                    <CardHeader className="relative">
+                        <CardTitle>Users</CardTitle>
+                        <CardDescription>
+                            A list of all users in your system.
+                        </CardDescription>
+                         <div className="absolute top-6 right-6">
+                            <Button onClick={() => handleOpenUserDialog(null)}>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Add User
                             </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => handleOpenDialog(user)}>
-                                <Edit className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteUser(user.id)}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                        </DropdownMenu>
-                    </TableCell>
-                    </TableRow>
-                ))
-              ) : (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center">No users found.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                    <Table>
+                        <TableHeader>
+                        <TableRow>
+                            <TableHead>User</TableHead>
+                            <TableHead>Role</TableHead>
+                            <TableHead className="hidden md:table-cell">Email</TableHead>
+                            <TableHead>
+                            <span className="sr-only">Actions</span>
+                            </TableHead>
+                        </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                        {loading ? (
+                            <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading...</TableCell></TableRow>
+                        ) : team.length > 0 ? (
+                            team.map((user) => (
+                                <TableRow key={user.id}>
+                                <TableCell>
+                                    <div className="flex items-center gap-3">
+                                    <Avatar>
+                                        <AvatarImage src={user.avatar_url || ''} alt={user.name} data-ai-hint="person portrait" />
+                                        <AvatarFallback>
+                                        {user.name.charAt(0)}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <span className="font-medium">{user.name}</span>
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <Badge variant={getRoleBadgeVariant(user.role as UserRole)}>
+                                    {user.role}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="hidden md:table-cell">
+                                    {user.email}
+                                </TableCell>
+                                <TableCell>
+                                    <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button aria-haspopup="true" size="icon" variant="ghost">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                        <span className="sr-only">Toggle menu</span>
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                        <DropdownMenuItem onClick={() => handleOpenUserDialog(user)}>
+                                            <Edit className="mr-2 h-4 w-4" /> Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteUser(user.id)}>
+                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow><TableCell colSpan={4} className="h-24 text-center">No users found.</TableCell></TableRow>
+                        )}
+                        </TableBody>
+                    </Table>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            
+            <TabsContent value="roles">
+                <Card>
+                    <CardHeader className="relative">
+                        <CardTitle>Roles</CardTitle>
+                        <CardDescription>
+                            Define roles and their permissions for your team.
+                        </CardDescription>
+                         <div className="absolute top-6 right-6">
+                            <Button onClick={() => handleOpenRoleDialog(null)}>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Add Role
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Role Name</TableHead>
+                                    <TableHead>Permissions</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                            {loading ? (
+                                <TableRow><TableCell colSpan={3} className="h-24 text-center">Loading...</TableCell></TableRow>
+                            ) : roles.length > 0 ? (
+                                roles.map((role) => (
+                                    <TableRow key={role.id}>
+                                        <TableCell>
+                                            <Badge variant={getRoleBadgeVariant(role.name as UserRole)}>
+                                                {role.name}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>{role.permissions.length} permissions</TableCell>
+                                        <TableCell className="text-right">
+                                           {!systemRoles.includes(role.name) && (
+                                                <>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleOpenRoleDialog(role)}>
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteRole(role.id)}>
+                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                             ) : (
+                                <TableRow><TableCell colSpan={3} className="h-24 text-center">No roles found.</TableCell></TableRow>
+                             )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+      </Tabs>
 
-      <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
+
+      <Dialog open={isUserDialogOpen} onOpenChange={handleUserDialogClose}>
           <DialogContent className="sm:max-w-4xl">
             <form onSubmit={handleSaveUser}>
               <DialogHeader>
@@ -303,15 +531,16 @@ export default function TeamPage() {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="role">Role</Label>
-                        <Select name="role" required defaultValue={editingUser?.role} onValueChange={(value) => handleRoleChange(value as UserRole)}>
+                        <Select name="role" required defaultValue={editingUser?.role} onValueChange={handleUserRoleChange}>
                         <SelectTrigger id="role">
                             <SelectValue placeholder="Select a role" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="Owner">Owner</SelectItem>
-                            <SelectItem value="Administrator">Administrator</SelectItem>
-                            <SelectItem value="Manager">Manager</SelectItem>
-                            <SelectItem value="Cashier">Cashier</SelectItem>
+                            {roles.map(role => (
+                                <SelectItem key={role.id} value={role.name}>
+                                    {role.name}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                         </Select>
                     </div>
@@ -332,51 +561,38 @@ export default function TeamPage() {
 
                   <div className="space-y-4">
                       <h3 className="text-lg font-medium">Permissions</h3>
-                       <ScrollArea className="h-72 p-4 border rounded-md">
-                        <div className="space-y-6">
-                            <div>
-                                <h4 className="flex items-center gap-2 text-md font-semibold mb-2">
-                                    <Store className="h-5 w-5" />
-                                    Point of Sale
-                                </h4>
-                                <div className="space-y-2">
-                                    {allPosPermissions.map(permission => (
-                                        <div key={permission} className="flex items-center justify-between">
-                                            <Label htmlFor={permission} className="font-normal text-sm">{posPermissions[permission].label}</Label>
-                                            <Switch
-                                                id={permission}
-                                                checked={selectedPermissions.includes(permission)}
-                                                onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
-                                                disabled={isPermissionLocked}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                      {renderPermissions(selectedUserPermissions, handleUserPermissionToggle, isUserPermissionLocked)}
+                  </div>
+              </div>
+                            
+              <DialogFooter className="pt-4">
+                <Button type="submit">Save Changes</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isRoleDialogOpen} onOpenChange={handleRoleDialogClose}>
+          <DialogContent className="sm:max-w-4xl">
+            <form onSubmit={handleSaveRole}>
+              <DialogHeader>
+                <DialogTitle>{editingRole?.id ? 'Edit Role' : 'Add New Role'}</DialogTitle>
+                <DialogDescription>
+                  {editingRole?.id ? "Update the role's details and permissions." : "Define a new role and assign its permissions."}
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="grid md:grid-cols-2 gap-8 py-4">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Role Name</Label>
+                        <Input id="name" name="name" defaultValue={editingRole?.name} required disabled={isRolePermissionLocked} />
+                    </div>
+                  </div>
 
-                            <Separator />
-
-                            <div>
-                                <h4 className="flex items-center gap-2 text-md font-semibold mb-2">
-                                    <ShieldCheck className="h-5 w-5" />
-                                    Back Office
-                                </h4>
-                                <div className="space-y-2">
-                                    {allBackOfficePermissions.map(permission => (
-                                        <div key={permission} className="flex items-center justify-between">
-                                            <Label htmlFor={permission} className="font-normal text-sm">{backOfficePermissions[permission].label}</Label>
-                                            <Switch
-                                                id={permission}
-                                                checked={selectedPermissions.includes(permission)}
-                                                onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
-                                                disabled={isPermissionLocked}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                       </ScrollArea>
+                  <div className="space-y-4">
+                      <h3 className="text-lg font-medium">Permissions</h3>
+                      {renderPermissions(selectedRolePermissions, handleRolePermissionToggle, isRolePermissionLocked)}
                   </div>
               </div>
                             
