@@ -18,7 +18,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (isClient && loggedInUser === null) {
+    if (isClient && !loggedInUser) {
       router.push("/sign-in");
     }
   }, [loggedInUser, router, isClient]);

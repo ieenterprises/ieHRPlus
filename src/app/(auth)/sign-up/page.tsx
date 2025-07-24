@@ -30,39 +30,43 @@ export default function SignUpPage() {
     }
 
     const formData = new FormData(event.currentTarget);
-    const email = (formData.get("email") as string).toLowerCase();
-    
-    // Check if user already exists
-    const { data: existingUser, error: fetchError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email)
-        .single();
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+    const ownerName = formData.get("owner_name") as string;
+    const pin = formData.get("pin") as string;
 
-    if (existingUser) {
+    const { data: { user }, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+            data: {
+                name: ownerName,
+                role: 'Owner',
+                permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)],
+                avatar_url: `https://placehold.co/100x100.png?text=${ownerName.charAt(0)}`,
+                pin: pin
+            }
+        }
+    });
+
+    if (error) {
         toast({
-            title: "Email already exists",
-            description: "An account with this email is already registered.",
+            title: "Error creating account",
+            description: error.message,
             variant: "destructive",
         });
         return;
     }
-
-    const newUser = {
-        name: formData.get("owner_name") as string,
-        email: email,
-        pin: formData.get("pin") as string,
-        role: "Owner",
-        permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)], 
-        avatar_url: "https://placehold.co/100x100.png",
-    };
     
-    const { error: insertError } = await supabase.from('users').insert(newUser);
+    // The trigger will create the user profile, but we need to set the PIN separately
+    // as it might not be ideal to pass it in raw_user_meta_data if there are restrictions.
+    // A secure alternative would be a serverless function to hash it. For now, this is simple.
+    const { error: updateError } = await supabase.from('users').update({ pin }).eq('id', user!.id);
 
-    if (insertError) {
+     if (updateError) {
         toast({
-            title: "Error creating account",
-            description: insertError.message,
+            title: "Error setting up account",
+            description: `Account created, but failed to set PIN: ${updateError.message}`,
             variant: "destructive",
         });
         return;
@@ -98,8 +102,12 @@ export default function SignUpPage() {
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" placeholder="m@example.com" required />
           </div>
+           <div className="grid gap-2">
+            <Label htmlFor="password">Password</Label>
+            <Input id="password" name="password" type="password" required />
+          </div>
           <div className="grid gap-2">
-            <Label htmlFor="pin">4-Digit PIN</Label>
+            <Label htmlFor="pin">4-Digit PIN (for POS login)</Label>
             <Input id="pin" name="pin" type="password" required maxLength={4} pattern="\\d{4}" title="PIN must be 4 digits" />
           </div>
         </CardContent>

@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = "https://pyhryzlanyjhyhnoyjpu.supabase.co";
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5aHJ5emxhbnlqaHlobm95anB1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMzNjY5MzIsImV4cCI6MjA2ODk0MjkzMn0.JCeoLg1Q6eOvc4Wo3eRlbDSmNqYJXWw4KBwlBuBYaZ4";
 
 let supabaseInstance = null;
 

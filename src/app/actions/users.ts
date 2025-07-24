@@ -7,20 +7,22 @@ import { revalidatePath } from 'next/cache';
 
 const checkSupabase = () => {
     if (!supabase) {
-        // In a real app, you'd want to handle this more gracefully.
-        // For mock mode, we'll just return early.
-        return false;
+        throw new Error("Supabase client is not initialized.");
     }
     return true;
 }
 
+// NOTE: Adding a new user is now handled through the sign-up flow or by inviting users via Supabase Auth.
+// This function is for creating users directly in the 'users' table which should only be done
+// if you are managing users outside of Supabase's built-in auth (e.g., for employees who only use PINs).
+// The current implementation uses Supabase Auth, so this function is less relevant for new user creation.
+// However, it's useful for creating employees who might not have a password but just a PIN.
 export async function addUser(userData: {
     name: string; email: string; role: UserRole; pin: string | null; permissions: string[]; avatar_url: string;
 }) {
-    if (!checkSupabase()) {
-        console.log("Mock addUser called", userData);
-        return { ...userData, id: `user_${new Date().getTime()}`, created_at: new Date().toISOString()};
-    }
+    checkSupabase();
+    // This is tricky without a password. In a real scenario, you'd likely send an invite email.
+    // For this app, we'll create a user without a Supabase auth entry, meaning they can ONLY log in with a PIN.
     const { data, error } = await supabase
         .from('users')
         .insert([userData])
@@ -35,10 +37,7 @@ export async function addUser(userData: {
 export async function updateUser(id: string, userData: {
     name: string; email: string; role: UserRole; pin: string | null; permissions: string[];
 }) {
-     if (!checkSupabase()) {
-        console.log("Mock updateUser called", id, userData);
-        return { ...userData, id: id };
-    }
+    checkSupabase();
     const { data, error } = await supabase
         .from('users')
         .update(userData)
@@ -50,16 +49,22 @@ export async function updateUser(id: string, userData: {
 }
 
 export async function deleteUser(id: string) {
-    if (!checkSupabase()) {
-        console.log("Mock deleteUser called", id);
-        return { id };
-    }
+    checkSupabase();
+    // This will delete from the public.users table.
+    // The user might still exist in auth.users. A more robust solution
+    // would be a serverless function to delete the auth user too.
     const { data, error } = await supabase
         .from('users')
         .delete()
         .eq('id', id);
 
     if (error) throw new Error(error.message);
+
+    // Also attempt to delete from auth. This requires service_role key on the server.
+    // For now, this will likely fail without a proper backend setup, but it's the correct pattern.
+    // const { error: authError } = await supabase.auth.admin.deleteUser(id);
+    // if (authError) console.warn(`Could not delete auth user: ${authError.message}`);
+
     revalidatePath('/team');
     return data;
 }

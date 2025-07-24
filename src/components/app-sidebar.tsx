@@ -44,10 +44,10 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { loggedInUser, setLoggedInUser } = useSettings();
+  const { loggedInUser, logout } = useSettings();
 
-  const handleLogout = () => {
-    setLoggedInUser(null);
+  const handleLogout = async () => {
+    await logout();
   };
 
   return (

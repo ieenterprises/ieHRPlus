@@ -1,10 +1,12 @@
 
 "use client";
 
-import { createContext, useContext, useState, ReactNode, createElement, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
 import type { AnyPermission } from '@/lib/permissions';
 import type { User } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
 export type FeatureSettings = Record<string, boolean>;
 
@@ -60,14 +62,11 @@ export type Role = {
 
 export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier";
 
-const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermissions)[];
-const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
-
 const getPermissionsForRole = (role: UserRole): AnyPermission[] => {
     switch(role) {
         case "Owner":
         case "Administrator":
-            return [...allPosPermissions, ...allBackOfficePermissions];
+            return [...Object.keys(posPermissions) as (keyof typeof posPermissions)[], ...Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[]];
         case "Manager":
             return ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS"];
         case "Cashier":
@@ -153,6 +152,7 @@ type SettingsContextType = {
     loggedInUser: User | null;
     setLoggedInUser: React.Dispatch<React.SetStateAction<User | null>>;
     getPermissionsForRole: (role: UserRole) => AnyPermission[];
+    logout: () => Promise<void>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -190,7 +190,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(() => getFromLocalStorage('paymentTypes', MOCK_PAYMENT_TYPES));
     const [taxes, setTaxes] = useState<Tax[]>(() => getFromLocalStorage('taxes', MOCK_TAXES));
     const [roles, setRoles] = useState<Role[]>(() => getFromLocalStorage('roles', MOCK_ROLES));
-    const [loggedInUser, setLoggedInUser] = useState<User | null>(() => getFromLocalStorage<User | null>('loggedInUser', null));
+    const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
+    const [loadingUser, setLoadingUser] = useState(true);
+    const router = useRouter();
+
 
     useEffect(() => { setInLocalStorage('featureSettings', featureSettings); }, [featureSettings]);
     useEffect(() => { setInLocalStorage('stores', stores); }, [stores]);
@@ -200,7 +203,47 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     useEffect(() => { setInLocalStorage('paymentTypes', paymentTypes); }, [paymentTypes]);
     useEffect(() => { setInLocalStorage('taxes', taxes); }, [taxes]);
     useEffect(() => { setInLocalStorage('roles', roles); }, [roles]);
-    useEffect(() => { setInLocalStorage('loggedInUser', loggedInUser); }, [loggedInUser]);
+
+    const fetchUser = useCallback(async () => {
+        if (!supabase) {
+            setLoadingUser(false);
+            return;
+        };
+        const { data: { session }} = await supabase.auth.getSession();
+        if (session?.user) {
+            const { data: userProfile } = await supabase.from('users').select('*').eq('id', session.user.id).single();
+            setLoggedInUser(userProfile);
+        } else {
+            setLoggedInUser(null);
+        }
+        setLoadingUser(false);
+    }, []);
+
+    useEffect(() => {
+        fetchUser();
+        const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' && session?.user) {
+                 fetchUser();
+            }
+            if (event === 'SIGNED_OUT') {
+                setLoggedInUser(null);
+                router.push('/sign-in');
+            }
+        });
+
+        return () => {
+            authListener.subscription.unsubscribe();
+        };
+    }, [fetchUser, router]);
+
+
+    const logout = async () => {
+        if (!supabase) return;
+        await supabase.auth.signOut();
+        setLoggedInUser(null);
+        router.push('/sign-in');
+    };
+
 
     const value: SettingsContextType = {
         featureSettings, setFeatureSettings,
@@ -213,6 +256,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         roles, setRoles,
         loggedInUser, setLoggedInUser,
         getPermissionsForRole,
+        logout,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);
