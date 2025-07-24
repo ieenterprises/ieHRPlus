@@ -53,6 +53,7 @@ import { cn } from "@/lib/utils";
 import { type Reservation, type Product } from "@/lib/types";
 import { addReservation } from "@/app/actions/reservations";
 import { supabase } from "@/lib/supabase";
+import { useSettings } from "@/hooks/use-settings";
 
 export default function ReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -60,6 +61,7 @@ export default function ReservationsPage() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { currency } = useSettings();
 
   const [guestName, setGuestName] = useState("");
   const [roomId, setRoomId] = useState<string>("");
@@ -195,7 +197,7 @@ export default function ReservationsPage() {
                     <SelectContent>
                       {rooms.map((room) => (
                         <SelectItem key={room.id} value={room.id}>
-                          {room.name} (${room.price}/night)
+                          {room.name} ({currency}{room.price}/night)
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -16,6 +16,7 @@ import { useState, useEffect } from "react";
 import { subMonths, format } from "date-fns";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/hooks/use-settings";
 
 type MonthlySales = { name: string; total: number };
 
@@ -29,6 +30,7 @@ export default function DashboardPage() {
   });
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { currency } = useSettings();
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -116,7 +118,7 @@ export default function DashboardPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{currency}{stats.totalRevenue.toFixed(2)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -168,7 +170,7 @@ export default function DashboardPage() {
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value) => `$${value}`}
+                tickFormatter={(value) => `${currency}${value}`}
               />
               <Tooltip
                 cursor={{ fill: "hsl(var(--secondary))" }}

@@ -26,11 +26,13 @@ import { CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { markDebtAsPaid } from "@/app/actions/debts";
 import { supabase } from "@/lib/supabase";
+import { useSettings } from "@/hooks/use-settings";
 
 export default function DebtsPage() {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { currency } = useSettings();
 
   useEffect(() => {
     const fetchDebts = async () => {
@@ -106,7 +108,7 @@ export default function DebtsPage() {
                     <TableCell className="font-medium">{debt.sales?.order_number}</TableCell>
                     <TableCell>{debt.customers?.name}</TableCell>
                     <TableCell className="hidden md:table-cell">{format(new Date(debt.created_at!), "LLL dd, y")}</TableCell>
-                    <TableCell className="text-right">${debt.amount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{currency}{debt.amount.toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge variant={debt.status === "Paid" ? "secondary" : "destructive"}>
                         {debt.status}

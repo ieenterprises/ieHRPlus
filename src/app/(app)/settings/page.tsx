@@ -40,6 +40,19 @@ const featureToggles = [
   { id: "customer_displays", label: "Customer displays", description: "Show order information to customers on a separate screen.", icon: MonitorPlay, defaultEnabled: false },
 ];
 
+const currencies = [
+    { value: '$', label: 'USD ($) - United States Dollar' },
+    { value: '€', label: 'EUR (€) - Euro' },
+    { value: '£', label: 'GBP (£) - British Pound Sterling' },
+    { value: '¥', label: 'JPY (¥) - Japanese Yen' },
+    { value: 'A$', label: 'AUD (A$) - Australian Dollar' },
+    { value: 'C$', label: 'CAD (C$) - Canadian Dollar' },
+    { value: 'Fr', label: 'CHF (Fr) - Swiss Franc' },
+    { value: '元', label: 'CNY (元) - Chinese Yuan' },
+    { value: 'kr', label: 'SEK (kr) - Swedish Krona' },
+    { value: 'NZ$', label: 'NZD (NZ$) - New Zealand Dollar' },
+    { value: '₦', label: 'NGN (₦) - Nigerian Naira' },
+];
 
 const EMPTY_STORE: Partial<StoreType> = { name: '', address: '' };
 const EMPTY_POS_DEVICE: Partial<PosDeviceType> = { name: '', store_id: '' };
@@ -572,17 +585,21 @@ export default function SettingsPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Currency</CardTitle>
-                            <CardDescription>Set the default currency symbol for your POS.</CardDescription>
+                            <CardDescription>Set the default currency for your POS.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="max-w-xs space-y-2">
-                                <Label htmlFor="currency">Currency Symbol</Label>
-                                <Input 
-                                    id="currency" 
-                                    value={currency} 
-                                    onChange={(e) => setCurrency(e.target.value)}
-                                    placeholder="$"
-                                />
+                                <Label htmlFor="currency">Currency</Label>
+                                <Select value={currency} onValueChange={setCurrency}>
+                                    <SelectTrigger id="currency">
+                                        <SelectValue placeholder="Select a currency" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {currencies.map(c => (
+                                            <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </CardContent>
                     </Card>

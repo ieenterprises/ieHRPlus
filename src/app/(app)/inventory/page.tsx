@@ -52,6 +52,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Papa from "papaparse";
 import { addProduct, updateProduct, deleteProduct, addCategory, updateCategory, deleteCategory } from "@/app/actions/inventory";
 import { supabase } from "@/lib/supabase";
+import { useSettings } from "@/hooks/use-settings";
 
 
 const EMPTY_PRODUCT: Partial<Product> = {
@@ -85,6 +86,7 @@ export default function InventoryPage() {
   const [stockUpdateFile, setStockUpdateFile] = useState<File | null>(null);
   
   const { toast } = useToast();
+  const { currency } = useSettings();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -302,7 +304,7 @@ export default function InventoryPage() {
                                         </TableCell>
                                         <TableCell className="font-medium">{product.name}</TableCell>
                                         <TableCell>{getCategoryName(product.category_id)}</TableCell>
-                                        <TableCell className="text-right">${product.price.toFixed(2)}</TableCell>
+                                        <TableCell className="text-right">{currency}{product.price.toFixed(2)}</TableCell>
                                         <TableCell className="text-right">{getCategoryName(product.category_id) === 'Room' ? 'N/A' : product.stock}</TableCell>
                                         <TableCell className="text-right">
                                             <DropdownMenu>
@@ -434,7 +436,7 @@ export default function InventoryPage() {
                     </Select>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="price" className="text-right">Price ($)</Label>
+                  <Label htmlFor="price" className="text-right">Price ({currency})</Label>
                   <Input id="price" name="price" type="number" step="0.01" defaultValue={editingProduct?.price} className="col-span-3" required />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">

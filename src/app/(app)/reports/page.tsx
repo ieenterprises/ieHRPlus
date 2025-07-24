@@ -60,7 +60,7 @@ type ReportDataPoint = {
     transactions: number;
 };
 
-function ReportChart({ data, title }: { data: ReportDataPoint[], title: string }) {
+function ReportChart({ data, title, currency }: { data: ReportDataPoint[], title: string, currency: string }) {
   return (
     <Card>
       <CardHeader>
@@ -71,7 +71,7 @@ function ReportChart({ data, title }: { data: ReportDataPoint[], title: string }
           <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
+            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${currency}${value}`} />
             <Tooltip
               cursor={{ fill: "hsl(var(--secondary))" }}
               contentStyle={{ backgroundColor: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)" }}
@@ -84,7 +84,7 @@ function ReportChart({ data, title }: { data: ReportDataPoint[], title: string }
   );
 }
 
-function ReportTable({ data, dataKeyLabel }: { data: ReportDataPoint[], dataKeyLabel: string }) {
+function ReportTable({ data, dataKeyLabel, currency }: { data: ReportDataPoint[], dataKeyLabel: string, currency: string }) {
     const totalSales = useMemo(() => data.reduce((acc, item) => acc + item.sales, 0), [data]);
     const totalQuantity = useMemo(() => data.reduce((acc, item) => acc + (item.quantity || 0), 0), [data]);
     const totalTransactions = useMemo(() => data.reduce((acc, item) => acc + item.transactions, 0), [data]);
@@ -108,7 +108,7 @@ function ReportTable({ data, dataKeyLabel }: { data: ReportDataPoint[], dataKeyL
                         {data.map(item => (
                             <TableRow key={item.name}>
                                 <TableCell className="font-medium">{item.name}</TableCell>
-                                <TableCell className="text-right">${item.sales.toFixed(2)}</TableCell>
+                                <TableCell className="text-right">{currency}{item.sales.toFixed(2)}</TableCell>
                                 <TableCell className="text-right">{item.quantity}</TableCell>
                                 <TableCell className="text-right">{item.transactions}</TableCell>
                             </TableRow>
@@ -117,7 +117,7 @@ function ReportTable({ data, dataKeyLabel }: { data: ReportDataPoint[], dataKeyL
                     <TableFooter>
                         <TableRow className="font-bold">
                             <TableCell>Total</TableCell>
-                            <TableCell className="text-right">${totalSales.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">{currency}{totalSales.toFixed(2)}</TableCell>
                             <TableCell className="text-right">{totalQuantity}</TableCell>
                             <TableCell className="text-right">{totalTransactions}</TableCell>
                         </TableRow>
@@ -134,7 +134,7 @@ export default function ReportsPage() {
     to: new Date(),
   });
   
-  const { stores, posDevices, paymentTypes, users } = useSettings();
+  const { stores, posDevices, paymentTypes, users, currency } = useSettings();
 
   const [filters, setFilters] = useState({
       storeId: 'all',
@@ -356,32 +356,32 @@ export default function ReportsPage() {
         <TabsContent value="item" className="pt-4 space-y-4">
             {loading ? <p>Loading report...</p> : (
                 <>
-                    <ReportChart data={salesByItem} title="Sales by Item" />
-                    <ReportTable data={salesByItem} dataKeyLabel="Item" />
+                    <ReportChart data={salesByItem} title="Sales by Item" currency={currency} />
+                    <ReportTable data={salesByItem} dataKeyLabel="Item" currency={currency} />
                 </>
             )}
         </TabsContent>
         <TabsContent value="category" className="pt-4 space-y-4">
             {loading ? <p>Loading report...</p> : (
                 <>
-                    <ReportChart data={salesByCategory} title="Sales by Category" />
-                    <ReportTable data={salesByCategory} dataKeyLabel="Category" />
+                    <ReportChart data={salesByCategory} title="Sales by Category" currency={currency} />
+                    <ReportTable data={salesByCategory} dataKeyLabel="Category" currency={currency} />
                 </>
             )}
         </TabsContent>
         <TabsContent value="employee" className="pt-4 space-y-4">
             {loading ? <p>Loading report...</p> : (
                  <>
-                    <ReportChart data={salesByEmployee} title="Sales by Employee" />
-                    <ReportTable data={salesByEmployee} dataKeyLabel="Employee" />
+                    <ReportChart data={salesByEmployee} title="Sales by Employee" currency={currency} />
+                    <ReportTable data={salesByEmployee} dataKeyLabel="Employee" currency={currency} />
                 </>
             )}
         </TabsContent>
          <TabsContent value="payment" className="pt-4 space-y-4">
             {loading ? <p>Loading report...</p> : (
                  <>
-                    <ReportChart data={salesByPayment} title="Sales by Payment Type" />
-                    <ReportTable data={salesByPayment} dataKeyLabel="Payment Type" />
+                    <ReportChart data={salesByPayment} title="Sales by Payment Type" currency={currency} />
+                    <ReportTable data={salesByPayment} dataKeyLabel="Payment Type" currency={currency} />
                 </>
             )}
         </TabsContent>

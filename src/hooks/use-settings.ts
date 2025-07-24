@@ -54,22 +54,12 @@ const MOCK_PRINTERS: PrinterType[] = [
 
 const MOCK_RECEIPT_SETTINGS: Record<string, ReceiptSettings> = {
   'store_1': {
-    emailedLogo: "https://placehold.co/200x200.png",
-    printedLogo: "https://placehold.co/200x200.png",
     header: "Welcome to Main Branch!",
     footer: "Thanks for visiting Main Branch!",
-    showCustomerInfo: true,
-    showComments: true,
-    language: 'English'
   },
   'store_2': {
-    emailedLogo: "https://placehold.co/200x200.png",
-    printedLogo: "https://placehold.co/200x200.png",
     header: 'CASONI PREMIUM CLUB Experience Luxury & Lifestyle',
     footer: 'Thank you for choosing Casoni Premium Club! We hope you had a premium experience.',
-    showCustomerInfo: false,
-    showComments: false,
-    language: 'English'
   }
 }
 
@@ -155,7 +145,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [loadingUser, setLoadingUser] = useState(true);
     const [selectedStore, setSelectedStore] = useState<StoreType | null>(() => getFromLocalStorage('selectedStore', null));
     const [selectedDevice, setSelectedDevice] = useState<PosDeviceType | null>(() => getFromLocalStorage('selectedDevice', null));
-    const [currency, setCurrency] = useState<string>(() => getFromLocalStorage('currency', 'USD'));
+    const [currency, setCurrency] = useState<string>(() => getFromLocalStorage('currency', '$'));
     const router = useRouter();
 
 

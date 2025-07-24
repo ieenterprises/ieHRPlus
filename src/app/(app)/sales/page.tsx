@@ -70,11 +70,13 @@ type OrderItem = {
 function ProductCard({
   product,
   onAddToCart,
-  categoryName
+  categoryName,
+  currency,
 }: {
   product: Product;
   onAddToCart: (product: Product) => void;
   categoryName: string;
+  currency: string;
 }) {
   const isRoom = categoryName === 'Room';
 
@@ -100,7 +102,7 @@ function ProductCard({
       <CardContent className="p-4">
         <h3 className="font-semibold truncate">{product.name}</h3>
         <p className="text-muted-foreground font-medium">
-          ${product.price.toFixed(2)}
+          {currency}{product.price.toFixed(2)}
         </p>
       </CardContent>
     </Card>
@@ -112,7 +114,8 @@ export default function SalesPage() {
     featureSettings, 
     paymentTypes: configuredPaymentTypes,
     loggedInUser,
-    selectedDevice
+    selectedDevice,
+    currency,
   } = useSettings();
   const { openTickets, saveTicket, deleteTicket } = usePos();
 
@@ -317,7 +320,7 @@ export default function SalesPage() {
     }
 
     if (amount > remainingBalance + 0.001) { 
-         toast({ title: "Amount Exceeds Balance", description: `Cannot pay more than the remaining $${remainingBalance.toFixed(2)}.`, variant: "destructive"});
+         toast({ title: "Amount Exceeds Balance", description: `Cannot pay more than the remaining ${currency}${remainingBalance.toFixed(2)}.`, variant: "destructive"});
         return;
     }
 
@@ -333,7 +336,7 @@ export default function SalesPage() {
 
   const handleCompleteSale = async (isRoomCheckout = false, creditInfo?: { customerId: string, amount: number }) => {
     if (remainingBalance > 0.001 && !creditInfo && !isRoomCheckout) {
-        toast({ title: "Payment Incomplete", description: `There is still a remaining balance of $${remainingBalance.toFixed(2)}.`, variant: "destructive" });
+        toast({ title: "Payment Incomplete", description: `There is still a remaining balance of ${currency}${remainingBalance.toFixed(2)}.`, variant: "destructive" });
         return;
     }
     
@@ -373,10 +376,10 @@ export default function SalesPage() {
         );
         
         if (!isRoomCheckout) {
-            let toastDescription = `Order complete. Total: $${total.toFixed(2)}.`;
+            let toastDescription = `Order complete. Total: ${currency}${total.toFixed(2)}.`;
             if (creditInfo) {
                 const customer = customers.find(c => c.id === creditInfo.customerId);
-                toastDescription += ` $${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
+                toastDescription += ` ${currency}${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
             }
 
             toast({ title: "Sale Completed", description: toastDescription });
@@ -507,6 +510,7 @@ export default function SalesPage() {
                         product={product}
                         onAddToCart={handleAddToCart}
                         categoryName={getCategoryName(product.category_id) || ''}
+                        currency={currency}
                     />
                 ))}
                 {filteredProducts.length === 0 && (
@@ -539,7 +543,7 @@ export default function SalesPage() {
                             <div className="flex-1">
                                 <p className="font-medium">{item.product.name}</p>
                                 <p className="text-sm text-muted-foreground">
-                                ${item.product.price.toFixed(2)}
+                                {currency}{item.product.price.toFixed(2)}
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -564,7 +568,7 @@ export default function SalesPage() {
                                 </Button>
                             </div>
                             <p className="w-16 text-right font-medium">
-                                ${(item.product.price * item.quantity).toFixed(2)}
+                                {currency}{(item.product.price * item.quantity).toFixed(2)}
                             </p>
                             <Button
                                 variant="ghost"
@@ -585,16 +589,16 @@ export default function SalesPage() {
                     <div className="space-y-2">
                         <div className="flex justify-between">
                         <span>Subtotal</span>
-                        <span>${subtotal.toFixed(2)}</span>
+                        <span>{currency}{subtotal.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-muted-foreground">
                         <span>Tax (8%)</span>
-                        <span>${tax.toFixed(2)}</span>
+                        <span>{currency}{tax.toFixed(2)}</span>
                         </div>
                         <Separator />
                         <div className="flex justify-between font-bold text-lg">
                         <span>Total</span>
-                        <span>${total.toFixed(2)}</span>
+                        <span>{currency}{total.toFixed(2)}</span>
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -704,9 +708,9 @@ export default function SalesPage() {
                 <div className="py-4 space-y-6">
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-lg font-bold">
                         <div className="text-muted-foreground">Total Due:</div>
-                        <div className="text-right">${total.toFixed(2)}</div>
+                        <div className="text-right">{currency}{total.toFixed(2)}</div>
                         <div className="text-primary">Remaining:</div>
-                        <div className="text-right text-primary">${remainingBalance.toFixed(2)}</div>
+                        <div className="text-right text-primary">{currency}{remainingBalance.toFixed(2)}</div>
                     </div>
 
                     <Separator />
@@ -726,7 +730,7 @@ export default function SalesPage() {
                                             <span className="font-medium">{payment.method}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className="font-semibold">${payment.amount.toFixed(2)}</span>
+                                            <span className="font-semibold">{currency}{payment.amount.toFixed(2)}</span>
                                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemovePayment(index)}>
                                                 <X className="h-4 w-4" />
                                             </Button>
@@ -749,7 +753,7 @@ export default function SalesPage() {
                                         type="number"
                                         step="0.01"
                                         required={currentPaymentType?.type !== 'Credit'}
-                                        placeholder={`Max $${remainingBalance.toFixed(2)}`}
+                                        placeholder={`Max ${currency}${remainingBalance.toFixed(2)}`}
                                         min="0.01"
                                         max={remainingBalance.toFixed(2)}
                                         disabled={currentPaymentType?.type === 'Credit'}
@@ -826,7 +830,7 @@ export default function SalesPage() {
                                             <TableCell className="font-medium">{ticket.ticket_name}</TableCell>
                                             <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
                                             <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
-                                            <TableCell className="text-right">${ticket.total.toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">{currency}{ticket.total.toFixed(2)}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as any)}>Load</Button>

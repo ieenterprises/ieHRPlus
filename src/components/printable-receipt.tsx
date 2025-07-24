@@ -12,7 +12,7 @@ type PrintableReceiptProps = {
 };
 
 export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
-  const { stores, receiptSettings } = useSettings();
+  const { stores, receiptSettings, currency } = useSettings();
   
   // For now, we assume a single store or the first store for receipt settings.
   // In a multi-store setup, you would need to determine the store from the sale/ticket.
@@ -66,8 +66,8 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
             <tr key={item.id}>
               <td className="text-left w-2/4 pr-1">{item.name}</td>
               <td className="text-center">{item.quantity}</td>
-              <td className="text-right">${item.price.toFixed(2)}</td>
-              <td className="text-right">${(item.price * item.quantity).toFixed(2)}</td>
+              <td className="text-right">{currency}{item.price.toFixed(2)}</td>
+              <td className="text-right">{currency}{(item.price * item.quantity).toFixed(2)}</td>
             </tr>
           ))}
         </tbody>
@@ -78,15 +78,15 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
       <div className="space-y-1">
         <div className="flex justify-between">
           <span>SUBTOTAL:</span>
-          <span>${subtotal.toFixed(2)}</span>
+          <span>{currency}{subtotal.toFixed(2)}</span>
         </div>
         <div className="flex justify-between">
           <span>TAX:</span>
-          <span>${tax.toFixed(2)}</span>
+          <span>{currency}{tax.toFixed(2)}</span>
         </div>
         <div className="flex justify-between font-bold text-sm">
           <span>TOTAL:</span>
-          <span>${total.toFixed(2)}</span>
+          <span>{currency}{total.toFixed(2)}</span>
         </div>
       </div>
 
@@ -98,7 +98,7 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
                     <div className="flex justify-between" key={method}>
                         <span>{method.toUpperCase()}:</span>
                         {/* In a real scenario, you'd have payment amounts per method */}
-                        {data.payment_methods.length === 1 && <span>${total.toFixed(2)}</span>}
+                        {data.payment_methods.length === 1 && <span>{currency}{total.toFixed(2)}</span>}
                     </div>
                 ))}
             </div>
