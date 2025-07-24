@@ -54,7 +54,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
-import { inviteUser, updateUser, deleteUser } from "@/app/actions/users";
+import { createUser, updateUser, deleteUser } from "@/app/actions/users";
 import { supabase } from "@/lib/supabase";
 
 const EMPTY_USER: Partial<User> = {
@@ -141,6 +141,8 @@ export default function TeamPage() {
     if (!editingUser) return;
 
     const formData = new FormData(event.currentTarget);
+    const password = formData.get("password") as string;
+    
     const userData = {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
@@ -151,13 +153,16 @@ export default function TeamPage() {
 
     try {
         if ('id' in editingUser && editingUser.id) {
-            await updateUser(editingUser.id, userData);
+            await updateUser(editingUser.id, { ...userData, password: password || undefined });
             setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...userData } as User : u));
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
-            await inviteUser(userData);
-            toast({ title: "User Invited", description: `An invitation has been sent to ${userData.email}.` });
-            // Refetch users to show the newly invited user
+            if (!password) {
+                toast({ title: "Password Required", description: "Please enter a password for the new user.", variant: "destructive"});
+                return;
+            }
+            await createUser({ ...userData, password });
+            toast({ title: "User Created", description: `User ${userData.name} has been created.` });
             await fetchUsers();
         }
         handleUserDialogClose(false);
@@ -387,6 +392,10 @@ export default function TeamPage() {
                   <div className="space-y-4">
                     <div className="space-y-2"><Label htmlFor="name">Name</Label><Input id="name" name="name" defaultValue={editingUser?.name} required /></div>
                     <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" defaultValue={editingUser?.email} required /></div>
+                    <div className="space-y-2">
+                        <Label htmlFor="password">Password</Label>
+                        <Input id="password" name="password" type="password" placeholder={editingUser?.id ? "Leave blank to keep current password" : ""} required={!editingUser?.id} />
+                    </div>
                     <div className="space-y-2"><Label htmlFor="role">Role</Label>
                         <Select name="role" required defaultValue={editingUser?.role} onValueChange={handleUserRoleChange}>
                         <SelectTrigger id="role"><SelectValue placeholder="Select a role" /></SelectTrigger>

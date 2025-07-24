@@ -19,44 +19,64 @@ const checkSupabaseAdmin = () => {
     return true;
 }
 
-export async function inviteUser(userData: {
-    name: string; email: string; role: UserRole; permissions: string[]; avatar_url: string;
+export async function createUser(userData: {
+    name: string; email: string; password?: string; role: UserRole; permissions: string[]; avatar_url: string;
 }) {
     checkSupabaseAdmin();
     
-    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      userData.email,
-      {
-        data: {
+    const { data: authData, error } = await supabaseAdmin.auth.admin.createUser({
+        email: userData.email,
+        password: userData.password,
+        email_confirm: true, // Auto-confirm user's email
+        user_metadata: {
           name: userData.name,
           role: userData.role,
           permissions: userData.permissions,
           avatar_url: userData.avatar_url,
         }
-      }
-    );
+    });
 
     if (error) {
-        console.error("Error inviting user:", error.message);
-        throw new Error(`Failed to invite user: ${error.message}`);
+        console.error("Error creating user:", error.message);
+        throw new Error(`Failed to create user: ${error.message}`);
     }
     
     revalidatePath('/team');
-    return data;
+    return authData.user;
 }
 
 export async function updateUser(id: string, userData: {
-    name: string; email: string; role: UserRole; permissions: string[];
+    name: string; email: string; password?: string; role: UserRole; permissions: string[];
 }) {
     checkSupabaseAdmin();
-    const { data, error } = await supabaseAdmin
+
+    const { password, ...profileData } = userData;
+
+    // Update user profile data in the `users` table
+    const { error: profileError } = await supabaseAdmin
         .from('users')
-        .update(userData)
+        .update(profileData)
         .eq('id', id);
 
-    if (error) throw new Error(error.message);
+    if (profileError) {
+        console.error("Error updating user profile:", profileError.message);
+        throw new Error(profileError.message);
+    }
+    
+    // If a new password is provided, update it in Auth
+    if (password) {
+        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+            id,
+            { password: password }
+        );
+        if (authError) {
+            console.error("Error updating user password:", authError.message);
+            throw new Error(`Failed to update password: ${authError.message}`);
+        }
+    }
+
     revalidatePath('/team');
-    return data;
+    return { success: true };
 }
 
 export async function deleteUser(id: string) {
