@@ -1,3 +1,4 @@
+
 import type { AnyPermission } from "./permissions";
 
 export type Category = Database['public']['Tables']['categories']['Row']
@@ -320,17 +321,15 @@ export type Database = {
           id: string
           name: string
           permissions: Json | null
-          pin: string | null
           role: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
           email: string
-          id?: string
+          id: string
           name: string
           permissions?: Json | null
-          pin?: string | null
           role: string
         }
         Update: {
@@ -340,10 +339,17 @@ export type Database = {
           id?: string
           name?: string
           permissions?: Json | null
-          pin?: string | null
           role?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "users_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {

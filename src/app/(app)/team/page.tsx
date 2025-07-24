@@ -62,7 +62,6 @@ const EMPTY_USER: Partial<User> = {
   email: "",
   role: "Cashier",
   avatar_url: "https://placehold.co/100x100.png",
-  pin: "",
   permissions: [],
 };
 
@@ -145,7 +144,6 @@ export default function TeamPage() {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       role: formData.get("role") as UserRole,
-      pin: formData.get("pin") as string,
       permissions: selectedUserPermissions,
       avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
     };
@@ -393,7 +391,6 @@ export default function TeamPage() {
                         <SelectContent>{roles.map(role => (<SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>))}</SelectContent>
                         </Select>
                     </div>
-                    <div className="space-y-2"><Label htmlFor="pin">POS PIN</Label><Input id="pin" name="pin" type="password" defaultValue={editingUser?.pin || ''} required pattern="\\d{4}" maxLength={4} title="PIN must be 4 digits."/></div>
                   </div>
                   <div className="space-y-4">
                       <h3 className="text-lg font-medium">Permissions</h3>

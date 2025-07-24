@@ -12,17 +12,14 @@ const checkSupabase = () => {
     return true;
 }
 
-// NOTE: Adding a new user is now handled through the sign-up flow or by inviting users via Supabase Auth.
-// This function is for creating users directly in the 'users' table which should only be done
-// if you are managing users outside of Supabase's built-in auth (e.g., for employees who only use PINs).
-// The current implementation uses Supabase Auth, so this function is less relevant for new user creation.
-// However, it's useful for creating employees who might not have a password but just a PIN.
+// NOTE: This function is for creating employees who might not have a password but just a PIN.
+// With the new auth flow, we invite users through Supabase Auth.
 export async function addUser(userData: {
-    name: string; email: string; role: UserRole; pin: string | null; permissions: string[]; avatar_url: string;
+    name: string; email: string; role: UserRole; permissions: string[]; avatar_url: string;
 }) {
     checkSupabase();
-    // This is tricky without a password. In a real scenario, you'd likely send an invite email.
-    // For this app, we'll create a user without a Supabase auth entry, meaning they can ONLY log in with a PIN.
+    // In a real app, you would use Supabase's admin functionality to invite a user by email
+    // This is a simplified version for this app.
     const { data, error } = await supabase
         .from('users')
         .insert([userData])
@@ -35,7 +32,7 @@ export async function addUser(userData: {
 }
 
 export async function updateUser(id: string, userData: {
-    name: string; email: string; role: UserRole; pin: string | null; permissions: string[];
+    name: string; email: string; role: UserRole; permissions: string[];
 }) {
     checkSupabase();
     const { data, error } = await supabase
@@ -50,21 +47,19 @@ export async function updateUser(id: string, userData: {
 
 export async function deleteUser(id: string) {
     checkSupabase();
-    // This will delete from the public.users table.
-    // The user might still exist in auth.users. A more robust solution
-    // would be a serverless function to delete the auth user too.
-    const { data, error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', id);
+    
+    // Deletes the user from the `auth.users` table, which will cascade and delete
+    // the corresponding entry from the `public.users` table due to the foreign key constraint.
+    const { error: authError } = await supabase.auth.admin.deleteUser(id);
 
-    if (error) throw new Error(error.message);
-
-    // Also attempt to delete from auth. This requires service_role key on the server.
-    // For now, this will likely fail without a proper backend setup, but it's the correct pattern.
-    // const { error: authError } = await supabase.auth.admin.deleteUser(id);
-    // if (authError) console.warn(`Could not delete auth user: ${authError.message}`);
+    if (authError) {
+        // Fallback to delete from public.users if admin deletion fails
+        // This might happen if the user was manually created or if permissions are not sufficient.
+        console.warn(`Could not delete auth user: ${authError.message}. Deleting from public users table as a fallback.`);
+        const { error: publicError } = await supabase.from('users').delete().eq('id', id);
+        if (publicError) throw new Error(publicError.message);
+    }
 
     revalidatePath('/team');
-    return data;
+    return { success: true };
 }
