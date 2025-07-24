@@ -154,6 +154,10 @@ type SettingsContextType = {
     loadingUser: boolean;
     getPermissionsForRole: (role: UserRole) => AnyPermission[];
     logout: () => Promise<void>;
+    selectedStore: StoreType | null;
+    setSelectedStore: React.Dispatch<React.SetStateAction<StoreType | null>>;
+    selectedDevice: PosDeviceType | null;
+    setSelectedDevice: React.Dispatch<React.SetStateAction<PosDeviceType | null>>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -193,6 +197,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [roles, setRoles] = useState<Role[]>(() => getFromLocalStorage('roles', MOCK_ROLES));
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
+    const [selectedStore, setSelectedStore] = useState<StoreType | null>(() => getFromLocalStorage('selectedStore', null));
+    const [selectedDevice, setSelectedDevice] = useState<PosDeviceType | null>(() => getFromLocalStorage('selectedDevice', null));
     const router = useRouter();
 
 
@@ -204,6 +210,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     useEffect(() => { setInLocalStorage('paymentTypes', paymentTypes); }, [paymentTypes]);
     useEffect(() => { setInLocalStorage('taxes', taxes); }, [taxes]);
     useEffect(() => { setInLocalStorage('roles', roles); }, [roles]);
+    useEffect(() => { setInLocalStorage('selectedStore', selectedStore); }, [selectedStore]);
+    useEffect(() => { setInLocalStorage('selectedDevice', selectedDevice); }, [selectedDevice]);
+
 
     const fetchUser = useCallback(async () => {
         if (!supabase) {
@@ -228,6 +237,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             }
             if (event === 'SIGNED_OUT') {
                 setLoggedInUser(null);
+                setSelectedStore(null);
+                setSelectedDevice(null);
                 router.push('/sign-in');
             }
         });
@@ -241,8 +252,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const logout = async () => {
         if (!supabase) return;
         await supabase.auth.signOut();
-        setLoggedInUser(null);
-        router.push('/sign-in');
     };
 
 
@@ -259,6 +268,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         loadingUser,
         getPermissionsForRole,
         logout,
+        selectedStore, setSelectedStore,
+        selectedDevice, setSelectedDevice,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);

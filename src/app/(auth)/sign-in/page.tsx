@@ -22,7 +22,7 @@ import { posPermissions, backOfficePermissions } from "@/lib/permissions";
 export default function SignInPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { setLoggedInUser } = useSettings();
+  const { setLoggedInUser, setSelectedStore, setSelectedDevice } = useSettings();
 
   const handlePasswordSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -55,37 +55,7 @@ export default function SignInPage() {
         .eq('id', authData.user.id)
         .single();
     
-    // If profile doesn't exist, create it. This handles cases where the trigger might have failed.
-    if (profileError && profileError.code === 'PGRST116') { // PGRST116 is the code for "no rows returned"
-      console.log("User profile not found, creating one...");
-      const userEmail = authData.user.email;
-      const userName = authData.user.user_metadata.name || userEmail?.split('@')[0] || 'New User';
-      const userRole = authData.user.user_metadata.role || 'Owner'; // Default to Owner if not set
-      
-      const { data: newUserProfile, error: createError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user.id,
-          name: userName,
-          email: userEmail!,
-          role: userRole,
-          permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)],
-          avatar_url: authData.user.user_metadata.avatar_url || `https://placehold.co/100x100.png?text=${userName.charAt(0)}`
-        })
-        .select()
-        .single();
-
-      if (createError) {
-         toast({
-          title: "Could not create user profile",
-          description: createError.message,
-          variant: "destructive",
-        });
-        await supabase.auth.signOut();
-        return;
-      }
-      user = newUserProfile;
-    } else if (profileError) {
+    if (profileError) {
        toast({
         title: "Could not find user profile",
         description: profileError.message,
@@ -101,7 +71,14 @@ export default function SignInPage() {
         title: "Signed In",
         description: `Welcome back, ${user.name}!`,
       });
-      router.push("/dashboard");
+      
+      if (user.role === 'Owner') {
+        router.push("/dashboard");
+      } else {
+        setSelectedStore(null);
+        setSelectedDevice(null);
+        router.push("/select-device");
+      }
     }
   };
 
