@@ -85,17 +85,16 @@ export default function KitchenPage() {
 
   const handlePrint = useReactToPrint({
     content: () => printableRef.current,
+    onAfterPrint: () => setPrintableData(null),
   });
 
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
     setPrintableData({ ...data, type });
-  };
-  
-  useEffect(() => {
-    if (printableData) {
+    // Use a timeout to ensure the state has updated and component has rendered
+    setTimeout(() => {
       handlePrint();
-    }
-  }, [printableData, handlePrint]);
+    }, 100);
+  };
   
   useEffect(() => {
     const fetchData = async () => {
