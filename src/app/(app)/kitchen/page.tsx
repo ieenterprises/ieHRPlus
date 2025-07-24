@@ -38,6 +38,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -81,20 +82,28 @@ export default function KitchenPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const [printableData, setPrintableData] = useState<any>(null);
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
   const printableRef = useRef(null);
 
   const handlePrint = useReactToPrint({
     content: () => printableRef.current,
-    onAfterPrint: () => setPrintableData(null),
+    onAfterPrint: () => {
+        setIsPrintDialogOpen(false);
+        setPrintableData(null);
+    },
   });
 
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
     setPrintableData({ ...data, type });
-    // Use a timeout to ensure the state has updated and component has rendered
-    setTimeout(() => {
-      handlePrint();
-    }, 100);
+    setIsPrintDialogOpen(true);
   };
+  
+  useEffect(() => {
+    if (isPrintDialogOpen && printableData) {
+      handlePrint();
+    }
+  }, [isPrintDialogOpen, printableData, handlePrint]);
+
   
   useEffect(() => {
     const fetchData = async () => {
@@ -222,11 +231,13 @@ export default function KitchenPage() {
 
   return (
     <div className="space-y-8">
-      <div style={{ display: "none" }}>
-        <div ref={printableRef}>
-          {printableData && <PrintableReceipt data={printableData} type={printableData.type} />}
-        </div>
-      </div>
+      <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
+        <DialogContent className="p-0 w-auto bg-transparent border-none shadow-none">
+          <div ref={printableRef} className="bg-white">
+            {printableData && <PrintableReceipt data={printableData} type={printableData.type} />}
+          </div>
+        </DialogContent>
+      </Dialog>
       <PageHeader
         title="Orders"
         description="View open tickets and completed receipts."
