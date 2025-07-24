@@ -29,17 +29,25 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
 import { useSettings } from "@/hooks/use-settings";
+import type { AnyPermission } from "@/lib/permissions";
 
-const navItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/sales", icon: ShoppingCart, label: "Sales" },
-  { href: "/kitchen", icon: ClipboardList, label: "Orders" },
-  { href: "/inventory", icon: Package, label: "Inventory" },
-  { href: "/reservations", icon: CalendarCheck, label: "Reservations" },
-  { href: "/reports", icon: BarChart3, label: "Reports" },
-  { href: "/team", icon: Users, label: "Team" },
-  { href: "/customers", icon: BookUser, label: "Customers" },
-  { href: "/debts", icon: ReceiptText, label: "Debts" },
+type NavItem = {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  permission?: AnyPermission;
+};
+
+const navItems: NavItem[] = [
+  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permission: "VIEW_SALES_REPORTS" },
+  { href: "/sales", icon: ShoppingCart, label: "Sales", permission: "ACCEPT_PAYMENTS" },
+  { href: "/kitchen", icon: ClipboardList, label: "Orders", permission: "VIEW_ALL_RECEIPTS" },
+  { href: "/inventory", icon: Package, label: "Inventory", permission: "MANAGE_ITEMS_BO" },
+  { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "MANAGE_ITEMS_BO" }, // Assuming managers handle this
+  { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS" },
+  { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES" },
+  { href: "/customers", icon: BookUser, label: "Customers", permission: "MANAGE_CUSTOMERS" },
+  { href: "/debts", icon: ReceiptText, label: "Debts", permission: "VIEW_ALL_RECEIPTS" },
 ];
 
 export function AppSidebar() {
@@ -49,6 +57,14 @@ export function AppSidebar() {
   const handleLogout = async () => {
     await logout();
   };
+  
+  const hasPermission = (permission?: AnyPermission) => {
+    if (!permission) return true; // Public route within the app
+    if (!loggedInUser) return false;
+    return loggedInUser.permissions.includes(permission);
+  };
+
+  const visibleNavItems = navItems.filter(item => hasPermission(item.permission));
 
   return (
     <Sidebar collapsible="icon">
@@ -69,7 +85,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
                 asChild
@@ -87,14 +103,16 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          <SidebarMenuItem>
-             <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
-                <Link href="/settings">
-                    <Settings />
-                    <span>Settings</span>
-                </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {hasPermission("MANAGE_FEATURE_SETTINGS") && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
+                  <Link href="/settings">
+                      <Settings />
+                      <span>Settings</span>
+                  </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <div className="flex items-center justify-between w-full p-2">
                 <div className="flex items-center gap-2">
