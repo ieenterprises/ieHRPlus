@@ -23,7 +23,6 @@ const settingsNav = [
   { id: "features", label: "Features", icon: SlidersHorizontal },
   { id: "printers", label: "Printers", icon: Printer },
   { id: "receipts", label: "Receipts", icon: Utensils },
-  { id: "items", label: "Items", icon: Package },
   { id: "payment_types", label: "Payment types", icon: CreditCard },
   { id: "taxes", label: "Taxes", icon: Percent },
   { id: "stores", label: "Stores", icon: Store },
@@ -640,7 +639,7 @@ export default function SettingsPage() {
                 </Card>
             )}
 
-            {['items', 'payment_types', 'taxes'].includes(activeSection) && (
+            {['payment_types', 'taxes'].includes(activeSection) && (
                 <Card>
                     <CardHeader>
                         <CardTitle>{settingsNav.find(nav => nav.id === activeSection)?.label}</CardTitle>
