@@ -9,7 +9,7 @@ import { PosProvider } from "@/hooks/use-pos";
 import { SettingsProvider, useSettings } from "@/hooks/use-settings";
 
 function AppLayoutContent({ children }: { children: React.ReactNode }) {
-  const { loggedInUser } = useSettings();
+  const { loggedInUser, loadingUser } = useSettings();
   const router = useRouter();
   const [isClient, setIsClient] = useState(false);
 
@@ -18,12 +18,12 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (isClient && !loggedInUser) {
+    if (isClient && !loadingUser && !loggedInUser) {
       router.push("/sign-in");
     }
-  }, [loggedInUser, router, isClient]);
+  }, [loggedInUser, loadingUser, router, isClient]);
 
-  if (!isClient || !loggedInUser) {
+  if (loadingUser || !isClient) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <p>Loading...</p>
@@ -31,6 +31,10 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (!loggedInUser) {
+    return null; // or a redirect component
+  }
+  
   return (
     <SidebarProvider>
       <AppSidebar />

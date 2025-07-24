@@ -151,6 +151,7 @@ type SettingsContextType = {
     setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
     loggedInUser: User | null;
     setLoggedInUser: React.Dispatch<React.SetStateAction<User | null>>;
+    loadingUser: boolean;
     getPermissionsForRole: (role: UserRole) => AnyPermission[];
     logout: () => Promise<void>;
 };
@@ -212,7 +213,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const { data: { session }} = await supabase.auth.getSession();
         if (session?.user) {
             const { data: userProfile } = await supabase.from('users').select('*').eq('id', session.user.id).single();
-            setLoggedInUser(userProfile);
+            setLoggedInUser(userProfile as User);
         } else {
             setLoggedInUser(null);
         }
@@ -255,6 +256,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         taxes, setTaxes,
         roles, setRoles,
         loggedInUser, setLoggedInUser,
+        loadingUser,
         getPermissionsForRole,
         logout,
     };
