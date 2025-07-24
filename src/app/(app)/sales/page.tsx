@@ -57,8 +57,9 @@ import {
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { usePos } from "@/hooks/use-pos";
+import { useSettings } from "@/hooks/use-settings";
 
-// Mock Data
+
 const MOCK_CATEGORIES: Category[] = [
     { id: 'cat_1', name: 'Food', created_at: "2023-01-01T10:00:00Z" },
     { id: 'cat_2', name: 'Beverages', created_at: "2023-01-01T10:00:00Z" },
@@ -133,6 +134,7 @@ function ProductCard({
 }
 
 export default function SalesPage() {
+  const { featureSettings, paymentTypes: configuredPaymentTypes } = useSettings();
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
@@ -154,7 +156,7 @@ export default function SalesPage() {
   const [guestName, setGuestName] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
-  const [splitPaymentMethod, setSplitPaymentMethod] = useState("Cash");
+  const [splitPaymentMethod, setSplitPaymentMethod] = useState(configuredPaymentTypes[0]?.name || "Cash");
   const [categoryFilter, setCategoryFilter] = useState("all");
 
   useEffect(() => {
@@ -326,8 +328,10 @@ export default function SalesPage() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const method = formData.get("paymentMethod") as string;
+    const paymentTypeDetails = configuredPaymentTypes.find(p => p.name === method);
 
-    if (method === "Credit") {
+
+    if (paymentTypeDetails?.type === "Credit") {
       const creditCustomerId = formData.get("creditCustomer") as string;
       if (!creditCustomerId) {
         toast({ title: "Customer Required", description: "Please select a customer.", variant: "destructive" });
@@ -351,7 +355,7 @@ export default function SalesPage() {
 
     setPayments([...payments, { method, amount: Math.min(amount, remainingBalance) }]);
     (event.target as HTMLFormElement).reset();
-    setSplitPaymentMethod("Cash");
+    setSplitPaymentMethod(configuredPaymentTypes[0]?.name || "Cash");
   };
 
 
@@ -486,6 +490,8 @@ export default function SalesPage() {
     }
   };
 
+  const currentPaymentType = configuredPaymentTypes.find(p => p.name === splitPaymentMethod);
+
   return (
     <TooltipProvider>
         <div className="space-y-8">
@@ -503,10 +509,12 @@ export default function SalesPage() {
 
             <div className="flex items-center justify-between">
                 <PageHeader title="Sales" description="Create a new order for products or room bookings." />
-                <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
-                    <Ticket className="mr-2 h-4 w-4" />
-                    Open Tickets ({openTickets.length})
-                </Button>
+                {featureSettings.open_tickets && (
+                    <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
+                        <Ticket className="mr-2 h-4 w-4" />
+                        Open Tickets ({openTickets.length})
+                    </Button>
+                )}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             <div className="lg:col-span-2 space-y-4">
@@ -618,10 +626,12 @@ export default function SalesPage() {
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                         <Button variant="secondary" onClick={handleSaveOrder}>
-                            <Save className="mr-2 h-4 w-4" /> {activeTicketId ? "Update" : "Save"} Order
-                        </Button>
-                         <Button variant="outline" onClick={handleClearOrder}>
+                         {featureSettings.open_tickets && (
+                            <Button variant="secondary" onClick={handleSaveOrder}>
+                                <Save className="mr-2 h-4 w-4" /> {activeTicketId ? "Update" : "Save"} Order
+                            </Button>
+                         )}
+                         <Button variant="outline" onClick={handleClearOrder} className={cn(!featureSettings.open_tickets && "col-span-2")}>
                             <X className="mr-2 h-4 w-4" /> {activeTicketId ? "Cancel" : "Clear"}
                         </Button>
                     </div>
@@ -709,7 +719,7 @@ export default function SalesPage() {
             setIsSplitPaymentDialogOpen(isOpen);
             if (!isOpen) {
                 setPayments([]);
-                setSplitPaymentMethod("Cash");
+                setSplitPaymentMethod(configuredPaymentTypes[0]?.name || "Cash");
             }
         }}>
             <DialogContent className="sm:max-w-md">
@@ -740,7 +750,7 @@ export default function SalesPage() {
                                 {payments.map((payment, index) => (
                                     <div key={index} className="flex items-center justify-between p-2 bg-secondary rounded-md">
                                         <div className="flex items-center gap-2">
-                                            {payment.method === 'Cash' ? <DollarSign className="h-5 w-5 text-green-500" /> : <CreditCard className="h-5 w-5 text-blue-500" />}
+                                            {configuredPaymentTypes.find(p=>p.name === payment.method)?.type === 'Cash' ? <DollarSign className="h-5 w-5 text-green-500" /> : <CreditCard className="h-5 w-5 text-blue-500" />}
                                             <span className="font-medium">{payment.method}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -766,12 +776,12 @@ export default function SalesPage() {
                                         name="paymentAmount"
                                         type="number"
                                         step="0.01"
-                                        required={splitPaymentMethod !== 'Credit'}
+                                        required={currentPaymentType?.type !== 'Credit'}
                                         placeholder={`Max $${remainingBalance.toFixed(2)}`}
                                         min="0.01"
                                         max={remainingBalance.toFixed(2)}
-                                        disabled={splitPaymentMethod === 'Credit'}
-                                        defaultValue={splitPaymentMethod === 'Credit' ? remainingBalance.toFixed(2) : ''}
+                                        disabled={currentPaymentType?.type === 'Credit'}
+                                        defaultValue={currentPaymentType?.type === 'Credit' ? remainingBalance.toFixed(2) : ''}
                                     />
                                 </div>
                                 <div className="w-40">
@@ -781,15 +791,15 @@ export default function SalesPage() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="Cash">Cash</SelectItem>
-                                            <SelectItem value="Card">Card</SelectItem>
-                                            <SelectItem value="Credit">Credit</SelectItem>
+                                            {configuredPaymentTypes.map(pt => (
+                                                <SelectItem key={pt.id} value={pt.name}>{pt.name}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <Button type="submit">{splitPaymentMethod === 'Credit' ? 'Record' : 'Add'}</Button>
+                                <Button type="submit">{currentPaymentType?.type === 'Credit' ? 'Record' : 'Add'}</Button>
                             </div>
-                             {splitPaymentMethod === 'Credit' && (
+                             {currentPaymentType?.type === 'Credit' && (
                                 <div className="space-y-2">
                                     <Label htmlFor="creditCustomer">Customer</Label>
                                     <Select name="creditCustomer" required>

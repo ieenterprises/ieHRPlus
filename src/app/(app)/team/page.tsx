@@ -53,6 +53,7 @@ import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSettings } from "@/hooks/use-settings";
 
 
 const EMPTY_USER: Partial<User> = {
@@ -72,39 +73,19 @@ const EMPTY_ROLE: Partial<Role> = {
 const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermissions)[];
 const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
 
-const getPermissionsForRole = (role: UserRole): AnyPermission[] => {
-    switch(role) {
-        case "Owner":
-        case "Administrator":
-            return [...allPosPermissions, ...allBackOfficePermissions];
-        case "Manager":
-            return ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS"];
-        case "Cashier":
-            return ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS"];
-        default:
-            return [];
-    }
-}
-
-const MOCK_ROLES: Role[] = [
-  { id: "role_owner", name: "Owner", permissions: getPermissionsForRole("Owner") },
-  { id: "role_admin", name: "Administrator", permissions: getPermissionsForRole("Administrator") },
-  { id: "role_manager", name: "Manager", permissions: getPermissionsForRole("Manager") },
-  { id: "role_cashier", name: "Cashier", permissions: getPermissionsForRole("Cashier") },
-];
 
 const MOCK_USERS: User[] = [
-    { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: getPermissionsForRole("Owner"), avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: getPermissionsForRole("Cashier"), avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: "user_3", name: "Jane Manager", email: "jane.m@orderflow.com", role: "Manager", pin: "4321", permissions: getPermissionsForRole("Manager"), avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_3", name: "Jane Manager", email: "jane.m@orderflow.com", role: "Manager", pin: "4321", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
 ];
 
 const systemRoles = ["Owner", "Administrator"];
 
 
 export default function TeamPage() {
+  const { roles, setRoles } = useSettings();
   const [team, setTeam] = useState<User[]>(MOCK_USERS);
-  const [roles, setRoles] = useState<Role[]>(MOCK_ROLES);
 
   const [loading, setLoading] = useState(false);
   
