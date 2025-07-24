@@ -1,3 +1,4 @@
+
 "use client";
 
 import { PageHeader } from "@/components/page-header";
@@ -13,24 +14,10 @@ import {
 } from "recharts";
 import { useState, useEffect } from "react";
 import { subMonths, format } from "date-fns";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 type MonthlySales = { name: string; total: number };
-
-// Mock Data
-const MOCK_SALES_DATA: MonthlySales[] = [
-  { name: "Jan", total: 1200 }, { name: "Feb", total: 1800 }, { name: "Mar", total: 2200 },
-  { name: "Apr", total: 2500 }, { name: "May", total: 3100 }, { name: "Jun", total: 2900 },
-  { name: "Jul", total: 3500 }, { name: "Aug", total: 3300 }, { name: "Sep", total: 4000 },
-  { name: "Oct", total: 4200 }, { name: "Nov", total: 4800 }, { name: "Dec", total: 5500 },
-];
-
-const MOCK_STATS = {
-    totalRevenue: 54231.89,
-    ordersToday: 25,
-    totalSales: 1234,
-    activeStaff: 4
-};
-
 
 export default function DashboardPage() {
   const [salesData, setSalesData] = useState<MonthlySales[]>([]);
@@ -41,16 +28,63 @@ export default function DashboardPage() {
     activeStaff: 0,
   });
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    setLoading(true);
-    // Simulate fetching data
-    setTimeout(() => {
-      setSalesData(MOCK_SALES_DATA);
-      setStats(MOCK_STATS);
-      setLoading(false);
-    }, 500);
-  }, []);
+    const fetchDashboardData = async () => {
+        if (!supabase) return;
+        setLoading(true);
+
+        // Fetch sales data for the chart (last 12 months)
+        const twelveMonthsAgo = subMonths(new Date(), 12);
+        const { data: monthlySalesData, error: salesError } = await supabase
+            .from('sales')
+            .select('created_at, total')
+            .gte('created_at', twelveMonthsAgo.toISOString());
+        
+        if (salesError) {
+            toast({ title: "Error fetching sales data", description: salesError.message, variant: "destructive" });
+        } else {
+            const monthlyTotals = monthlySalesData.reduce((acc, sale) => {
+                const month = format(new Date(sale.created_at!), 'MMM');
+                acc[month] = (acc[month] || 0) + sale.total;
+                return acc;
+            }, {} as Record<string, number>);
+
+            const chartData: MonthlySales[] = Array.from({ length: 12 }, (_, i) => {
+                const d = subMonths(new Date(), i);
+                return format(d, 'MMM');
+            }).reverse().map(monthName => ({
+                name: monthName,
+                total: monthlyTotals[monthName] || 0,
+            }));
+            setSalesData(chartData);
+        }
+
+        // Fetch stats
+        const { data: sales, error: totalSalesError } = await supabase.from('sales').select('total, created_at');
+        const { count: userCount, error: userCountError } = await supabase.from('users').select('*', { count: 'exact', head: true });
+
+        if (totalSalesError || userCountError) {
+            toast({ title: "Error fetching stats", description: totalSalesError?.message || userCountError?.message, variant: "destructive" });
+        } else {
+            const today = new Date().toISOString().slice(0, 10);
+            const totalRevenue = sales.reduce((acc, s) => acc + s.total, 0);
+            const ordersToday = sales.filter(s => s.created_at!.slice(0, 10) === today).length;
+            
+            setStats({
+                totalRevenue: totalRevenue,
+                ordersToday: ordersToday,
+                totalSales: sales.length,
+                activeStaff: userCount || 0
+            });
+        }
+        
+        setLoading(false);
+    };
+
+    fetchDashboardData();
+  }, [toast]);
 
   if (loading) {
     return (
@@ -83,7 +117,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
-            {/* <p className="text-xs text-muted-foreground">+20.1% from last month</p> */}
           </CardContent>
         </Card>
         <Card>
@@ -93,7 +126,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+{stats.ordersToday}</div>
-            {/* <p className="text-xs text-muted-foreground">+180.1% from last month</p> */}
           </CardContent>
         </Card>
         <Card>
@@ -103,7 +135,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+{stats.totalSales}</div>
-            {/* <p className="text-xs text-muted-foreground">+19% from last month</p> */}
           </CardContent>
         </Card>
         <Card>
@@ -112,7 +143,7 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+{stats.activeStaff}</div>
+            <div className="text-2xl font-bold">{stats.activeStaff}</div>
             <p className="text-xs text-muted-foreground">Total registered users</p>
           </CardContent>
         </Card>

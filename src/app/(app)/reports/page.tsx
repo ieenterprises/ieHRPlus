@@ -1,3 +1,4 @@
+
 "use client";
 
 import { PageHeader } from "@/components/page-header";
@@ -28,34 +29,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { useState, useEffect } from "react";
-import { subDays, format } from "date-fns";
+import { subDays, format, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
+import type { Sale, Product, Category, User } from "@/lib/types";
 
 type SalesData = {
     name: string;
     sales: number;
 };
-
-// Mock Data
-const MOCK_SALES_BY_ITEM: SalesData[] = [
-    { name: "Cheeseburger", sales: 4500.50 },
-    { name: "Fries", sales: 2200.00 },
-    { name: "Cola", sales: 1800.75 },
-    { name: "T-Shirt", sales: 3200.00 },
-    { name: "King Suite", sales: 15000.00 },
-];
-
-const MOCK_SALES_BY_CATEGORY: SalesData[] = [
-    { name: "Room", sales: 15000.00 },
-    { name: "Food", sales: 6700.50 },
-    { name: "Merchandise", sales: 3200.00 },
-    { name: "Beverages", sales: 1800.75 },
-];
-
-const MOCK_SALES_BY_EMPLOYEE: SalesData[] = [
-    { name: "Admin", sales: 20500.25 },
-    { name: "John Cashier", sales: 16201.00 },
-];
 
 function SalesChart({ data, title }: { data: SalesData[], title: string }) {
   return (
@@ -91,17 +74,74 @@ export default function ReportsPage() {
   const [salesByCategory, setSalesByCategory] = useState<SalesData[]>([]);
   const [salesByEmployee, setSalesByEmployee] = useState<SalesData[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    setLoading(true);
-    // Simulate fetching and processing report data
-    setTimeout(() => {
-        setSalesByItem(MOCK_SALES_BY_ITEM);
-        setSalesByCategory(MOCK_SALES_BY_CATEGORY);
-        setSalesByEmployee(MOCK_SALES_BY_EMPLOYEE);
+    const fetchReportData = async () => {
+      if (!supabase || !date?.from) return;
+      setLoading(true);
+
+      const fromDate = startOfDay(date.from).toISOString();
+      const toDate = date.to ? endOfDay(date.to).toISOString() : endOfDay(new Date()).toISOString();
+
+      const { data: sales, error: salesError } = await supabase
+        .from('sales')
+        .select('*, users(name), items')
+        .gte('created_at', fromDate)
+        .lte('created_at', toDate);
+
+      if (salesError) {
+        toast({ title: "Error fetching sales data", description: salesError.message, variant: "destructive" });
         setLoading(false);
-    }, 500);
-  }, [date]);
+        return;
+      }
+      
+      const { data: products, error: productsError } = await supabase.from('products').select('id, category_id');
+      const { data: categories, error: categoriesError } = await supabase.from('categories').select('id, name');
+
+      if (productsError || categoriesError) {
+        toast({ title: "Error fetching product/category data", description: productsError?.message || categoriesError?.message, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+      
+      // Process sales by item
+      const itemSales = sales.reduce((acc, sale) => {
+        (sale.items as any[]).forEach(item => {
+          acc[item.name] = (acc[item.name] || 0) + (item.price * item.quantity);
+        });
+        return acc;
+      }, {} as Record<string, number>);
+      setSalesByItem(Object.entries(itemSales).map(([name, sales]) => ({ name, sales })).sort((a, b) => b.sales - a.sales));
+      
+      // Process sales by category
+      const categorySales = sales.reduce((acc, sale) => {
+        (sale.items as any[]).forEach(item => {
+          const product = products.find(p => p.id === item.id);
+          if (product) {
+            const category = categories.find(c => c.id === product.category_id);
+            if (category) {
+              acc[category.name] = (acc[category.name] || 0) + (item.price * item.quantity);
+            }
+          }
+        });
+        return acc;
+      }, {} as Record<string, number>);
+      setSalesByCategory(Object.entries(categorySales).map(([name, sales]) => ({ name, sales })).sort((a, b) => b.sales - a.sales));
+
+      // Process sales by employee
+      const employeeSales = sales.reduce((acc, sale) => {
+        const employeeName = (sale as any).users?.name || 'N/A';
+        acc[employeeName] = (acc[employeeName] || 0) + sale.total;
+        return acc;
+      }, {} as Record<string, number>);
+      setSalesByEmployee(Object.entries(employeeSales).map(([name, sales]) => ({ name, sales })).sort((a, b) => b.sales - a.sales));
+      
+      setLoading(false);
+    };
+
+    fetchReportData();
+  }, [date, toast]);
 
   return (
     <div className="space-y-8">
