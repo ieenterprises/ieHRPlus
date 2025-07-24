@@ -98,12 +98,14 @@ export default function KitchenPage() {
     setIsPrintDialogOpen(true);
   };
   
-  useEffect(() => {
-    if (isPrintDialogOpen && printableData) {
-      handlePrint();
+  const handleDialogChange = (open: boolean) => {
+    setIsPrintDialogOpen(open);
+    if (open && printableData) {
+      setTimeout(() => {
+        handlePrint();
+      }, 100);
     }
-  }, [isPrintDialogOpen, printableData, handlePrint]);
-
+  }
   
   useEffect(() => {
     const fetchData = async () => {
@@ -231,7 +233,7 @@ export default function KitchenPage() {
 
   return (
     <div className="space-y-8">
-      <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
+      <Dialog open={isPrintDialogOpen} onOpenChange={handleDialogChange}>
         <DialogContent className="p-0 w-auto bg-transparent border-none shadow-none">
           <div ref={printableRef} className="bg-white">
             {printableData && <PrintableReceipt data={printableData} type={printableData.type} />}
