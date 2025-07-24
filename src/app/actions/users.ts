@@ -48,16 +48,14 @@ export async function updateUser(id: string, userData: {
 export async function deleteUser(id: string) {
     checkSupabase();
     
-    // Deletes the user from the `auth.users` table, which will cascade and delete
-    // the corresponding entry from the `public.users` table due to the foreign key constraint.
-    const { error: authError } = await supabase.auth.admin.deleteUser(id);
+    // This is the correct way to delete a user using the admin client.
+    // The corresponding profile in `public.users` will be deleted automatically
+    // by the `ON DELETE CASCADE` constraint we set up in the SQL schema.
+    const { error } = await supabase.auth.admin.deleteUser(id);
 
-    if (authError) {
-        // Fallback to delete from public.users if admin deletion fails
-        // This might happen if the user was manually created or if permissions are not sufficient.
-        console.warn(`Could not delete auth user: ${authError.message}. Deleting from public users table as a fallback.`);
-        const { error: publicError } = await supabase.from('users').delete().eq('id', id);
-        if (publicError) throw new Error(publicError.message);
+    if (error) {
+        console.error("Error deleting user:", error.message);
+        throw new Error(`Failed to delete user: ${error.message}`);
     }
 
     revalidatePath('/team');
