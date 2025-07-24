@@ -168,16 +168,21 @@ export default function SalesPage() {
     }
     
     try {
+        const reservationData = {
+            guest_name: guestName,
+            product_id: roomItem.product.id,
+            check_in: dateRange.from.toISOString(),
+            check_out: dateRange.to.toISOString(),
+            status: status
+        };
+
         if (status === 'Checked-in') {
-            await handleCompleteSale(true);
+            await Promise.all([
+                handleCompleteSale(true),
+                addReservation(reservationData),
+            ]);
         } else {
-             await addReservation({
-                guest_name: guestName,
-                product_id: roomItem.product.id,
-                check_in: dateRange.from.toISOString(),
-                check_out: dateRange.to.toISOString(),
-                status: 'Confirmed'
-            });
+             await addReservation(reservationData);
         }
         
         if (activeTicketId) await deleteTicket(activeTicketId, true);
@@ -350,7 +355,7 @@ export default function SalesPage() {
 
         await addSale(saleData, creditInfo);
         
-        if (activeTicketId) await deleteTicket(activeTicketId, true);
+        if (activeTicketId && !isRoomCheckout) await deleteTicket(activeTicketId, true);
 
         const stockUpdates = orderItems
             .filter(item => getCategoryName(item.product.category_id) !== 'Room')
@@ -365,19 +370,24 @@ export default function SalesPage() {
             })
         );
         
-        let toastDescription = `Order complete. Total: $${total.toFixed(2)}.`;
-        if (creditInfo) {
-            const customer = customers.find(c => c.id === creditInfo.customerId);
-            toastDescription += ` $${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
+        if (!isRoomCheckout) {
+            let toastDescription = `Order complete. Total: $${total.toFixed(2)}.`;
+            if (creditInfo) {
+                const customer = customers.find(c => c.id === creditInfo.customerId);
+                toastDescription += ` $${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
+            }
+
+            toast({ title: "Sale Completed", description: toastDescription });
+
+            handleClearOrder();
+            setPayments([]);
+            setIsSplitPaymentDialogOpen(false);
         }
-
-        toast({ title: "Sale Completed", description: toastDescription });
-
-        handleClearOrder();
-        setPayments([]);
-        setIsSplitPaymentDialogOpen(false);
     } catch (error: any) {
         toast({ title: "Error completing sale", description: error.message, variant: "destructive" });
+        if (!isRoomCheckout) {
+          throw error;
+        }
     }
   };
   
