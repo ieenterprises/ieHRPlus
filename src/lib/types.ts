@@ -20,7 +20,7 @@ export type Debt = Database['public']['Tables']['debts']['Row'] & {
   customers: { name: string | null } | null;
 };
 export type Reservation = Database['public']['Tables']['reservations']['Row'] & {
-  products: { name: string | null } | null;
+  products: { name: string | null; price: number | null; } | null;
 };
 export type OpenTicket = Database['public']['Tables']['open_tickets']['Row'] & {
   users: { name: string | null } | null;
@@ -254,6 +254,7 @@ export type Database = {
           name: string
           price: number
           stock: number
+          status: string
         }
         Insert: {
           category_id?: string | null
@@ -263,6 +264,7 @@ export type Database = {
           name: string
           price: number
           stock: number
+          status?: string
         }
         Update: {
           category_id?: string | null
@@ -272,6 +274,7 @@ export type Database = {
           name?: string
           price?: number
           stock?: number
+          status?: string
         }
         Relationships: [
           {

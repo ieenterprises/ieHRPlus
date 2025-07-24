@@ -50,6 +50,18 @@ export async function deleteProduct(id: string) {
     return data;
 }
 
+export async function updateRoomStatus(id: string, status: 'Available' | 'Occupied' | 'Maintenance') {
+  checkSupabase();
+  const { data, error } = await supabase
+    .from('products')
+    .update({ status })
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+  revalidatePath('/reservations');
+  return data;
+}
+
 
 // Category Actions
 export async function addCategory(categoryData: { name: string }) {

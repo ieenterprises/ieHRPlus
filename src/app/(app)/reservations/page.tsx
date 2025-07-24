@@ -2,8 +2,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format, addDays } from "date-fns";
-import { Calendar as CalendarIcon, PlusCircle } from "lucide-react";
+import { format, differenceInDays } from "date-fns";
+import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
@@ -32,6 +32,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -52,12 +58,65 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { type Reservation, type Product } from "@/lib/types";
 import { addReservation } from "@/app/actions/reservations";
+import { updateRoomStatus } from "@/app/actions/inventory";
 import { supabase } from "@/lib/supabase";
 import { useSettings } from "@/hooks/use-settings";
+
+type RoomStatus = 'Available' | 'Occupied' | 'Maintenance';
+
+function RoomStatusCard({ 
+  room, 
+  onStatusChange,
+  categoryName,
+}: { 
+  room: Product;
+  onStatusChange: (roomId: string, status: RoomStatus) => void;
+  categoryName: string;
+}) {
+  const statusConfig = {
+    Available: { icon: CheckCircle, color: "text-green-500", bg: "bg-green-50" },
+    Occupied: { icon: Bed, color: "text-blue-500", bg: "bg-blue-50" },
+    Maintenance: { icon: Wrench, color: "text-yellow-500", bg: "bg-yellow-50" },
+  };
+
+  const currentStatus = room.status as RoomStatus;
+  const config = statusConfig[currentStatus] || statusConfig.Available;
+  const Icon = config.icon;
+
+  return (
+    <Card className={cn("relative", config.bg)}>
+      <CardContent className="flex flex-col items-center justify-center p-4 gap-2">
+        <Icon className={cn("h-8 w-8", config.color)} />
+        <p className="font-bold text-lg">{room.name}</p>
+        <p className="text-sm text-muted-foreground">{categoryName}</p>
+        <Badge variant={currentStatus === 'Available' ? 'secondary' : 'default'} className={cn(
+          currentStatus === 'Occupied' && 'bg-blue-100 text-blue-800',
+          currentStatus === 'Maintenance' && 'bg-yellow-100 text-yellow-800',
+          currentStatus === 'Available' && 'bg-green-100 text-green-800',
+        )}>
+          {room.status}
+        </Badge>
+      </CardContent>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => onStatusChange(room.id, 'Available')}>Set as Available</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onStatusChange(room.id, 'Occupied')}>Set as Occupied</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onStatusChange(room.id, 'Maintenance')}>Set for Maintenance</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </Card>
+  );
+}
 
 export default function ReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [rooms, setRooms] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
@@ -67,39 +126,38 @@ export default function ReservationsPage() {
   const [roomId, setRoomId] = useState<string>("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
+  const fetchData = async () => {
+    if (!supabase) return;
+    setLoading(true);
+    const [reservationsRes, productsRes, categoriesRes] = await Promise.all([
+      supabase.from('reservations').select('*, products(name, price)').order('check_in', { ascending: false }),
+      supabase.from('products').select('*, categories(name)').order('name', { ascending: true }),
+      supabase.from('categories').select('*'),
+    ]);
+  
+    if (reservationsRes.error) {
+      toast({ title: "Error fetching reservations", description: reservationsRes.error.message, variant: "destructive" });
+    } else {
+      setReservations(reservationsRes.data || []);
+    }
+  
+    const roomCategory = categoriesRes.data?.find(c => c.name === 'Room');
+    if (productsRes.error) {
+       toast({ title: "Error fetching room data", description: productsRes.error.message, variant: "destructive" });
+    } else if (roomCategory) {
+      setRooms(productsRes.data?.filter(p => p.category_id === roomCategory.id) || []);
+    } else {
+      setRooms([]);
+    }
+
+    if (categoriesRes.data) setCategories(categoriesRes.data);
+    
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      if (!supabase) return;
-      setLoading(true);
-      const [reservationsRes, productsRes, categoriesRes] = await Promise.all([
-        supabase.from('reservations').select('*, products(name)').order('check_in', { ascending: false }),
-        supabase.from('products').select('*'),
-        supabase.from('categories').select('id').eq('name', 'Room').limit(1),
-      ]);
-
-      if (reservationsRes.error) {
-        toast({ title: "Error fetching reservations", description: reservationsRes.error.message, variant: "destructive" });
-      } else {
-        setReservations(reservationsRes.data || []);
-      }
-
-      if (productsRes.error) {
-         toast({ title: "Error fetching room data", description: productsRes.error.message, variant: "destructive" });
-      } else if (categoriesRes.error) {
-          // This check handles potential RLS or other access errors for categories table
-         toast({ title: "Error fetching room categories", description: categoriesRes.error.message, variant: "destructive" });
-      } else {
-        const roomCategoryId = categoriesRes.data?.[0]?.id;
-        if (roomCategoryId) {
-            setRooms(productsRes.data?.filter(p => p.category_id === roomCategoryId) || []);
-        } else {
-            setRooms([]); // No "Room" category found, so no rooms to show.
-        }
-      }
-      setLoading(false);
-    };
     fetchData();
-  }, [toast]);
+  }, []);
 
   const handleAddReservation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -121,12 +179,9 @@ export default function ReservationsPage() {
     };
 
     try {
-      const newReservation = await addReservation(newReservationData);
-      const room = rooms.find(r => r.id === roomId);
+      await addReservation(newReservationData);
       
-      setReservations([{...newReservation, products: { name: room?.name || '' }}, ...reservations]);
       setIsDialogOpen(false);
-      
       setGuestName("");
       setRoomId("");
       setDateRange(undefined);
@@ -135,12 +190,25 @@ export default function ReservationsPage() {
         title: "Reservation Created",
         description: `Booking for ${guestName} has been confirmed.`,
       });
+      fetchData(); // Refresh all data
     } catch (error: any) {
       toast({
         title: "Error creating reservation",
         description: error.message,
         variant: "destructive",
       });
+    }
+  };
+  
+  const handleStatusChange = async (roomId: string, status: RoomStatus) => {
+    try {
+        await updateRoomStatus(roomId, status);
+        setRooms(prevRooms => 
+            prevRooms.map(room => room.id === roomId ? { ...room, status } : room)
+        );
+        toast({ title: "Room Status Updated" });
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
 
@@ -155,6 +223,14 @@ export default function ReservationsPage() {
       default:
         return 'default';
     }
+  };
+
+  const getCategoryName = (categoryId: string) => categories.find(c => c.id === categoryId)?.name || 'N/A';
+  
+  const calculateTotal = (reservation: Reservation) => {
+    if (!reservation.products?.price) return 0;
+    const nights = differenceInDays(new Date(reservation.check_out), new Date(reservation.check_in));
+    return nights * reservation.products.price;
   };
 
   return (
@@ -195,7 +271,7 @@ export default function ReservationsPage() {
                       <SelectValue placeholder="Select a room" />
                     </SelectTrigger>
                     <SelectContent>
-                      {rooms.map((room) => (
+                      {rooms.filter(r => r.status === 'Available').map((room) => (
                         <SelectItem key={room.id} value={room.id}>
                           {room.name} ({currency}{room.price}/night)
                         </SelectItem>
@@ -251,6 +327,28 @@ export default function ReservationsPage() {
           </DialogContent>
         </Dialog>
       </div>
+      
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Room Status</h2>
+        {loading ? (
+             <p>Loading room statuses...</p>
+        ): rooms.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {rooms.map(room => (
+                    <RoomStatusCard 
+                        key={room.id} 
+                        room={room} 
+                        onStatusChange={handleStatusChange}
+                        categoryName={getCategoryName(room.category_id as string)}
+                    />
+                ))}
+            </div>
+        ) : (
+             <Card className="flex items-center justify-center h-32">
+                <p className="text-muted-foreground">No rooms found.</p>
+             </Card>
+        )}
+      </div>
 
       <Card>
         <CardHeader>
@@ -263,17 +361,18 @@ export default function ReservationsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Guest</TableHead>
+                <TableHead>Customer</TableHead>
                 <TableHead>Room</TableHead>
-                <TableHead className="hidden md:table-cell">Check-in</TableHead>
-                <TableHead className="hidden md:table-cell">Check-out</TableHead>
+                <TableHead>Dates</TableHead>
+                <TableHead className="text-right">Total</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
                     Loading...
                   </TableCell>
                 </TableRow>
@@ -282,18 +381,25 @@ export default function ReservationsPage() {
                   <TableRow key={reservation.id}>
                     <TableCell className="font-medium">{reservation.guest_name}</TableCell>
                     <TableCell>{reservation.products?.name}</TableCell>
-                    <TableCell className="hidden md:table-cell">{format(new Date(reservation.check_in), "LLL dd, y")}</TableCell>
-                    <TableCell className="hidden md:table-cell">{format(new Date(reservation.check_out), "LLL dd, y")}</TableCell>
+                    <TableCell>
+                        {format(new Date(reservation.check_in), "LLL dd, y")} - {format(new Date(reservation.check_out), "LLL dd, y")}
+                    </TableCell>
+                    <TableCell className="text-right">{currency}{calculateTotal(reservation).toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusVariant(reservation.status as any)}>
                         {reservation.status}
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                        <Button variant="ghost" size="icon">
+                            <Edit className="h-4 w-4" />
+                        </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
                     No reservations found.
                   </TableCell>
                 </TableRow>
