@@ -3,7 +3,6 @@
 
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { useSettings } from "@/hooks/use-settings";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,19 +15,31 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { type User, type UserRole } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
+import { getPermissionsForRole } from "@/hooks/use-settings";
 
 export default function SignUpPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { setUsers, users } = useSettings();
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const email = formData.get("email") as string;
+     if (!supabase) {
+        toast({ title: "Database not connected", description: "Please configure Supabase.", variant: "destructive" });
+        return;
+    }
 
-    if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+    const formData = new FormData(event.currentTarget);
+    const email = (formData.get("email") as string).toLowerCase();
+    
+    // Check if user already exists
+    const { data: existingUser, error: fetchError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+    if (existingUser) {
         toast({
             title: "Email already exists",
             description: "An account with this email is already registered.",
@@ -37,18 +48,25 @@ export default function SignUpPage() {
         return;
     }
 
-    const newUser: User = {
-        id: `user_${new Date().getTime()}`,
+    const newUser = {
         name: formData.get("owner_name") as string,
         email: email,
         pin: formData.get("pin") as string,
         role: "Owner",
-        permissions: [], // Owner permissions are system-defined
+        permissions: getPermissionsForRole("Owner"), 
         avatar_url: "https://placehold.co/100x100.png",
-        created_at: new Date().toISOString(),
     };
     
-    setUsers(prevUsers => [...prevUsers, newUser]);
+    const { error: insertError } = await supabase.from('users').insert(newUser);
+
+    if (insertError) {
+        toast({
+            title: "Error creating account",
+            description: insertError.message,
+            variant: "destructive",
+        });
+        return;
+    }
     
     toast({
         title: "Account Created",

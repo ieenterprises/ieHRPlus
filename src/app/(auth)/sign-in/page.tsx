@@ -16,33 +16,43 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 export default function SignInPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { users, setLoggedInUser } = useSettings();
+  const { setLoggedInUser } = useSettings();
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!supabase) {
+        toast({ title: "Database not connected", description: "Please configure Supabase.", variant: "destructive" });
+        return;
+    }
     const formData = new FormData(event.currentTarget);
     const email = formData.get("email") as string;
     const pin = formData.get("pin") as string;
 
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.pin === pin);
-
-    if (user) {
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email.toLowerCase())
+        .eq('pin', pin)
+        .single();
+    
+    if (error || !user) {
+      toast({
+        title: "Invalid Credentials",
+        description: "The email or PIN you entered is incorrect. Please try again.",
+        variant: "destructive",
+      });
+    } else {
       setLoggedInUser(user);
       toast({
         title: "Signed In",
         description: `Welcome back, ${user.name}!`,
       });
       router.push("/dashboard");
-    } else {
-      toast({
-        title: "Invalid Credentials",
-        description: "The email or PIN you entered is incorrect. Please try again.",
-        variant: "destructive",
-      });
     }
   };
 

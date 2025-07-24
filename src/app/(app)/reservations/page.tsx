@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -41,52 +42,65 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { type Reservation, type Product, type Category } from "@/lib/types";
-
-const MOCK_CATEGORIES: Category[] = [
-    { id: 'cat_4', name: 'Room', created_at: "2023-01-01T10:00:00Z" },
-];
-
-const MOCK_ROOM_PRODUCTS: Product[] = [
-    { id: 'prod_5', name: 'King Suite', price: 299.99, stock: 5, category_id: 'cat_4', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: 'prod_6', name: 'Queen Room', price: 199.99, stock: 10, category_id: 'cat_4', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
-];
-
-const MOCK_RESERVATIONS: Reservation[] = [
-    { id: "res_1", product_id: 'prod_5', guest_name: "Charlie Davis", check_in: new Date().toISOString(), check_out: addDays(new Date(), 3).toISOString(), status: "Checked-in", created_at: "2023-08-10T12:00:00Z", products: { name: "King Suite" } },
-    { id: "res_2", product_id: 'prod_6', guest_name: "Dana White", check_in: addDays(new Date(), 1).toISOString(), check_out: addDays(new Date(), 5).toISOString(), status: "Confirmed", created_at: "2023-08-09T15:00:00Z", products: { name: "Queen Room" } },
-    { id: "res_3", product_id: 'prod_5', guest_name: "Eve Black", check_in: addDays(new Date(), -5).toISOString(), check_out: addDays(new Date(), -2).toISOString(), status: "Checked-out", created_at: "2023-08-01T11:00:00Z", products: { name: "King Suite" } },
-];
-
+import { type Reservation, type Product } from "@/lib/types";
+import { addReservation } from "@/app/actions/reservations";
+import { supabase } from "@/lib/supabase";
 
 export default function ReservationsPage() {
-  const [reservations, setReservations] = useState<Reservation[]>(MOCK_RESERVATIONS);
-  const [rooms, setRooms] = useState<Product[]>(MOCK_ROOM_PRODUCTS);
-  const [loading, setLoading] = useState(false);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [rooms, setRooms] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const [guestName, setGuestName] = useState("");
   const [roomId, setRoomId] = useState<string>("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!supabase) return;
+      setLoading(true);
+      const [reservationsRes, roomsRes, categoriesRes] = await Promise.all([
+        supabase.from('reservations').select('*, products(name)').order('check_in', { ascending: false }),
+        supabase.from('products').select('*'),
+        supabase.from('categories').select('id').eq('name', 'Room').single(),
+      ]);
+
+      if (reservationsRes.error) {
+        toast({ title: "Error fetching reservations", description: reservationsRes.error.message, variant: "destructive" });
+      } else {
+        setReservations(reservationsRes.data || []);
+      }
+
+      if (roomsRes.error || categoriesRes.error) {
+        toast({ title: "Error fetching room data", description: roomsRes.error?.message || categoriesRes.error?.message, variant: "destructive" });
+      } else {
+        const roomCategoryId = categoriesRes.data?.id;
+        setRooms(roomsRes.data?.filter(p => p.category_id === roomCategoryId) || []);
+      }
+      setLoading(false);
+    };
+    fetchData();
+  }, [toast]);
+
   const handleAddReservation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!guestName || !roomId || !dateRange?.from || !dateRange?.to) {
-        toast({
-            title: "Missing Information",
-            description: "Please fill out all fields to create a reservation.",
-            variant: "destructive",
-        });
-        return;
+      toast({
+        title: "Missing Information",
+        description: "Please fill out all fields to create a reservation.",
+        variant: "destructive",
+      });
+      return;
     }
 
     const newReservationData = {
@@ -94,39 +108,34 @@ export default function ReservationsPage() {
       product_id: roomId,
       check_in: dateRange.from.toISOString(),
       check_out: dateRange.to.toISOString(),
-      status: "Confirmed",
+      status: "Confirmed" as const,
     };
 
     try {
-        const room = rooms.find(r => r.id === roomId);
-        const newReservation: Reservation = {
-            id: `res_${new Date().getTime()}`,
-            created_at: new Date().toISOString(),
-            products: { name: room?.name || '' },
-            ...newReservationData
-        };
+      const newReservation = await addReservation(newReservationData);
+      const room = rooms.find(r => r.id === roomId);
+      
+      setReservations([{...newReservation, products: { name: room?.name || '' }}, ...reservations]);
+      setIsDialogOpen(false);
+      
+      setGuestName("");
+      setRoomId("");
+      setDateRange(undefined);
 
-        setReservations([newReservation, ...reservations]);
-        setIsDialogOpen(false);
-        
-        setGuestName("");
-        setRoomId("");
-        setDateRange(undefined);
-
-        toast({
-          title: "Reservation Created",
-          description: `Booking for ${guestName} has been confirmed.`,
-        });
+      toast({
+        title: "Reservation Created",
+        description: `Booking for ${guestName} has been confirmed.`,
+      });
     } catch (error: any) {
-        toast({
-            title: "Error creating reservation",
-            description: "An unexpected error occurred.",
-            variant: "destructive",
-        });
+      toast({
+        title: "Error creating reservation",
+        description: error.message,
+        variant: "destructive",
+      });
     }
   };
-  
-   const getStatusVariant = (status: Reservation['status']) => {
+
+  const getStatusVariant = (status: Reservation['status']) => {
     switch (status) {
       case 'Checked-in':
         return 'default';
@@ -139,10 +148,9 @@ export default function ReservationsPage() {
     }
   };
 
-
   return (
     <div className="space-y-8">
-       <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <PageHeader
           title="Reservations"
           description="Manage room bookings and availability."
@@ -187,44 +195,44 @@ export default function ReservationsPage() {
                   </Select>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                     <Label className="text-right">Dates</Label>
-                     <div className="col-span-3">
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                variant={"outline"}
-                                className={cn(
-                                    "w-full justify-start text-left font-normal",
-                                    !dateRange && "text-muted-foreground"
-                                )}
-                                >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {dateRange?.from ? (
-                                    dateRange.to ? (
-                                    <>
-                                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                                        {format(dateRange.to, "LLL dd, y")}
-                                    </>
-                                    ) : (
-                                    format(dateRange.from, "LLL dd, y")
-                                    )
-                                ) : (
-                                    <span>Pick check-in and check-out dates</span>
-                                )}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                initialFocus
-                                mode="range"
-                                defaultMonth={dateRange?.from}
-                                selected={dateRange}
-                                onSelect={setDateRange}
-                                numberOfMonths={1}
-                                />
-                            </PopoverContent>
-                        </Popover>
-                     </div>
+                  <Label className="text-right">Dates</Label>
+                  <div className="col-span-3">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !dateRange && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {dateRange?.from ? (
+                            dateRange.to ? (
+                              <>
+                                {format(dateRange.from, "LLL dd, y")} -{" "}
+                                {format(dateRange.to, "LLL dd, y")}
+                              </>
+                            ) : (
+                              format(dateRange.from, "LLL dd, y")
+                            )
+                          ) : (
+                            <span>Pick check-in and check-out dates</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          initialFocus
+                          mode="range"
+                          defaultMonth={dateRange?.from}
+                          selected={dateRange}
+                          onSelect={setDateRange}
+                          numberOfMonths={1}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
               </div>
               <DialogFooter>
@@ -255,30 +263,30 @@ export default function ReservationsPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                 <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
-                        Loading...
-                    </TableCell>
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
+                    Loading...
+                  </TableCell>
                 </TableRow>
               ) : reservations.length > 0 ? (
                 reservations.map((reservation) => (
-                    <TableRow key={reservation.id}>
+                  <TableRow key={reservation.id}>
                     <TableCell className="font-medium">{reservation.guest_name}</TableCell>
                     <TableCell>{reservation.products?.name}</TableCell>
                     <TableCell className="hidden md:table-cell">{format(new Date(reservation.check_in), "LLL dd, y")}</TableCell>
                     <TableCell className="hidden md:table-cell">{format(new Date(reservation.check_out), "LLL dd, y")}</TableCell>
                     <TableCell>
-                        <Badge variant={getStatusVariant(reservation.status as any)}>
+                      <Badge variant={getStatusVariant(reservation.status as any)}>
                         {reservation.status}
-                        </Badge>
+                      </Badge>
                     </TableCell>
-                    </TableRow>
+                  </TableRow>
                 ))
-               ) : (
+              ) : (
                 <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
-                        No reservations found.
-                    </TableCell>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
+                    No reservations found.
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>

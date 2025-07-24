@@ -99,7 +99,7 @@ const backOfficePermissions = {
 const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermissions)[];
 const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
 
-const getPermissionsForRole = (role: UserRole): AnyPermission[] => {
+export const getPermissionsForRole = (role: UserRole): AnyPermission[] => {
     switch(role) {
         case "Owner":
         case "Administrator":
@@ -119,20 +119,6 @@ const MOCK_ROLES: Role[] = [
   { id: "role_manager", name: "Manager", permissions: getPermissionsForRole("Manager") },
   { id: "role_cashier", name: "Cashier", permissions: getPermissionsForRole("Cashier") },
 ];
-
-const MOCK_DEFAULT_USER: User[] = [
-  { 
-    id: "user_1", 
-    name: "Admin", 
-    email: "admin@orderflow.com", 
-    role: "Owner", 
-    pin: "1111", 
-    permissions: getPermissionsForRole("Owner"), 
-    avatar_url: '', 
-    created_at: "2023-01-01T10:00:00Z" 
-  },
-];
-
 
 const MOCK_STORES: StoreType[] = [
     { id: 'store_1', name: 'Main Branch', address: '123 Main St, Anytown, USA' },
@@ -183,7 +169,6 @@ const MOCK_TAXES: Tax[] = [
     { id: 'tax_2', name: 'Service Charge', rate: 10, is_default: false, type: 'Added' },
 ];
 
-
 type SettingsContextType = {
     featureSettings: FeatureSettings;
     setFeatureSettings: React.Dispatch<React.SetStateAction<FeatureSettings>>;
@@ -201,15 +186,12 @@ type SettingsContextType = {
     setTaxes: React.Dispatch<React.SetStateAction<Tax[]>>;
     roles: Role[];
     setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
-    users: User[];
-    setUsers: React.Dispatch<React.SetStateAction<User[]>>;
     loggedInUser: User | null;
     setLoggedInUser: React.Dispatch<React.SetStateAction<User | null>>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-// Helper function to get data from localStorage
 const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     if (typeof window === 'undefined') {
         return defaultValue;
@@ -226,7 +208,6 @@ const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     return defaultValue;
 };
 
-// Helper function to set data in localStorage
 const setInLocalStorage = <T,>(key: string, value: T) => {
     if (typeof window !== 'undefined') {
         window.localStorage.setItem(key, JSON.stringify(value));
@@ -244,13 +225,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(() => getFromLocalStorage('paymentTypes', MOCK_PAYMENT_TYPES));
     const [taxes, setTaxes] = useState<Tax[]>(() => getFromLocalStorage('taxes', MOCK_TAXES));
     const [roles, setRoles] = useState<Role[]>(() => getFromLocalStorage('roles', MOCK_ROLES));
-    const [users, setUsers] = useState<User[]>(() => {
-        const savedUsers = getFromLocalStorage<User[]>('users', []);
-        return savedUsers.length > 0 ? savedUsers : MOCK_DEFAULT_USER;
-    });
     const [loggedInUser, setLoggedInUser] = useState<User | null>(() => getFromLocalStorage<User | null>('loggedInUser', null));
 
-    // Effects to save to localStorage whenever state changes
     useEffect(() => { setInLocalStorage('featureSettings', featureSettings); }, [featureSettings]);
     useEffect(() => { setInLocalStorage('stores', stores); }, [stores]);
     useEffect(() => { setInLocalStorage('posDevices', posDevices); }, [posDevices]);
@@ -259,9 +235,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     useEffect(() => { setInLocalStorage('paymentTypes', paymentTypes); }, [paymentTypes]);
     useEffect(() => { setInLocalStorage('taxes', taxes); }, [taxes]);
     useEffect(() => { setInLocalStorage('roles', roles); }, [roles]);
-    useEffect(() => { setInLocalStorage('users', users); }, [users]);
     useEffect(() => { setInLocalStorage('loggedInUser', loggedInUser); }, [loggedInUser]);
-
 
     const value = {
         featureSettings, setFeatureSettings,
@@ -272,8 +246,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         paymentTypes, setPaymentTypes,
         taxes, setTaxes,
         roles, setRoles,
-        users, setUsers,
         loggedInUser, setLoggedInUser,
+        users: [], // users are fetched from db, not stored in settings context
+        setUsers: () => {}, // this is now handled by the team page
     };
 
     return createElement(SettingsContext.Provider, { value }, children);

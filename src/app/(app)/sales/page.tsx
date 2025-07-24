@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
-import { type Product, type Customer, type Reservation, type Category, type User, type SaleItem, type OpenTicket } from "@/lib/types";
+import { type Product, type Customer, type Category, type SaleItem, type OpenTicket } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -58,30 +58,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { usePos } from "@/hooks/use-pos";
 import { useSettings } from "@/hooks/use-settings";
-
-
-const MOCK_CATEGORIES: Category[] = [
-    { id: 'cat_1', name: 'Food', created_at: "2023-01-01T10:00:00Z" },
-    { id: 'cat_2', name: 'Beverages', created_at: "2023-01-01T10:00:00Z" },
-    { id: 'cat_3', name: 'Merchandise', created_at: "2023-01-01T10:00:00Z" },
-    { id: 'cat_4', name: 'Room', created_at: "2023-01-01T10:00:00Z" },
-];
-
-const MOCK_PRODUCTS: Product[] = [
-    { id: 'prod_1', name: 'Cheeseburger', price: 12.99, stock: 50, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: 'prod_2', name: 'Fries', price: 4.50, stock: 100, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: 'prod_3', name: 'Cola', price: 2.50, stock: 200, category_id: 'cat_2', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: 'prod_4', name: 'T-Shirt', price: 25.00, stock: 30, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: 'prod_5', name: 'King Suite', price: 299.99, stock: 5, category_id: 'cat_4', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: 'prod_6', name: 'Queen Room', price: 199.99, stock: 10, category_id: 'cat_4', image_url: 'https://placehold.co/300x200.png', created_at: "2023-01-01T10:00:00Z" },
-];
-
-const MOCK_CUSTOMERS: Customer[] = [
-    { id: "cust_1", name: "Walk-in Customer", email: "walkin@example.com", phone: null, created_at: "2023-01-01T10:00:00Z" },
-    { id: "cust_2", name: "Alice Johnson", email: "alice.j@email.com", phone: "111-222-3333", created_at: "2023-05-10T11:30:00Z" },
-    { id: "cust_3", name: "Bob Williams", email: "bob.w@email.com", phone: "444-555-6666", created_at: "2023-06-15T14:00:00Z" },
-];
-
+import { supabase } from "@/lib/supabase";
+import { addSale, updateProductStock } from "@/app/actions/sales";
+import { addReservation } from "@/app/actions/reservations";
 
 type OrderItem = {
   product: Product;
@@ -132,15 +111,17 @@ export default function SalesPage() {
   const { 
     featureSettings, 
     paymentTypes: configuredPaymentTypes,
-    users,
     loggedInUser
   } = useSettings();
-  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
-  const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
-  const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
+  const { openTickets, saveTicket, deleteTicket } = usePos();
 
-  const { openTickets, saveOrUpdateTicket, deleteTicket } = usePos();
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  
+  const [loading, setLoading] = useState(true);
+
   const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
 
@@ -149,31 +130,57 @@ export default function SalesPage() {
 
   const { toast } = useToast();
   
-  // State for the reservation payment dialog
   const [guestName, setGuestName] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState(configuredPaymentTypes[0]?.name || "Cash");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!supabase) return;
+      setLoading(true);
+      const [productsRes, categoriesRes, customersRes] = await Promise.all([
+        supabase.from('products').select('*'),
+        supabase.from('categories').select('*'),
+        supabase.from('customers').select('*')
+      ]);
+
+      if (productsRes.data) setProducts(productsRes.data);
+      if (categoriesRes.data) setCategories(categoriesRes.data);
+      if (customersRes.data) {
+        setCustomers(customersRes.data);
+        const walkIn = customersRes.data.find(c => c.name.toLowerCase() === 'walk-in customer');
+        if (walkIn) setSelectedCustomerId(walkIn.id);
+      }
+      setLoading(false);
+    };
+    fetchData();
+  }, []);
 
   const handleConfirmBooking = async (status: 'Confirmed' | 'Checked-in') => {
     const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
     if (!roomItem || !guestName || !dateRange?.from || !dateRange?.to) {
-        toast({
-            title: "Missing Information",
-            description: "Please provide guest name and reservation dates.",
-            variant: "destructive",
-        });
+        toast({ title: "Missing Information", description: "Please provide guest name and reservation dates.", variant: "destructive" });
         return;
     }
     
     try {
-        if (activeTicketId) {
-            handleDeleteTicket(activeTicketId, true);
-        }
-        if(status === 'Checked-in') {
+        if (status === 'Checked-in') {
             await handleCompleteSale(true);
+        } else {
+             await addReservation({
+                guest_name: guestName,
+                product_id: roomItem.product.id,
+                check_in: dateRange.from.toISOString(),
+                check_out: dateRange.to.toISOString(),
+                status: 'Confirmed'
+            });
         }
+        
+        if (activeTicketId) await deleteTicket(activeTicketId, true);
 
         setIsReservationPaymentDialogOpen(false);
         setGuestName("");
@@ -186,7 +193,7 @@ export default function SalesPage() {
         });
 
     } catch(error: any) {
-         toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
+         toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
 
@@ -202,17 +209,11 @@ export default function SalesPage() {
 
     setOrderItems((prevItems) => {
       if (categoryName === 'Room' && prevItems.some(item => getCategoryName(item.product.category_id) === 'Room')) {
-        toast({
-            title: "One Room at a Time",
-            description: "You can only book one room per transaction.",
-            variant: "destructive"
-        });
+        toast({ title: "One Room at a Time", description: "You can only book one room per transaction.", variant: "destructive" });
         return prevItems;
       }
 
-      const existingItem = prevItems.find(
-        (item) => item.product.id === product.id
-      );
+      const existingItem = prevItems.find((item) => item.product.id === product.id);
       if (existingItem) {
         if (categoryName !== 'Room' && existingItem.quantity + 1 > productInStock.stock) {
           toast({ title: "Stock Limit Reached", description: `Only ${productInStock.stock} ${productInStock.name} in stock.`, variant: "destructive" });
@@ -274,16 +275,10 @@ export default function SalesPage() {
 
   const handlePayment = () => {
     if (orderItems.length === 0) {
-      toast({
-        title: "Empty Order",
-        description: "Please add items to the order before proceeding to payment.",
-        variant: "destructive",
-      });
+      toast({ title: "Empty Order", description: "Please add items to the order before proceeding to payment.", variant: "destructive" });
       return;
     }
-
     const hasRoom = orderItems.some(item => getCategoryName(item.product.category_id) === 'Room');
-
     if (hasRoom) {
         setIsReservationPaymentDialogOpen(true);
     } else {
@@ -297,7 +292,6 @@ export default function SalesPage() {
     const formData = new FormData(event.currentTarget);
     const method = formData.get("paymentMethod") as string;
     const paymentTypeDetails = configuredPaymentTypes.find(p => p.name === method);
-
 
     if (paymentTypeDetails?.type === "Credit") {
       const creditCustomerId = formData.get("creditCustomer") as string;
@@ -338,18 +332,36 @@ export default function SalesPage() {
     }
     
     try {
-        if (activeTicketId) {
-            handleDeleteTicket(activeTicketId, true);
-        }
+        const saleItems: SaleItem[] = orderItems.map(item => ({
+            id: item.product.id,
+            name: item.product.name,
+            quantity: item.quantity,
+            price: item.product.price,
+        }));
+
+        const saleData = {
+            items: saleItems,
+            total: total,
+            payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
+            customer_id: creditInfo ? creditInfo.customerId : selectedCustomerId,
+            employee_id: loggedInUser?.id || null,
+            status: 'Fulfilled' as const
+        };
+
+        await addSale(saleData, creditInfo);
+        
+        if (activeTicketId) await deleteTicket(activeTicketId, true);
 
         const stockUpdates = orderItems
             .filter(item => getCategoryName(item.product.category_id) !== 'Room')
-            .map(item => ({ id: item.product.id, newStock: item.product.stock - item.quantity }));
+            .map(item => ({ id: item.product.id, stock: item.product.stock - item.quantity }));
+        
+        if(stockUpdates.length > 0) await updateProductStock(stockUpdates);
         
         setProducts(prevProducts =>
             prevProducts.map(p => {
                 const update = stockUpdates.find(u => u.id === p.id);
-                return update ? { ...p, stock: update.newStock } : p;
+                return update ? { ...p, stock: update.stock } : p;
             })
         );
         
@@ -359,16 +371,13 @@ export default function SalesPage() {
             toastDescription += ` $${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
         }
 
-        toast({
-            title: "Sale Completed",
-            description: toastDescription,
-        });
+        toast({ title: "Sale Completed", description: toastDescription });
 
         handleClearOrder();
         setPayments([]);
         setIsSplitPaymentDialogOpen(false);
     } catch (error: any) {
-        toast({ title: "Error completing sale", description: "An unexpected error occurred.", variant: "destructive" });
+        toast({ title: "Error completing sale", description: error.message, variant: "destructive" });
     }
   };
   
@@ -392,33 +401,19 @@ export default function SalesPage() {
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
     try {
-        if (activeTicketId) {
-            const existingTicket = openTickets.find(t => t.id === activeTicketId);
-            if (existingTicket) {
-                const updatedTicket = { ...existingTicket, items: saleItems, total };
-                saveOrUpdateTicket(updatedTicket, true);
-                toast({ title: "Order Updated", description: "The open ticket has been updated." });
-            }
-        } else {
-            const newTicket = {
-                id: `ticket_${new Date().getTime()}`,
-                items: saleItems,
-                total: total,
-                employee_id: loggedInUser?.id ?? null,
-                users: { name: loggedInUser?.name ?? 'N/A' },
-                customers: null,
-                customer_id: null,
-                ticket_name: `Ticket @ ${format(new Date(), 'HH:mm')}`,
-                created_at: new Date().toISOString(),
-                notes: null,
-            };
-            saveOrUpdateTicket(newTicket as any, false);
-            toast({ title: "Order Saved", description: "The order has been saved as an open ticket." });
-        }
+        await saveTicket({
+            id: activeTicketId, // can be null
+            items: saleItems,
+            total: total,
+            employee_id: loggedInUser?.id ?? null,
+            customer_id: selectedCustomerId,
+            ticket_name: `Ticket @ ${format(new Date(), 'HH:mm')}`,
+        });
         
+        toast({ title: activeTicketId ? "Order Updated" : "Order Saved", description: "The order has been saved as an open ticket." });
         handleClearOrder();
     } catch (error: any) {
-        toast({ title: "Error Saving Order", description: "An unexpected error occurred.", variant: "destructive" });
+        toast({ title: "Error Saving Order", description: error.message, variant: "destructive" });
     }
   };
 
@@ -440,6 +435,7 @@ export default function SalesPage() {
 
     setOrderItems(newOrderItems);
     setActiveTicketId(ticket.id);
+    setSelectedCustomerId(ticket.customer_id);
     setIsTicketsDialogOpen(false);
   };
 
@@ -448,13 +444,11 @@ export default function SalesPage() {
       return;
     }
     try {
-      deleteTicket(ticketId);
-      if (activeTicketId === ticketId) {
-        handleClearOrder();
-      }
+      await deleteTicket(ticketId);
+      if (activeTicketId === ticketId) handleClearOrder();
       if (!silent) toast({ title: "Ticket Deleted", variant: "destructive" });
     } catch (error: any) {
-      if (!silent) toast({ title: "Error Deleting Ticket", description: "An unexpected error occurred.", variant: "destructive" });
+      if (!silent) toast({ title: "Error Deleting Ticket", description: error.message, variant: "destructive" });
     }
   };
 
@@ -465,12 +459,22 @@ export default function SalesPage() {
         <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <PageHeader title="Sales" description="Create a new order for products or room bookings." />
-                {featureSettings.open_tickets && (
-                    <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
-                        <Ticket className="mr-2 h-4 w-4" />
-                        Open Tickets ({openTickets.length})
-                    </Button>
-                )}
+                <div className="flex items-center gap-2">
+                    <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId}>
+                        <SelectTrigger className="w-[200px]">
+                            <SelectValue placeholder="Select Customer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    {featureSettings.open_tickets && (
+                        <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
+                            <Ticket className="mr-2 h-4 w-4" />
+                            Open Tickets ({openTickets.length})
+                        </Button>
+                    )}
+                </div>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             <div className="lg:col-span-2 space-y-4">

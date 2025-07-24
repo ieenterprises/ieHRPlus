@@ -1,3 +1,4 @@
+
 'use server';
 
 import { supabase } from '@/lib/supabase';
@@ -22,6 +23,7 @@ export async function getOpenTickets() {
 }
 
 export async function saveTicket(ticketData: {
+    id: string | null; // Can be null for new tickets
     items: SaleItem[];
     total: number;
     employee_id: string | null;
@@ -29,14 +31,18 @@ export async function saveTicket(ticketData: {
     ticket_name?: string;
 }) {
     checkSupabase();
+
+    const { id, ...dataToUpsert } = ticketData;
+
     const { data, error } = await supabase
         .from('open_tickets')
-        .insert([ticketData])
+        .upsert({ id: id || undefined, ...dataToUpsert })
         .select()
         .single();
     
     if (error) throw new Error(error.message);
     revalidatePath('/sales');
+    revalidatePath('/kitchen');
     return data;
 }
 
@@ -49,5 +55,6 @@ export async function deleteTicket(id: string) {
 
     if (error) throw new Error(error.message);
     revalidatePath('/sales');
+    revalidatePath('/kitchen');
     return data;
 }
