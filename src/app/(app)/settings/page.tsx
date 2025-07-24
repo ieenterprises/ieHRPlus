@@ -22,7 +22,6 @@ import { Textarea } from "@/components/ui/textarea";
 const settingsNav = [
   { id: "features", label: "Features", icon: SlidersHorizontal },
   { id: "printers", label: "Printers", icon: Printer },
-  { id: "tickets", label: "Tickets", icon: Ticket },
   { id: "receipts", label: "Receipts", icon: Utensils },
   { id: "items", label: "Items", icon: Package },
   { id: "payment_types", label: "Payment types", icon: CreditCard },
@@ -641,7 +640,7 @@ export default function SettingsPage() {
                 </Card>
             )}
 
-            {['tickets', 'items', 'payment_types', 'taxes'].includes(activeSection) && (
+            {['items', 'payment_types', 'taxes'].includes(activeSection) && (
                 <Card>
                     <CardHeader>
                         <CardTitle>{settingsNav.find(nav => nav.id === activeSection)?.label}</CardTitle>
