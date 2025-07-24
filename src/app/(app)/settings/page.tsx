@@ -52,6 +52,14 @@ type PosDeviceType = {
   store_id: string;
 };
 
+type PrinterType = {
+    id: string;
+    name: string;
+    connection_type: 'Network' | 'Bluetooth' | 'Cable';
+    ip_address?: string | null;
+    pos_device_id: string;
+};
+
 const MOCK_STORES: StoreType[] = [
     { id: 'store_1', name: 'Main Branch', address: '123 Main St, Anytown, USA' }
 ];
@@ -61,8 +69,15 @@ const MOCK_POS_DEVICES: PosDeviceType[] = [
     { id: 'pos_2', name: 'Bar Terminal', store_id: 'store_1' },
 ];
 
+const MOCK_PRINTERS: PrinterType[] = [
+    { id: 'printer_1', name: 'Kitchen Printer', connection_type: 'Network', ip_address: '192.168.1.100', pos_device_id: 'pos_1' },
+    { id: 'printer_2', name: 'Receipt Printer', connection_type: 'Bluetooth', pos_device_id: 'pos_1' },
+];
+
+
 const EMPTY_STORE: Partial<StoreType> = { name: '', address: '' };
 const EMPTY_POS_DEVICE: Partial<PosDeviceType> = { name: '', store_id: '' };
+const EMPTY_PRINTER: Partial<PrinterType> = { name: '', connection_type: 'Network', ip_address: '', pos_device_id: '' };
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("features");
@@ -74,12 +89,16 @@ export default function SettingsPage() {
 
   const [stores, setStores] = useState<StoreType[]>(MOCK_STORES);
   const [posDevices, setPosDevices] = useState<PosDeviceType[]>(MOCK_POS_DEVICES);
+  const [printers, setPrinters] = useState<PrinterType[]>(MOCK_PRINTERS);
   
   const [isStoreDialogOpen, setIsStoreDialogOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Partial<StoreType> | null>(null);
   
   const [isDeviceDialogOpen, setIsDeviceDialogOpen] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Partial<PosDeviceType> | null>(null);
+  
+  const [isPrinterDialogOpen, setIsPrinterDialogOpen] = useState(false);
+  const [editingPrinter, setEditingPrinter] = useState<Partial<PrinterType> | null>(null);
 
   const handleToggle = (id: string, checked: boolean) => {
     setFeatureSettings(prev => ({ ...prev, [id]: checked }));
@@ -162,7 +181,39 @@ export default function SettingsPage() {
   }
   
   const getStoreName = (storeId: string) => stores.find(s => s.id === storeId)?.name || 'N/A';
+  
+  const getDeviceName = (deviceId: string) => posDevices.find(d => d.id === deviceId)?.name || 'N/A';
 
+  // Printer Handlers
+  const handleOpenPrinterDialog = (printer: Partial<PrinterType> | null) => {
+    setEditingPrinter(printer ? { ...printer } : EMPTY_PRINTER);
+    setIsPrinterDialogOpen(true);
+  }
+
+  const handleDeletePrinter = (printerId: string) => {
+    setPrinters(printers.filter(p => p.id !== printerId));
+    toast({ title: "Printer Deleted" });
+  }
+
+  const handlePrinterFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const printerData = {
+        name: formData.get('name') as string,
+        connection_type: formData.get('connection_type') as PrinterType['connection_type'],
+        ip_address: formData.get('ip_address') as string,
+        pos_device_id: formData.get('pos_device_id') as string,
+    };
+
+    if (editingPrinter?.id) {
+        setPrinters(printers.map(p => p.id === editingPrinter.id ? { ...p, ...printerData } : p));
+        toast({ title: "Printer Updated" });
+    } else {
+        setPrinters([...printers, { id: `printer_${new Date().getTime()}`, ...printerData }]);
+        toast({ title: "Printer Added" });
+    }
+    setIsPrinterDialogOpen(false);
+  }
 
   return (
     <div className="space-y-8">
@@ -227,6 +278,58 @@ export default function SettingsPage() {
                                 </div>
                             ))}
                         </div>
+                    </CardContent>
+                </Card>
+            )}
+            
+            {activeSection === 'printers' && (
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Printers</CardTitle>
+                        <CardDescription>Manage your receipt and kitchen printers.</CardDescription>
+                         <Button className="absolute top-6 right-6" onClick={() => handleOpenPrinterDialog(null)}>
+                            <PlusCircle className="mr-2 h-4 w-4"/> Add Printer
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Printer Name</TableHead>
+                                    <TableHead>Connection</TableHead>
+                                    <TableHead>POS Device</TableHead>
+                                    <TableHead><span className="sr-only">Actions</span></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {printers.map(printer => (
+                                    <TableRow key={printer.id}>
+                                        <TableCell className="font-medium">{printer.name}</TableCell>
+                                        <TableCell>{printer.connection_type}{printer.connection_type === 'Network' && `: ${printer.ip_address}`}</TableCell>
+                                        <TableCell>{getDeviceName(printer.pos_device_id)}</TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                    <span className="sr-only">Toggle menu</span>
+                                                </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => handleOpenPrinterDialog(printer)}>
+                                                        <Edit className="mr-2 h-4 w-4" /> Edit
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeletePrinter(printer.id)}>
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     </CardContent>
                 </Card>
             )}
@@ -331,7 +434,7 @@ export default function SettingsPage() {
                 </Card>
             )}
 
-            {['printers', 'tickets', 'receipts', 'items', 'payment_types', 'taxes'].includes(activeSection) && (
+            {['tickets', 'receipts', 'items', 'payment_types', 'taxes'].includes(activeSection) && (
                 <Card>
                     <CardHeader>
                         <CardTitle>{settingsNav.find(nav => nav.id === activeSection)?.label}</CardTitle>
@@ -392,6 +495,58 @@ export default function SettingsPage() {
                             <SelectContent>
                                 {stores.map(store => (
                                     <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="submit">Save</Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPrinterDialogOpen} onOpenChange={setIsPrinterDialogOpen}>
+        <DialogContent>
+            <form onSubmit={handlePrinterFormSubmit}>
+                <DialogHeader>
+                    <DialogTitle>{editingPrinter?.id ? 'Edit Printer' : 'Add Printer'}</DialogTitle>
+                    <DialogDescription>Enter the details for the printer.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4 grid gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Printer Name</Label>
+                        <Input id="name" name="name" defaultValue={editingPrinter?.name} required />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="connection_type">Connection Type</Label>
+                        <Select name="connection_type" required defaultValue={editingPrinter?.connection_type} onValueChange={(value) => setEditingPrinter(p => ({...p, connection_type: value as any}))}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a connection type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Network">Network (Ethernet)</SelectItem>
+                                <SelectItem value="Bluetooth">Bluetooth</SelectItem>
+                                <SelectItem value="Cable">Cable (USB)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {editingPrinter?.connection_type === 'Network' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="ip_address">IP Address</Label>
+                            <Input id="ip_address" name="ip_address" defaultValue={editingPrinter?.ip_address ?? ''} placeholder="e.g., 192.168.1.100" required />
+                        </div>
+                    )}
+                     <div className="space-y-2">
+                        <Label htmlFor="pos_device_id">POS Device</Label>
+                        <Select name="pos_device_id" required defaultValue={editingPrinter?.pos_device_id}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a POS device" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {posDevices.map(device => (
+                                    <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
