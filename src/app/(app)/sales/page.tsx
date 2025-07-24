@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, LogOut, Save, Ticket, Trash2 } from "lucide-react";
+import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -82,11 +82,6 @@ const MOCK_CUSTOMERS: Customer[] = [
     { id: "cust_3", name: "Bob Williams", email: "bob.w@email.com", phone: "444-555-6666", created_at: "2023-06-15T14:00:00Z" },
 ];
 
-const MOCK_USERS: User[] = [
-    { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: [], avatar_url: '', created_at: "2023-01-01T10:00:00Z" },
-    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: [], avatar_url: '', created_at: "2023-01-01T10:00:00Z" },
-];
-
 
 type OrderItem = {
   product: Product;
@@ -134,13 +129,16 @@ function ProductCard({
 }
 
 export default function SalesPage() {
-  const { featureSettings, paymentTypes: configuredPaymentTypes } = useSettings();
+  const { 
+    featureSettings, 
+    paymentTypes: configuredPaymentTypes,
+    users,
+    loggedInUser
+  } = useSettings();
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
   const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
-  const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
 
   const { openTickets, saveOrUpdateTicket, deleteTicket } = usePos();
   const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
@@ -148,7 +146,6 @@ export default function SalesPage() {
 
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
-  const [isClockInDialogOpen, setIsClockInDialogOpen] = useState(true);
 
   const { toast } = useToast();
   
@@ -158,35 +155,6 @@ export default function SalesPage() {
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState(configuredPaymentTypes[0]?.name || "Cash");
   const [categoryFilter, setCategoryFilter] = useState("all");
-
-  useEffect(() => {
-    if(users.length > 0) {
-      setIsClockInDialogOpen(!loggedInUser)
-    }
-  }, [loggedInUser, users]);
-
-
-  const handleClockIn = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const pin = formData.get("pin");
-    const user = users.find(u => u.pin === pin);
-    if (user) {
-        setLoggedInUser(user);
-        setIsClockInDialogOpen(false);
-        toast({
-            title: "Clocked In",
-            description: `Welcome, ${user.name}!`,
-        });
-    } else {
-        toast({
-            title: "Invalid PIN",
-            description: "The PIN you entered is incorrect. Please try again.",
-            variant: "destructive",
-        });
-    }
-  };
-
 
   const handleConfirmBooking = async (status: 'Confirmed' | 'Checked-in') => {
     const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
@@ -495,18 +463,6 @@ export default function SalesPage() {
   return (
     <TooltipProvider>
         <div className="space-y-8">
-            {loggedInUser && (
-                <Card className="flex items-center justify-between p-4 bg-secondary">
-                    <div>
-                        <p className="text-sm text-secondary-foreground">Logged in as</p>
-                        <p className="font-bold text-lg text-secondary-foreground">{loggedInUser.name} ({loggedInUser.role})</p>
-                    </div>
-                    <Button variant="outline" onClick={() => setLoggedInUser(null)}>
-                        <LogOut className="mr-2 h-4 w-4" /> Clock Out
-                    </Button>
-                </Card>
-            )}
-
             <div className="flex items-center justify-between">
                 <PageHeader title="Sales" description="Create a new order for products or room bookings." />
                 {featureSettings.open_tickets && (
@@ -644,7 +600,7 @@ export default function SalesPage() {
                                     </Button>
                                 </div>
                             </TooltipTrigger>
-                            {!loggedInUser && <TooltipContent><p>Please clock in to process payments.</p></TooltipContent>}
+                            {!loggedInUser && <TooltipContent><p>Please sign in to process payments.</p></TooltipContent>}
                         </Tooltip>
                     </div>
                     </CardFooter>
@@ -825,33 +781,6 @@ export default function SalesPage() {
                         Complete Sale
                     </Button>
                 </DialogFooter>
-            </DialogContent>
-        </Dialog>
-        <Dialog open={isClockInDialogOpen} onOpenChange={setIsClockInDialogOpen}>
-            <DialogContent className="sm:max-w-sm">
-                 <form onSubmit={handleClockIn}>
-                    <DialogHeader>
-                        <DialogTitle className="text-2xl">Clock In</DialogTitle>
-                        <DialogDescription>
-                            Enter your 4-digit PIN to start a new sales session.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-8">
-                        <Label htmlFor="pin" className="sr-only">PIN</Label>
-                        <Input
-                            id="pin"
-                            name="pin"
-                            type="password"
-                            maxLength={4}
-                            required
-                            className="text-center text-4xl tracking-[1rem] font-bold h-16"
-                            autoFocus
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button type="submit" className="w-full" size="lg">Clock In</Button>
-                    </DialogFooter>
-                </form>
             </DialogContent>
         </Dialog>
         <Dialog open={isTicketsDialogOpen} onOpenChange={setIsTicketsDialogOpen}>

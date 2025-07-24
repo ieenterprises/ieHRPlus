@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
+import { useSettings } from "@/hooks/use-settings";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -43,6 +44,11 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { loggedInUser, setLoggedInUser } = useSettings();
+
+  const handleLogout = () => {
+    setLoggedInUser(null);
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -93,15 +99,17 @@ export function AppSidebar() {
             <div className="flex items-center justify-between w-full p-2">
                 <div className="flex items-center gap-2">
                     <Avatar className="h-8 w-8">
-                        <AvatarImage src="https://placehold.co/100x100.png" alt="User" data-ai-hint="person portrait" />
-                        <AvatarFallback>AD</AvatarFallback>
+                        <AvatarImage src={loggedInUser?.avatar_url || "https://placehold.co/100x100.png"} alt={loggedInUser?.name || "User"} data-ai-hint="person portrait" />
+                        <AvatarFallback>
+                          {loggedInUser?.name?.charAt(0) || 'U'}
+                        </AvatarFallback>
                     </Avatar>
-                    <div className="flex flex-col text-sm">
-                        <span className="font-semibold">Admin</span>
-                        <span className="text-muted-foreground">admin@orderflow.com</span>
+                    <div className="flex flex-col text-sm truncate">
+                        <span className="font-semibold truncate">{loggedInUser?.name}</span>
+                        <span className="text-muted-foreground truncate">{loggedInUser?.email}</span>
                     </div>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 group-data-[collapsible=icon]:hidden">
+                <Button variant="ghost" size="icon" className="h-8 w-8 group-data-[collapsible=icon]:hidden" onClick={handleLogout}>
                     <LogOut className="h-4 w-4" />
                 </Button>
             </div>

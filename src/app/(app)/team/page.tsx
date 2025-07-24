@@ -73,19 +73,11 @@ const EMPTY_ROLE: Partial<Role> = {
 const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermissions)[];
 const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
 
-
-const MOCK_USERS: User[] = [
-    { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: "user_3", name: "Jane Manager", email: "jane.m@orderflow.com", role: "Manager", pin: "4321", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
-];
-
 const systemRoles = ["Owner", "Administrator"];
 
 
 export default function TeamPage() {
-  const { roles, setRoles } = useSettings();
-  const [team, setTeam] = useState<User[]>(MOCK_USERS);
+  const { roles, setRoles, users, setUsers } = useSettings();
 
   const [loading, setLoading] = useState(false);
   
@@ -147,7 +139,7 @@ export default function TeamPage() {
 
     try {
         if (editingUser?.id) {
-            setTeam(team.map(u => u.id === editingUser.id ? { ...u, ...userData } as User : u));
+            setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...userData } as User : u));
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
             const newUser: User = { 
@@ -156,7 +148,7 @@ export default function TeamPage() {
                 created_at: new Date().toISOString(),
                 ...userData, 
             };
-            setTeam([newUser, ...team]);
+            setUsers([newUser, ...users]);
             toast({ title: "User Added", description: `${newUser.name} has been added to the team.` });
         }
         handleUserDialogClose(false);
@@ -167,7 +159,7 @@ export default function TeamPage() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-        setTeam(team.filter(u => u.id !== userId));
+        setUsers(users.filter(u => u.id !== userId));
         toast({
             title: "User Deleted",
             description: "The user has been removed from the team.",
@@ -238,7 +230,7 @@ export default function TeamPage() {
     const roleToDelete = roles.find(r => r.id === roleId);
     if (!roleToDelete) return;
     
-    if (team.some(user => user.role === roleToDelete.name)) {
+    if (users.some(user => user.role === roleToDelete.name)) {
         toast({
             title: "Cannot Delete Role",
             description: "This role is currently assigned to one or more users. Please reassign them before deleting the role.",
@@ -378,8 +370,8 @@ export default function TeamPage() {
                         <TableBody>
                         {loading ? (
                             <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading...</TableCell></TableRow>
-                        ) : team.length > 0 ? (
-                            team.map((user) => (
+                        ) : users.length > 0 ? (
+                            users.map((user) => (
                                 <TableRow key={user.id}>
                                 <TableCell>
                                     <div className="flex items-center gap-3">

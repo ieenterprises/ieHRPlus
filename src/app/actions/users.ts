@@ -1,3 +1,4 @@
+
 'use server';
 
 import { supabase } from '@/lib/supabase';
@@ -6,14 +7,20 @@ import { revalidatePath } from 'next/cache';
 
 const checkSupabase = () => {
     if (!supabase) {
-        throw new Error("Supabase client is not initialized. Please check your environment variables.");
+        // In a real app, you'd want to handle this more gracefully.
+        // For mock mode, we'll just return early.
+        return false;
     }
+    return true;
 }
 
 export async function addUser(userData: {
     name: string; email: string; role: UserRole; pin: string | null; permissions: string[]; avatar_url: string;
 }) {
-    checkSupabase();
+    if (!checkSupabase()) {
+        console.log("Mock addUser called", userData);
+        return { ...userData, id: `user_${new Date().getTime()}`, created_at: new Date().toISOString()};
+    }
     const { data, error } = await supabase
         .from('users')
         .insert([userData])
@@ -28,7 +35,10 @@ export async function addUser(userData: {
 export async function updateUser(id: string, userData: {
     name: string; email: string; role: UserRole; pin: string | null; permissions: string[];
 }) {
-    checkSupabase();
+     if (!checkSupabase()) {
+        console.log("Mock updateUser called", id, userData);
+        return { ...userData, id: id };
+    }
     const { data, error } = await supabase
         .from('users')
         .update(userData)
@@ -40,7 +50,10 @@ export async function updateUser(id: string, userData: {
 }
 
 export async function deleteUser(id: string) {
-    checkSupabase();
+    if (!checkSupabase()) {
+        console.log("Mock deleteUser called", id);
+        return { id };
+    }
     const { data, error } = await supabase
         .from('users')
         .delete()

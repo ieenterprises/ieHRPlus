@@ -1,7 +1,9 @@
+
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement } from 'react';
 import type { AnyPermission } from '@/lib/permissions';
+import type { User } from '@/lib/types';
 
 export type FeatureSettings = Record<string, boolean>;
 
@@ -55,7 +57,7 @@ export type Role = {
   permissions: AnyPermission[];
 };
 
-type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier";
+export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier";
 
 const posPermissions = {
     LOGIN_WITH_PIN: { label: "Log in to the app using personal PIN code" },
@@ -185,6 +187,10 @@ type SettingsContextType = {
     setTaxes: React.Dispatch<React.SetStateAction<Tax[]>>;
     roles: Role[];
     setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
+    users: User[];
+    setUsers: React.Dispatch<React.SetStateAction<User[]>>;
+    loggedInUser: User | null;
+    setLoggedInUser: React.Dispatch<React.SetStateAction<User | null>>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -205,6 +211,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(MOCK_PAYMENT_TYPES);
     const [taxes, setTaxes] = useState<Tax[]>(MOCK_TAXES);
     const [roles, setRoles] = useState<Role[]>(MOCK_ROLES);
+    const [users, setUsers] = useState<User[]>([]);
+    const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
 
     const value = {
         featureSettings, setFeatureSettings,
@@ -215,6 +223,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         paymentTypes, setPaymentTypes,
         taxes, setTaxes,
         roles, setRoles,
+        users, setUsers,
+        loggedInUser, setLoggedInUser,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);
