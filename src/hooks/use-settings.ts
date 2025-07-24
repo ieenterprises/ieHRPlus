@@ -56,10 +56,20 @@ const MOCK_RECEIPT_SETTINGS: Record<string, ReceiptSettings> = {
   'store_1': {
     header: "Welcome to Main Branch!",
     footer: "Thanks for visiting Main Branch!",
+    emailedLogo: null,
+    printedLogo: null,
+    showCustomerInfo: true,
+    showComments: true,
+    language: 'en',
   },
   'store_2': {
     header: 'CASONI PREMIUM CLUB Experience Luxury & Lifestyle',
     footer: 'Thank you for choosing Casoni Premium Club! We hope you had a premium experience.',
+    emailedLogo: null,
+    printedLogo: null,
+    showCustomerInfo: false,
+    showComments: false,
+    language: 'en',
   }
 }
 

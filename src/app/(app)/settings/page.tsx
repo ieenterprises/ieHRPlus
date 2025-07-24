@@ -115,6 +115,14 @@ export default function SettingsPage() {
 
   const [isTaxDialogOpen, setIsTaxDialogOpen] = useState(false);
   const [editingTax, setEditingTax] = useState<Partial<Tax> | null>(null);
+
+  const [selectedStoreForReceipt, setSelectedStoreForReceipt] = useState<string>(stores[0]?.id || '');
+
+  useEffect(() => {
+    if (!selectedStoreForReceipt && stores.length > 0) {
+      setSelectedStoreForReceipt(stores[0].id);
+    }
+  }, [stores, selectedStoreForReceipt]);
   
   const handleToggle = (id: string, checked: boolean) => {
     setFeatureSettings(prev => ({ ...prev, [id]: checked }));
@@ -166,7 +174,6 @@ export default function SettingsPage() {
       } else {
           const newId = `store_${new Date().getTime()}`;
           setStores([...stores, { id: newId, ...storeData }]);
-          setReceiptSettings(prev => ({ ...prev, [newId]: { header: '', footer: '' } as ReceiptSettings }));
           toast({ title: "Store Added" });
       }
       setIsStoreDialogOpen(false);
@@ -281,6 +288,8 @@ export default function SettingsPage() {
   const getStoreName = (storeId: string) => stores.find(s => s.id === storeId)?.name || 'N/A';
   const getDeviceName = (deviceId: string) => posDevices.find(d => d.id === deviceId)?.name || 'N/A';
   
+  const currentReceiptSettings = receiptSettings[selectedStoreForReceipt];
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -506,34 +515,101 @@ export default function SettingsPage() {
             )}
             
             {activeSection === 'receipt' && (
-                <div className="space-y-6">
-                    {stores.map(store => (
-                        <Card key={store.id}>
-                            <CardHeader>
-                                <CardTitle>Receipt Settings: {store.name}</CardTitle>
+                <Card>
+                    <CardHeader>
+                        <div className="flex flex-row items-start justify-between">
+                            <div>
+                                <CardTitle>Receipt settings</CardTitle>
                                 <CardDescription>Customize the printed and emailed receipts for this store.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                 <div className="space-y-2">
-                                    <Label>Header Text</Label>
-                                    <Textarea
-                                        value={receiptSettings[store.id]?.header || ''}
-                                        onChange={(e) => handleReceiptSettingChange(store.id, 'header', e.target.value)}
-                                        placeholder="E.g., Welcome to our store!"
-                                    />
-                                 </div>
-                                 <div className="space-y-2">
-                                    <Label>Footer Text</Label>
-                                    <Textarea
-                                        value={receiptSettings[store.id]?.footer || ''}
-                                        onChange={(e) => handleReceiptSettingChange(store.id, 'footer', e.target.value)}
-                                        placeholder="E.g., Thank you for your business!"
-                                    />
-                                 </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
+                            </div>
+                            <Select value={selectedStoreForReceipt} onValueChange={setSelectedStoreForReceipt}>
+                                <SelectTrigger className="w-[200px]">
+                                    <SelectValue placeholder="Select a store" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {stores.map(store => <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6 pt-6">
+                        <div className="space-y-2">
+                          <Label>Logo</Label>
+                          <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                <span className="text-sm text-muted-foreground">Emailed receipt</span>
+                                <div className="h-24 w-full border rounded-md flex items-center justify-center bg-muted/50 cursor-pointer">
+                                  <Image src="https://placehold.co/150x150.png" width={80} height={80} alt="Emailed receipt logo" data-ai-hint="logo company" />
+                                </div>
+                              </div>
+                               <div className="space-y-1">
+                                <span className="text-sm text-muted-foreground">Printed receipt</span>
+                                <div className="h-24 w-full border rounded-md flex items-center justify-center bg-muted/50 cursor-pointer">
+                                   <Image src="https://placehold.co/150x150.png" width={80} height={80} alt="Printed receipt logo" data-ai-hint="logo company" />
+                                </div>
+                              </div>
+                          </div>
+                        </div>
+
+                         <div className="space-y-2">
+                            <Label>Header</Label>
+                            <Textarea
+                                value={currentReceiptSettings?.header || ''}
+                                onChange={(e) => handleReceiptSettingChange(selectedStoreForReceipt, 'header', e.target.value)}
+                                placeholder="E.g., Welcome to our store!"
+                                maxLength={500}
+                            />
+                             <p className="text-xs text-muted-foreground text-right">{currentReceiptSettings?.header?.length || 0}/500</p>
+                         </div>
+
+                         <div className="space-y-2">
+                            <Label>Footer</Label>
+                            <Textarea
+                                value={currentReceiptSettings?.footer || ''}
+                                onChange={(e) => handleReceiptSettingChange(selectedStoreForReceipt, 'footer', e.target.value)}
+                                placeholder="E.g., Thank you for your business!"
+                                maxLength={500}
+                            />
+                            <p className="text-xs text-muted-foreground text-right">{currentReceiptSettings?.footer?.length || 0}/500</p>
+                         </div>
+                        
+                         <div className="flex items-center justify-between">
+                           <Label htmlFor="showCustomerInfo">Show customer info</Label>
+                           <Switch
+                             id="showCustomerInfo"
+                             checked={currentReceiptSettings?.showCustomerInfo}
+                             onCheckedChange={(checked) => handleReceiptSettingChange(selectedStoreForReceipt, 'showCustomerInfo', checked)}
+                           />
+                         </div>
+
+                         <div className="flex items-center justify-between">
+                           <Label htmlFor="showComments">Show comments</Label>
+                           <Switch
+                             id="showComments"
+                             checked={currentReceiptSettings?.showComments}
+                             onCheckedChange={(checked) => handleReceiptSettingChange(selectedStoreForReceipt, 'showComments', checked)}
+                           />
+                         </div>
+                         
+                         <div className="space-y-2">
+                            <Label>Receipt language</Label>
+                            <Select
+                              value={currentReceiptSettings?.language}
+                              onValueChange={(value) => handleReceiptSettingChange(selectedStoreForReceipt, 'language', value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select language" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="en">English</SelectItem>
+                                <SelectItem value="es">Spanish</SelectItem>
+                                <SelectItem value="fr">French</SelectItem>
+                              </SelectContent>
+                            </Select>
+                         </div>
+
+                    </CardContent>
+                </Card>
             )}
             
             {activeSection === 'taxes' && (

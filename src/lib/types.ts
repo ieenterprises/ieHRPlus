@@ -44,12 +44,11 @@ export type PrinterType = {
 export type ReceiptSettings = {
   header: string;
   footer: string;
-  // These were removed for simplicity but can be added back
-  // emailedLogo: string | null;
-  // printedLogo: string | null;
-  // showCustomerInfo: boolean;
-  // showComments: boolean;
-  // language: string;
+  emailedLogo: string | null;
+  printedLogo: string | null;
+  showCustomerInfo: boolean;
+  showComments: boolean;
+  language: string;
 };
 
 export type Tax = {
