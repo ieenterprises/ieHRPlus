@@ -53,7 +53,7 @@ import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useSettings, getPermissionsForRole } from "@/hooks/use-settings";
+import { useSettings } from "@/hooks/use-settings";
 import { addUser, updateUser, deleteUser } from "@/app/actions/users";
 import { supabase } from "@/lib/supabase";
 
@@ -77,7 +77,7 @@ const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof ty
 const systemRoles = ["Owner", "Administrator"];
 
 export default function TeamPage() {
-  const { roles, setRoles } = useSettings();
+  const { roles, setRoles, getPermissionsForRole } = useSettings();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   

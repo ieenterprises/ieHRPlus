@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { getPermissionsForRole } from "@/hooks/use-settings";
+import { posPermissions, backOfficePermissions } from "@/lib/permissions";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -53,7 +53,7 @@ export default function SignUpPage() {
         email: email,
         pin: formData.get("pin") as string,
         role: "Owner",
-        permissions: getPermissionsForRole("Owner"), 
+        permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)], 
         avatar_url: "https://placehold.co/100x100.png",
     };
     
