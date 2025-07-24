@@ -90,18 +90,19 @@ export default function TeamPage() {
 
   const { toast } = useToast();
 
+  const fetchUsers = async () => {
+    if (!supabase) return;
+    setLoading(true);
+    const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    if (error) {
+      toast({ title: "Error fetching users", description: error.message, variant: "destructive" });
+    } else {
+      setUsers(data || []);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchUsers = async () => {
-      if (!supabase) return;
-      setLoading(true);
-      const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
-      if (error) {
-        toast({ title: "Error fetching users", description: error.message, variant: "destructive" });
-      } else {
-        setUsers(data || []);
-      }
-      setLoading(false);
-    };
     fetchUsers();
   }, [toast]);
 
@@ -156,6 +157,8 @@ export default function TeamPage() {
         } else {
             await inviteUser(userData);
             toast({ title: "User Invited", description: `An invitation has been sent to ${userData.email}.` });
+            // Refetch users to show the newly invited user
+            await fetchUsers();
         }
         handleUserDialogClose(false);
     } catch(error: any) {
