@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { posPermissions, backOfficePermissions } from "@/lib/permissions";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -41,27 +42,60 @@ export default function SignInPage() {
     if (authError || !authData.user) {
       toast({
         title: "Invalid Credentials",
-        description: "The email or password you entered is incorrect.",
+        description: authError?.message || "The email or password you entered is incorrect.",
         variant: "destructive",
       });
       return;
     }
     
     // Fetch profile
-    const { data: user, error: profileError } = await supabase
+    let { data: user, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', authData.user.id)
         .single();
     
-    if (profileError || !user) {
-      toast({
+    // If profile doesn't exist, create it. This handles cases where the trigger might have failed.
+    if (profileError && profileError.code === 'PGRST116') { // PGRST116 is the code for "no rows returned"
+      console.log("User profile not found, creating one...");
+      const userEmail = authData.user.email;
+      const userName = authData.user.user_metadata.name || userEmail?.split('@')[0] || 'New User';
+      const userRole = authData.user.user_metadata.role || 'Owner'; // Default to Owner if not set
+      
+      const { data: newUserProfile, error: createError } = await supabase
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          name: userName,
+          email: userEmail!,
+          role: userRole,
+          permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)],
+          avatar_url: authData.user.user_metadata.avatar_url || `https://placehold.co/100x100.png?text=${userName.charAt(0)}`
+        })
+        .select()
+        .single();
+
+      if (createError) {
+         toast({
+          title: "Could not create user profile",
+          description: createError.message,
+          variant: "destructive",
+        });
+        await supabase.auth.signOut();
+        return;
+      }
+      user = newUserProfile;
+    } else if (profileError) {
+       toast({
         title: "Could not find user profile",
-        description: profileError?.message || "An unexpected error occurred.",
+        description: profileError.message,
         variant: "destructive",
       });
-      await supabase.auth.signOut(); // Log out the user if profile is missing
-    } else {
+      await supabase.auth.signOut();
+      return;
+    }
+    
+    if (user) {
       setLoggedInUser(user);
       toast({
         title: "Signed In",
