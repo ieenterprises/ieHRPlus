@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Bell, Percent, SlidersHorizontal, Package, Building, CreditCard, Shield } from "lucide-react";
+import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Bell, Percent, SlidersHorizontal, Package, Building, CreditCard, Shield, Store, HardDrive } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,8 @@ const settingsNav = [
   { id: "items", label: "Items" },
   { id: "payment_types", label: "Payment types" },
   { id: "taxes", label: "Taxes" },
+  { id: "stores", label: "Stores", icon: Store },
+  { id: "pos_devices", label: "POS devices", icon: HardDrive },
 ];
 
 const featureToggles = [
@@ -86,6 +88,7 @@ export default function SettingsPage() {
                 )}
                 onClick={() => setActiveSection(item.id)}
               >
+                {item.icon && <item.icon className="mr-2 h-4 w-4" />}
                 {item.label}
               </Button>
             ))}
