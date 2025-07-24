@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 const settingsNav = [
   { id: "features", label: "Features" },
-  { id: "employees", label: "Employees" },
+  { id: "printers", label: "Printers", icon: Printer },
   { id: "tickets", label: "Tickets" },
   { id: "receipts", label: "Receipts" },
   { id: "items", label: "Items" },
