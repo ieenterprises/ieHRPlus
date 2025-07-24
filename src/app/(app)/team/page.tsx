@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +21,7 @@ import {
 import { type User, type UserRole } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle, Edit, Trash2 } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Store } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +47,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { posPermissions, backOfficePermissions, type AnyPermission } from "@/lib/permissions";
+import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 
 
 const EMPTY_USER: Partial<User> = {
@@ -55,13 +59,31 @@ const EMPTY_USER: Partial<User> = {
   role: "Cashier",
   avatar_url: "https://placehold.co/100x100.png",
   pin: "",
+  permissions: [],
 };
 
 const MOCK_USERS: User[] = [
     { id: "user_1", name: "Admin", email: "admin@orderflow.com", role: "Owner", pin: "1111", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
-    { id: "user_3", name: "Jane Manager", email: "jane.m@orderflow.com", role: "Manager", pin: "4321", permissions: [], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_2", name: "John Cashier", email: "john.c@orderflow.com", role: "Cashier", pin: "1234", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS"], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
+    { id: "user_3", name: "Jane Manager", email: "jane.m@orderflow.com", role: "Manager", pin: "4321", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO"], avatar_url: 'https://placehold.co/100x100.png', created_at: "2023-01-01T10:00:00Z" },
 ];
+
+const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermissions)[];
+const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
+
+const getPermissionsForRole = (role: UserRole): AnyPermission[] => {
+    switch(role) {
+        case "Owner":
+        case "Administrator":
+            return [...allPosPermissions, ...allBackOfficePermissions];
+        case "Manager":
+            return ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS"];
+        case "Cashier":
+            return ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS"];
+        default:
+            return [];
+    }
+}
 
 
 export default function TeamPage() {
@@ -69,22 +91,38 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+  const [selectedPermissions, setSelectedPermissions] = useState<AnyPermission[]>([]);
+  
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (editingUser?.role) {
+      if (editingUser.role === 'Owner' || editingUser.role === 'Administrator') {
+        setSelectedPermissions(getPermissionsForRole(editingUser.role as UserRole));
+      } else {
+        setSelectedPermissions((editingUser.permissions as AnyPermission[] | null) || getPermissionsForRole(editingUser.role as UserRole));
+      }
+    }
+  }, [editingUser]);
+
   const handleOpenDialog = (user: Partial<User> | null) => {
-    setEditingUser(user ? user : EMPTY_USER);
+    const targetUser = user ? user : EMPTY_USER;
+    setEditingUser(targetUser);
     setIsDialogOpen(true);
   };
   
   const handleDialogClose = (open: boolean) => {
     if (!open) {
       setEditingUser(null);
+      setSelectedPermissions([]);
     }
     setIsDialogOpen(open);
   }
 
   const handleSaveUser = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!editingUser) return;
+
     const formData = new FormData(event.currentTarget);
     
     const userData = {
@@ -92,12 +130,12 @@ export default function TeamPage() {
       email: formData.get("email") as string,
       role: formData.get("role") as UserRole,
       pin: formData.get("pin") as string,
-      permissions: [], // Permissions handled by role for now
+      permissions: selectedPermissions,
     };
 
     try {
         if (editingUser?.id) {
-            setTeam(team.map(u => u.id === editingUser.id ? { ...u, ...userData, permissions: u.permissions } as User : u));
+            setTeam(team.map(u => u.id === editingUser.id ? { ...u, ...userData } as User : u));
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
             const newUser: User = { 
@@ -128,6 +166,17 @@ export default function TeamPage() {
     }
   }
 
+  const handleRoleChange = (role: UserRole) => {
+    setEditingUser(prev => ({ ...prev, role }));
+    setSelectedPermissions(getPermissionsForRole(role));
+  }
+  
+  const handlePermissionToggle = (permission: AnyPermission, checked: boolean) => {
+    setSelectedPermissions(prev =>
+        checked ? [...prev, permission] : prev.filter(p => p !== permission)
+    );
+  }
+
   const getRoleBadgeVariant = (role: UserRole): BadgeProps['variant'] => {
     switch (role) {
       case "Owner":
@@ -142,6 +191,9 @@ export default function TeamPage() {
         return "outline";
     }
   };
+
+  const isPermissionLocked = editingUser?.role === 'Owner' || editingUser?.role === 'Administrator';
+
 
   return (
     <div className="space-y-8">
@@ -230,7 +282,7 @@ export default function TeamPage() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-4xl">
             <form onSubmit={handleSaveUser}>
               <DialogHeader>
                 <DialogTitle>{editingUser?.id ? 'Edit User' : 'Add New User'}</DialogTitle>
@@ -239,42 +291,93 @@ export default function TeamPage() {
                 </DialogDescription>
               </DialogHeader>
               
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" name="name" defaultValue={editingUser?.name} required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" name="email" type="email" defaultValue={editingUser?.email} required />
-                </div>
-                <div className="space-y-2">
-                   <Label htmlFor="role">Role</Label>
-                   <Select name="role" required defaultValue={editingUser?.role}>
-                    <SelectTrigger id="role">
-                      <SelectValue placeholder="Select a role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Owner">Owner</SelectItem>
-                      <SelectItem value="Administrator">Administrator</SelectItem>
-                      <SelectItem value="Manager">Manager</SelectItem>
-                      <SelectItem value="Cashier">Cashier</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                 <div className="space-y-2">
-                  <Label htmlFor="pin">POS PIN</Label>
-                  <Input 
-                    id="pin" 
-                    name="pin" 
-                    type="password" 
-                    defaultValue={editingUser?.pin || ''} 
-                    required 
-                    pattern="\\d{4}" 
-                    maxLength={4} 
-                    title="PIN must be 4 digits."
-                  />
-                </div>
+              <div className="grid md:grid-cols-2 gap-8 py-4">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Name</Label>
+                        <Input id="name" name="name" defaultValue={editingUser?.name} required />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" name="email" type="email" defaultValue={editingUser?.email} required />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="role">Role</Label>
+                        <Select name="role" required defaultValue={editingUser?.role} onValueChange={(value) => handleRoleChange(value as UserRole)}>
+                        <SelectTrigger id="role">
+                            <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Owner">Owner</SelectItem>
+                            <SelectItem value="Administrator">Administrator</SelectItem>
+                            <SelectItem value="Manager">Manager</SelectItem>
+                            <SelectItem value="Cashier">Cashier</SelectItem>
+                        </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="pin">POS PIN</Label>
+                        <Input 
+                        id="pin" 
+                        name="pin" 
+                        type="password" 
+                        defaultValue={editingUser?.pin || ''} 
+                        required 
+                        pattern="\\d{4}" 
+                        maxLength={4} 
+                        title="PIN must be 4 digits."
+                        />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                      <h3 className="text-lg font-medium">Permissions</h3>
+                       <ScrollArea className="h-72 p-4 border rounded-md">
+                        <div className="space-y-6">
+                            <div>
+                                <h4 className="flex items-center gap-2 text-md font-semibold mb-2">
+                                    <Store className="h-5 w-5" />
+                                    Point of Sale
+                                </h4>
+                                <div className="space-y-2">
+                                    {allPosPermissions.map(permission => (
+                                        <div key={permission} className="flex items-center justify-between">
+                                            <Label htmlFor={permission} className="font-normal text-sm">{posPermissions[permission].label}</Label>
+                                            <Switch
+                                                id={permission}
+                                                checked={selectedPermissions.includes(permission)}
+                                                onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
+                                                disabled={isPermissionLocked}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <Separator />
+
+                            <div>
+                                <h4 className="flex items-center gap-2 text-md font-semibold mb-2">
+                                    <ShieldCheck className="h-5 w-5" />
+                                    Back Office
+                                </h4>
+                                <div className="space-y-2">
+                                    {allBackOfficePermissions.map(permission => (
+                                        <div key={permission} className="flex items-center justify-between">
+                                            <Label htmlFor={permission} className="font-normal text-sm">{backOfficePermissions[permission].label}</Label>
+                                            <Switch
+                                                id={permission}
+                                                checked={selectedPermissions.includes(permission)}
+                                                onCheckedChange={(checked) => handlePermissionToggle(permission, checked)}
+                                                disabled={isPermissionLocked}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                       </ScrollArea>
+                  </div>
               </div>
                             
               <DialogFooter className="pt-4">

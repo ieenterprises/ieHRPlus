@@ -2,7 +2,9 @@ import type { AnyPermission } from "./permissions";
 
 export type Category = Database['public']['Tables']['categories']['Row']
 export type Product = Database['public']['Tables']['products']['Row']
-export type User = Database['public']['Tables']['users']['Row']
+export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions'> & {
+    permissions: AnyPermission[] | null;
+}
 export type Customer = Database['public']['Tables']['customers']['Row']
 export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 'payment_methods'> & {
   items: SaleItem[];
