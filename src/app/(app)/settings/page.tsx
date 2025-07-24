@@ -2,12 +2,13 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Bell, Percent, SlidersHorizontal, Package, Building, CreditCard, Shield, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2 } from "lucide-react";
+import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Bell, Percent, SlidersHorizontal, Package, Building, CreditCard, Shield, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 const settingsNav = [
   { id: "features", label: "Features", icon: SlidersHorizontal },
@@ -60,19 +62,53 @@ type PrinterType = {
     pos_device_id: string;
 };
 
+type ReceiptSettings = {
+  emailedLogo: string | null;
+  printedLogo: string | null;
+  header: string;
+  footer: string;
+  showCustomerInfo: boolean;
+  showComments: boolean;
+  language: string;
+};
+
 const MOCK_STORES: StoreType[] = [
-    { id: 'store_1', name: 'Main Branch', address: '123 Main St, Anytown, USA' }
+    { id: 'store_1', name: 'Main Branch', address: '123 Main St, Anytown, USA' },
+    { id: 'store_2', name: 'Casoni Outdoor Bar', address: '456 Oak Ave, Sometown, USA' },
 ];
 
 const MOCK_POS_DEVICES: PosDeviceType[] = [
     { id: 'pos_1', name: 'Front Counter', store_id: 'store_1' },
     { id: 'pos_2', name: 'Bar Terminal', store_id: 'store_1' },
+    { id: 'pos_3', name: 'Outdoor Bar POS', store_id: 'store_2' },
 ];
 
 const MOCK_PRINTERS: PrinterType[] = [
     { id: 'printer_1', name: 'Kitchen Printer', connection_type: 'Network', ip_address: '192.168.1.100', pos_device_id: 'pos_1' },
     { id: 'printer_2', name: 'Receipt Printer', connection_type: 'Bluetooth', pos_device_id: 'pos_1' },
+    { id: 'printer_3', name: 'Bar Receipt Printer', connection_type: 'Network', ip_address: '192.168.1.102', pos_device_id: 'pos_3' },
 ];
+
+const MOCK_RECEIPT_SETTINGS: Record<string, ReceiptSettings> = {
+  'store_1': {
+    emailedLogo: "https://placehold.co/200x200.png",
+    printedLogo: "https://placehold.co/200x200.png",
+    header: "Welcome to Main Branch!",
+    footer: "Thanks for visiting Main Branch!",
+    showCustomerInfo: true,
+    showComments: true,
+    language: 'English'
+  },
+  'store_2': {
+    emailedLogo: "https://placehold.co/200x200.png",
+    printedLogo: "https://placehold.co/200x200.png",
+    header: 'CASONI PREMIUM CLUB Experience Luxury & Lifestyle',
+    footer: 'Thank you for choosing Casoni Premium Club! We hope you had a premium experience.',
+    showCustomerInfo: false,
+    showComments: false,
+    language: 'English'
+  }
+}
 
 
 const EMPTY_STORE: Partial<StoreType> = { name: '', address: '' };
@@ -99,6 +135,13 @@ export default function SettingsPage() {
   
   const [isPrinterDialogOpen, setIsPrinterDialogOpen] = useState(false);
   const [editingPrinter, setEditingPrinter] = useState<Partial<PrinterType> | null>(null);
+
+  const [receiptSettings, setReceiptSettings] = useState<Record<string, ReceiptSettings>>(MOCK_RECEIPT_SETTINGS);
+  const [selectedStoreForReceipts, setSelectedStoreForReceipts] = useState<string>(MOCK_STORES[0]?.id || '');
+  const [initialReceiptSettings, setInitialReceiptSettings] = useState<ReceiptSettings | null>(receiptSettings[selectedStoreForReceipts] || null);
+
+  const currentReceiptSettings = receiptSettings[selectedStoreForReceipts];
+  const hasReceiptChanges = JSON.stringify(currentReceiptSettings) !== JSON.stringify(initialReceiptSettings);
 
   const handleToggle = (id: string, checked: boolean) => {
     setFeatureSettings(prev => ({ ...prev, [id]: checked }));
@@ -158,6 +201,10 @@ export default function SettingsPage() {
   }
   
   const handleDeleteDevice = (deviceId: string) => {
+      if (printers.some(p => p.pos_device_id === deviceId)) {
+          toast({ title: "Cannot Delete POS Device", description: "This device has printers assigned to it.", variant: "destructive" });
+          return;
+      }
       setPosDevices(posDevices.filter(d => d.id !== deviceId));
       toast({ title: "POS Device Deleted" });
   }
@@ -214,6 +261,40 @@ export default function SettingsPage() {
     }
     setIsPrinterDialogOpen(false);
   }
+  
+  // Receipt Settings Handlers
+  const handleReceiptSettingChange = <K extends keyof ReceiptSettings>(key: K, value: ReceiptSettings[K]) => {
+    setReceiptSettings(prev => ({
+        ...prev,
+        [selectedStoreForReceipts]: {
+            ...prev[selectedStoreForReceipts],
+            [key]: value
+        }
+    }));
+  }
+
+  const handleLogoUpload = (type: 'emailedLogo' | 'printedLogo', event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            handleReceiptSettingChange(type, reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    }
+  }
+
+  const handleSaveReceiptSettings = () => {
+    setInitialReceiptSettings(currentReceiptSettings);
+    toast({ title: "Receipt Settings Saved", description: `Settings for ${getStoreName(selectedStoreForReceipts)} have been updated.` });
+  }
+
+  const handleCancelReceiptSettings = () => {
+    setReceiptSettings(prev => ({
+        ...prev,
+        [selectedStoreForReceipts]: initialReceiptSettings!
+    }));
+  }
 
   return (
     <div className="space-y-8">
@@ -222,7 +303,7 @@ export default function SettingsPage() {
           title="Settings"
           description="Configure the features and behavior of your POS system."
         />
-        {hasChanges && (
+        {activeSection === 'features' && hasChanges && (
             <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={handleCancelChanges}>Cancel</Button>
                 <Button onClick={handleSaveChanges}>Save Changes</Button>
@@ -333,6 +414,132 @@ export default function SettingsPage() {
                     </CardContent>
                 </Card>
             )}
+            
+            {activeSection === 'receipts' && currentReceiptSettings && (
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Receipt settings</CardTitle>
+                        <div className="absolute top-6 right-6 w-48">
+                            <Label>Store</Label>
+                            <Select value={selectedStoreForReceipts} onValueChange={setSelectedStoreForReceipts}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a store" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {stores.map(store => (
+                                        <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div>
+                            <Label className="text-lg">Logo</Label>
+                            <div className="grid grid-cols-2 gap-4 mt-2">
+                                <div className="space-y-2">
+                                    <Label className="text-muted-foreground">Emailed receipt</Label>
+                                    <div className="w-40 h-40 border rounded-md flex items-center justify-center relative group bg-muted/20">
+                                        {currentReceiptSettings.emailedLogo ? (
+                                             <>
+                                                <Image src={currentReceiptSettings.emailedLogo} alt="Emailed Logo" layout="fill" className="object-contain p-2" />
+                                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Button size="sm" onClick={() => (document.getElementById('emailedLogoInput') as HTMLInputElement).click()}>Change</Button>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <Button variant="outline" onClick={() => (document.getElementById('emailedLogoInput') as HTMLInputElement).click()}>Upload</Button>
+                                        )}
+                                        <input type="file" id="emailedLogoInput" className="hidden" accept="image/*" onChange={(e) => handleLogoUpload('emailedLogo', e)} />
+                                    </div>
+                                </div>
+                                 <div className="space-y-2">
+                                    <Label className="text-muted-foreground">Printed receipt</Label>
+                                    <div className="w-40 h-40 border rounded-md flex items-center justify-center relative group bg-muted/20">
+                                        {currentReceiptSettings.printedLogo ? (
+                                            <>
+                                                <Image src={currentReceiptSettings.printedLogo} alt="Printed Logo" layout="fill" className="object-contain p-2" />
+                                                <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleReceiptSettingChange('printedLogo', null)}>
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Button size="sm" onClick={() => (document.getElementById('printedLogoInput') as HTMLInputElement).click()}>Change</Button>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <Button variant="outline" onClick={() => (document.getElementById('printedLogoInput') as HTMLInputElement).click()}>Upload</Button>
+                                        )}
+                                        <input type="file" id="printedLogoInput" className="hidden" accept="image/*" onChange={(e) => handleLogoUpload('printedLogo', e)} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator />
+                        
+                        <div className="space-y-2">
+                            <Label htmlFor="receipt-header">Header</Label>
+                            <Textarea 
+                                id="receipt-header" 
+                                value={currentReceiptSettings.header} 
+                                onChange={(e) => handleReceiptSettingChange('header', e.target.value)} 
+                                maxLength={500} 
+                                className="min-h-[60px]"
+                            />
+                            <p className="text-sm text-muted-foreground text-right">{currentReceiptSettings.header.length} / 500</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="receipt-footer">Footer</Label>
+                            <Textarea 
+                                id="receipt-footer" 
+                                value={currentReceiptSettings.footer} 
+                                onChange={(e) => handleReceiptSettingChange('footer', e.target.value)} 
+                                maxLength={500}
+                                className="min-h-[60px]" 
+                            />
+                            <p className="text-sm text-muted-foreground text-right">{currentReceiptSettings.footer.length} / 500</p>
+                        </div>
+                        
+                        <Separator />
+
+                        <div className="space-y-4">
+                           <div className="flex items-center justify-between">
+                                <Label htmlFor="show-customer-info">Show customer info</Label>
+                                <Switch id="show-customer-info" checked={currentReceiptSettings.showCustomerInfo} onCheckedChange={(c) => handleReceiptSettingChange('showCustomerInfo', c)} />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="show-comments">Show comments</Label>
+                                <Switch id="show-comments" checked={currentReceiptSettings.showComments} onCheckedChange={(c) => handleReceiptSettingChange('showComments', c)} />
+                            </div>
+                        </div>
+                        
+                        <Separator />
+                        
+                        <div className="w-1/2">
+                            <Label htmlFor="receipt-language">Receipt language</Label>
+                            <Select value={currentReceiptSettings.language} onValueChange={(v) => handleReceiptSettingChange('language', v)}>
+                                <SelectTrigger id="receipt-language">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="English">English</SelectItem>
+                                    <SelectItem value="Spanish">Spanish</SelectItem>
+                                    <SelectItem value="French">French</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {hasReceiptChanges && (
+                            <div className="flex justify-end gap-2 pt-4">
+                                <Button variant="ghost" onClick={handleCancelReceiptSettings}>Cancel</Button>
+                                <Button onClick={handleSaveReceiptSettings}>Save</Button>
+                            </div>
+                        )}
+
+                    </CardContent>
+                </Card>
+            )}
 
             {activeSection === 'stores' && (
                 <Card>
@@ -434,7 +641,7 @@ export default function SettingsPage() {
                 </Card>
             )}
 
-            {['tickets', 'receipts', 'items', 'payment_types', 'taxes'].includes(activeSection) && (
+            {['tickets', 'items', 'payment_types', 'taxes'].includes(activeSection) && (
                 <Card>
                     <CardHeader>
                         <CardTitle>{settingsNav.find(nav => nav.id === activeSection)?.label}</CardTitle>
