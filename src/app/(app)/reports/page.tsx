@@ -22,6 +22,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
+    TableFooter,
 } from "@/components/ui/table";
 import {
   BarChart,
@@ -113,12 +114,14 @@ function ReportTable({ data, dataKeyLabel }: { data: ReportDataPoint[], dataKeyL
                             </TableRow>
                         ))}
                     </TableBody>
-                    <TableRow className="font-bold">
-                        <TableCell>Total</TableCell>
-                        <TableCell className="text-right">${totalSales.toFixed(2)}</TableCell>
-                        <TableCell className="text-right">{totalQuantity}</TableCell>
-                        <TableCell className="text-right">{totalTransactions}</TableCell>
-                    </TableRow>
+                    <TableFooter>
+                        <TableRow className="font-bold">
+                            <TableCell>Total</TableCell>
+                            <TableCell className="text-right">${totalSales.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">{totalQuantity}</TableCell>
+                            <TableCell className="text-right">{totalTransactions}</TableCell>
+                        </TableRow>
+                    </TableFooter>
                 </Table>
             </CardContent>
         </Card>
