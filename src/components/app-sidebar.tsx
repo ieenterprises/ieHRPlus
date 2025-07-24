@@ -1,3 +1,4 @@
+
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -81,9 +82,11 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Settings">
-              <Settings />
-              <span>Settings</span>
+             <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
+                <Link href="/settings">
+                    <Settings />
+                    <span>Settings</span>
+                </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
