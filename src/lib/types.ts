@@ -1,4 +1,5 @@
 
+
 import type { AnyPermission } from "./permissions";
 
 export type Category = Database['public']['Tables']['categories']['Row']
@@ -12,6 +13,7 @@ export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 
   payment_methods: string[];
   customers: Customer | null;
   users: Pick<User, 'name'> | null;
+  pos_devices: { store_id: string } | null;
 };
 export type Debt = Database['public']['Tables']['debts']['Row'] & {
   sales: { order_number: number | null } | null;
@@ -23,6 +25,13 @@ export type Reservation = Database['public']['Tables']['reservations']['Row'] & 
 export type OpenTicket = Database['public']['Tables']['open_tickets']['Row'] & {
   users: { name: string | null } | null;
   customers: { name: string | null } | null;
+};
+export type StoreType = Database['public']['Tables']['stores']['Row'];
+export type PosDeviceType = Database['public']['Tables']['pos_devices']['Row'];
+export type PaymentType = {
+    id: string;
+    name: string;
+    type: 'Cash' | 'Card' | 'Credit' | 'Other';
 };
 
 
@@ -186,6 +195,32 @@ export type Database = {
           }
         ]
       }
+      pos_devices: {
+        Row: {
+          id: string
+          name: string
+          store_id: string
+        }
+        Insert: {
+          id: string
+          name: string
+          store_id: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_devices_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           category_id: string | null
@@ -273,6 +308,7 @@ export type Database = {
           payment_methods: Json
           status: string
           total: number
+          pos_device_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -284,6 +320,7 @@ export type Database = {
           payment_methods: Json
           status: string
           total: number
+          pos_device_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -295,6 +332,7 @@ export type Database = {
           payment_methods?: Json
           status?: string
           total?: number
+          pos_device_id?: string | null
         }
         Relationships: [
           {
@@ -310,8 +348,33 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_pos_device"
+            columns: ["pos_device_id"]
+            isOneToOne: false
+            referencedRelation: "pos_devices"
+            referencedColumns: ["id"]
           }
         ]
+      }
+      stores: {
+        Row: {
+          id: string
+          name: string
+          address: string
+        }
+        Insert: {
+          id: string
+          name: string
+          address: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          address?: string
+        }
+        Relationships: []
       }
       users: {
         Row: {

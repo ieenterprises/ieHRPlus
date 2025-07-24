@@ -3,24 +3,14 @@
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
 import type { AnyPermission } from '@/lib/permissions';
-import type { User } from '@/lib/types';
+import type { User, StoreType, PosDeviceType, PaymentType, Role } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
+export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
+
 export type FeatureSettings = Record<string, boolean>;
-
-export type StoreType = {
-  id: string;
-  name: string;
-  address: string;
-};
-
-export type PosDeviceType = {
-  id: string;
-  name:string;
-  store_id: string;
-};
 
 export type PrinterType = {
     id: string;
@@ -40,24 +30,12 @@ export type ReceiptSettings = {
   language: string;
 };
 
-export type PaymentType = {
-    id: string;
-    name: string;
-    type: 'Cash' | 'Card' | 'Credit' | 'Other';
-};
-
 export type Tax = {
     id: string;
     name: string;
     rate: number;
     is_default: boolean;
     type: 'Included' | 'Added';
-};
-
-export type Role = {
-  id: string;
-  name: string;
-  permissions: AnyPermission[];
 };
 
 export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier";
@@ -149,6 +127,7 @@ type SettingsContextType = {
     setTaxes: React.Dispatch<React.SetStateAction<Tax[]>>;
     roles: Role[];
     setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
+    users: User[];
     loggedInUser: User | null;
     setLoggedInUser: React.Dispatch<React.SetStateAction<User | null>>;
     loadingUser: boolean;
@@ -195,6 +174,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(() => getFromLocalStorage('paymentTypes', MOCK_PAYMENT_TYPES));
     const [taxes, setTaxes] = useState<Tax[]>(() => getFromLocalStorage('taxes', MOCK_TAXES));
     const [roles, setRoles] = useState<Role[]>(() => getFromLocalStorage('roles', MOCK_ROLES));
+    const [users, setUsers] = useState<User[]>([]);
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
     const [selectedStore, setSelectedStore] = useState<StoreType | null>(() => getFromLocalStorage('selectedStore', null));
@@ -228,12 +208,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         }
         setLoadingUser(false);
     }, []);
+    
+    const fetchAllUsers = useCallback(async () => {
+        if (!supabase) return;
+        const { data } = await supabase.from('users').select('*');
+        setUsers(data as User[] || []);
+    }, []);
 
     useEffect(() => {
         fetchUser();
+        fetchAllUsers();
         const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_IN' && session?.user) {
                  fetchUser();
+                 fetchAllUsers();
             }
             if (event === 'SIGNED_OUT') {
                 setLoggedInUser(null);
@@ -246,7 +234,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         return () => {
             authListener.subscription.unsubscribe();
         };
-    }, [fetchUser, router]);
+    }, [fetchUser, fetchAllUsers, router]);
 
 
     const logout = async () => {
@@ -264,6 +252,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         paymentTypes, setPaymentTypes,
         taxes, setTaxes,
         roles, setRoles,
+        users,
         loggedInUser, setLoggedInUser,
         loadingUser,
         getPermissionsForRole,

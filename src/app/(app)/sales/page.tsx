@@ -111,7 +111,8 @@ export default function SalesPage() {
   const { 
     featureSettings, 
     paymentTypes: configuredPaymentTypes,
-    loggedInUser
+    loggedInUser,
+    selectedDevice
   } = useSettings();
   const { openTickets, saveTicket, deleteTicket } = usePos();
 
@@ -350,6 +351,7 @@ export default function SalesPage() {
             payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
             customer_id: creditInfo ? creditInfo.customerId : selectedCustomerId,
             employee_id: loggedInUser?.id || null,
+            pos_device_id: selectedDevice?.id || null,
             status: 'Fulfilled' as const
         };
 

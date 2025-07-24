@@ -1,3 +1,4 @@
+
 'use server';
 
 import { supabase } from '@/lib/supabase';
@@ -17,6 +18,7 @@ export async function addSale(
         payment_methods: string[];
         customer_id: string | null;
         employee_id: string | null;
+        pos_device_id: string | null; // Added field
         status: 'Pending' | 'Fulfilled';
     },
     creditInfo?: { customerId: string, amount: number }
