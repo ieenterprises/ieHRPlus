@@ -108,7 +108,7 @@ export default function SignUpPage() {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="pin">4-Digit PIN (for POS login)</Label>
-            <Input id="pin" name="pin" type="password" required maxLength={4} pattern="\\d{4}" title="PIN must be 4 digits" />
+            <Input id="pin" name="pin" type="text" inputMode="numeric" required maxLength={4} pattern="\\d{4}" title="PIN must be 4 digits" />
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
