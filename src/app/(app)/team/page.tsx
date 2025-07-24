@@ -54,7 +54,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
-import { addUser, updateUser, deleteUser } from "@/app/actions/users";
+import { inviteUser, updateUser, deleteUser } from "@/app/actions/users";
 import { supabase } from "@/lib/supabase";
 
 const EMPTY_USER: Partial<User> = {
@@ -154,9 +154,8 @@ export default function TeamPage() {
             setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...userData } as User : u));
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
-            const newUser = await addUser(userData);
-            setUsers([newUser, ...users]);
-            toast({ title: "User Added", description: `${newUser.name} has been added to the team.` });
+            await inviteUser(userData);
+            toast({ title: "User Invited", description: `An invitation has been sent to ${userData.email}.` });
         }
         handleUserDialogClose(false);
     } catch(error: any) {

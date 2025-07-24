@@ -1,7 +1,7 @@
 
 'use server';
 
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAdmin } from '@/lib/supabase';
 import type { UserRole } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 
@@ -12,21 +12,35 @@ const checkSupabase = () => {
     return true;
 }
 
-// NOTE: This function is for creating employees who might not have a password but just a PIN.
-// With the new auth flow, we invite users through Supabase Auth.
-export async function addUser(userData: {
+const checkSupabaseAdmin = () => {
+    if (!supabaseAdmin) {
+        throw new Error("Supabase admin client is not initialized. Please check your service role key environment variable.");
+    }
+    return true;
+}
+
+export async function inviteUser(userData: {
     name: string; email: string; role: UserRole; permissions: string[]; avatar_url: string;
 }) {
-    checkSupabase();
-    // In a real app, you would use Supabase's admin functionality to invite a user by email
-    // This is a simplified version for this app.
-    const { data, error } = await supabase
-        .from('users')
-        .insert([userData])
-        .select()
-        .single();
+    checkSupabaseAdmin();
+    
+    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      userData.email,
+      {
+        data: {
+          name: userData.name,
+          role: userData.role,
+          permissions: userData.permissions,
+          avatar_url: userData.avatar_url,
+        }
+      }
+    );
 
-    if (error) throw new Error(error.message);
+    if (error) {
+        console.error("Error inviting user:", error.message);
+        throw new Error(`Failed to invite user: ${error.message}`);
+    }
+    
     revalidatePath('/team');
     return data;
 }
@@ -34,8 +48,8 @@ export async function addUser(userData: {
 export async function updateUser(id: string, userData: {
     name: string; email: string; role: UserRole; permissions: string[];
 }) {
-    checkSupabase();
-    const { data, error } = await supabase
+    checkSupabaseAdmin();
+    const { data, error } = await supabaseAdmin
         .from('users')
         .update(userData)
         .eq('id', id);
@@ -46,12 +60,9 @@ export async function updateUser(id: string, userData: {
 }
 
 export async function deleteUser(id: string) {
-    checkSupabase();
+    checkSupabaseAdmin();
     
-    // This is the correct way to delete a user using the admin client.
-    // The corresponding profile in `public.users` will be deleted automatically
-    // by the `ON DELETE CASCADE` constraint we set up in the SQL schema.
-    const { error } = await supabase.auth.admin.deleteUser(id);
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
 
     if (error) {
         console.error("Error deleting user:", error.message);
