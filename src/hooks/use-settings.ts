@@ -1,7 +1,7 @@
 
 "use client";
 
-import { createContext, useContext, useState, ReactNode, createElement } from 'react';
+import { createContext, useContext, useState, ReactNode, createElement, useEffect } from 'react';
 import type { AnyPermission } from '@/lib/permissions';
 import type { User } from '@/lib/types';
 
@@ -113,6 +113,26 @@ const getPermissionsForRole = (role: UserRole): AnyPermission[] => {
     }
 }
 
+const MOCK_ROLES: Role[] = [
+  { id: "role_owner", name: "Owner", permissions: getPermissionsForRole("Owner") },
+  { id: "role_admin", name: "Administrator", permissions: getPermissionsForRole("Administrator") },
+  { id: "role_manager", name: "Manager", permissions: getPermissionsForRole("Manager") },
+  { id: "role_cashier", name: "Cashier", permissions: getPermissionsForRole("Cashier") },
+];
+
+const MOCK_DEFAULT_USER: User[] = [
+  { 
+    id: "user_1", 
+    name: "Admin", 
+    email: "admin@orderflow.com", 
+    role: "Owner", 
+    pin: "1111", 
+    permissions: getPermissionsForRole("Owner"), 
+    avatar_url: '', 
+    created_at: "2023-01-01T10:00:00Z" 
+  },
+];
+
 
 const MOCK_STORES: StoreType[] = [
     { id: 'store_1', name: 'Main Branch', address: '123 Main St, Anytown, USA' },
@@ -163,12 +183,6 @@ const MOCK_TAXES: Tax[] = [
     { id: 'tax_2', name: 'Service Charge', rate: 10, is_default: false, type: 'Added' },
 ];
 
-const MOCK_ROLES: Role[] = [
-  { id: "role_owner", name: "Owner", permissions: getPermissionsForRole("Owner") },
-  { id: "role_admin", name: "Administrator", permissions: getPermissionsForRole("Administrator") },
-  { id: "role_manager", name: "Manager", permissions: getPermissionsForRole("Manager") },
-  { id: "role_cashier", name: "Cashier", permissions: getPermissionsForRole("Cashier") },
-];
 
 type SettingsContextType = {
     featureSettings: FeatureSettings;
@@ -195,24 +209,59 @@ type SettingsContextType = {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
+// Helper function to get data from localStorage
+const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
+    if (typeof window === 'undefined') {
+        return defaultValue;
+    }
+    const storedValue = window.localStorage.getItem(key);
+    if (storedValue) {
+        try {
+            return JSON.parse(storedValue);
+        } catch (error) {
+            console.error(`Error parsing localStorage key "${key}":`, error);
+            return defaultValue;
+        }
+    }
+    return defaultValue;
+};
+
+// Helper function to set data in localStorage
+const setInLocalStorage = <T,>(key: string, value: T) => {
+    if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify(value));
+    }
+};
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
-    const [featureSettings, setFeatureSettings] = useState<FeatureSettings>({
-        open_tickets: true,
-        shifts: true,
-        time_management: false,
-        kitchen_printers: true,
-        dining_options: true,
-        customer_displays: false,
+    const [featureSettings, setFeatureSettings] = useState<FeatureSettings>(() => getFromLocalStorage('featureSettings', {
+        open_tickets: true, shifts: true, time_management: false, kitchen_printers: true, dining_options: true, customer_displays: false,
+    }));
+    const [stores, setStores] = useState<StoreType[]>(() => getFromLocalStorage('stores', MOCK_STORES));
+    const [posDevices, setPosDevices] = useState<PosDeviceType[]>(() => getFromLocalStorage('posDevices', MOCK_POS_DEVICES));
+    const [printers, setPrinters] = useState<PrinterType[]>(() => getFromLocalStorage('printers', MOCK_PRINTERS));
+    const [receiptSettings, setReceiptSettings] = useState<Record<string, ReceiptSettings>>(() => getFromLocalStorage('receiptSettings', MOCK_RECEIPT_SETTINGS));
+    const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(() => getFromLocalStorage('paymentTypes', MOCK_PAYMENT_TYPES));
+    const [taxes, setTaxes] = useState<Tax[]>(() => getFromLocalStorage('taxes', MOCK_TAXES));
+    const [roles, setRoles] = useState<Role[]>(() => getFromLocalStorage('roles', MOCK_ROLES));
+    const [users, setUsers] = useState<User[]>(() => {
+        const savedUsers = getFromLocalStorage<User[]>('users', []);
+        return savedUsers.length > 0 ? savedUsers : MOCK_DEFAULT_USER;
     });
-    const [stores, setStores] = useState<StoreType[]>(MOCK_STORES);
-    const [posDevices, setPosDevices] = useState<PosDeviceType[]>(MOCK_POS_DEVICES);
-    const [printers, setPrinters] = useState<PrinterType[]>(MOCK_PRINTERS);
-    const [receiptSettings, setReceiptSettings] = useState<Record<string, ReceiptSettings>>(MOCK_RECEIPT_SETTINGS);
-    const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(MOCK_PAYMENT_TYPES);
-    const [taxes, setTaxes] = useState<Tax[]>(MOCK_TAXES);
-    const [roles, setRoles] = useState<Role[]>(MOCK_ROLES);
-    const [users, setUsers] = useState<User[]>([]);
-    const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
+    const [loggedInUser, setLoggedInUser] = useState<User | null>(() => getFromLocalStorage<User | null>('loggedInUser', null));
+
+    // Effects to save to localStorage whenever state changes
+    useEffect(() => { setInLocalStorage('featureSettings', featureSettings); }, [featureSettings]);
+    useEffect(() => { setInLocalStorage('stores', stores); }, [stores]);
+    useEffect(() => { setInLocalStorage('posDevices', posDevices); }, [posDevices]);
+    useEffect(() => { setInLocalStorage('printers', printers); }, [printers]);
+    useEffect(() => { setInLocalStorage('receiptSettings', receiptSettings); }, [receiptSettings]);
+    useEffect(() => { setInLocalStorage('paymentTypes', paymentTypes); }, [paymentTypes]);
+    useEffect(() => { setInLocalStorage('taxes', taxes); }, [taxes]);
+    useEffect(() => { setInLocalStorage('roles', roles); }, [roles]);
+    useEffect(() => { setInLocalStorage('users', users); }, [users]);
+    useEffect(() => { setInLocalStorage('loggedInUser', loggedInUser); }, [loggedInUser]);
+
 
     const value = {
         featureSettings, setFeatureSettings,
