@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 
 const settingsNav = [
   { id: "features", label: "Features", icon: SlidersHorizontal },
@@ -70,6 +71,21 @@ type ReceiptSettings = {
   language: string;
 };
 
+type PaymentType = {
+    id: string;
+    name: string;
+    type: 'Cash' | 'Card' | 'Credit' | 'Other';
+};
+
+type Tax = {
+    id: string;
+    name: string;
+    rate: number;
+    is_default: boolean;
+    type: 'Included' | 'Added';
+};
+
+
 const MOCK_STORES: StoreType[] = [
     { id: 'store_1', name: 'Main Branch', address: '123 Main St, Anytown, USA' },
     { id: 'store_2', name: 'Casoni Outdoor Bar', address: '456 Oak Ave, Sometown, USA' },
@@ -108,10 +124,23 @@ const MOCK_RECEIPT_SETTINGS: Record<string, ReceiptSettings> = {
   }
 }
 
+const MOCK_PAYMENT_TYPES: PaymentType[] = [
+    { id: 'pay_1', name: 'Cash', type: 'Cash' },
+    { id: 'pay_2', name: 'Card', type: 'Card' },
+    { id: 'pay_3', name: 'Credit', type: 'Credit' },
+];
+
+const MOCK_TAXES: Tax[] = [
+    { id: 'tax_1', name: 'VAT', rate: 8, is_default: true, type: 'Included' },
+    { id: 'tax_2', name: 'Service Charge', rate: 10, is_default: false, type: 'Added' },
+];
+
 
 const EMPTY_STORE: Partial<StoreType> = { name: '', address: '' };
 const EMPTY_POS_DEVICE: Partial<PosDeviceType> = { name: '', store_id: '' };
 const EMPTY_PRINTER: Partial<PrinterType> = { name: '', connection_type: 'Network', ip_address: '', pos_device_id: '' };
+const EMPTY_PAYMENT_TYPE: Partial<PaymentType> = { name: '', type: 'Other' };
+const EMPTY_TAX: Partial<Tax> = { name: '', rate: 0, is_default: false, type: 'Added' };
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("features");
@@ -124,6 +153,8 @@ export default function SettingsPage() {
   const [stores, setStores] = useState<StoreType[]>(MOCK_STORES);
   const [posDevices, setPosDevices] = useState<PosDeviceType[]>(MOCK_POS_DEVICES);
   const [printers, setPrinters] = useState<PrinterType[]>(MOCK_PRINTERS);
+  const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(MOCK_PAYMENT_TYPES);
+  const [taxes, setTaxes] = useState<Tax[]>(MOCK_TAXES);
   
   const [isStoreDialogOpen, setIsStoreDialogOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Partial<StoreType> | null>(null);
@@ -133,6 +164,12 @@ export default function SettingsPage() {
   
   const [isPrinterDialogOpen, setIsPrinterDialogOpen] = useState(false);
   const [editingPrinter, setEditingPrinter] = useState<Partial<PrinterType> | null>(null);
+
+  const [isPaymentTypeDialogOpen, setIsPaymentTypeDialogOpen] = useState(false);
+  const [editingPaymentType, setEditingPaymentType] = useState<Partial<PaymentType> | null>(null);
+
+  const [isTaxDialogOpen, setIsTaxDialogOpen] = useState(false);
+  const [editingTax, setEditingTax] = useState<Partial<Tax> | null>(null);
 
   const [receiptSettings, setReceiptSettings] = useState<Record<string, ReceiptSettings>>(MOCK_RECEIPT_SETTINGS);
   const [selectedStoreForReceipts, setSelectedStoreForReceipts] = useState<string>(MOCK_STORES[0]?.id || '');
@@ -293,6 +330,67 @@ export default function SettingsPage() {
         [selectedStoreForReceipts]: initialReceiptSettings!
     }));
   }
+  
+  // Payment Type Handlers
+    const handleOpenPaymentTypeDialog = (paymentType: Partial<PaymentType> | null) => {
+        setEditingPaymentType(paymentType ? { ...paymentType } : EMPTY_PAYMENT_TYPE);
+        setIsPaymentTypeDialogOpen(true);
+    }
+
+    const handleDeletePaymentType = (id: string) => {
+        setPaymentTypes(paymentTypes.filter(pt => pt.id !== id));
+        toast({ title: "Payment Type Deleted" });
+    }
+
+    const handlePaymentTypeFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const data = {
+            name: formData.get('name') as string,
+            type: formData.get('type') as PaymentType['type'],
+        };
+
+        if (editingPaymentType?.id) {
+            setPaymentTypes(paymentTypes.map(pt => pt.id === editingPaymentType.id ? { ...pt, ...data } : pt));
+            toast({ title: "Payment Type Updated" });
+        } else {
+            setPaymentTypes([...paymentTypes, { id: `pay_${new Date().getTime()}`, ...data }]);
+            toast({ title: "Payment Type Added" });
+        }
+        setIsPaymentTypeDialogOpen(false);
+    }
+
+    // Tax Handlers
+    const handleOpenTaxDialog = (tax: Partial<Tax> | null) => {
+        setEditingTax(tax ? { ...tax } : EMPTY_TAX);
+        setIsTaxDialogOpen(true);
+    }
+
+    const handleDeleteTax = (id: string) => {
+        setTaxes(taxes.filter(t => t.id !== id));
+        toast({ title: "Tax Deleted" });
+    }
+
+    const handleTaxFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const data = {
+            name: formData.get('name') as string,
+            rate: parseFloat(formData.get('rate') as string),
+            type: formData.get('type') as Tax['type'],
+            is_default: (formData.get('is_default') as string) === 'on',
+        };
+
+        if (editingTax?.id) {
+            setTaxes(taxes.map(t => t.id === editingTax.id ? { ...t, ...data } : t));
+            toast({ title: "Tax Updated" });
+        } else {
+            setTaxes([...taxes, { id: `tax_${new Date().getTime()}`, ...data }]);
+            toast({ title: "Tax Added" });
+        }
+        setIsTaxDialogOpen(false);
+    }
+
 
   return (
     <div className="space-y-8">
@@ -639,16 +737,106 @@ export default function SettingsPage() {
                 </Card>
             )}
 
-            {['payment_types', 'taxes'].includes(activeSection) && (
-                <Card>
+            {activeSection === 'payment_types' && (
+                 <Card>
                     <CardHeader>
-                        <CardTitle>{settingsNav.find(nav => nav.id === activeSection)?.label}</CardTitle>
-                        <CardDescription>Settings for this section are under construction.</CardDescription>
+                        <CardTitle>Payment Types</CardTitle>
+                        <CardDescription>Manage the payment methods accepted at your stores.</CardDescription>
+                         <Button className="absolute top-6 right-6" onClick={() => handleOpenPaymentTypeDialog(null)}>
+                            <PlusCircle className="mr-2 h-4 w-4"/> Add Payment Type
+                        </Button>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex items-center justify-center h-48 text-muted-foreground">
-                            <p>Coming Soon!</p>
-                        </div>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Type</TableHead>
+                                    <TableHead><span className="sr-only">Actions</span></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {paymentTypes.map(pt => (
+                                    <TableRow key={pt.id}>
+                                        <TableCell className="font-medium">{pt.name}</TableCell>
+                                        <TableCell><Badge variant="outline">{pt.type}</Badge></TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => handleOpenPaymentTypeDialog(pt)}>
+                                                        <Edit className="mr-2 h-4 w-4" /> Edit
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeletePaymentType(pt.id)}>
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
+
+            {activeSection === 'taxes' && (
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Taxes</CardTitle>
+                        <CardDescription>Manage tax rates for your items and services.</CardDescription>
+                         <Button className="absolute top-6 right-6" onClick={() => handleOpenTaxDialog(null)}>
+                            <PlusCircle className="mr-2 h-4 w-4"/> Add Tax
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Rate</TableHead>
+                                    <TableHead>Type</TableHead>
+                                    <TableHead>Default</TableHead>
+                                    <TableHead><span className="sr-only">Actions</span></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {taxes.map(tax => (
+                                    <TableRow key={tax.id}>
+                                        <TableCell className="font-medium">{tax.name}</TableCell>
+                                        <TableCell>{tax.rate}%</TableCell>
+                                        <TableCell><Badge variant="outline">{tax.type}</Badge></TableCell>
+                                        <TableCell>
+                                            {tax.is_default && <Badge>Default</Badge>}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => handleOpenTaxDialog(tax)}>
+                                                        <Edit className="mr-2 h-4 w-4" /> Edit
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteTax(tax.id)}>
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     </CardContent>
                 </Card>
             )}
@@ -755,6 +943,78 @@ export default function SettingsPage() {
                                 ))}
                             </SelectContent>
                         </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="submit">Save</Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isPaymentTypeDialogOpen} onOpenChange={setIsPaymentTypeDialogOpen}>
+        <DialogContent>
+            <form onSubmit={handlePaymentTypeFormSubmit}>
+                <DialogHeader>
+                    <DialogTitle>{editingPaymentType?.id ? 'Edit Payment Type' : 'Add Payment Type'}</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 grid gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Name</Label>
+                        <Input id="name" name="name" defaultValue={editingPaymentType?.name} required />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="type">Type</Label>
+                        <Select name="type" required defaultValue={editingPaymentType?.type}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Cash">Cash</SelectItem>
+                                <SelectItem value="Card">Card</SelectItem>
+                                <SelectItem value="Credit">Credit</SelectItem>
+                                <SelectItem value="Other">Other</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="submit">Save</Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isTaxDialogOpen} onOpenChange={setIsTaxDialogOpen}>
+        <DialogContent>
+            <form onSubmit={handleTaxFormSubmit}>
+                <DialogHeader>
+                    <DialogTitle>{editingTax?.id ? 'Edit Tax' : 'Add Tax'}</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 grid gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Tax Name</Label>
+                        <Input id="name" name="name" defaultValue={editingTax?.name} required />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="rate">Tax Rate (%)</Label>
+                        <Input id="rate" name="rate" type="number" step="0.01" defaultValue={editingTax?.rate} required />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="type">Tax Type</Label>
+                        <Select name="type" required defaultValue={editingTax?.type}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Added">Added to price</SelectItem>
+                                <SelectItem value="Included">Included in price</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <Switch id="is_default" name="is_default" defaultChecked={editingTax?.is_default} />
+                        <Label htmlFor="is_default">Apply tax by default</Label>
                     </div>
                 </div>
                 <DialogFooter>
