@@ -1,191 +1,213 @@
--- Drop existing tables in reverse order of creation to avoid foreign key constraints
+-- Drop tables in reverse order of creation to handle dependencies
 DROP TABLE IF EXISTS public.debts;
+DROP TABLE IF EXISTS public.open_tickets;
 DROP TABLE IF EXISTS public.reservations;
 DROP TABLE IF EXISTS public.sales;
-DROP TABLE IF EXISTS public.open_tickets;
+DROP TABLE IF EXISTS public.printers;
+DROP TABLE IF EXISTS public.pos_devices;
 DROP TABLE IF EXISTS public.products;
 DROP TABLE IF EXISTS public.categories;
-DROP TABLE IF EXISTS public.pos_devices;
-DROP TABLE IF EXISTS public.stores;
 DROP TABLE IF EXISTS public.customers;
 DROP TABLE IF EXISTS public.users;
+DROP TABLE IF EXISTS public.stores;
+
+-- Drop functions and other objects if they exist
+DROP FUNCTION IF EXISTS public.handle_new_user;
+
+-- Create stores table first as other tables depend on it
+CREATE TABLE public.stores (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    address TEXT NOT NULL
+);
 
 -- Create users table
--- This table is managed by Supabase Auth, but we define it here for clarity and to add custom columns.
 CREATE TABLE public.users (
-    id uuid NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    name character varying NOT NULL,
-    email character varying NOT NULL UNIQUE,
-    role character varying NOT NULL,
-    avatar_url character varying,
-    permissions jsonb,
-    created_at timestamp with time zone DEFAULT now()
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    role TEXT NOT NULL,
+    avatar_url TEXT,
+    permissions JSONB,
+    created_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow authenticated users to read their own user record" ON public.users FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Allow users to update their own user record" ON public.users FOR UPDATE USING (auth.uid() = id);
-
--- Function to create a public user profile when a new auth user is created.
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.users (id, name, email, role, avatar_url, permissions)
-  VALUES (
-    new.id,
-    new.raw_user_meta_data->>'name',
-    new.email,
-    new.raw_user_meta_data->>'role',
-    new.raw_user_meta_data->>'avatar_url',
-    (new.raw_user_meta_data->>'permissions')::jsonb
-  );
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger to execute the function upon new user creation in Supabase Auth.
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- Create stores table
-CREATE TABLE public.stores (
-    id text NOT NULL PRIMARY KEY DEFAULT 'store_' || substr(md5(random()::text), 0, 8),
-    name character varying NOT NULL,
-    address character varying
-);
-ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all authenticated users to read stores" ON public.stores FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow admin/owner to manage stores" ON public.stores FOR ALL USING (
-  (SELECT role FROM public.users WHERE id = auth.uid()) IN ('Administrator', 'Owner')
-);
-
--- Create pos_devices table
-CREATE TABLE public.pos_devices (
-    id text NOT NULL PRIMARY KEY DEFAULT 'pos_' || substr(md5(random()::text), 0, 8),
-    name character varying NOT NULL,
-    store_id text NOT NULL REFERENCES public.stores(id) ON DELETE CASCADE
-);
-ALTER TABLE public.pos_devices ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all authenticated users to read POS devices" ON public.pos_devices FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow admin/owner to manage POS devices" ON public.pos_devices FOR ALL USING (
-  (SELECT role FROM public.users WHERE id = auth.uid()) IN ('Administrator', 'Owner')
-);
-
 
 -- Create categories table
 CREATE TABLE public.categories (
-    id uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
-    name character varying NOT NULL,
-    created_at timestamp with time zone DEFAULT now()
-);
-ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all authenticated users to read categories" ON public.categories FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow admin/owner to manage categories" ON public.categories FOR ALL USING (
-  (SELECT role FROM public.users WHERE id = auth.uid()) IN ('Administrator', 'Owner')
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Create products table
 CREATE TABLE public.products (
-    id uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
-    name character varying NOT NULL,
-    price double precision NOT NULL,
-    stock integer NOT NULL,
-    category_id uuid REFERENCES public.categories(id) ON DELETE SET NULL,
-    image_url text,
-    created_at timestamp with time zone DEFAULT now()
-);
-ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all authenticated users to read products" ON public.products FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authorized users to manage products" ON public.products FOR ALL USING (
-    'MANAGE_ITEMS_BO' = ANY (SELECT jsonb_array_elements_text((SELECT permissions FROM public.users WHERE id = auth.uid()))::text)
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    price REAL NOT NULL,
+    stock INTEGER NOT NULL,
+    image_url TEXT,
+    category_id UUID REFERENCES public.categories(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'Available',
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Create customers table
 CREATE TABLE public.customers (
-    id uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
-    name character varying NOT NULL,
-    email character varying NOT NULL,
-    phone character varying,
-    created_at timestamp with time zone DEFAULT now()
-);
-ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all authenticated users to read customers" ON public.customers FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authorized users to manage customers" ON public.customers FOR ALL USING (
-    'MANAGE_CUSTOMERS' = ANY (SELECT jsonb_array_elements_text((SELECT permissions FROM public.users WHERE id = auth.uid()))::text)
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Create pos_devices table
+CREATE TABLE public.pos_devices (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    store_id TEXT NOT NULL REFERENCES public.stores(id) ON DELETE CASCADE
+);
 
 -- Create sales table
 CREATE TABLE public.sales (
-    id uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_number serial,
-    items jsonb NOT NULL,
-    total double precision NOT NULL,
-    payment_methods jsonb NOT NULL,
-    status character varying NOT NULL,
-    customer_id uuid REFERENCES public.customers(id) ON DELETE SET NULL,
-    employee_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
-    pos_device_id text REFERENCES public.pos_devices(id) ON DELETE SET NULL,
-    created_at timestamp with time zone DEFAULT now()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_number SERIAL,
+    total REAL NOT NULL,
+    items JSONB NOT NULL,
+    payment_methods JSONB NOT NULL,
+    status TEXT NOT NULL,
+    employee_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
+    pos_device_id TEXT REFERENCES public.pos_devices(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all authenticated users to read sales" ON public.sales FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authorized users to create sales" ON public.sales FOR INSERT WITH CHECK (
-    'ACCEPT_PAYMENTS' = ANY (SELECT jsonb_array_elements_text((SELECT permissions FROM public.users WHERE id = auth.uid()))::text)
+
+-- Create debts table
+CREATE TABLE public.debts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sale_id UUID REFERENCES public.sales(id) ON DELETE SET NULL,
+    customer_id UUID REFERENCES public.customers(id) ON DELETE CASCADE,
+    amount REAL NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Create open_tickets table
 CREATE TABLE public.open_tickets (
-    id uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
-    ticket_name character varying,
-    items jsonb NOT NULL,
-    total double precision NOT NULL,
-    notes text,
-    employee_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
-    customer_id uuid REFERENCES public.customers(id) ON DELETE SET NULL,
-    created_at timestamp with time zone DEFAULT now()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_name TEXT,
+    items JSONB NOT NULL,
+    total REAL NOT NULL,
+    notes TEXT,
+    employee_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.open_tickets ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all authenticated users to read open tickets" ON public.open_tickets FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authorized users to manage open tickets" ON public.open_tickets FOR ALL USING (
-    'MANAGE_OPEN_TICKETS' = ANY (SELECT jsonb_array_elements_text((SELECT permissions FROM public.users WHERE id = auth.uid()))::text)
-);
-
-
--- Create debts table
-CREATE TABLE public.debts (
-    id uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
-    sale_id uuid REFERENCES public.sales(id) ON DELETE CASCADE,
-    customer_id uuid REFERENCES public.customers(id) ON DELETE CASCADE,
-    amount double precision NOT NULL,
-    status character varying NOT NULL,
-    created_at timestamp with time zone DEFAULT now()
-);
-ALTER TABLE public.debts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all authenticated users to read debts" ON public.debts FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authorized users to manage debts" ON public.debts FOR ALL USING (
-    'VIEW_ALL_RECEIPTS' = ANY (SELECT jsonb_array_elements_text((SELECT permissions FROM public.users WHERE id = auth.uid()))::text)
-);
-
 
 -- Create reservations table
 CREATE TABLE public.reservations (
-    id uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
-    guest_name character varying NOT NULL,
-    product_id uuid REFERENCES public.products(id) ON DELETE SET NULL,
-    check_in timestamp with time zone NOT NULL,
-    check_out timestamp with time zone NOT NULL,
-    status character varying NOT NULL,
-    created_at timestamp with time zone DEFAULT now()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    guest_name TEXT NOT NULL,
+    product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
+    check_in TIMESTAMPTZ NOT NULL,
+    check_out TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Function to handle new user creation
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.users (id, name, email, role, avatar_url, permissions)
+    VALUES (
+        new.id,
+        new.raw_user_meta_data->>'name',
+        new.email,
+        new.raw_user_meta_data->>'role',
+        new.raw_user_meta_data->>'avatar_url',
+        (new.raw_user_meta_data->>'permissions')::jsonb
+    );
+    RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger to call the function on new user signup
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Enable Row Level Security (RLS) for all tables
+ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pos_devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.debts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.open_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reservations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all authenticated users to read reservations" ON public.reservations FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authorized users to manage reservations" ON public.reservations FOR ALL USING (
-    'MANAGE_ITEMS_BO' = ANY (SELECT jsonb_array_elements_text((SELECT permissions FROM public.users WHERE id = auth.uid()))::text)
-);
+
+-- Policies for public access (users can see their own data, etc.)
+-- Allow public access to stores (all users need this info)
+DROP POLICY IF EXISTS "Allow public read access to stores" ON public.stores;
+CREATE POLICY "Allow public read access to stores" ON public.stores FOR SELECT USING (true);
+
+-- Allow users to view their own profile
+DROP POLICY IF EXISTS "Allow individual read access to users" ON public.users;
+CREATE POLICY "Allow individual read access to users" ON public.users FOR SELECT USING (auth.uid() = id);
+
+-- Allow users to update their own profile
+DROP POLICY IF EXISTS "Allow individual update access to users" ON public.users;
+CREATE POLICY "Allow individual update access to users" ON public.users FOR UPDATE USING (auth.uid() = id);
+
+-- Allow read access to all authenticated users for some tables
+DROP POLICY IF EXISTS "Allow authenticated read access to categories" ON public.categories;
+CREATE POLICY "Allow authenticated read access to categories" ON public.categories FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Allow authenticated read access to products" ON public.products;
+CREATE POLICY "Allow authenticated read access to products" ON public.products FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Allow authenticated read access to customers" ON public.customers;
+CREATE POLICY "Allow authenticated read access to customers" ON public.customers FOR SELECT TO authenticated USING (true);
+
+-- Allow service_role to manage everything (needed for admin operations)
+-- Example for one table, repeat for others as necessary or create a role
+DROP POLICY IF EXISTS "Allow admin full access" ON public.users;
+CREATE POLICY "Allow admin full access" ON public.users FOR ALL USING (true) WITH CHECK (true);
+-- You would create similar admin policies for all tables for full control from server-side admin client
+
+-- Allow authenticated users to perform actions based on their role (more complex policies)
+-- For example, allow users to insert sales
+DROP POLICY IF EXISTS "Allow authenticated users to create sales" ON public.sales;
+CREATE POLICY "Allow authenticated users to create sales" ON public.sales FOR INSERT TO authenticated WITH CHECK (true);
+
+-- Allow users to view sales they created
+DROP POLICY IF EXISTS "Allow individual read access to sales" ON public.sales;
+CREATE POLICY "Allow individual read access to sales" ON public.sales FOR SELECT TO authenticated USING (auth.uid() = employee_id);
 
 
--- Insert initial data (optional, but good for starting)
-INSERT INTO public.customers (name, email, phone) VALUES ('Walk-in Customer', 'walkin@example.com', NULL);
-INSERT INTO public.categories (name) VALUES ('Food'), ('Beverage'), ('Room');
+-- Policies for full access to all tables for the 'service_role' key
+-- This is crucial for server-side actions (`supabaseAdmin`).
+CREATE POLICY "Allow service role full access on stores" ON public.stores FOR ALL TO service_role;
+CREATE POLICY "Allow service role full access on users" ON public.users FOR ALL TO service_role;
+CREATE POLICY "Allow service role full access on categories" ON public.categories FOR ALL TO service_role;
+CREATE POLICY "Allow service role full access on products" ON public.products FOR ALL TO service_role;
+CREATE POLICY "Allow service role full access on customers" ON public.customers FOR ALL TO service_role;
+CREATE POLICY "Allow service role full access on pos_devices" ON public.pos_devices FOR ALL TO service_role;
+CREATE POLICY "Allow service role full access on sales" ON public.sales FOR ALL TO service_role;
+CREATE POLICY "Allow service role full access on debts" ON public.debts FOR ALL TO service_role;
+CREATE POLICY "Allow service role full access on open_tickets" ON public.open_tickets FOR ALL TO service_role;
+CREATE POLICY "Allow service role full access on reservations" ON public.reservations FOR ALL TO service_role;
+
+
+-- Pre-populate some data (optional, but helpful for development)
+
+-- Insert a default "Walk-in Customer"
+INSERT INTO public.customers (name, email, phone) VALUES ('Walk-in Customer', 'walkin@example.com', NULL)
+ON CONFLICT (email) DO NOTHING;
+
+-- Insert a default "Room" category
+INSERT INTO public.categories (name) VALUES ('Room')
+ON CONFLICT (name) DO NOTHING;
