@@ -143,7 +143,7 @@ export default function SignInPage() {
               <CardContent className="grid gap-4 pt-4">
                  <div className="grid gap-2">
                   <Label htmlFor="pin">4-Digit PIN</Label>
-                  <Input id="pin" name="pin" type="password" required maxLength={4} className="text-center text-2xl tracking-[1rem]" />
+                  <Input id="pin" name="pin" type="text" inputMode="numeric" required maxLength={4} pattern="\\d{4}" title="PIN must be 4 digits" className="text-center text-2xl tracking-[1rem]" />
                 </div>
               </CardContent>
               <CardFooter className="flex flex-col gap-4">
