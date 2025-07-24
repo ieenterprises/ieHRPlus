@@ -1,0 +1,116 @@
+
+"use client";
+
+import React from "react";
+import { format } from "date-fns";
+import type { Sale, OpenTicket, SaleItem } from "@/lib/types";
+import { useSettings } from "@/hooks/use-settings";
+
+type PrintableReceiptProps = {
+  data: (Sale | OpenTicket) & { type: 'receipt' | 'ticket' };
+  type: 'receipt' | 'ticket';
+};
+
+export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
+  const { stores, receiptSettings } = useSettings();
+  
+  // For now, we assume a single store or the first store for receipt settings.
+  // In a multi-store setup, you would need to determine the store from the sale/ticket.
+  const currentStore = stores[0];
+  const currentReceiptSettings = receiptSettings[currentStore?.id] || {
+    header: `Welcome to ${currentStore?.name || 'our store'}!`,
+    footer: "Thank you for your purchase!",
+  };
+
+  const isSale = (d: any): d is Sale => type === 'receipt' && 'order_number' in d;
+  
+  const items = data.items as SaleItem[];
+  const total = data.total;
+  const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const tax = total - subtotal;
+  
+  return (
+    <div className="bg-white text-black font-mono text-xs w-[288px] p-2">
+      <div className="text-center space-y-1">
+        <h1 className="text-sm font-bold">{currentStore?.name || "OrderFlow POS"}</h1>
+        <p>{currentStore?.address}</p>
+        <p>{format(new Date(), "LLL dd, y HH:mm")}</p>
+      </div>
+
+      <div className="my-2 border-t border-dashed border-black"></div>
+      
+      <div className="text-center">
+        {isSale(data) ? (
+          <>
+            <p className="font-bold">RECEIPT #{data.order_number}</p>
+            <p>Cashier: {data.users?.name || 'N/A'}</p>
+          </>
+        ) : (
+          <p className="font-bold">OPEN TICKET: {data.ticket_name}</p>
+        )}
+      </div>
+
+      <div className="my-2 border-t border-dashed border-black"></div>
+
+      <table className="w-full">
+        <thead>
+          <tr>
+            <th className="text-left">ITEM</th>
+            <th className="text-center">QTY</th>
+            <th className="text-right">PRICE</th>
+            <th className="text-right">TOTAL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.id}>
+              <td className="text-left w-2/4 pr-1">{item.name}</td>
+              <td className="text-center">{item.quantity}</td>
+              <td className="text-right">${item.price.toFixed(2)}</td>
+              <td className="text-right">${(item.price * item.quantity).toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="my-2 border-t border-dashed border-black"></div>
+
+      <div className="space-y-1">
+        <div className="flex justify-between">
+          <span>SUBTOTAL:</span>
+          <span>${subtotal.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>TAX:</span>
+          <span>${tax.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between font-bold text-sm">
+          <span>TOTAL:</span>
+          <span>${total.toFixed(2)}</span>
+        </div>
+      </div>
+
+      {isSale(data) && (
+        <>
+            <div className="my-2 border-t border-dashed border-black"></div>
+            <div className="space-y-1">
+                {(data.payment_methods as string[]).map(method => (
+                    <div className="flex justify-between" key={method}>
+                        <span>{method.toUpperCase()}:</span>
+                        {/* In a real scenario, you'd have payment amounts per method */}
+                        {data.payment_methods.length === 1 && <span>${total.toFixed(2)}</span>}
+                    </div>
+                ))}
+            </div>
+        </>
+      )}
+
+      <div className="my-2 border-t border-dashed border-black"></div>
+      
+      <div className="text-center space-y-1">
+        <p>{currentReceiptSettings.header}</p>
+        <p>{currentReceiptSettings.footer}</p>
+      </div>
+    </div>
+  );
+};

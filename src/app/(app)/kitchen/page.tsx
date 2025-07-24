@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { PageHeader } from "@/components/page-header";
@@ -24,7 +24,7 @@ import { type Sale, type Product, type Category, type User, type OpenTicket } fr
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, Printer } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -43,6 +43,8 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePos } from "@/hooks/use-pos";
 import { supabase } from "@/lib/supabase";
+import { useReactToPrint } from "react-to-print";
+import { PrintableReceipt } from "@/components/printable-receipt";
 
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -77,6 +79,23 @@ export default function KitchenPage() {
     maxAmount: "",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  const [printableData, setPrintableData] = useState<any>(null);
+  const printableRef = useRef(null);
+
+  const handlePrint = useReactToPrint({
+    content: () => printableRef.current,
+  });
+
+  const onPrint = (data: any, type: 'receipt' | 'ticket') => {
+    setPrintableData({ ...data, type });
+  };
+  
+  useEffect(() => {
+    if (printableData) {
+      handlePrint();
+    }
+  }, [printableData, handlePrint]);
   
   useEffect(() => {
     const fetchData = async () => {
@@ -204,6 +223,11 @@ export default function KitchenPage() {
 
   return (
     <div className="space-y-8">
+      <div style={{ display: "none" }}>
+        <div ref={printableRef}>
+          {printableData && <PrintableReceipt data={printableData} type={printableData.type} />}
+        </div>
+      </div>
       <PageHeader
         title="Orders"
         description="View open tickets and completed receipts."
@@ -230,11 +254,12 @@ export default function KitchenPage() {
                                 <TableHead>Date</TableHead>
                                 <TableHead>Items</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
+                                <TableHead>Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                            {loading ? (
-                                <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
                             ) : openTickets.length > 0 ? (
                                 openTickets.map(ticket => (
                                     <TableRow key={ticket.id}>
@@ -243,11 +268,16 @@ export default function KitchenPage() {
                                         <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
                                         <TableCell>{(ticket.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
                                         <TableCell className="text-right">${ticket.total.toFixed(2)}</TableCell>
+                                        <TableCell>
+                                          <Button variant="outline" size="sm" onClick={() => onPrint(ticket, 'ticket')}>
+                                            <Printer className="mr-2 h-4 w-4" /> Print
+                                          </Button>
+                                        </TableCell>
                                     </TableRow>
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                                    <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
                                         No open tickets found.
                                     </TableCell>
                                 </TableRow>
@@ -363,11 +393,12 @@ export default function KitchenPage() {
                         <TableHead>Category</TableHead>
                         <TableHead className="text-right">Total</TableHead>
                         <TableHead className="text-center">Payment</TableHead>
+                        <TableHead>Actions</TableHead>
                     </TableRow>
                     </TableHeader>
                     <TableBody>
                     {loading ? (
-                        <TableRow><TableCell colSpan={8} className="h-24 text-center">Loading...</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={9} className="h-24 text-center">Loading...</TableCell></TableRow>
                     ) : filteredReceipts.length > 0 ? (
                         filteredReceipts.map((sale) => {
                         const categoriesForDisplay = getSaleCategoryNames(sale.displayItems);
@@ -398,11 +429,16 @@ export default function KitchenPage() {
                                 ))}
                             </div>
                             </TableCell>
+                            <TableCell>
+                                <Button variant="outline" size="sm" onClick={() => onPrint(sale, 'receipt')}>
+                                <Printer className="mr-2 h-4 w-4" /> Print
+                                </Button>
+                            </TableCell>
                         </TableRow>
                         )})
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
+                            <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
                                 No receipts found for the selected filters.
                             </TableCell>
                         </TableRow>
