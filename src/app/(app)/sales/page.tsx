@@ -371,7 +371,7 @@ export default function SalesPage() {
               sale_id: newSale.id,
               customer_id: creditInfo.customerId,
               amount: creditInfo.amount,
-              status: "Unpaid",
+              status: "Unpaid" as const,
               created_at: new Date().toISOString(),
               sales: { order_number: newSale.order_number },
               customers: { name: customers.find(c => c.id === creditInfo.customerId)?.name || null },
@@ -896,30 +896,32 @@ export default function SalesPage() {
         </Dialog>
          <Dialog open={isAuthPinDialogOpen} onOpenChange={setIsAuthPinDialogOpen}>
             <form onSubmit={handlePinAuthSubmit}>
-                <DialogHeader>
-                    <DialogTitle>Manager Authorization Required</DialogTitle>
-                    <DialogDescription>
-                        Enter a Manager's PIN to delete this open ticket. (Hint: demo PIN is {MANAGER_PIN})
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                    <Label htmlFor="manager-pin">Manager PIN</Label>
-                    <Input
-                        id="manager-pin"
-                        type="password"
-                        value={pinValue}
-                        onChange={(e) => setPinValue(e.target.value)}
-                        required
-                    />
-                </div>
-                <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsAuthPinDialogOpen(false)}>Cancel</Button>
-                    <Button type="submit">Authorize</Button>
-                </DialogFooter>
+              <DialogHeader>
+                  <DialogTitle>Manager Authorization Required</DialogTitle>
+                  <DialogDescription>
+                      Enter a Manager's PIN to delete this open ticket. (Hint: demo PIN is {MANAGER_PIN})
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                  <Label htmlFor="manager-pin">Manager PIN</Label>
+                  <Input
+                      id="manager-pin"
+                      type="password"
+                      value={pinValue}
+                      onChange={(e) => setPinValue(e.target.value)}
+                      required
+                  />
+              </div>
+              <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAuthPinDialogOpen(false)}>Cancel</Button>
+                  <Button type="submit">Authorize</Button>
+              </DialogFooter>
             </form>
         </Dialog>
     </TooltipProvider>
   );
 }
+
+    
 
     
