@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
-import { type Product, type Customer, type Category, type SaleItem, type OpenTicket } from "@/lib/types";
+import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -63,6 +63,9 @@ type OrderItem = {
   product: Product;
   quantity: number;
 };
+
+const SENIOR_ROLES: UserRole[] = ["Owner", "Administrator", "Manager"];
+const MANAGER_PIN = "1234"; // Demo PIN
 
 function ProductCard({
   product,
@@ -132,6 +135,10 @@ export default function SalesPage() {
 
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
+  
+  const [isAuthPinDialogOpen, setIsAuthPinDialogOpen] = useState(false);
+  const [ticketToDelete, setTicketToDelete] = useState<string | null>(null);
+  const [pinValue, setPinValue] = useState('');
 
   const { toast } = useToast();
   
@@ -466,16 +473,39 @@ export default function SalesPage() {
     setIsTicketsDialogOpen(false);
   };
 
-  const handleDeleteTicket = async (ticketId: string, silent = false) => {
-    if (!silent && !window.confirm("Are you sure you want to permanently delete this saved order?")) {
-      return;
+  const handleDeleteTicketRequest = (ticketId: string) => {
+    if (loggedInUser && SENIOR_ROLES.includes(loggedInUser.role as UserRole)) {
+      if (window.confirm("Are you sure you want to permanently delete this saved order?")) {
+        handleDeleteTicket(ticketId);
+      }
+    } else {
+      setTicketToDelete(ticketId);
+      setIsAuthPinDialogOpen(true);
     }
+  };
+
+  const handleDeleteTicket = async (ticketId: string) => {
     try {
       await deleteTicket(ticketId);
       if (activeTicketId === ticketId) handleClearOrder();
-      if (!silent) toast({ title: "Ticket Deleted", variant: "destructive" });
+      toast({ title: "Ticket Deleted", variant: "destructive" });
     } catch (error: any) {
-      if (!silent) toast({ title: "Error Deleting Ticket", description: error.message, variant: "destructive" });
+      toast({ title: "Error Deleting Ticket", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handlePinAuthSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (pinValue === MANAGER_PIN) {
+      if (ticketToDelete) {
+        handleDeleteTicket(ticketToDelete);
+      }
+      setIsAuthPinDialogOpen(false);
+      setTicketToDelete(null);
+      setPinValue('');
+    } else {
+      toast({ title: "Invalid PIN", description: "The PIN you entered is incorrect.", variant: "destructive" });
+      setPinValue('');
     }
   };
 
@@ -846,7 +876,7 @@ export default function SalesPage() {
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as any)}>Load</Button>
-                                                    <Button variant="destructive" size="sm" onClick={() => handleDeleteTicket(ticket.id)}>
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDeleteTicketRequest(ticket.id)}>
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </div>
@@ -864,6 +894,32 @@ export default function SalesPage() {
                         </Table>
                     </ScrollArea>
                 </div>
+            </DialogContent>
+        </Dialog>
+         <Dialog open={isAuthPinDialogOpen} onOpenChange={setIsAuthPinDialogOpen}>
+            <DialogContent className="sm:max-w-sm">
+                <form onSubmit={handlePinAuthSubmit}>
+                    <DialogHeader>
+                        <DialogTitle>Manager Authorization Required</DialogTitle>
+                        <DialogDescription>
+                            Enter a Manager's PIN to delete this open ticket. (Hint: demo PIN is {MANAGER_PIN})
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Label htmlFor="manager-pin">Manager PIN</Label>
+                        <Input
+                            id="manager-pin"
+                            type="password"
+                            value={pinValue}
+                            onChange={(e) => setPinValue(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsAuthPinDialogOpen(false)}>Cancel</Button>
+                        <Button type="submit">Authorize</Button>
+                    </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     </TooltipProvider>
