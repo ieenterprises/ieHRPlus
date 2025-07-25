@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,40 +22,35 @@ import {
 import { type Debt } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { markDebtAsPaid } from "@/app/actions/debts";
-import { supabase } from "@/lib/supabase";
 import { useSettings } from "@/hooks/use-settings";
+import Papa from "papaparse";
 
 export default function DebtsPage() {
-  const [debts, setDebts] = useState<Debt[]>([]);
+  const { debts, setDebts, sales, users, customers, currency } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const { currency } = useSettings();
+
+  const enrichedDebts = useMemo(() => {
+    return debts.map(debt => {
+      const sale = sales.find(s => s.id === debt.sale_id);
+      return {
+        ...debt,
+        sales: sale ? { order_number: sale.order_number } : null,
+        customers: customers.find(c => c.id === debt.customer_id) || null,
+        users: users.find(u => u.id === sale?.employee_id) || null,
+      }
+    });
+  }, [debts, sales, customers, users]);
+
 
   useEffect(() => {
-    const fetchDebts = async () => {
-      if (!supabase) return;
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('debts')
-        .select(`*, sales(order_number), customers(name)`)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        toast({ title: "Error fetching debts", description: error.message, variant: "destructive" });
-      } else {
-        setDebts(data || []);
-      }
-      setLoading(false);
-    };
-    fetchDebts();
-  }, [toast]);
+    setLoading(false);
+  }, []);
 
   const handleMarkAsPaid = async (debtId: string) => {
     try {
-      await markDebtAsPaid(debtId);
       setDebts((prevDebts) =>
         prevDebts.map((debt) =>
           debt.id === debtId ? { ...debt, status: "Paid" } : debt
@@ -70,12 +65,41 @@ export default function DebtsPage() {
     }
   };
 
+  const handleExport = () => {
+    const dataToExport = enrichedDebts.map(d => ({
+        "Order #": d.sales?.order_number,
+        "Customer": d.customers?.name,
+        "Employee": d.users?.name || "N/A",
+        "Date": format(new Date(d.created_at!), "LLL dd, y"),
+        "Amount": d.amount.toFixed(2),
+        "Status": d.status,
+    }));
+
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `debt_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete", description: "Debt report has been downloaded." });
+  };
+
+
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Debt Management"
-        description="Track and recover outstanding credit sales."
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Debt Management"
+          description="Track and recover outstanding credit sales."
+        />
+        <Button onClick={handleExport} variant="outline">
+          <Download className="mr-2 h-4 w-4" />
+          Export to CSV
+        </Button>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Debts</CardTitle>
@@ -89,6 +113,7 @@ export default function DebtsPage() {
               <TableRow>
                 <TableHead>Order #</TableHead>
                 <TableHead>Customer</TableHead>
+                <TableHead className="hidden sm:table-cell">Employee</TableHead>
                 <TableHead className="hidden md:table-cell">Date</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Status</TableHead>
@@ -98,15 +123,16 @@ export default function DebtsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
                     Loading...
                   </TableCell>
                 </TableRow>
-              ) : debts.length > 0 ? (
-                debts.map((debt) => (
+              ) : enrichedDebts.length > 0 ? (
+                enrichedDebts.map((debt) => (
                   <TableRow key={debt.id}>
                     <TableCell className="font-medium">{debt.sales?.order_number}</TableCell>
                     <TableCell>{debt.customers?.name}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{debt.users?.name || 'N/A'}</TableCell>
                     <TableCell className="hidden md:table-cell">{format(new Date(debt.created_at!), "LLL dd, y")}</TableCell>
                     <TableCell className="text-right">{currency}{debt.amount.toFixed(2)}</TableCell>
                     <TableCell>
@@ -126,7 +152,7 @@ export default function DebtsPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
                     No debts found.
                   </TableCell>
                 </TableRow>

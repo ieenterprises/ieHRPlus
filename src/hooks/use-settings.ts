@@ -1,11 +1,10 @@
 
 "use client";
 
-import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, ReactNode, createElement, useEffect } from 'react';
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax } from '@/lib/types';
+import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
-import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
 export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
@@ -14,25 +13,43 @@ export type FeatureSettings = Record<string, boolean>;
 
 export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier";
 
-const getPermissionsForRole = (role: UserRole): AnyPermission[] => {
-    switch(role) {
-        case "Owner":
-        case "Administrator":
-            return [...Object.keys(posPermissions) as (keyof typeof posPermissions)[], ...Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[]];
-        case "Manager":
-            return ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS"];
-        case "Cashier":
-            return ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS"];
-        default:
-            return [];
-    }
-}
+// --- MOCK DATA ---
+
+const getPermissionsForRole = (role: UserRole, allRoles: Role[]): AnyPermission[] => {
+    const roleData = allRoles.find(r => r.name === role);
+    return roleData?.permissions || [];
+};
 
 const MOCK_ROLES: Role[] = [
-  { id: "role_owner", name: "Owner", permissions: getPermissionsForRole("Owner") },
-  { id: "role_admin", name: "Administrator", permissions: getPermissionsForRole("Administrator") },
-  { id: "role_manager", name: "Manager", permissions: getPermissionsForRole("Manager") },
-  { id: "role_cashier", name: "Cashier", permissions: getPermissionsForRole("Cashier") },
+  { id: "role_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
+  { id: "role_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
+  { id: "role_manager", name: "Manager", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS"] },
+  { id: "role_cashier", name: "Cashier", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS"] },
+];
+
+const MOCK_USERS: User[] = [
+    { id: 'user_1', name: 'Ada Lovelace', email: 'owner@example.com', role: 'Owner', avatar_url: 'https://placehold.co/100x100.png?text=A', permissions: getPermissionsForRole('Owner', MOCK_ROLES), created_at: new Date().toISOString() },
+    { id: 'user_2', name: 'Grace Hopper', email: 'manager@example.com', role: 'Manager', avatar_url: 'https://placehold.co/100x100.png?text=G', permissions: getPermissionsForRole('Manager', MOCK_ROLES), created_at: new Date().toISOString() },
+    { id: 'user_3', name: 'Charles Babbage', email: 'cashier@example.com', role: 'Cashier', avatar_url: 'https://placehold.co/100x100.png?text=C', permissions: getPermissionsForRole('Cashier', MOCK_ROLES), created_at: new Date().toISOString() },
+];
+
+const MOCK_CATEGORIES: Category[] = [
+    { id: 'cat_1', name: 'Food', created_at: new Date().toISOString() },
+    { id: 'cat_2', name: 'Beverage', created_at: new Date().toISOString() },
+    { id: 'cat_3', name: 'Room', created_at: new Date().toISOString() },
+];
+
+const MOCK_PRODUCTS: Product[] = [
+    { id: 'prod_1', name: 'Cheeseburger', price: 12.99, stock: 50, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
+    { id: 'prod_2', name: 'Fries', price: 4.99, stock: 100, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
+    { id: 'prod_3', name: 'Coca-Cola', price: 2.50, stock: 200, category_id: 'cat_2', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
+    { id: 'prod_4', name: 'Standard Room', price: 150.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
+    { id: 'prod_5', name: 'Deluxe Suite', price: 250.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Occupied' },
+];
+
+const MOCK_CUSTOMERS: Customer[] = [
+    { id: 'cust_1', name: 'Walk-in Customer', email: 'walkin@example.com', phone: null, created_at: new Date().toISOString() },
+    { id: 'cust_2', name: 'John Doe', email: 'john.doe@example.com', phone: '555-1234', created_at: new Date().toISOString() },
 ];
 
 const MOCK_STORES: StoreType[] = [
@@ -53,25 +70,9 @@ const MOCK_PRINTERS: PrinterType[] = [
 ];
 
 const MOCK_RECEIPT_SETTINGS: Record<string, ReceiptSettings> = {
-  'store_1': {
-    header: "Welcome to Main Branch!",
-    footer: "Thanks for visiting Main Branch!",
-    emailedLogo: null,
-    printedLogo: null,
-    showCustomerInfo: true,
-    showComments: true,
-    language: 'en',
-  },
-  'store_2': {
-    header: 'CASONI PREMIUM CLUB Experience Luxury & Lifestyle',
-    footer: 'Thank you for choosing Casoni Premium Club! We hope you had a premium experience.',
-    emailedLogo: null,
-    printedLogo: null,
-    showCustomerInfo: false,
-    showComments: false,
-    language: 'en',
-  }
-}
+  'store_1': { header: "Welcome to Main Branch!", footer: "Thanks for visiting Main Branch!", emailedLogo: null, printedLogo: null, showCustomerInfo: true, showComments: true, language: 'en' },
+  'store_2': { header: 'CASONI PREMIUM CLUB Experience Luxury & Lifestyle', footer: 'Thank you for choosing Casoni Premium Club!', emailedLogo: null, printedLogo: null, showCustomerInfo: false, showComments: false, language: 'en' },
+};
 
 const MOCK_PAYMENT_TYPES: PaymentType[] = [
     { id: 'pay_1', name: 'Cash', type: 'Cash' },
@@ -84,142 +85,124 @@ const MOCK_TAXES: Tax[] = [
     { id: 'tax_2', name: 'Service Charge', rate: 10, is_default: false, type: 'Added' },
 ];
 
+const MOCK_SALES: Sale[] = []; // Start with no sales, they will be created by the user
+const MOCK_DEBTS: Debt[] = [];
+const MOCK_RESERVATIONS: Reservation[] = [
+    { id: 'res_1', guest_name: 'Jane Smith', product_id: 'prod_5', check_in: new Date().toISOString(), check_out: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString(), status: 'Checked-in', created_at: new Date().toISOString(), products: MOCK_PRODUCTS.find(p => p.id === 'prod_5') || null },
+];
+const MOCK_OPEN_TICKETS: OpenTicket[] = [];
+
+// --- Context and Provider ---
+
 type SettingsContextType = {
+    // Data states
     featureSettings: FeatureSettings;
-    setFeatureSettings: React.Dispatch<React.SetStateAction<FeatureSettings>>;
     stores: StoreType[];
-    setStores: React.Dispatch<React.SetStateAction<StoreType[]>>;
     posDevices: PosDeviceType[];
-    setPosDevices: React.Dispatch<React.SetStateAction<PosDeviceType[]>>;
     printers: PrinterType[];
-    setPrinters: React.Dispatch<React.SetStateAction<PrinterType[]>>;
     receiptSettings: Record<string, ReceiptSettings>;
-    setReceiptSettings: React.Dispatch<React.SetStateAction<Record<string, ReceiptSettings>>>;
     paymentTypes: PaymentType[];
-    setPaymentTypes: React.Dispatch<React.SetStateAction<PaymentType[]>>;
     taxes: Tax[];
-    setTaxes: React.Dispatch<React.SetStateAction<Tax[]>>;
     roles: Role[];
-    setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
     users: User[];
+    products: Product[];
+    categories: Category[];
+    customers: Customer[];
+    sales: Sale[];
+    debts: Debt[];
+    reservations: Reservation[];
+    
+    // Data setters
+    setFeatureSettings: React.Dispatch<React.SetStateAction<FeatureSettings>>;
+    setStores: React.Dispatch<React.SetStateAction<StoreType[]>>;
+    setPosDevices: React.Dispatch<React.SetStateAction<PosDeviceType[]>>;
+    setPrinters: React.Dispatch<React.SetStateAction<PrinterType[]>>;
+    setReceiptSettings: React.Dispatch<React.SetStateAction<Record<string, ReceiptSettings>>>;
+    setPaymentTypes: React.Dispatch<React.SetStateAction<PaymentType[]>>;
+    setTaxes: React.Dispatch<React.SetStateAction<Tax[]>>;
+    setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
+    setUsers: React.Dispatch<React.SetStateAction<User[]>>;
+    setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
+    setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
+    setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
+    setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
+    setDebts: React.Dispatch<React.SetStateAction<Debt[]>>;
+    setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
+    
+    // Auth and session state
     loggedInUser: User | null;
     setLoggedInUser: React.Dispatch<React.SetStateAction<User | null>>;
     loadingUser: boolean;
-    getPermissionsForRole: (role: UserRole) => AnyPermission[];
-    logout: () => Promise<void>;
+    logout: () => void;
+    
     selectedStore: StoreType | null;
     setSelectedStore: React.Dispatch<React.SetStateAction<StoreType | null>>;
     selectedDevice: PosDeviceType | null;
     setSelectedDevice: React.Dispatch<React.SetStateAction<PosDeviceType | null>>;
     currency: string;
     setCurrency: React.Dispatch<React.SetStateAction<string>>;
+    getPermissionsForRole: (role: UserRole) => AnyPermission[];
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
-    if (typeof window === 'undefined') {
-        return defaultValue;
-    }
-    const storedValue = window.localStorage.getItem(key);
-    if (storedValue) {
+const useLocalStorage = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
+    const [value, setValue] = useState<T>(() => {
+        if (typeof window === 'undefined') return defaultValue;
         try {
-            return JSON.parse(storedValue);
+            const item = window.localStorage.getItem(key);
+            return item ? JSON.parse(item) : defaultValue;
         } catch (error) {
             console.error(`Error parsing localStorage key "${key}":`, error);
             return defaultValue;
         }
-    }
-    return defaultValue;
-};
+    });
 
-const setInLocalStorage = <T,>(key: string, value: T) => {
-    if (typeof window !== 'undefined') {
-        window.localStorage.setItem(key, JSON.stringify(value));
-    }
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem(key, JSON.stringify(value));
+        }
+    }, [key, value]);
+
+    return [value, setValue];
 };
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-    const [featureSettings, setFeatureSettings] = useState<FeatureSettings>(() => getFromLocalStorage('featureSettings', {
-        open_tickets: true, shifts: true, time_management: false, kitchen_printers: true, dining_options: true, customer_displays: false,
-    }));
-    const [stores, setStores] = useState<StoreType[]>(() => getFromLocalStorage('stores', MOCK_STORES));
-    const [posDevices, setPosDevices] = useState<PosDeviceType[]>(() => getFromLocalStorage('posDevices', MOCK_POS_DEVICES));
-    const [printers, setPrinters] = useState<PrinterType[]>(() => getFromLocalStorage('printers', MOCK_PRINTERS));
-    const [receiptSettings, setReceiptSettings] = useState<Record<string, ReceiptSettings>>(() => getFromLocalStorage('receiptSettings', MOCK_RECEIPT_SETTINGS));
-    const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(() => getFromLocalStorage('paymentTypes', MOCK_PAYMENT_TYPES));
-    const [taxes, setTaxes] = useState<Tax[]>(() => getFromLocalStorage('taxes', MOCK_TAXES));
-    const [roles, setRoles] = useState<Role[]>(() => getFromLocalStorage('roles', MOCK_ROLES));
-    const [users, setUsers] = useState<User[]>([]);
-    const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
+    const [featureSettings, setFeatureSettings] = useLocalStorage<FeatureSettings>('featureSettings', { open_tickets: true, shifts: true, time_management: false, kitchen_printers: true, dining_options: true, customer_displays: false });
+    const [stores, setStores] = useLocalStorage<StoreType[]>('stores', MOCK_STORES);
+    const [posDevices, setPosDevices] = useLocalStorage<PosDeviceType[]>('posDevices', MOCK_POS_DEVICES);
+    const [printers, setPrinters] = useLocalStorage<PrinterType[]>('printers', MOCK_PRINTERS);
+    const [receiptSettings, setReceiptSettings] = useLocalStorage<Record<string, ReceiptSettings>>('receiptSettings', MOCK_RECEIPT_SETTINGS);
+    const [paymentTypes, setPaymentTypes] = useLocalStorage<PaymentType[]>('paymentTypes', MOCK_PAYMENT_TYPES);
+    const [taxes, setTaxes] = useLocalStorage<Tax[]>('taxes', MOCK_TAXES);
+    const [roles, setRoles] = useLocalStorage<Role[]>('roles', MOCK_ROLES);
+    const [users, setUsers] = useLocalStorage<User[]>('users', MOCK_USERS);
+    const [products, setProducts] = useLocalStorage<Product[]>('products', MOCK_PRODUCTS);
+    const [categories, setCategories] = useLocalStorage<Category[]>('categories', MOCK_CATEGORIES);
+    const [customers, setCustomers] = useLocalStorage<Customer[]>('customers', MOCK_CUSTOMERS);
+    const [sales, setSales] = useLocalStorage<Sale[]>('sales', MOCK_SALES);
+    const [debts, setDebts] = useLocalStorage<Debt[]>('debts', MOCK_DEBTS);
+    const [reservations, setReservations] = useLocalStorage<Reservation[]>('reservations', MOCK_RESERVATIONS);
+    
+    const [loggedInUser, setLoggedInUser] = useLocalStorage<User | null>('loggedInUser', null);
     const [loadingUser, setLoadingUser] = useState(true);
-    const [selectedStore, setSelectedStore] = useState<StoreType | null>(() => getFromLocalStorage('selectedStore', null));
-    const [selectedDevice, setSelectedDevice] = useState<PosDeviceType | null>(() => getFromLocalStorage('selectedDevice', null));
-    const [currency, setCurrency] = useState<string>(() => getFromLocalStorage('currency', '$'));
+    
+    const [selectedStore, setSelectedStore] = useLocalStorage<StoreType | null>('selectedStore', null);
+    const [selectedDevice, setSelectedDevice] = useLocalStorage<PosDeviceType | null>('selectedDevice', null);
+    const [currency, setCurrency] = useLocalStorage<string>('currency', '$');
+    
     const router = useRouter();
 
-
-    useEffect(() => { setInLocalStorage('featureSettings', featureSettings); }, [featureSettings]);
-    useEffect(() => { setInLocalStorage('stores', stores); }, [stores]);
-    useEffect(() => { setInLocalStorage('posDevices', posDevices); }, [posDevices]);
-    useEffect(() => { setInLocalStorage('printers', printers); }, [printers]);
-    useEffect(() => { setInLocalStorage('receiptSettings', receiptSettings); }, [receiptSettings]);
-    useEffect(() => { setInLocalStorage('paymentTypes', paymentTypes); }, [paymentTypes]);
-    useEffect(() => { setInLocalStorage('taxes', taxes); }, [taxes]);
-    useEffect(() => { setInLocalStorage('roles', roles); }, [roles]);
-    useEffect(() => { setInLocalStorage('selectedStore', selectedStore); }, [selectedStore]);
-    useEffect(() => { setInLocalStorage('selectedDevice', selectedDevice); }, [selectedDevice]);
-    useEffect(() => { setInLocalStorage('currency', currency); }, [currency]);
-
-
-    const fetchUser = useCallback(async () => {
-        if (!supabase) {
-            setLoadingUser(false);
-            return;
-        };
-        const { data: { session }} = await supabase.auth.getSession();
-        if (session?.user) {
-            const { data: userProfile } = await supabase.from('users').select('*').eq('id', session.user.id).single();
-            setLoggedInUser(userProfile as User);
-        } else {
-            setLoggedInUser(null);
-        }
+    useEffect(() => {
         setLoadingUser(false);
     }, []);
     
-    const fetchAllUsers = useCallback(async () => {
-        if (!supabase) return;
-        const { data } = await supabase.from('users').select('*');
-        setUsers(data as User[] || []);
-    }, []);
-
-    useEffect(() => {
-        fetchUser();
-        fetchAllUsers();
-        const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'SIGNED_IN' && session?.user) {
-                 fetchUser();
-                 fetchAllUsers();
-            }
-            if (event === 'SIGNED_OUT') {
-                setLoggedInUser(null);
-                setSelectedStore(null);
-                setSelectedDevice(null);
-                router.push('/sign-in');
-            }
-        });
-
-        return () => {
-            authListener.subscription.unsubscribe();
-        };
-    }, [fetchUser, fetchAllUsers, router]);
-
-
-    const logout = async () => {
-        if (!supabase) return;
-        await supabase.auth.signOut();
+    const logout = () => {
+        setLoggedInUser(null);
+        setSelectedStore(null);
+        setSelectedDevice(null);
+        router.push('/sign-in');
     };
-
 
     const value: SettingsContextType = {
         featureSettings, setFeatureSettings,
@@ -230,14 +213,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         paymentTypes, setPaymentTypes,
         taxes, setTaxes,
         roles, setRoles,
-        users,
+        users, setUsers,
+        products, setProducts,
+        categories, setCategories,
+        customers, setCustomers,
+        sales, setSales,
+        debts, setDebts,
+        reservations, setReservations,
         loggedInUser, setLoggedInUser,
         loadingUser,
-        getPermissionsForRole,
         logout,
         selectedStore, setSelectedStore,
         selectedDevice, setSelectedDevice,
         currency, setCurrency,
+        getPermissionsForRole: (role: UserRole) => getPermissionsForRole(role, roles),
     };
 
     return createElement(SettingsContext.Provider, { value }, children);

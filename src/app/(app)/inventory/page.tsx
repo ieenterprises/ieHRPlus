@@ -42,16 +42,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Trash2, Edit, Download } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Product, type Category } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import Papa from "papaparse";
-import { addProduct, updateProduct, deleteProduct, addCategory, updateCategory, deleteCategory } from "@/app/actions/inventory";
-import { supabase } from "@/lib/supabase";
 import { useSettings } from "@/hooks/use-settings";
 
 
@@ -68,8 +64,11 @@ const EMPTY_CATEGORY: Partial<Category> = {
 };
 
 export default function InventoryPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { 
+    products, setProducts, 
+    categories, setCategories, 
+    currency 
+  } = useSettings();
   const [loading, setLoading] = useState(true);
 
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
@@ -78,38 +77,12 @@ export default function InventoryPage() {
 
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
-
-  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
-  const [importFile, setImportFile] = useState<File | null>(null);
-  
-  const [isStockUpdateDialogOpen, setIsStockUpdateDialogOpen] = useState(false);
-  const [stockUpdateFile, setStockUpdateFile] = useState<File | null>(null);
   
   const { toast } = useToast();
-  const { currency } = useSettings();
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!supabase) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      const [productsRes, categoriesRes] = await Promise.all([
-        supabase.from('products').select('*').order('created_at', { ascending: false }),
-        supabase.from('categories').select('*').order('name', { ascending: true })
-      ]);
-
-      if (productsRes.error) toast({ title: "Error fetching products", description: productsRes.error.message, variant: "destructive" });
-      else setProducts(productsRes.data || []);
-
-      if (categoriesRes.error) toast({ title: "Error fetching categories", description: categoriesRes.error.message, variant: "destructive" });
-      else setCategories(categoriesRes.data || []);
-      
-      setLoading(false);
-    };
-    fetchData();
-  }, [toast]);
+    setLoading(false);
+  }, []);
 
   const getCategoryName = (categoryId: string | null) => {
     if (!categoryId) return "N/A";
@@ -131,7 +104,6 @@ export default function InventoryPage() {
   
   const handleDeleteProduct = async (productId: string) => {
     try {
-      await deleteProduct(productId);
       setProducts(products.filter(p => p.id !== productId));
       toast({ title: "Product Deleted", description: "The product has been removed from inventory." });
     } catch (error: any) {
@@ -168,15 +140,15 @@ export default function InventoryPage() {
       price: parseFloat(formData.get("price") as string),
       stock: parseInt(formData.get("stock") as string, 10),
       image_url: imagePreview || EMPTY_PRODUCT.image_url!,
+      status: editingProduct.status || 'Available',
     };
     
     try {
       if ('id' in editingProduct && editingProduct.id) {
-        await updateProduct(editingProduct.id, productData);
         setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...productData } as Product : p));
         toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
       } else {
-        const newProduct = await addProduct(productData);
+        const newProduct = { ...productData, id: `prod_${new Date().getTime()}`, created_at: new Date().toISOString() };
         setProducts([newProduct, ...products]);
         toast({ title: "Product Added", description: `${productData.name} has been added to inventory.` });
       }
@@ -207,7 +179,6 @@ export default function InventoryPage() {
       return;
     }
     try {
-      await deleteCategory(categoryId);
       setCategories(categories.filter((c) => c.id !== categoryId));
       toast({ title: "Category Deleted" });
     } catch (error: any) {
@@ -232,11 +203,10 @@ export default function InventoryPage() {
 
     try {
       if ('id' in editingCategory && editingCategory.id) {
-        await updateCategory(editingCategory.id, categoryData);
         setCategories(categories.map((c) => c.id === editingCategory.id ? ({ ...c, ...categoryData } as Category) : c));
         toast({ title: "Category Updated" });
       } else {
-        const newCategory = await addCategory(categoryData);
+        const newCategory = { ...categoryData, id: `cat_${new Date().getTime()}`, created_at: new Date().toISOString() };
         setCategories([...categories, newCategory]);
         toast({ title: "Category Added" });
       }
@@ -245,8 +215,6 @@ export default function InventoryPage() {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
-
-  // ... (Bulk action handlers can be implemented later if needed)
 
   return (
     <div className="space-y-8">

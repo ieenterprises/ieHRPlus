@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { PageHeader } from "@/components/page-header";
@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type Sale, type Product, type Category, type User, type OpenTicket } from "@/lib/types";
+import { type Sale } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -43,7 +43,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePos } from "@/hooks/use-pos";
-import { supabase } from "@/lib/supabase";
+import { useSettings } from "@/hooks/use-settings";
 import { useReactToPrint } from "react-to-print";
 import { PrintableReceipt } from "@/components/printable-receipt";
 
@@ -62,13 +62,9 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function KitchenPage() {
-  const [sales, setSales] = useState<Sale[]>([]);
+  const { sales, products, categories, users } = useSettings();
   const { openTickets } = usePos();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-
   const { toast } = useToast();
   
   const [filters, setFilters] = useState({
@@ -108,33 +104,8 @@ export default function KitchenPage() {
   }
   
   useEffect(() => {
-    const fetchData = async () => {
-        if (!supabase) return;
-        setLoading(true);
-
-        const [salesRes, productsRes, categoriesRes, usersRes] = await Promise.all([
-            supabase.from('sales').select('*, customers(name), users(name)').order('created_at', { ascending: false }),
-            supabase.from('products').select('*'),
-            supabase.from('categories').select('*'),
-            supabase.from('users').select('*'),
-        ]);
-
-        if (salesRes.error) toast({ title: "Error fetching sales", description: salesRes.error.message, variant: "destructive" });
-        else setSales((salesRes.data as Sale[]) || []);
-        
-        if (productsRes.error) toast({ title: "Error fetching products", description: productsRes.error.message, variant: "destructive" });
-        else setProducts(productsRes.data || []);
-        
-        if (categoriesRes.error) toast({ title: "Error fetching categories", description: categoriesRes.error.message, variant: "destructive" });
-        else setCategories(categoriesRes.data || []);
-
-        if (usersRes.error) toast({ title: "Error fetching users", description: usersRes.error.message, variant: "destructive" });
-        else setUsers(usersRes.data || []);
-        
-        setLoading(false);
-    }
-    fetchData();
-  }, [toast]);
+    setLoading(false);
+  }, []);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -156,80 +127,81 @@ export default function KitchenPage() {
     return Array.from(categoryIds).map(id =>
         categories.find(c => c.id === id)?.name || 'Unknown'
     );
-};
+  };
 
-  const filteredReceipts = sales.filter((sale) => {
-    if (sale.status !== 'Fulfilled') return false;
+  const filteredReceipts = useMemo(() => {
+    return sales.filter((sale) => {
+      if (sale.status !== 'Fulfilled') return false;
 
-    const searchTermLower = filters.searchTerm.toLowerCase();
-    
-    const searchMatch =
-      filters.searchTerm === "" ||
-      sale.order_number.toString().includes(searchTermLower) ||
-      (sale.customers?.name ?? 'Walk-in').toLowerCase().includes(searchTermLower) ||
-      (sale.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
-      sale.items.some((item) => item.name.toLowerCase().includes(searchTermLower));
-    
-    const saleCategories = getSaleCategoryNames(sale.items);
-    const categoryMatch = filters.category === "all" || saleCategories.some(catName => getCategoryFromId(categories.find(c=>c.name === filters.category)?.id ?? "")?.name === catName);
-    
-    const paymentMatch =
-      filters.paymentMethod === "all" ||
-      sale.payment_methods.some(pm => pm === filters.paymentMethod);
+      const searchTermLower = filters.searchTerm.toLowerCase();
+      
+      const searchMatch =
+        filters.searchTerm === "" ||
+        sale.order_number.toString().includes(searchTermLower) ||
+        (sale.customers?.name ?? 'Walk-in').toLowerCase().includes(searchTermLower) ||
+        (sale.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
+        sale.items.some((item) => item.name.toLowerCase().includes(searchTermLower));
+      
+      const saleCategories = getSaleCategoryNames(sale.items);
+      const categoryMatch = filters.category === "all" || saleCategories.includes(filters.category);
+      
+      const paymentMatch =
+        filters.paymentMethod === "all" ||
+        sale.payment_methods.some(pm => pm === filters.paymentMethod);
 
-    const employeeMatch = filters.employee === "all" || sale.users?.name === filters.employee;
-    
-    const dateMatch =
-      !dateRange?.from ||
-      (new Date(sale.created_at!) >= dateRange.from &&
-        (!dateRange.to || new Date(sale.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
+      const employeeMatch = filters.employee === "all" || sale.users?.name === filters.employee;
+      
+      const dateMatch =
+        !dateRange?.from ||
+        (new Date(sale.created_at!) >= dateRange.from &&
+          (!dateRange.to || new Date(sale.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
 
-    const minAmount = parseFloat(filters.minAmount);
-    const maxAmount = parseFloat(filters.maxAmount);
+      const minAmount = parseFloat(filters.minAmount);
+      const maxAmount = parseFloat(filters.maxAmount);
 
-    const itemsForAmountCheck =
-      filters.category === "all"
-        ? sale.items
-        : sale.items.filter((item) => {
-            const product = products.find((p) => p.id === item.id);
-            if (!product) return false;
-            const category = getCategoryFromId(product.category_id!);
-            const filterCategory = categories.find(c => c.name === filters.category);
-            return category?.id === filterCategory?.id;
+      const itemsForAmountCheck =
+        filters.category === "all"
+          ? sale.items
+          : sale.items.filter((item) => {
+              const product = products.find((p) => p.id === item.id);
+              if (!product) return false;
+              const category = getCategoryFromId(product.category_id!);
+              const filterCategory = categories.find(c => c.name === filters.category);
+              return category?.id === filterCategory?.id;
+            });
+      
+      const totalForAmountCheck = itemsForAmountCheck.reduce((acc, item) => {
+          const product = products.find((p) => p.id === item.id);
+          return acc + (product ? product.price * item.quantity : 0);
+      }, 0);
+
+      const amountMatch =
+        (isNaN(minAmount) || totalForAmountCheck >= minAmount) &&
+        (isNaN(maxAmount) || totalForAmountCheck <= maxAmount);
+
+      return searchMatch && categoryMatch && paymentMatch && dateMatch && amountMatch && employeeMatch;
+    }).map(sale => {
+        const displayItems = filters.category === 'all'
+          ? sale.items
+          : sale.items.filter(item => {
+              const product = products.find(p => p.id === item.id);
+              if (!product) return false;
+              const category = getCategoryFromId(product.category_id!);
+              return category?.name === filters.category;
           });
-    
-    const totalForAmountCheck = itemsForAmountCheck.reduce((acc, item) => {
-        const product = products.find((p) => p.id === item.id);
-        return acc + (product ? product.price * item.quantity : 0);
-    }, 0);
 
-    const amountMatch =
-      (isNaN(minAmount) || totalForAmountCheck >= minAmount) &&
-      (isNaN(maxAmount) || totalForAmountCheck <= maxAmount);
+      const displayTotal = displayItems.reduce((acc, item) => {
+          const product = products.find(p => p.id === item.id);
+          return acc + (product ? product.price * item.quantity : 0);
+      }, 0);
 
-    return searchMatch && categoryMatch && paymentMatch && dateMatch && amountMatch && employeeMatch;
-  }).map(sale => {
-      const displayItems = filters.category === 'all'
-        ? sale.items
-        : sale.items.filter(item => {
-            const product = products.find(p => p.id === item.id);
-            if (!product) return false;
-            const category = getCategoryFromId(product.category_id!);
-            const filterCategory = categories.find(c => c.name === filters.category);
-            return category?.id === filterCategory?.id;
-        });
-
-    const displayTotal = displayItems.reduce((acc, item) => {
-        const product = products.find(p => p.id === item.id);
-        return acc + (product ? product.price * item.quantity : 0);
-    }, 0);
-
-    return {
-        ...sale,
-        displayItems,
-        displayTotal,
-    };
-  });
+      return {
+          ...sale,
+          displayItems,
+          displayTotal,
+      };
+    });
+  }, [sales, filters, dateRange, products, categories]);
 
   return (
     <div className="space-y-8">

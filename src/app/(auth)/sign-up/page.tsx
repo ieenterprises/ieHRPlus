@@ -15,46 +15,32 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { useSettings } from "@/hooks/use-settings";
 import { posPermissions, backOfficePermissions } from "@/lib/permissions";
 
 export default function SignUpPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { setUsers, roles, getPermissionsForRole } = useSettings();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-     if (!supabase) {
-        toast({ title: "Database not connected", description: "Please configure Supabase.", variant: "destructive" });
-        return;
-    }
 
     const formData = new FormData(event.currentTarget);
     const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
     const ownerName = formData.get("owner_name") as string;
 
-    const { data: { user }, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-            data: {
-                name: ownerName,
-                role: 'Owner',
-                permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)],
-                avatar_url: `https://placehold.co/100x100.png?text=${ownerName.charAt(0)}`,
-            }
-        }
-    });
-
-    if (error) {
-        toast({
-            title: "Error creating account",
-            description: error.message,
-            variant: "destructive",
-        });
-        return;
-    }
+    const newUser = {
+      id: `user_${new Date().getTime()}`,
+      name: ownerName,
+      email: email,
+      role: 'Owner' as const,
+      avatar_url: `https://placehold.co/100x100.png?text=${ownerName.charAt(0)}`,
+      permissions: getPermissionsForRole('Owner'),
+      created_at: new Date().toISOString(),
+    };
+    
+    setUsers(prev => [...prev, newUser]);
     
     toast({
         title: "Account Created",
@@ -79,7 +65,7 @@ export default function SignUpPage() {
             <Input id="business-name" name="business_name" placeholder="Acme Inc." required />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="owner-name">Owner&apos;s Name</Label>
+            <Label htmlFor="owner-name">Owner's Name</Label>
             <Input id="owner-name" name="owner_name" placeholder="John Doe" required />
           </div>
           <div className="grid gap-2">

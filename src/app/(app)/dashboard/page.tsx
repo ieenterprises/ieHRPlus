@@ -3,7 +3,7 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, Utensils, Users, BarChart } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, BarChart } from "lucide-react";
 import {
   Bar,
   BarChart as RechartsBarChart,
@@ -14,13 +14,12 @@ import {
 } from "recharts";
 import { useState, useEffect } from "react";
 import { subMonths, format } from "date-fns";
-import { supabase } from "@/lib/supabase";
-import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
 
 type MonthlySales = { name: string; total: number };
 
 export default function DashboardPage() {
+  const { sales, users, currency } = useSettings();
   const [salesData, setSalesData] = useState<MonthlySales[]>([]);
   const [stats, setStats] = useState({
     totalRevenue: 0,
@@ -29,64 +28,38 @@ export default function DashboardPage() {
     activeStaff: 0,
   });
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
-  const { currency } = useSettings();
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-        if (!supabase) return;
-        setLoading(true);
+    setLoading(true);
 
-        // Fetch sales data for the chart (last 12 months)
-        const twelveMonthsAgo = subMonths(new Date(), 12);
-        const { data: monthlySalesData, error: salesError } = await supabase
-            .from('sales')
-            .select('created_at, total')
-            .gte('created_at', twelveMonthsAgo.toISOString());
-        
-        if (salesError) {
-            toast({ title: "Error fetching sales data", description: salesError.message, variant: "destructive" });
-        } else {
-            const monthlyTotals = monthlySalesData.reduce((acc, sale) => {
-                const month = format(new Date(sale.created_at!), 'MMM');
-                acc[month] = (acc[month] || 0) + sale.total;
-                return acc;
-            }, {} as Record<string, number>);
+    const monthlyTotals = sales.reduce((acc, sale) => {
+        const month = format(new Date(sale.created_at!), 'MMM');
+        acc[month] = (acc[month] || 0) + sale.total;
+        return acc;
+    }, {} as Record<string, number>);
 
-            const chartData: MonthlySales[] = Array.from({ length: 12 }, (_, i) => {
-                const d = subMonths(new Date(), i);
-                return format(d, 'MMM');
-            }).reverse().map(monthName => ({
-                name: monthName,
-                total: monthlyTotals[monthName] || 0,
-            }));
-            setSalesData(chartData);
-        }
+    const chartData: MonthlySales[] = Array.from({ length: 12 }, (_, i) => {
+        const d = subMonths(new Date(), i);
+        return format(d, 'MMM');
+    }).reverse().map(monthName => ({
+        name: monthName,
+        total: monthlyTotals[monthName] || 0,
+    }));
+    setSalesData(chartData);
 
-        // Fetch stats
-        const { data: sales, error: totalSalesError } = await supabase.from('sales').select('total, created_at');
-        const { count: userCount, error: userCountError } = await supabase.from('users').select('*', { count: 'exact', head: true });
-
-        if (totalSalesError || userCountError) {
-            toast({ title: "Error fetching stats", description: totalSalesError?.message || userCountError?.message, variant: "destructive" });
-        } else {
-            const today = new Date().toISOString().slice(0, 10);
-            const totalRevenue = sales.reduce((acc, s) => acc + s.total, 0);
-            const ordersToday = sales.filter(s => s.created_at!.slice(0, 10) === today).length;
-            
-            setStats({
-                totalRevenue: totalRevenue,
-                ordersToday: ordersToday,
-                totalSales: sales.length,
-                activeStaff: userCount || 0
-            });
-        }
-        
-        setLoading(false);
-    };
-
-    fetchDashboardData();
-  }, [toast]);
+    const today = new Date().toISOString().slice(0, 10);
+    const totalRevenue = sales.reduce((acc, s) => acc + s.total, 0);
+    const ordersToday = sales.filter(s => s.created_at!.slice(0, 10) === today).length;
+    
+    setStats({
+        totalRevenue: totalRevenue,
+        ordersToday: ordersToday,
+        totalSales: sales.length,
+        activeStaff: users.length
+    });
+    
+    setLoading(false);
+  }, [sales, users]);
 
   if (loading) {
     return (
@@ -124,7 +97,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Orders Today</CardTitle>
-            <Utensils className="h-4 w-4 text-muted-foreground" />
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+{stats.ordersToday}</div>

@@ -34,7 +34,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, Download } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -48,10 +48,10 @@ import { DateRange } from "react-day-picker";
 import { useState, useEffect, useMemo } from "react";
 import { subDays, format, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
-import type { Sale, Product, Category, User, StoreType, PosDeviceType, PaymentType } from "@/lib/types";
+import type { Product, Category, User, StoreType, PosDeviceType, PaymentType } from "@/lib/types";
+import Papa from "papaparse";
 
 type ReportDataPoint = {
     name: string;
@@ -134,7 +134,7 @@ export default function ReportsPage() {
     to: new Date(),
   });
   
-  const { stores, posDevices, paymentTypes, users, currency } = useSettings();
+  const { stores, posDevices, paymentTypes, users, currency, sales, products, categories } = useSettings();
 
   const [filters, setFilters] = useState({
       storeId: 'all',
@@ -143,6 +143,7 @@ export default function ReportsPage() {
       paymentType: 'all',
   });
 
+  const [activeTab, setActiveTab] = useState("item");
   const [salesByItem, setSalesByItem] = useState<ReportDataPoint[]>([]);
   const [salesByCategory, setSalesByCategory] = useState<ReportDataPoint[]>([]);
   const [salesByEmployee, setSalesByEmployee] = useState<ReportDataPoint[]>([]);
@@ -161,50 +162,23 @@ export default function ReportsPage() {
   }, [filters.storeId]);
 
   useEffect(() => {
-    const fetchReportData = async () => {
-      if (!supabase || !date?.from) return;
       setLoading(true);
+      if (!date?.from) return;
 
-      const fromDate = startOfDay(date.from).toISOString();
-      const toDate = date.to ? endOfDay(date.to).toISOString() : endOfDay(new Date()).toISOString();
+      const fromDate = startOfDay(date.from);
+      const toDate = date.to ? endOfDay(date.to) : endOfDay(new Date());
 
-      let query = supabase
-        .from('sales')
-        .select('*, users(name), items, pos_devices(store_id)')
-        .gte('created_at', fromDate)
-        .lte('created_at', toDate);
-
-      if (filters.employeeId !== 'all') {
-        query = query.eq('employee_id', filters.employeeId);
-      }
-      if (filters.deviceId !== 'all') {
-        query = query.eq('pos_device_id', filters.deviceId);
-      } else if (filters.storeId !== 'all') {
-          const deviceIds = availableDevices.map(d => d.id);
-          query = query.in('pos_device_id', deviceIds);
-      }
-      if (filters.paymentType !== 'all') {
-          query = query.contains('payment_methods', [filters.paymentType]);
-      }
-
-      const { data: sales, error: salesError } = await query;
-
-      if (salesError) {
-        toast({ title: "Error fetching sales data", description: salesError.message, variant: "destructive" });
-        setLoading(false);
-        return;
-      }
+      let filteredSales = sales.filter(sale => {
+          const saleDate = new Date(sale.created_at!);
+          let match = saleDate >= fromDate && saleDate <= toDate;
+          if (filters.employeeId !== 'all') match &&= sale.employee_id === filters.employeeId;
+          // Note: In a real DB, we'd join to get store_id from pos_device_id. Here we mock it.
+          // This filter part for store/device is non-functional in demo mode without modifying sale data structure.
+          if (filters.paymentType !== 'all') match &&= sale.payment_methods.includes(filters.paymentType);
+          return match;
+      });
       
-      const { data: products, error: productsError } = await supabase.from('products').select('id, category_id');
-      const { data: categories, error: categoriesError } = await supabase.from('categories').select('id, name');
-
-      if (productsError || categoriesError) {
-        toast({ title: "Error fetching product/category data", description: productsError?.message || categoriesError?.message, variant: "destructive" });
-        setLoading(false);
-        return;
-      }
-      
-      const itemSales = sales.reduce((acc, sale) => {
+      const itemSales = filteredSales.reduce((acc, sale) => {
         (sale.items as any[]).forEach(item => {
             acc[item.name] = acc[item.name] || { name: item.name, sales: 0, quantity: 0, transactions: 0 };
             acc[item.name].sales += item.price * item.quantity;
@@ -215,7 +189,7 @@ export default function ReportsPage() {
       }, {} as Record<string, ReportDataPoint>);
       setSalesByItem(Object.values(itemSales).sort((a, b) => b.sales - a.sales));
       
-      const categorySales = sales.reduce((acc, sale) => {
+      const categorySales = filteredSales.reduce((acc, sale) => {
         (sale.items as any[]).forEach(item => {
           const product = products.find(p => p.id === item.id);
           if (product) {
@@ -232,8 +206,8 @@ export default function ReportsPage() {
       }, {} as Record<string, ReportDataPoint>);
       setSalesByCategory(Object.values(categorySales).sort((a, b) => b.sales - a.sales));
 
-      const employeeSales = sales.reduce((acc, sale) => {
-        const employeeName = (sale as any).users?.name || 'N/A';
+      const employeeSales = filteredSales.reduce((acc, sale) => {
+        const employeeName = users.find(u => u.id === sale.employee_id)?.name || 'N/A';
         acc[employeeName] = acc[employeeName] || { name: employeeName, sales: 0, quantity: 0, transactions: 0 };
         acc[employeeName].sales += sale.total;
         acc[employeeName].quantity += (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
@@ -242,7 +216,7 @@ export default function ReportsPage() {
       }, {} as Record<string, ReportDataPoint>);
       setSalesByEmployee(Object.values(employeeSales).sort((a, b) => b.sales - a.sales));
 
-      const paymentSales = sales.reduce((acc, sale) => {
+      const paymentSales = filteredSales.reduce((acc, sale) => {
         (sale.payment_methods as any[]).forEach(method => {
             acc[method] = acc[method] || { name: method, sales: 0, quantity: 0, transactions: 0};
             acc[method].sales += sale.total; // Imperfect for split payments
@@ -254,14 +228,40 @@ export default function ReportsPage() {
       setSalesByPayment(Object.values(paymentSales).sort((a, b) => b.sales - a.sales));
 
       setLoading(false);
-    };
-
-    fetchReportData();
-  }, [date, toast, filters, availableDevices]);
+  }, [date, filters, sales, products, categories, users]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
+
+  const handleExport = () => {
+    let dataToExport: any[] = [];
+    let reportName = activeTab;
+
+    switch(activeTab) {
+      case 'item': dataToExport = salesByItem; break;
+      case 'category': dataToExport = salesByCategory; break;
+      case 'employee': dataToExport = salesByEmployee; break;
+      case 'payment': dataToExport = salesByPayment; break;
+    }
+
+    const csv = Papa.unparse(dataToExport.map(d => ({
+        Name: d.name,
+        "Net Sales": d.sales.toFixed(2),
+        "Items Sold": d.quantity,
+        Transactions: d.transactions,
+    })));
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${reportName}_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete", description: "Report has been downloaded." });
+  }
 
 
   return (
@@ -271,42 +271,45 @@ export default function ReportsPage() {
           title="Sales Reports"
           description="Analyze your sales performance with detailed filters."
         />
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              id="date"
-              variant={"outline"}
-              className={cn(
-                "w-full sm:w-[300px] justify-start text-left font-normal",
-                !date && "text-muted-foreground"
-              )}
-            >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {date?.from ? (
-                date.to ? (
-                  <>
-                    {format(date.from, "LLL dd, y")} -{" "}
-                    {format(date.to, "LLL dd, y")}
-                  </>
+        <div className="flex gap-2 w-full sm:w-auto">
+            <Popover>
+            <PopoverTrigger asChild>
+                <Button
+                id="date"
+                variant={"outline"}
+                className={cn(
+                    "w-full sm:w-[300px] justify-start text-left font-normal",
+                    !date && "text-muted-foreground"
+                )}
+                >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {date?.from ? (
+                    date.to ? (
+                    <>
+                        {format(date.from, "LLL dd, y")} -{" "}
+                        {format(date.to, "LLL dd, y")}
+                    </>
+                    ) : (
+                    format(date.from, "LLL dd, y")
+                    )
                 ) : (
-                  format(date.from, "LLL dd, y")
-                )
-              ) : (
-                <span>Pick a date</span>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
-            <Calendar
-              initialFocus
-              mode="range"
-              defaultMonth={date?.from}
-              selected={date}
-              onSelect={setDate}
-              numberOfMonths={2}
-            />
-          </PopoverContent>
-        </Popover>
+                    <span>Pick a date</span>
+                )}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={date?.from}
+                selected={date}
+                onSelect={setDate}
+                numberOfMonths={2}
+                />
+            </PopoverContent>
+            </Popover>
+            <Button onClick={handleExport} variant="outline"><Download className="h-4 w-4"/></Button>
+        </div>
       </div>
 
     <Card>
@@ -345,7 +348,7 @@ export default function ReportsPage() {
         </CardContent>
     </Card>
 
-      <Tabs defaultValue="item">
+      <Tabs defaultValue="item" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="item">By Item</TabsTrigger>
           <TabsTrigger value="category">By Category</TabsTrigger>

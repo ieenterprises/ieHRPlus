@@ -39,8 +39,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { addCustomer, updateCustomer, deleteCustomer } from "@/app/actions/customers";
-import { supabase } from "@/lib/supabase";
+import { useSettings } from "@/hooks/use-settings";
 
 const EMPTY_CUSTOMER: Partial<Customer> = {
   name: "",
@@ -49,26 +48,15 @@ const EMPTY_CUSTOMER: Partial<Customer> = {
 };
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const { customers, setCustomers, debts } = useSettings();
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Partial<Customer> | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchCustomers = async () => {
-      if (!supabase) return;
-      setLoading(true);
-      const { data, error } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
-      if (error) {
-        toast({ title: "Error fetching customers", description: error.message, variant: "destructive" });
-      } else {
-        setCustomers(data || []);
-      }
-      setLoading(false);
-    };
-    fetchCustomers();
-  }, [toast]);
+    setLoading(false);
+  }, []);
 
   const handleOpenDialog = (customer: Partial<Customer> | null) => {
     setEditingCustomer(customer ? { ...customer } : EMPTY_CUSTOMER);
@@ -95,11 +83,10 @@ export default function CustomersPage() {
 
     try {
       if ('id' in editingCustomer && editingCustomer.id) {
-        await updateCustomer(editingCustomer.id, customerData);
         setCustomers(customers.map(c => c.id === editingCustomer.id ? { ...c, ...customerData } as Customer : c));
         toast({ title: "Customer Updated", description: `${customerData.name}'s details have been updated.` });
       } else {
-        const newCustomer = await addCustomer(customerData);
+        const newCustomer = { ...customerData, id: `cust_${new Date().getTime()}`, created_at: new Date().toISOString() };
         setCustomers([newCustomer, ...customers]);
         toast({ title: "Customer Added", description: `${customerData.name} has been added.` });
       }
@@ -110,8 +97,11 @@ export default function CustomersPage() {
   };
 
   const handleDeleteCustomer = async (customerId: string) => {
+     if (debts.some(d => d.customer_id === customerId && d.status === 'Unpaid')) {
+        toast({ title: "Cannot Delete Customer", description: "This customer has outstanding debts.", variant: "destructive" });
+        return;
+      }
     try {
-      await deleteCustomer(customerId);
       setCustomers(customers.filter(c => c.id !== customerId));
       toast({
         title: "Customer Deleted",
