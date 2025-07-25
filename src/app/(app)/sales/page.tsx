@@ -896,10 +896,11 @@ export default function SalesPage() {
         </Dialog>
          <Dialog open={isAuthPinDialogOpen} onOpenChange={setIsAuthPinDialogOpen}>
             <form onSubmit={handlePinAuthSubmit}>
+            <DialogContent>
               <DialogHeader>
                   <DialogTitle>Manager Authorization Required</DialogTitle>
                   <DialogDescription>
-                      Enter a Manager's PIN to delete this open ticket. (Hint: demo PIN is {MANAGER_PIN})
+                      Enter a Manager's PIN to delete this open ticket.
                   </DialogDescription>
               </DialogHeader>
               <div className="py-4">
@@ -916,6 +917,7 @@ export default function SalesPage() {
                   <Button type="button" variant="outline" onClick={() => setIsAuthPinDialogOpen(false)}>Cancel</Button>
                   <Button type="submit">Authorize</Button>
               </DialogFooter>
+              </DialogContent>
             </form>
         </Dialog>
     </TooltipProvider>
