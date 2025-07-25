@@ -61,6 +61,7 @@ const EMPTY_USER: Partial<User> = {
   role: "Cashier",
   avatar_url: "https://placehold.co/100x100.png",
   permissions: [],
+  pin: "",
 };
 
 const EMPTY_ROLE: Partial<Role> = {
@@ -131,6 +132,7 @@ export default function TeamPage() {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       role: formData.get("role") as UserRole,
+      pin: formData.get("pin") as string,
       permissions: selectedUserPermissions,
       avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
     };
@@ -377,6 +379,10 @@ export default function TeamPage() {
                     <div className="space-y-2">
                         <Label htmlFor="password">Password</Label>
                         <Input id="password" name="password" type="password" placeholder={editingUser?.id ? "Leave blank to keep current password" : "Required for new user"} required={!editingUser?.id} />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="pin">4-Digit PIN</Label>
+                        <Input id="pin" name="pin" type="text" pattern="\d{4}" maxLength={4} placeholder="e.g., 1234" defaultValue={editingUser?.pin || ""} required />
                     </div>
                     <div className="space-y-2"><Label htmlFor="role">Role</Label>
                         <Select name="role" required defaultValue={editingUser?.role} onValueChange={handleUserRoleChange}>

@@ -65,7 +65,6 @@ type OrderItem = {
 };
 
 const SENIOR_ROLES: UserRole[] = ["Owner", "Administrator", "Manager"];
-const MANAGER_PIN = "1234"; // Demo PIN
 
 function ProductCard({
   product,
@@ -114,6 +113,7 @@ export default function SalesPage() {
     featureSettings, 
     paymentTypes: configuredPaymentTypes,
     loggedInUser,
+    users,
     selectedDevice,
     currency,
     products,
@@ -494,7 +494,10 @@ export default function SalesPage() {
 
   const handlePinAuthSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pinValue === MANAGER_PIN) {
+    const seniorUsers = users.filter(u => SENIOR_ROLES.includes(u.role as UserRole));
+    const isValidPin = seniorUsers.some(u => u.pin === pinValue);
+    
+    if (isValidPin) {
       if (ticketToDelete) {
         handleDeleteTicket(ticketToDelete);
       }
