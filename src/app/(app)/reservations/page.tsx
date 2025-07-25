@@ -57,7 +57,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { type Reservation, type Product } from "@/lib/types";
+import { type Reservation, type Product, type Category } from "@/lib/types";
 import { addReservation, updateReservationStatus } from "@/app/actions/reservations";
 import { updateRoomStatus } from "@/app/actions/inventory";
 import { supabase } from "@/lib/supabase";
@@ -80,7 +80,7 @@ function RoomStatusCard({
     Maintenance: { icon: Wrench, color: "text-yellow-500", bg: "bg-yellow-50" },
   };
 
-  const currentStatus = room.status as RoomStatus;
+  const currentStatus = (room.status as RoomStatus) || 'Available';
   const config = statusConfig[currentStatus] || statusConfig.Available;
   const Icon = config.icon;
 
@@ -117,7 +117,7 @@ function RoomStatusCard({
 export default function ReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [rooms, setRooms] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -146,22 +146,30 @@ export default function ReservationsPage() {
       setReservations(reservationsRes.data || []);
     }
   
-    const roomCategory = categoriesRes.data?.find(c => c.name === 'Room');
     if (productsRes.error) {
        toast({ title: "Error fetching room data", description: productsRes.error.message, variant: "destructive" });
-    } else if (roomCategory) {
-      setRooms(productsRes.data?.filter(p => p.category_id === roomCategory.id) || []);
-    } else {
-      setRooms([]);
+    }
+    
+    if (categoriesRes.error) {
+      toast({ title: "Error fetching category data", description: categoriesRes.error.message, variant: "destructive" });
     }
 
-    if (categoriesRes.data) setCategories(categoriesRes.data);
+    if (categoriesRes.data && productsRes.data) {
+      setCategories(categoriesRes.data);
+      const roomCategory = categoriesRes.data.find(c => c.name === 'Room');
+      if (roomCategory) {
+        setRooms(productsRes.data.filter(p => p.category_id === roomCategory.id));
+      } else {
+        setRooms([]);
+      }
+    }
     
     setLoading(false);
   };
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAddReservation = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -258,7 +266,7 @@ export default function ReservationsPage() {
   const calculateTotal = (reservation: Reservation) => {
     if (!reservation.products?.price) return 0;
     const nights = differenceInDays(new Date(reservation.check_out), new Date(reservation.check_in));
-    return nights * reservation.products.price;
+    return nights > 0 ? nights * reservation.products.price : reservation.products.price;
   };
 
   return (
