@@ -58,9 +58,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { usePos } from "@/hooks/use-pos";
 import { useSettings } from "@/hooks/use-settings";
-import { supabase } from "@/lib/supabase";
-import { addSale, updateProductStock } from "@/app/actions/sales";
-import { addReservation } from "@/app/actions/reservations";
 
 type OrderItem = {
   product: Product;
@@ -116,13 +113,17 @@ export default function SalesPage() {
     loggedInUser,
     selectedDevice,
     currency,
+    products,
+    setProducts,
+    categories,
+    customers,
+    setSales,
+    setDebts,
+    setReservations,
   } = useSettings();
   const { openTickets, saveTicket, deleteTicket } = usePos();
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   
   const [loading, setLoading] = useState(true);
 
@@ -143,26 +144,19 @@ export default function SalesPage() {
 
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!supabase) return;
-      setLoading(true);
-      const [productsRes, categoriesRes, customersRes] = await Promise.all([
-        supabase.from('products').select('*'),
-        supabase.from('categories').select('*'),
-        supabase.from('customers').select('*')
-      ]);
+    const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
+    if (walkIn) setSelectedCustomerId(walkIn.id);
+    setLoading(false);
+  }, [customers]);
 
-      if (productsRes.data) setProducts(productsRes.data);
-      if (categoriesRes.data) setCategories(categoriesRes.data);
-      if (customersRes.data) {
-        setCustomers(customersRes.data);
-        const walkIn = customersRes.data.find(c => c.name.toLowerCase() === 'walk-in customer');
-        if (walkIn) setSelectedCustomerId(walkIn.id);
-      }
-      setLoading(false);
-    };
-    fetchData();
-  }, []);
+  const addReservation = (reservationData: Omit<Omit<import("/Users/user/Downloads/work/studio-f3/studio-f3/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; }) => {
+     setReservations(prev => [...prev, {
+        id: `res_${new Date().getTime()}`,
+        created_at: new Date().toISOString(),
+        products: products.find(p => p.id === reservationData.product_id) || null,
+        ...reservationData
+     }]);
+  };
 
   const handleConfirmBooking = async (status: 'Confirmed' | 'Checked-in') => {
     const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
@@ -181,15 +175,13 @@ export default function SalesPage() {
         };
 
         if (status === 'Checked-in') {
-            await Promise.all([
-                handleCompleteSale(true),
-                addReservation(reservationData),
-            ]);
+            handleCompleteSale(true);
+            addReservation(reservationData);
         } else {
-             await addReservation(reservationData);
+             addReservation(reservationData);
         }
         
-        if (activeTicketId) await deleteTicket(activeTicketId, true);
+        if (activeTicketId) await deleteTicket(activeTicketId);
 
         setIsReservationPaymentDialogOpen(false);
         setGuestName("");
@@ -348,32 +340,52 @@ export default function SalesPage() {
             price: item.product.price,
         }));
 
-        const saleData = {
+        const newSale = {
+            id: `sale_${new Date().getTime()}`,
+            order_number: Math.floor(Math.random() * 100000),
+            created_at: new Date().toISOString(),
             items: saleItems,
             total: total,
             payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
             customer_id: creditInfo ? creditInfo.customerId : selectedCustomerId,
             employee_id: loggedInUser?.id || null,
             pos_device_id: selectedDevice?.id || null,
-            status: 'Fulfilled' as const
+            status: 'Fulfilled' as const,
+            customers: customers.find(c => c.id === (creditInfo ? creditInfo.customerId : selectedCustomerId)) || null,
+            users: { name: loggedInUser?.name || null },
+            pos_devices: selectedDevice ? { store_id: selectedDevice.store_id } : null,
         };
 
-        await addSale(saleData, creditInfo);
+        setSales(prev => [...prev, newSale]);
         
-        if (activeTicketId && !isRoomCheckout) await deleteTicket(activeTicketId, true);
+        if (creditInfo) {
+            const newDebt = {
+              id: `debt_${new Date().getTime()}`,
+              sale_id: newSale.id,
+              customer_id: creditInfo.customerId,
+              amount: creditInfo.amount,
+              status: "Unpaid",
+              created_at: new Date().toISOString(),
+              sales: { order_number: newSale.order_number },
+              customers: { name: customers.find(c => c.id === creditInfo.customerId)?.name || null },
+            };
+            setDebts(prev => [...prev, newDebt]);
+        }
+        
+        if (activeTicketId && !isRoomCheckout) await deleteTicket(activeTicketId);
 
         const stockUpdates = orderItems
             .filter(item => getCategoryName(item.product.category_id) !== 'Room')
             .map(item => ({ id: item.product.id, stock: item.product.stock - item.quantity }));
         
-        if(stockUpdates.length > 0) await updateProductStock(stockUpdates);
-        
-        setProducts(prevProducts =>
-            prevProducts.map(p => {
-                const update = stockUpdates.find(u => u.id === p.id);
-                return update ? { ...p, stock: update.stock } : p;
-            })
-        );
+        if(stockUpdates.length > 0) {
+            setProducts(prevProducts =>
+                prevProducts.map(p => {
+                    const update = stockUpdates.find(u => u.id === p.id);
+                    return update ? { ...p, stock: update.stock } : p;
+                })
+            );
+        }
         
         if (!isRoomCheckout) {
             let toastDescription = `Order complete. Total: ${currency}${total.toFixed(2)}.`;

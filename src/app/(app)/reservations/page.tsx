@@ -58,9 +58,6 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { type Reservation, type Product, type Category } from "@/lib/types";
-import { addReservation, updateReservationStatus } from "@/app/actions/reservations";
-import { updateRoomStatus } from "@/app/actions/inventory";
-import { supabase } from "@/lib/supabase";
 import { useSettings } from "@/hooks/use-settings";
 
 type RoomStatus = 'Available' | 'Occupied' | 'Maintenance';
@@ -115,9 +112,12 @@ function RoomStatusCard({
 }
 
 export default function ReservationsPage() {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [rooms, setRooms] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { 
+    reservations, setReservations, 
+    products, setProducts,
+    categories,
+    currency 
+  } = useSettings();
   const [loading, setLoading] = useState(true);
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -125,52 +125,28 @@ export default function ReservationsPage() {
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
 
   const { toast } = useToast();
-  const { currency } = useSettings();
 
   const [guestName, setGuestName] = useState("");
   const [roomId, setRoomId] = useState<string>("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-
-  const fetchData = async () => {
-    if (!supabase) return;
-    setLoading(true);
-    const [reservationsRes, productsRes, categoriesRes] = await Promise.all([
-      supabase.from('reservations').select('*, products(name, price)').order('check_in', { ascending: false }),
-      supabase.from('products').select('*, categories(name)').order('name', { ascending: true }),
-      supabase.from('categories').select('*'),
-    ]);
   
-    if (reservationsRes.error) {
-      toast({ title: "Error fetching reservations", description: reservationsRes.error.message, variant: "destructive" });
-    } else {
-      setReservations(reservationsRes.data || []);
-    }
-  
-    if (productsRes.error) {
-       toast({ title: "Error fetching room data", description: productsRes.error.message, variant: "destructive" });
-    }
-    
-    if (categoriesRes.error) {
-      toast({ title: "Error fetching category data", description: categoriesRes.error.message, variant: "destructive" });
-    }
-
-    if (categoriesRes.data && productsRes.data) {
-      setCategories(categoriesRes.data);
-      const roomCategory = categoriesRes.data.find(c => c.name === 'Room');
-      if (roomCategory) {
-        setRooms(productsRes.data.filter(p => p.category_id === roomCategory.id));
-      } else {
-        setRooms([]);
-      }
-    }
-    
-    setLoading(false);
-  };
+  const rooms = products.filter(p => {
+    const category = categories.find(c => c.id === p.category_id);
+    return category?.name === 'Room';
+  });
 
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setLoading(false);
   }, []);
+
+  const addReservation = (reservationData: Omit<Omit<import("/Users/user/Downloads/work/studio-f3/studio-f3/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; }) => {
+     setReservations(prev => [...prev, {
+        id: `res_${new Date().getTime()}`,
+        created_at: new Date().toISOString(),
+        products: products.find(p => p.id === reservationData.product_id) || null,
+        ...reservationData
+     }]);
+  };
 
   const handleAddReservation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -192,7 +168,7 @@ export default function ReservationsPage() {
     };
 
     try {
-      await addReservation(newReservationData);
+      addReservation(newReservationData);
       
       setIsAddDialogOpen(false);
       setGuestName("");
@@ -203,7 +179,6 @@ export default function ReservationsPage() {
         title: "Reservation Created",
         description: `Booking for ${guestName} has been confirmed.`,
       });
-      fetchData(); // Refresh all data
     } catch (error: any) {
       toast({
         title: "Error creating reservation",
@@ -215,9 +190,8 @@ export default function ReservationsPage() {
   
   const handleStatusChange = async (roomId: string, status: RoomStatus) => {
     try {
-        await updateRoomStatus(roomId, status);
-        setRooms(prevRooms => 
-            prevRooms.map(room => room.id === roomId ? { ...room, status } : room)
+        setProducts(prevProducts => 
+            prevProducts.map(room => room.id === roomId ? { ...room, status } : room)
         );
         toast({ title: "Room Status Updated" });
     } catch (error: any) {
@@ -238,8 +212,19 @@ export default function ReservationsPage() {
     const newStatus = formData.get("status") as Reservation['status'];
 
     try {
-        await updateReservationStatus(editingReservation.id, editingReservation.product_id, newStatus);
-        fetchData();
+        setReservations(prev => prev.map(res => 
+            res.id === editingReservation.id ? { ...res, status: newStatus } : res
+        ));
+        
+        let roomStatus: RoomStatus | null = null;
+        if (newStatus === 'Checked-in') roomStatus = 'Occupied';
+        if (newStatus === 'Checked-out') roomStatus = 'Available';
+        // Note: 'Maintenance' must be set manually from the room status card
+        
+        if (roomStatus) {
+            handleStatusChange(editingReservation.product_id, roomStatus);
+        }
+
         setIsEditDialogOpen(false);
         setEditingReservation(null);
         toast({ title: "Reservation Updated", description: `Booking for ${editingReservation.guest_name} is now ${newStatus}.`});
@@ -261,7 +246,10 @@ export default function ReservationsPage() {
     }
   };
 
-  const getCategoryName = (categoryId: string) => categories.find(c => c.id === categoryId)?.name || 'N/A';
+  const getCategoryName = (categoryId: string | null) => {
+    if(!categoryId) return 'N/A';
+    return categories.find(c => c.id === categoryId)?.name || 'N/A';
+  }
   
   const calculateTotal = (reservation: Reservation) => {
     if (!reservation.products?.price) return 0;
@@ -309,7 +297,7 @@ export default function ReservationsPage() {
                     <SelectContent>
                       {rooms.filter(r => r.status === 'Available').map((room) => (
                         <SelectItem key={room.id} value={room.id}>
-                          {room.name} ({currency}{room.price}/night)
+                          {room.name} ({currency}{room.price.toFixed(2)}/night)
                         </SelectItem>
                       ))}
                     </SelectContent>
