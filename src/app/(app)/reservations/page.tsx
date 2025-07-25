@@ -4,8 +4,9 @@
 
 import { useState, useEffect } from "react";
 import { format, differenceInDays } from "date-fns";
-import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit } from "lucide-react";
+import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download } from "lucide-react";
 import { type DateRange } from "react-day-picker";
+import Papa from "papaparse";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -259,6 +260,29 @@ export default function ReservationsPage() {
     return nights > 0 ? nights * reservation.products.price : reservation.products.price;
   };
 
+  const handleExport = () => {
+    const dataToExport = reservations.map(r => ({
+      "Guest Name": r.guest_name,
+      "Room": r.products?.name,
+      "Check-in": format(new Date(r.check_in), "yyyy-MM-dd"),
+      "Check-out": format(new Date(r.check_out), "yyyy-MM-dd"),
+      "Total": calculateTotal(r).toFixed(2),
+      "Status": r.status,
+    }));
+
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `bookings_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete", description: "Bookings report has been downloaded." });
+  };
+
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -266,92 +290,98 @@ export default function ReservationsPage() {
           title="Reservations"
           description="Manage room bookings and availability."
         />
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              New Reservation
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <form onSubmit={handleAddReservation}>
-              <DialogHeader>
-                <DialogTitle>New Reservation</DialogTitle>
-                <DialogDescription>
-                  Fill in the details to book a room for a guest.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="guestName" className="text-right">
-                    Guest Name
-                  </Label>
-                  <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} className="col-span-3" required />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="room" className="text-right">
-                    Room
-                  </Label>
-                  <Select onValueChange={setRoomId} value={roomId} required>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select a room" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rooms.filter(r => r.status === 'Available').map((room) => (
-                        <SelectItem key={room.id} value={room.id}>
-                          {room.name} ({currency}{room.price.toFixed(2)}/night)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">Dates</Label>
-                  <div className="col-span-3">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !dateRange && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateRange?.from ? (
-                            dateRange.to ? (
-                              <>
-                                {format(dateRange.from, "LLL dd, y")} -{" "}
-                                {format(dateRange.to, "LLL dd, y")}
-                              </>
+        <div className="flex items-center gap-2">
+           <Button onClick={handleExport} variant="outline">
+              <Download className="mr-2 h-4 w-4" />
+              Export to CSV
+           </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                New Reservation
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <form onSubmit={handleAddReservation}>
+                <DialogHeader>
+                  <DialogTitle>New Reservation</DialogTitle>
+                  <DialogDescription>
+                    Fill in the details to book a room for a guest.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="guestName" className="text-right">
+                      Guest Name
+                    </Label>
+                    <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} className="col-span-3" required />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="room" className="text-right">
+                      Room
+                    </Label>
+                    <Select onValueChange={setRoomId} value={roomId} required>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select a room" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {rooms.filter(r => r.status === 'Available').map((room) => (
+                          <SelectItem key={room.id} value={room.id}>
+                            {room.name} ({currency}{room.price.toFixed(2)}/night)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right">Dates</Label>
+                    <div className="col-span-3">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !dateRange && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateRange?.from ? (
+                              dateRange.to ? (
+                                <>
+                                  {format(dateRange.from, "LLL dd, y")} -{" "}
+                                  {format(dateRange.to, "LLL dd, y")}
+                                </>
+                              ) : (
+                                format(dateRange.from, "LLL dd, y")
+                              )
                             ) : (
-                              format(dateRange.from, "LLL dd, y")
-                            )
-                          ) : (
-                            <span>Pick check-in and check-out dates</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          initialFocus
-                          mode="range"
-                          defaultMonth={dateRange?.from}
-                          selected={dateRange}
-                          onSelect={setDateRange}
-                          numberOfMonths={1}
-                        />
-                      </PopoverContent>
-                    </Popover>
+                              <span>Pick check-in and check-out dates</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={dateRange?.from}
+                            selected={dateRange}
+                            onSelect={setDateRange}
+                            numberOfMonths={1}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit">Confirm Reservation</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter>
+                  <Button type="submit">Confirm Reservation</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
       
       <div className="space-y-4">
