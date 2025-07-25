@@ -57,7 +57,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { type Reservation, type Product } from "@/lib/types";
-import { addReservation } from "@/app/actions/reservations";
+import { addReservation, updateReservationStatus } from "@/app/actions/reservations";
 import { updateRoomStatus } from "@/app/actions/inventory";
 import { supabase } from "@/lib/supabase";
 import { useSettings } from "@/hooks/use-settings";
@@ -118,7 +118,11 @@ export default function ReservationsPage() {
   const [rooms, setRooms] = useState<Product[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
+
   const { toast } = useToast();
   const { currency } = useSettings();
 
@@ -181,7 +185,7 @@ export default function ReservationsPage() {
     try {
       await addReservation(newReservationData);
       
-      setIsDialogOpen(false);
+      setIsAddDialogOpen(false);
       setGuestName("");
       setRoomId("");
       setDateRange(undefined);
@@ -212,6 +216,29 @@ export default function ReservationsPage() {
     }
   };
 
+  const handleEditReservation = (reservation: Reservation) => {
+    setEditingReservation(reservation);
+    setIsEditDialogOpen(true);
+  }
+
+  const handleUpdateReservation = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingReservation) return;
+
+    const formData = new FormData(event.currentTarget);
+    const newStatus = formData.get("status") as Reservation['status'];
+
+    try {
+        await updateReservationStatus(editingReservation.id, newStatus);
+        fetchData();
+        setIsEditDialogOpen(false);
+        setEditingReservation(null);
+        toast({ title: "Reservation Updated", description: `Booking for ${editingReservation.guest_name} is now ${newStatus}.`});
+    } catch (error: any) {
+        toast({ title: "Error updating reservation", description: error.message, variant: "destructive" });
+    }
+  }
+
   const getStatusVariant = (status: Reservation['status']) => {
     switch (status) {
       case 'Checked-in':
@@ -240,7 +267,7 @@ export default function ReservationsPage() {
           title="Reservations"
           description="Manage room bookings and availability."
         />
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <PlusCircle className="mr-2 h-4 w-4" />
@@ -391,7 +418,7 @@ export default function ReservationsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditReservation(reservation)}>
                             <Edit className="h-4 w-4" />
                         </Button>
                     </TableCell>
@@ -408,6 +435,38 @@ export default function ReservationsPage() {
           </Table>
         </CardContent>
       </Card>
+
+       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <form onSubmit={handleUpdateReservation}>
+                <DialogHeader>
+                    <DialogTitle>Update Reservation Status</DialogTitle>
+                    <DialogDescription>
+                        Update the status for the booking by {editingReservation?.guest_name}.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="status">Booking Status</Label>
+                        <Select name="status" defaultValue={editingReservation?.status}>
+                            <SelectTrigger id="status">
+                                <SelectValue placeholder="Select a status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Confirmed">Confirmed</SelectItem>
+                                <SelectItem value="Checked-in">Checked-in</SelectItem>
+                                <SelectItem value="Checked-out">Checked-out</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+                    <Button type="submit">Save Changes</Button>
+                </DialogFooter>
+            </form>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }

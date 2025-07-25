@@ -32,3 +32,17 @@ export async function addReservation(reservationData: NewReservationData) {
     revalidatePath('/sales');
     return data;
 }
+
+export async function updateReservationStatus(id: string, status: 'Confirmed' | 'Checked-in' | 'Checked-out') {
+    checkSupabase();
+    const { data, error } = await supabase
+        .from('reservations')
+        .update({ status })
+        .eq('id', id);
+
+    if (error) {
+        throw new Error(error.message);
+    }
+    revalidatePath('/reservations');
+    return data;
+}
