@@ -475,9 +475,7 @@ export default function SalesPage() {
 
   const handleDeleteTicketRequest = (ticketId: string) => {
     if (loggedInUser && SENIOR_ROLES.includes(loggedInUser.role as UserRole)) {
-      if (window.confirm("Are you sure you want to permanently delete this saved order?")) {
-        handleDeleteTicket(ticketId);
-      }
+      handleDeleteTicket(ticketId);
     } else {
       setTicketToDelete(ticketId);
       setIsAuthPinDialogOpen(true);
@@ -897,31 +895,31 @@ export default function SalesPage() {
             </DialogContent>
         </Dialog>
          <Dialog open={isAuthPinDialogOpen} onOpenChange={setIsAuthPinDialogOpen}>
-            <DialogContent className="sm:max-w-sm">
-                <form onSubmit={handlePinAuthSubmit}>
-                    <DialogHeader>
-                        <DialogTitle>Manager Authorization Required</DialogTitle>
-                        <DialogDescription>
-                            Enter a Manager's PIN to delete this open ticket. (Hint: demo PIN is {MANAGER_PIN})
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                        <Label htmlFor="manager-pin">Manager PIN</Label>
-                        <Input
-                            id="manager-pin"
-                            type="password"
-                            value={pinValue}
-                            onChange={(e) => setPinValue(e.target.value)}
-                            required
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsAuthPinDialogOpen(false)}>Cancel</Button>
-                        <Button type="submit">Authorize</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
+            <form onSubmit={handlePinAuthSubmit}>
+                <DialogHeader>
+                    <DialogTitle>Manager Authorization Required</DialogTitle>
+                    <DialogDescription>
+                        Enter a Manager's PIN to delete this open ticket. (Hint: demo PIN is {MANAGER_PIN})
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="manager-pin">Manager PIN</Label>
+                    <Input
+                        id="manager-pin"
+                        type="password"
+                        value={pinValue}
+                        onChange={(e) => setPinValue(e.target.value)}
+                        required
+                    />
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsAuthPinDialogOpen(false)}>Cancel</Button>
+                    <Button type="submit">Authorize</Button>
+                </DialogFooter>
+            </form>
         </Dialog>
     </TooltipProvider>
   );
 }
+
+    
