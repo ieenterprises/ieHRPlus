@@ -450,7 +450,7 @@ export default function ReservationsPage() {
                                 <SelectValue placeholder="Select a status" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="Confirmed">Confirmed</SelectItem>
+                                <SelectItem value="Maintenance">Maintenance</SelectItem>
                                 <SelectItem value="Checked-in">Checked-in</SelectItem>
                                 <SelectItem value="Checked-out">Checked-out</SelectItem>
                             </SelectContent>
