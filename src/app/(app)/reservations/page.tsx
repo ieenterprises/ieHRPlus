@@ -219,7 +219,7 @@ export default function ReservationsPage() {
         let roomStatus: RoomStatus | null = null;
         if (newStatus === 'Checked-in') roomStatus = 'Occupied';
         if (newStatus === 'Checked-out') roomStatus = 'Available';
-        // Note: 'Maintenance' must be set manually from the room status card
+        if (newStatus === 'Maintenance') roomStatus = 'Maintenance';
         
         if (roomStatus) {
             handleStatusChange(editingReservation.product_id, roomStatus);
@@ -241,6 +241,8 @@ export default function ReservationsPage() {
         return 'secondary';
       case 'Checked-out':
         return 'outline';
+      case 'Maintenance':
+        return 'destructive';
       default:
         return 'default';
     }
