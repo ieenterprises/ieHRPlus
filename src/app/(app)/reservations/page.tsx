@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -223,13 +224,13 @@ export default function ReservationsPage() {
 
   const handleUpdateReservation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!editingReservation) return;
+    if (!editingReservation || !editingReservation.product_id) return;
 
     const formData = new FormData(event.currentTarget);
     const newStatus = formData.get("status") as Reservation['status'];
 
     try {
-        await updateReservationStatus(editingReservation.id, newStatus);
+        await updateReservationStatus(editingReservation.id, editingReservation.product_id, newStatus);
         fetchData();
         setIsEditDialogOpen(false);
         setEditingReservation(null);
