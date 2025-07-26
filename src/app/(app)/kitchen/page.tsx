@@ -133,17 +133,18 @@ export default function KitchenPage() {
     // 2. Remove the sale
     setSales(prev => prev.filter(s => s.id !== receipt.id));
 
-    // 3. Restore stock
+    // 3. Restore stock for non-room items
+    const roomCategory = categories.find(c => c.name === 'Room');
     const stockUpdates = receipt.items.map(item => {
         const product = products.find(p => p.id === item.id);
-        if (!product || getCategoryName(product.category_id) === 'Room') return null;
+        if (!product || product.category_id === roomCategory?.id) return null;
         return { id: item.id, newStock: product.stock + item.quantity };
-    }).filter(Boolean);
+    }).filter((item): item is { id: string; newStock: number; } => item !== null);
 
     if (stockUpdates.length > 0) {
         setProducts(prevProducts =>
             prevProducts.map(p => {
-                const update = stockUpdates.find(u => u!.id === p.id);
+                const update = stockUpdates.find(u => u.id === p.id);
                 return update ? { ...p, stock: update.newStock } : p;
             })
         );
@@ -248,8 +249,6 @@ export default function KitchenPage() {
       };
     });
   }, [sales, filters, dateRange, products, categories]);
-
-  const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
 
   return (
     <div className="space-y-8">
