@@ -121,6 +121,7 @@ export default function SalesPage() {
     setSales,
     setDebts,
     setReservations,
+    setVoidedLogs,
   } = useSettings();
   const { openTickets, saveTicket, deleteTicket } = usePos();
 
@@ -134,12 +135,6 @@ export default function SalesPage() {
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
   
-  const [isAuthPinDialogOpen, setIsAuthPinDialogOpen] = useState(false);
-  const [authAction, setAuthAction] = useState<'deleteTicket' | 'deleteItem' | null>(null);
-  const [pinValue, setPinValue] = useState('');
-  const [ticketToDelete, setTicketToDelete] = useState<string | null>(null);
-  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-
   const { toast } = useToast();
   
   const [guestName, setGuestName] = useState("");
@@ -267,14 +262,25 @@ export default function SalesPage() {
   };
 
   const handleRemoveItem = (productId: string) => {
-    // If it's a loaded ticket and user lacks permission, prompt for PIN
-    if (activeTicketId && !loggedInUser?.permissions.includes('VOID_SAVED_ITEMS')) {
-      setAuthAction('deleteItem');
-      setItemToDelete(productId);
-      setIsAuthPinDialogOpen(true);
-      return;
+    if (activeTicketId && loggedInUser) {
+        const itemToRemove = orderItems.find(item => item.product.id === productId);
+        if (itemToRemove) {
+            const newLog = {
+                id: `void_${new Date().getTime()}`,
+                type: 'item' as const,
+                voided_by_employee_id: loggedInUser.id,
+                created_at: new Date().toISOString(),
+                data: {
+                    item_name: itemToRemove.product.name,
+                    quantity: itemToRemove.quantity,
+                    price: itemToRemove.product.price,
+                    ticket_name: openTickets.find(t => t.id === activeTicketId)?.ticket_name,
+                },
+                users: { name: loggedInUser.name },
+            };
+            setVoidedLogs(prev => [...prev, newLog]);
+        }
     }
-    // Otherwise, remove directly
     setOrderItems((prevItems) =>
       prevItems.filter((item) => item.product.id !== productId)
     );
@@ -481,54 +487,33 @@ export default function SalesPage() {
     setIsTicketsDialogOpen(false);
   };
 
-  const handleDeleteTicketRequest = (ticketId: string) => {
-    if (loggedInUser?.permissions.includes('VOID_SAVED_ITEMS')) {
-      handleDeleteTicket(ticketId);
-    } else {
-      setAuthAction('deleteTicket');
-      setTicketToDelete(ticketId);
-      setIsAuthPinDialogOpen(true);
-    }
-  };
-
   const handleDeleteTicket = async (ticketId: string) => {
+    if (!loggedInUser) return;
+    const ticketToDelete = openTickets.find(t => t.id === ticketId);
+    if (!ticketToDelete) return;
     try {
+      const newLog = {
+          id: `void_${new Date().getTime()}`,
+          type: 'ticket' as const,
+          voided_by_employee_id: loggedInUser.id,
+          created_at: new Date().toISOString(),
+          data: {
+              ticket_name: ticketToDelete.ticket_name,
+              ticket_total: ticketToDelete.total,
+              customer_name: ticketToDelete.customers?.name
+          },
+          users: { name: loggedInUser.name },
+      };
+      setVoidedLogs(prev => [...prev, newLog]);
+
       await deleteTicket(ticketId);
       if (activeTicketId === ticketId) handleClearOrder();
-      toast({ title: "Ticket Deleted", variant: "destructive" });
+      toast({ title: "Ticket Voided", variant: "destructive" });
     } catch (error: any) {
       toast({ title: "Error Deleting Ticket", description: error.message, variant: "destructive" });
     }
   };
   
-  const resetAuthDialog = () => {
-    setIsAuthPinDialogOpen(false);
-    setPinValue('');
-    setTicketToDelete(null);
-    setItemToDelete(null);
-    setAuthAction(null);
-  };
-
-  const handlePinAuthSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const usersWithPermission = users.filter(u => u.permissions.includes('VOID_SAVED_ITEMS'));
-    const isValidPin = usersWithPermission.some(u => u.pin === pinValue);
-    
-    if (isValidPin) {
-      if (authAction === 'deleteTicket' && ticketToDelete) {
-        handleDeleteTicket(ticketToDelete);
-        toast({ title: "Ticket Deleted", description: "The open ticket has been deleted." });
-      } else if (authAction === 'deleteItem' && itemToDelete) {
-        setOrderItems((prevItems) => prevItems.filter((item) => item.product.id !== itemToDelete));
-        toast({ title: "Item Voided", description: "The item has been removed from the order." });
-      }
-      resetAuthDialog();
-    } else {
-      toast({ title: "Invalid PIN", description: "The PIN does not belong to an authorized user.", variant: "destructive" });
-      setPinValue('');
-    }
-  };
-
   const currentPaymentType = configuredPaymentTypes.find(p => p.name === splitPaymentMethod);
 
   return (
@@ -896,7 +881,7 @@ export default function SalesPage() {
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as any)}>Load</Button>
-                                                    <Button variant="destructive" size="sm" onClick={() => handleDeleteTicketRequest(ticket.id)}>
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDeleteTicket(ticket.id)}>
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </div>
@@ -915,32 +900,6 @@ export default function SalesPage() {
                     </ScrollArea>
                 </div>
             </DialogContent>
-        </Dialog>
-         <Dialog open={isAuthPinDialogOpen} onOpenChange={setIsAuthPinDialogOpen}>
-            <form onSubmit={handlePinAuthSubmit}>
-            <DialogContent>
-              <DialogHeader>
-                  <DialogTitle>Authorization Required</DialogTitle>
-                  <DialogDescription>
-                      Enter an authorized user's PIN to complete this action.
-                  </DialogDescription>
-              </DialogHeader>
-              <div className="py-4">
-                  <Label htmlFor="manager-pin">PIN</Label>
-                  <Input
-                      id="manager-pin"
-                      type="password"
-                      value={pinValue}
-                      onChange={(e) => setPinValue(e.target.value)}
-                      required
-                  />
-              </div>
-              <DialogFooter>
-                  <Button type="button" variant="outline" onClick={resetAuthDialog}>Cancel</Button>
-                  <Button type="submit">Authorize</Button>
-              </DialogFooter>
-              </DialogContent>
-            </form>
         </Dialog>
     </TooltipProvider>
   );

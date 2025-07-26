@@ -25,6 +25,7 @@ import {
   CalendarCheck,
   Package,
   BookUser,
+  Trash2,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
@@ -48,6 +49,7 @@ const navItems: NavItem[] = [
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES" },
   { href: "/customers", icon: BookUser, label: "Customers", permission: "MANAGE_CUSTOMERS" },
   { href: "/debts", icon: ReceiptText, label: "Debts", permission: "VIEW_ALL_RECEIPTS" },
+  { href: "/voided", icon: Trash2, label: "Voided", permission: "VIEW_SALES_REPORTS" },
 ];
 
 export function AppSidebar() {

@@ -75,6 +75,22 @@ export type Role = {
 
 export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier";
 
+export type VoidedLog = {
+  id: string;
+  type: 'ticket' | 'item';
+  voided_by_employee_id: string;
+  created_at: string;
+  data: {
+    ticket_name?: string;
+    item_name?: string;
+    quantity?: number;
+    price?: number;
+    ticket_total?: number;
+    customer_name?: string | null;
+  };
+  users: { name: string | null } | null;
+};
+
 
 // SUPABASE TYPE DEFINITIONS
 export type Json =

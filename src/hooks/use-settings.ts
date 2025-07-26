@@ -3,7 +3,7 @@
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect } from 'react';
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket } from '@/lib/types';
+import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 
@@ -111,6 +111,7 @@ type SettingsContextType = {
     sales: Sale[];
     debts: Debt[];
     reservations: Reservation[];
+    voidedLogs: VoidedLog[];
     
     // Data setters
     setFeatureSettings: React.Dispatch<React.SetStateAction<FeatureSettings>>;
@@ -128,6 +129,7 @@ type SettingsContextType = {
     setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
     setDebts: React.Dispatch<React.SetStateAction<Debt[]>>;
     setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
+    setVoidedLogs: React.Dispatch<React.SetStateAction<VoidedLog[]>>;
     
     // Auth and session state
     loggedInUser: User | null;
@@ -183,6 +185,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [sales, setSales] = useLocalStorage<Sale[]>('sales', MOCK_SALES);
     const [debts, setDebts] = useLocalStorage<Debt[]>('debts', MOCK_DEBTS);
     const [reservations, setReservations] = useLocalStorage<Reservation[]>('reservations', MOCK_RESERVATIONS);
+    const [voidedLogs, setVoidedLogs] = useLocalStorage<VoidedLog[]>('voidedLogs', []);
     
     const [loggedInUser, setLoggedInUser] = useLocalStorage<User | null>('loggedInUser', null);
     const [loadingUser, setLoadingUser] = useState(true);
@@ -220,6 +223,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         sales, setSales,
         debts, setDebts,
         reservations, setReservations,
+        voidedLogs, setVoidedLogs,
         loggedInUser, setLoggedInUser,
         loadingUser,
         logout,
