@@ -39,11 +39,46 @@ export default function VoidedPage() {
     setLoading(false);
   }, []);
 
+  const getBadgeVariant = (type: VoidedLog['type']) => {
+    switch (type) {
+        case 'ticket': return 'destructive';
+        case 'receipt': return 'destructive';
+        case 'item': return 'secondary';
+        default: return 'outline';
+    }
+  }
+
+  const getLogDetails = (log: VoidedLog) => {
+    switch (log.type) {
+        case 'ticket':
+            return `Ticket: ${log.data.ticket_name}`;
+        case 'item':
+            return `Item: ${log.data.item_name} (x${log.data.quantity}) from ticket ${log.data.ticket_name}`;
+        case 'receipt':
+            return `Receipt #${log.data.order_number}: ${log.data.items}`;
+        default:
+            return '';
+    }
+  }
+  
+  const getLogAmount = (log: VoidedLog) => {
+    switch (log.type) {
+        case 'ticket':
+            return log.data.ticket_total?.toFixed(2);
+        case 'item':
+            return (log.data.price! * log.data.quantity!).toFixed(2);
+        case 'receipt':
+            return log.data.receipt_total?.toFixed(2);
+        default:
+            return '0.00';
+    }
+  }
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="Voided Logs"
-        description="A log of all voided tickets and items."
+        description="A log of all voided tickets, items, and receipts."
       />
       <Card>
         <CardHeader>
@@ -78,21 +113,13 @@ export default function VoidedPage() {
                     </TableCell>
                     <TableCell>{log.users?.name || 'N/A'}</TableCell>
                     <TableCell>
-                      <Badge variant={log.type === 'ticket' ? 'destructive' : 'secondary'}>
-                        {log.type === 'ticket' ? 'Ticket Void' : 'Item Void'}
+                      <Badge variant={getBadgeVariant(log.type)}>
+                        {log.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      {log.type === 'ticket' 
-                        ? `Ticket: ${log.data.ticket_name}`
-                        : `Item: ${log.data.item_name} (x${log.data.quantity}) from ticket ${log.data.ticket_name}`
-                      }
-                    </TableCell>
+                    <TableCell>{getLogDetails(log)}</TableCell>
                     <TableCell className="text-right">
-                      {log.type === 'ticket'
-                        ? `${currency}${log.data.ticket_total?.toFixed(2)}`
-                        : `${currency}${(log.data.price! * log.data.quantity!).toFixed(2)}`
-                      }
+                      {currency}{getLogAmount(log)}
                     </TableCell>
                   </TableRow>
                 ))

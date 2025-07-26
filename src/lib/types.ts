@@ -4,7 +4,7 @@ import type { AnyPermission } from "./permissions";
 
 export type Category = Database['public']['Tables']['categories']['Row']
 export type Product = Database['public']['Tables']['products']['Row']
-export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions' | 'pin'> & {
+export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions'> & {
     permissions: AnyPermission[];
 }
 export type Customer = Database['public']['Tables']['customers']['Row']
@@ -76,7 +76,7 @@ export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier";
 
 export type VoidedLog = {
   id: string;
-  type: 'ticket' | 'item';
+  type: 'ticket' | 'item' | 'receipt';
   voided_by_employee_id: string;
   created_at: string;
   data: {
@@ -86,6 +86,11 @@ export type VoidedLog = {
     price?: number;
     ticket_total?: number;
     customer_name?: string | null;
+    // For receipt voids
+    receipt_id?: string;
+    order_number?: number;
+    receipt_total?: number;
+    items?: string;
   };
   users: { name: string | null } | null;
 };
@@ -428,7 +433,6 @@ export type Database = {
           name: string
           permissions: Json | null
           role: string
-          pin: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -438,7 +442,6 @@ export type Database = {
           name: string
           permissions?: Json | null
           role: string
-          pin?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -448,7 +451,6 @@ export type Database = {
           name?: string
           permissions?: Json | null
           role?: string
-          pin?: string | null
         }
         Relationships: [
           {

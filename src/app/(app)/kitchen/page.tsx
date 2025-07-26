@@ -24,7 +24,7 @@ import { type Sale } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar as CalendarIcon, Printer } from "lucide-react";
+import { Calendar as CalendarIcon, Printer, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -62,7 +62,7 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function KitchenPage() {
-  const { sales, products, categories, users } = useSettings();
+  const { sales, setSales, products, setProducts, categories, users, loggedInUser, setVoidedLogs } = useSettings();
   const { openTickets } = usePos();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -106,6 +106,52 @@ export default function KitchenPage() {
   useEffect(() => {
     setLoading(false);
   }, []);
+
+  const handleVoidReceipt = (receipt: Sale) => {
+    if (!loggedInUser) return;
+    if (!window.confirm(`Are you sure you want to void Receipt #${receipt.order_number}? This action cannot be undone.`)) {
+        return;
+    }
+
+    // 1. Log the voided receipt
+    const newLog = {
+        id: `void_${new Date().getTime()}`,
+        type: 'receipt' as const,
+        voided_by_employee_id: loggedInUser.id,
+        created_at: new Date().toISOString(),
+        data: {
+            receipt_id: receipt.id,
+            order_number: receipt.order_number,
+            receipt_total: receipt.total,
+            customer_name: receipt.customers?.name || 'Walk-in',
+            items: receipt.items.map(item => `${item.name} (x${item.quantity})`).join(', '),
+        },
+        users: { name: loggedInUser.name },
+    };
+    setVoidedLogs(prev => [...prev, newLog]);
+
+    // 2. Remove the sale
+    setSales(prev => prev.filter(s => s.id !== receipt.id));
+
+    // 3. Restore stock
+    const stockUpdates = receipt.items.map(item => {
+        const product = products.find(p => p.id === item.id);
+        if (!product || getCategoryName(product.category_id) === 'Room') return null;
+        return { id: item.id, newStock: product.stock + item.quantity };
+    }).filter(Boolean);
+
+    if (stockUpdates.length > 0) {
+        setProducts(prevProducts =>
+            prevProducts.map(p => {
+                const update = stockUpdates.find(u => u!.id === p.id);
+                return update ? { ...p, stock: update.newStock } : p;
+            })
+        );
+    }
+    
+    toast({ title: "Receipt Voided", description: `Receipt #${receipt.order_number} has been voided and removed from sales.`, variant: "destructive" });
+  };
+
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -202,6 +248,8 @@ export default function KitchenPage() {
       };
     });
   }, [sales, filters, dateRange, products, categories]);
+
+  const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
 
   return (
     <div className="space-y-8">
@@ -414,9 +462,16 @@ export default function KitchenPage() {
                             </div>
                             </TableCell>
                             <TableCell>
-                                <Button variant="outline" size="sm" onClick={() => onPrint(sale, 'receipt')}>
-                                <Printer className="mr-2 h-4 w-4" /> Print
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="sm" onClick={() => onPrint(sale, 'receipt')}>
+                                        <Printer className="mr-2 h-4 w-4" /> Print
+                                    </Button>
+                                    {loggedInUser?.permissions.includes('CANCEL_RECEIPTS') && (
+                                        <Button variant="destructive" size="sm" onClick={() => handleVoidReceipt(sale)}>
+                                            <Trash2 className="mr-2 h-4 w-4" /> Void
+                                        </Button>
+                                    )}
+                                </div>
                             </TableCell>
                         </TableRow>
                         )})
