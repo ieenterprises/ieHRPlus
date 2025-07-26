@@ -72,7 +72,7 @@ const EMPTY_ROLE: Partial<Role> = {
 const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermissions)[];
 const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
 
-const systemRoles = ["Owner", "Administrator"];
+const systemRoles = ["Owner"];
 
 export default function TeamPage() {
   const { users, setUsers, roles, setRoles, getPermissionsForRole } = useSettings();
@@ -237,7 +237,7 @@ export default function TeamPage() {
     }
   };
 
-  const isUserPermissionLocked = systemRoles.includes(editingUser?.role || "");
+  const isUserPermissionLocked = false;
   const isRoleNameLocked = systemRoles.includes(editingRole?.name || "");
 
   const renderPermissions = (
@@ -421,5 +421,3 @@ export default function TeamPage() {
     </div>
   );
 }
-
-    
