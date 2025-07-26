@@ -238,7 +238,7 @@ export default function TeamPage() {
   };
 
   const isUserPermissionLocked = systemRoles.includes(editingUser?.role || "");
-  const isRolePermissionLocked = systemRoles.includes(editingRole?.name || "");
+  const isRoleNameLocked = systemRoles.includes(editingRole?.name || "");
 
   const renderPermissions = (
     permissions: AnyPermission[], 
@@ -347,11 +347,9 @@ export default function TeamPage() {
                                     <TableCell><Badge variant={getRoleBadgeVariant(role.name as UserRole)}>{role.name}</Badge></TableCell>
                                     <TableCell>{role.permissions.length} permissions</TableCell>
                                     <TableCell className="text-right">
-                                       {!systemRoles.includes(role.name) && (
-                                            <>
-                                                <Button variant="ghost" size="icon" onClick={() => handleOpenRoleDialog(role)}><Edit className="h-4 w-4" /></Button>
-                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteRole(role.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                            </>
+                                        <Button variant="ghost" size="icon" onClick={() => handleOpenRoleDialog(role)}><Edit className="h-4 w-4" /></Button>
+                                        {!systemRoles.includes(role.name) && (
+                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteRole(role.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                         )}
                                     </TableCell>
                                 </TableRow>
@@ -382,7 +380,7 @@ export default function TeamPage() {
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="pin">4-Digit PIN</Label>
-                        <Input id="pin" name="pin" type="text" pattern="\d{4}" maxLength={4} placeholder="e.g., 1234" defaultValue={editingUser?.pin || ""} required />
+                        <Input id="pin" name="pin" type="text" pattern="\\d{4}" maxLength={4} placeholder="e.g., 1234" defaultValue={editingUser?.pin || ""} required />
                     </div>
                     <div className="space-y-2"><Label htmlFor="role">Role</Label>
                         <Select name="role" required defaultValue={editingUser?.role} onValueChange={handleUserRoleChange}>
@@ -409,11 +407,11 @@ export default function TeamPage() {
               </DialogHeader>
               <div className="grid md:grid-cols-2 gap-8 py-4">
                   <div className="space-y-4">
-                    <div className="space-y-2"><Label htmlFor="name">Role Name</Label><Input id="name" name="name" defaultValue={editingRole?.name} required disabled={isRolePermissionLocked} /></div>
+                    <div className="space-y-2"><Label htmlFor="name">Role Name</Label><Input id="name" name="name" defaultValue={editingRole?.name} required disabled={isRoleNameLocked} /></div>
                   </div>
                   <div className="space-y-4">
                       <h3 className="text-lg font-medium">Permissions</h3>
-                      {renderPermissions(selectedRolePermissions, handleRolePermissionToggle, isRolePermissionLocked)}
+                      {renderPermissions(selectedRolePermissions, handleRolePermissionToggle, false)}
                   </div>
               </div>
               <DialogFooter className="pt-4"><Button type="submit">Save Changes</Button></DialogFooter>
