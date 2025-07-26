@@ -64,8 +64,6 @@ type OrderItem = {
   quantity: number;
 };
 
-const SENIOR_ROLES: UserRole[] = ["Owner", "Administrator", "Manager"];
-
 function ProductCard({
   product,
   onAddToCart,
@@ -474,7 +472,7 @@ export default function SalesPage() {
   };
 
   const handleDeleteTicketRequest = (ticketId: string) => {
-    if (loggedInUser && SENIOR_ROLES.includes(loggedInUser.role as UserRole)) {
+    if (loggedInUser && loggedInUser.permissions.includes('VOID_SAVED_ITEMS')) {
       handleDeleteTicket(ticketId);
     } else {
       setTicketToDelete(ticketId);
@@ -494,8 +492,8 @@ export default function SalesPage() {
 
   const handlePinAuthSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const seniorUsers = users.filter(u => SENIOR_ROLES.includes(u.role as UserRole));
-    const isValidPin = seniorUsers.some(u => u.pin === pinValue);
+    const usersWithPermission = users.filter(u => u.permissions.includes('VOID_SAVED_ITEMS'));
+    const isValidPin = usersWithPermission.some(u => u.pin === pinValue);
     
     if (isValidPin) {
       if (ticketToDelete) {
@@ -505,7 +503,7 @@ export default function SalesPage() {
       setTicketToDelete(null);
       setPinValue('');
     } else {
-      toast({ title: "Invalid PIN", description: "The PIN you entered is incorrect.", variant: "destructive" });
+      toast({ title: "Invalid PIN", description: "The PIN does not belong to an authorized user.", variant: "destructive" });
       setPinValue('');
     }
   };
@@ -901,13 +899,13 @@ export default function SalesPage() {
             <form onSubmit={handlePinAuthSubmit}>
             <DialogContent>
               <DialogHeader>
-                  <DialogTitle>Manager Authorization Required</DialogTitle>
+                  <DialogTitle>Authorization Required</DialogTitle>
                   <DialogDescription>
-                      Enter a Manager's PIN to delete this open ticket.
+                      Enter an authorized user's PIN to delete this open ticket.
                   </DialogDescription>
               </DialogHeader>
               <div className="py-4">
-                  <Label htmlFor="manager-pin">Manager PIN</Label>
+                  <Label htmlFor="manager-pin">PIN</Label>
                   <Input
                       id="manager-pin"
                       type="password"
@@ -930,3 +928,4 @@ export default function SalesPage() {
     
 
     
+
