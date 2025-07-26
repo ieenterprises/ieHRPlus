@@ -267,12 +267,14 @@ export default function SalesPage() {
   };
 
   const handleRemoveItem = (productId: string) => {
+    // If it's a loaded ticket and user lacks permission, prompt for PIN
     if (activeTicketId && !loggedInUser?.permissions.includes('VOID_SAVED_ITEMS')) {
       setAuthAction('deleteItem');
       setItemToDelete(productId);
       setIsAuthPinDialogOpen(true);
       return;
     }
+    // Otherwise, remove directly
     setOrderItems((prevItems) =>
       prevItems.filter((item) => item.product.id !== productId)
     );
