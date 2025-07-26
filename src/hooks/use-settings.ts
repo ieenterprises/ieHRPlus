@@ -28,9 +28,9 @@ const MOCK_ROLES: Role[] = [
 ];
 
 const MOCK_USERS: User[] = [
-    { id: 'user_1', name: 'Ada Lovelace', email: 'owner@example.com', role: 'Owner', avatar_url: 'https://placehold.co/100x100.png?text=A', permissions: getPermissionsForRole('Owner', MOCK_ROLES), pin: '1111', created_at: new Date().toISOString() },
-    { id: 'user_2', name: 'Grace Hopper', email: 'manager@example.com', role: 'Manager', avatar_url: 'https://placehold.co/100x100.png?text=G', permissions: getPermissionsForRole('Manager', MOCK_ROLES), pin: '5678', created_at: new Date().toISOString() },
-    { id: 'user_3', name: 'Charles Babbage', email: 'cashier@example.com', role: 'Cashier', avatar_url: 'https://placehold.co/100x100.png?text=C', permissions: getPermissionsForRole('Cashier', MOCK_ROLES), pin: '0000', created_at: new Date().toISOString() },
+    { id: 'user_1', name: 'Ada Lovelace', email: 'owner@example.com', role: 'Owner', avatar_url: 'https://placehold.co/100x100.png?text=A', permissions: getPermissionsForRole('Owner', MOCK_ROLES), created_at: new Date().toISOString() },
+    { id: 'user_2', name: 'Grace Hopper', email: 'manager@example.com', role: 'Manager', avatar_url: 'https://placehold.co/100x100.png?text=G', permissions: getPermissionsForRole('Manager', MOCK_ROLES), created_at: new Date().toISOString() },
+    { id: 'user_3', name: 'Charles Babbage', email: 'cashier@example.com', role: 'Cashier', avatar_url: 'https://placehold.co/100x100.png?text=C', permissions: getPermissionsForRole('Cashier', MOCK_ROLES), created_at: new Date().toISOString() },
 ];
 
 const MOCK_CATEGORIES: Category[] = [
