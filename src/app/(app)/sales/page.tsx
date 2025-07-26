@@ -135,8 +135,10 @@ export default function SalesPage() {
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
   
   const [isAuthPinDialogOpen, setIsAuthPinDialogOpen] = useState(false);
-  const [ticketToDelete, setTicketToDelete] = useState<string | null>(null);
+  const [authAction, setAuthAction] = useState<'deleteTicket' | 'deleteItem' | null>(null);
   const [pinValue, setPinValue] = useState('');
+  const [ticketToDelete, setTicketToDelete] = useState<string | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   const { toast } = useToast();
   
@@ -265,6 +267,12 @@ export default function SalesPage() {
   };
 
   const handleRemoveItem = (productId: string) => {
+    if (activeTicketId && !loggedInUser?.permissions.includes('VOID_SAVED_ITEMS')) {
+      setAuthAction('deleteItem');
+      setItemToDelete(productId);
+      setIsAuthPinDialogOpen(true);
+      return;
+    }
     setOrderItems((prevItems) =>
       prevItems.filter((item) => item.product.id !== productId)
     );
@@ -472,9 +480,10 @@ export default function SalesPage() {
   };
 
   const handleDeleteTicketRequest = (ticketId: string) => {
-    if (loggedInUser && loggedInUser.permissions.includes('VOID_SAVED_ITEMS')) {
+    if (loggedInUser?.permissions.includes('VOID_SAVED_ITEMS')) {
       handleDeleteTicket(ticketId);
     } else {
+      setAuthAction('deleteTicket');
       setTicketToDelete(ticketId);
       setIsAuthPinDialogOpen(true);
     }
@@ -489,6 +498,14 @@ export default function SalesPage() {
       toast({ title: "Error Deleting Ticket", description: error.message, variant: "destructive" });
     }
   };
+  
+  const resetAuthDialog = () => {
+    setIsAuthPinDialogOpen(false);
+    setPinValue('');
+    setTicketToDelete(null);
+    setItemToDelete(null);
+    setAuthAction(null);
+  };
 
   const handlePinAuthSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -496,12 +513,14 @@ export default function SalesPage() {
     const isValidPin = usersWithPermission.some(u => u.pin === pinValue);
     
     if (isValidPin) {
-      if (ticketToDelete) {
+      if (authAction === 'deleteTicket' && ticketToDelete) {
         handleDeleteTicket(ticketToDelete);
+        toast({ title: "Ticket Deleted", description: "The open ticket has been deleted." });
+      } else if (authAction === 'deleteItem' && itemToDelete) {
+        setOrderItems((prevItems) => prevItems.filter((item) => item.product.id !== itemToDelete));
+        toast({ title: "Item Voided", description: "The item has been removed from the order." });
       }
-      setIsAuthPinDialogOpen(false);
-      setTicketToDelete(null);
-      setPinValue('');
+      resetAuthDialog();
     } else {
       toast({ title: "Invalid PIN", description: "The PIN does not belong to an authorized user.", variant: "destructive" });
       setPinValue('');
@@ -901,7 +920,7 @@ export default function SalesPage() {
               <DialogHeader>
                   <DialogTitle>Authorization Required</DialogTitle>
                   <DialogDescription>
-                      Enter an authorized user's PIN to delete this open ticket.
+                      Enter an authorized user's PIN to complete this action.
                   </DialogDescription>
               </DialogHeader>
               <div className="py-4">
@@ -915,7 +934,7 @@ export default function SalesPage() {
                   />
               </div>
               <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsAuthPinDialogOpen(false)}>Cancel</Button>
+                  <Button type="button" variant="outline" onClick={resetAuthDialog}>Cancel</Button>
                   <Button type="submit">Authorize</Button>
               </DialogFooter>
               </DialogContent>
@@ -924,8 +943,3 @@ export default function SalesPage() {
     </TooltipProvider>
   );
 }
-
-    
-
-    
-
