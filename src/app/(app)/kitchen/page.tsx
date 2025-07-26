@@ -136,10 +136,14 @@ export default function KitchenPage() {
     // 3. Restore stock for non-room items
     const roomCategory = categories.find(c => c.name === 'Room');
     const stockUpdates = receipt.items.map(item => {
-        const product = products.find(p => p.id === item.id);
-        if (!product || product.category_id === roomCategory?.id) return null;
-        return { id: item.id, newStock: product.stock + item.quantity };
+      const product = products.find(p => p.id === item.id);
+      if (!product) return null; // Product no longer exists
+      // Do not restore stock for rooms
+      if (roomCategory && product.category_id === roomCategory.id) return null;
+      
+      return { id: item.id, newStock: product.stock + item.quantity };
     }).filter((item): item is { id: string; newStock: number; } => item !== null);
+
 
     if (stockUpdates.length > 0) {
         setProducts(prevProducts =>
