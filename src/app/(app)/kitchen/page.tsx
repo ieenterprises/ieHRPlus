@@ -24,7 +24,7 @@ import { type Sale, type OpenTicket } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar as CalendarIcon, Printer } from "lucide-react";
+import { Calendar as CalendarIcon, Printer, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -202,6 +202,44 @@ export default function KitchenPage() {
       };
     });
   }, [sales, filters, dateRange, products, categories]);
+  
+  const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
+
+  const handleMoveReceiptToVoid = (saleId: string) => {
+    const saleToVoid = sales.find(s => s.id === saleId);
+    if (!saleToVoid) return;
+
+    setVoidedLogs(prev => [...prev, {
+        id: `void_${new Date().getTime()}`,
+        type: 'receipt',
+        voided_by_employee_id: loggedInUser?.id || 'unknown',
+        created_at: new Date().toISOString(),
+        data: saleToVoid,
+        users: null,
+    }]);
+
+    setSales(prev => prev.filter(s => s.id !== saleId));
+
+    toast({ title: "Receipt Moved", description: `Receipt #${saleToVoid.order_number} has been moved to the voided logs.` });
+  };
+  
+  const handleMoveTicketToVoid = (ticketId: string) => {
+    const ticketToVoid = openTickets.find(t => t.id === ticketId);
+    if (!ticketToVoid) return;
+
+    setVoidedLogs(prev => [...prev, {
+        id: `void_${new Date().getTime()}`,
+        type: 'ticket',
+        voided_by_employee_id: loggedInUser?.id || 'unknown',
+        created_at: new Date().toISOString(),
+        data: ticketToVoid,
+        users: null,
+    }]);
+
+    deleteTicket(ticketId);
+
+    toast({ title: "Ticket Moved", description: `Ticket "${ticketToVoid.ticket_name}" has been moved to the voided logs.` });
+  }
 
   return (
     <div className="space-y-8">
@@ -257,6 +295,11 @@ export default function KitchenPage() {
                                             <Button variant="outline" size="sm" onClick={() => onPrint(ticket, 'ticket')}>
                                               <Printer className="mr-2 h-4 w-4" /> Print
                                             </Button>
+                                             {hasPermission('CANCEL_RECEIPTS') && (
+                                                <Button variant="destructive" size="sm" onClick={() => handleMoveTicketToVoid(ticket.id)}>
+                                                    <Trash2 className="mr-2 h-4 w-4" /> Move to Void
+                                                </Button>
+                                            )}
                                           </div>
                                         </TableCell>
                                     </TableRow>
@@ -420,6 +463,11 @@ export default function KitchenPage() {
                                     <Button variant="outline" size="sm" onClick={() => onPrint(sale, 'receipt')}>
                                         <Printer className="mr-2 h-4 w-4" /> Print
                                     </Button>
+                                    {hasPermission('CANCEL_RECEIPTS') && (
+                                        <Button variant="destructive" size="sm" onClick={() => handleMoveReceiptToVoid(sale.id)}>
+                                            Move to Void
+                                        </Button>
+                                    )}
                                 </div>
                             </TableCell>
                         </TableRow>
