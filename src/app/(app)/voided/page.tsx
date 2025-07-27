@@ -122,7 +122,7 @@ export default function VoidedPage() {
   }, [enrichedLogs, filters, dateRange, products, categories]);
 
   const filteredVoidedTickets = useMemo(() => {
-    return enrichedLogs.filter((log): log is VoidedLog & { type: 'ticket' } => log.type === 'ticket');
+    return enrichedLogs.filter((log): log is VoidedLog & { type: 'ticket', data: any } => log.type === 'ticket');
   }, [enrichedLogs]);
 
   useEffect(() => {
@@ -216,29 +216,33 @@ export default function VoidedPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Date Voided</TableHead>
                                 <TableHead>Ticket Name</TableHead>
-                                <TableHead>Customer</TableHead>
-                                <TableHead>Voided By</TableHead>
+                                <TableHead>Employee</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Items</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                            {loading ? (
-                                <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
                             ) : filteredVoidedTickets.length > 0 ? (
                                 filteredVoidedTickets.map(log => (
                                     <TableRow key={log.id}>
-                                        <TableCell>{format(new Date(log.created_at!), 'LLL dd, y HH:mm')}</TableCell>
                                         <TableCell className="font-medium">{log.data.ticket_name}</TableCell>
-                                        <TableCell>{log.data.customers?.name || 'N/A'}</TableCell>
-                                        <TableCell>{log.users?.name ?? 'N/A'}</TableCell>
-                                        <TableCell className="text-right">{currency}{log.data.total?.toFixed(2)}</TableCell>
+                                        <TableCell>{log.data.users?.name ?? 'N/A'}</TableCell>
+                                        <TableCell>{format(new Date(log.data.created_at!), 'LLL dd, y HH:mm')}</TableCell>
+                                        <TableCell>{(log.data.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
+                                        <TableCell className="text-right">{currency}{log.data.total.toFixed(2)}</TableCell>
+                                        <TableCell className="text-right">
+                                            <span className="text-muted-foreground text-xs">Voided by: {log.users?.name || 'N/A'}</span>
+                                        </TableCell>
                                     </TableRow>
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                                    <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
                                         No voided tickets found.
                                     </TableCell>
                                 </TableRow>
@@ -387,3 +391,5 @@ export default function VoidedPage() {
     </div>
   );
 }
+
+    
