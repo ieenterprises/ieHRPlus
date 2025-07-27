@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Download } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -38,6 +38,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -59,7 +70,7 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function VoidedPage() {
-  const { voidedLogs, currency, users, products, categories } = useSettings();
+  const { voidedLogs, setVoidedLogs, currency, users, products, categories } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -70,6 +81,7 @@ export default function VoidedPage() {
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [activeTab, setActiveTab] = useState("receipts");
+  const [logToDelete, setLogToDelete] = useState<string | null>(null);
 
   const enrichedLogs = useMemo(() => {
     return voidedLogs.map(log => {
@@ -133,6 +145,16 @@ export default function VoidedPage() {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
+  const handleDeleteVoidedLog = (logId: string) => {
+    setVoidedLogs(prev => prev.filter(log => log.id !== logId));
+    toast({
+      title: "Log Deleted",
+      description: "The voided log has been permanently removed.",
+      variant: "destructive"
+    });
+    setLogToDelete(null);
+  };
+
   const handleExport = () => {
     let dataToExport: any[] = [];
     let reportName = "";
@@ -188,6 +210,21 @@ export default function VoidedPage() {
 
   return (
     <div className="space-y-8">
+       <AlertDialog open={!!logToDelete} onOpenChange={(open) => !open && setLogToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the voided log from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setLogToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleDeleteVoidedLog(logToDelete!)}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="flex items-center justify-between">
         <PageHeader
           title="Voided Logs"
@@ -236,7 +273,12 @@ export default function VoidedPage() {
                                         <TableCell>{(log.data.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
                                         <TableCell className="text-right">{currency}{log.data.total.toFixed(2)}</TableCell>
                                         <TableCell className="text-right">
-                                            <span className="text-muted-foreground text-xs">Voided by: {log.users?.name || 'N/A'}</span>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <span className="text-muted-foreground text-xs">Voided by: {log.users?.name || 'N/A'}</span>
+                                                <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)}>
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -370,7 +412,12 @@ export default function VoidedPage() {
                                   </div>
                                 </TableCell>
                                 <TableCell>
-                                  <span className="text-muted-foreground text-xs">Voided by: {log.users?.name || 'N/A'}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground text-xs whitespace-nowrap">Voided by: {log.users?.name || 'N/A'}</span>
+                                        <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)}>
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                           );
@@ -391,5 +438,3 @@ export default function VoidedPage() {
     </div>
   );
 }
-
-    
