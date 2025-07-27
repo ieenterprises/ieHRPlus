@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type Sale } from "@/lib/types";
+import { type Sale, type OpenTicket } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -63,7 +63,7 @@ const getPaymentBadgeVariant = (method: string) => {
 
 export default function KitchenPage() {
   const { sales, setSales, products, setProducts, categories, users, loggedInUser, setVoidedLogs } = useSettings();
-  const { openTickets } = usePos();
+  const { openTickets, deleteTicket } = usePos();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   
@@ -192,6 +192,45 @@ export default function KitchenPage() {
         categories.find(c => c.id === id)?.name || 'Unknown'
     );
   };
+  
+  const handleDeleteTicket = async (ticketId: string) => {
+    if (!loggedInUser) {
+      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+      return;
+    }
+
+    const ticketToDelete = openTickets.find(t => t.id === ticketId);
+    if (!ticketToDelete) {
+      toast({ title: "Error", description: "Ticket not found.", variant: "destructive" });
+      return;
+    }
+    
+    if (!window.confirm(`Are you sure you want to delete the ticket "${ticketToDelete.ticket_name}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+      const newLog = {
+          id: `void_${new Date().getTime()}`,
+          type: 'ticket' as const,
+          voided_by_employee_id: loggedInUser.id,
+          created_at: new Date().toISOString(),
+          data: {
+              ticket_name: ticketToDelete.ticket_name,
+              ticket_total: ticketToDelete.total,
+              customer_name: ticketToDelete.customers?.name
+          },
+          users: { name: loggedInUser.name },
+      };
+      setVoidedLogs(prev => [...prev, newLog]);
+
+      await deleteTicket(ticketId);
+      toast({ title: "Ticket Deleted", variant: "destructive", description: `Ticket "${ticketToDelete.ticket_name}" has been deleted.` });
+    } catch (error: any) {
+      toast({ title: "Error Deleting Ticket", description: error.message, variant: "destructive" });
+    }
+  };
+
 
   const filteredReceipts = useMemo(() => {
     return sales.filter((sale) => {
@@ -302,7 +341,7 @@ export default function KitchenPage() {
                                 <TableHead>Date</TableHead>
                                 <TableHead>Items</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
-                                <TableHead>Actions</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -316,10 +355,17 @@ export default function KitchenPage() {
                                         <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
                                         <TableCell>{(ticket.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
                                         <TableCell className="text-right">${ticket.total.toFixed(2)}</TableCell>
-                                        <TableCell>
-                                          <Button variant="outline" size="sm" onClick={() => onPrint(ticket, 'ticket')}>
-                                            <Printer className="mr-2 h-4 w-4" /> Print
-                                          </Button>
+                                        <TableCell className="text-right">
+                                          <div className="flex justify-end gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => onPrint(ticket, 'ticket')}>
+                                              <Printer className="mr-2 h-4 w-4" /> Print
+                                            </Button>
+                                            {loggedInUser?.permissions.includes('VOID_SAVED_ITEMS') && (
+                                              <Button variant="destructive" size="icon" onClick={() => handleDeleteTicket(ticket.id)}>
+                                                <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                          </div>
                                         </TableCell>
                                     </TableRow>
                                 ))
