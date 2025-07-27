@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2 } from "lucide-react";
+import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -262,25 +262,6 @@ export default function SalesPage() {
   };
 
   const handleRemoveItem = (productId: string) => {
-    if (activeTicketId && loggedInUser) {
-        const itemToRemove = orderItems.find(item => item.product.id === productId);
-        if (itemToRemove) {
-            const newLog = {
-                id: `void_${new Date().getTime()}`,
-                type: 'item' as const,
-                voided_by_employee_id: loggedInUser.id,
-                created_at: new Date().toISOString(),
-                data: {
-                    item_name: itemToRemove.product.name,
-                    quantity: itemToRemove.quantity,
-                    price: itemToRemove.product.price,
-                    ticket_name: openTickets.find(t => t.id === activeTicketId)?.ticket_name,
-                },
-                users: { name: loggedInUser.name },
-            };
-            setVoidedLogs(prev => [...prev, newLog]);
-        }
-    }
     setOrderItems((prevItems) =>
       prevItems.filter((item) => item.product.id !== productId)
     );
@@ -485,33 +466,6 @@ export default function SalesPage() {
     setActiveTicketId(ticket.id);
     setSelectedCustomerId(ticket.customer_id);
     setIsTicketsDialogOpen(false);
-  };
-
-  const handleDeleteTicket = async (ticketId: string) => {
-    if (!loggedInUser) return;
-    const ticketToDelete = openTickets.find(t => t.id === ticketId);
-    if (!ticketToDelete) return;
-    try {
-      const newLog = {
-          id: `void_${new Date().getTime()}`,
-          type: 'ticket' as const,
-          voided_by_employee_id: loggedInUser.id,
-          created_at: new Date().toISOString(),
-          data: {
-              ticket_name: ticketToDelete.ticket_name,
-              ticket_total: ticketToDelete.total,
-              customer_name: ticketToDelete.customers?.name
-          },
-          users: { name: loggedInUser.name },
-      };
-      setVoidedLogs(prev => [...prev, newLog]);
-
-      await deleteTicket(ticketId);
-      if (activeTicketId === ticketId) handleClearOrder();
-      toast({ title: "Ticket Voided", variant: "destructive" });
-    } catch (error: any) {
-      toast({ title: "Error Deleting Ticket", description: error.message, variant: "destructive" });
-    }
   };
   
   const currentPaymentType = configuredPaymentTypes.find(p => p.name === splitPaymentMethod);
@@ -855,7 +809,7 @@ export default function SalesPage() {
                 <DialogHeader>
                     <DialogTitle>Open Tickets</DialogTitle>
                     <DialogDescription>
-                        Select a saved ticket to load it, or delete it.
+                        Select a saved ticket to load it.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
@@ -881,9 +835,6 @@ export default function SalesPage() {
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as any)}>Load</Button>
-                                                    <Button variant="destructive" size="sm" onClick={() => handleDeleteTicket(ticket.id)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
                                                 </div>
                                             </TableCell>
                                         </TableRow>

@@ -24,7 +24,7 @@ import { type Sale, type OpenTicket } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar as CalendarIcon, Printer, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, Printer } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -107,67 +107,6 @@ export default function KitchenPage() {
     setLoading(false);
   }, []);
 
-  const handleVoidReceipt = (receiptToVoid: Sale) => {
-    if (!loggedInUser) {
-        toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
-        return;
-    }
-    if (!window.confirm(`Are you sure you want to void Receipt #${receiptToVoid.order_number}? This action cannot be undone.`)) {
-        return;
-    }
-
-    const newLog = {
-        id: `void_${new Date().getTime()}`,
-        type: 'receipt' as const,
-        voided_by_employee_id: loggedInUser.id,
-        created_at: new Date().toISOString(),
-        data: {
-            ...receiptToVoid, // Store the entire sale object
-            receipt_id: receiptToVoid.id,
-            order_number: receiptToVoid.order_number,
-            receipt_total: receiptToVoid.total,
-            customer_name: receiptToVoid.customers?.name || 'Walk-in',
-            items: receiptToVoid.items.map(item => `${item.name} (x${item.quantity})`).join(', '),
-        },
-        users: { name: loggedInUser.name },
-    };
-
-    setVoidedLogs(prevLogs => [...prevLogs, newLog]);
-    setSales(prevSales => prevSales.filter(sale => sale.id !== receiptToVoid.id));
-    
-    // Restore stock in a separate, safe block
-    try {
-        const stockUpdates = receiptToVoid.items
-            .map(item => {
-                const product = products.find(p => p.id === item.id);
-                if (!product) return null;
-
-                const category = categories.find(c => c.id === product.category_id);
-                // Do not restore stock for items that might be services (like rooms).
-                if (category?.name === 'Room') {
-                    return null;
-                }
-                return { id: item.id, newStock: product.stock + item.quantity };
-            })
-            .filter((item): item is { id: string; newStock: number } => item !== null);
-
-        if (stockUpdates.length > 0) {
-            setProducts(prevProducts =>
-                prevProducts.map(p => {
-                    const update = stockUpdates.find(u => u.id === p.id);
-                    return update ? { ...p, stock: update.newStock } : p;
-                })
-            );
-        }
-    } catch (stockError) {
-        console.error("Stock could not be restored, but receipt was voided:", stockError);
-        toast({ title: "Stock Warning", description: "Could not restore stock for voided items.", variant: "destructive" });
-    }
-
-    toast({ title: "Receipt Voided", description: `Receipt #${receiptToVoid.order_number} has been voided.`, variant: "destructive" });
-};
-
-
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
@@ -190,46 +129,6 @@ export default function KitchenPage() {
     );
   };
   
-  const handleDeleteTicket = async (ticketId: string) => {
-    if (!loggedInUser) {
-      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
-      return;
-    }
-
-    const ticketToDelete = openTickets.find(t => t.id === ticketId);
-    if (!ticketToDelete) {
-      toast({ title: "Error", description: "Ticket not found.", variant: "destructive" });
-      return;
-    }
-    
-    if (!window.confirm(`Are you sure you want to delete the ticket "${ticketToDelete.ticket_name}"? This action cannot be undone.`)) {
-        return;
-    }
-    
-    try {
-      const newLog = {
-          id: `void_${new Date().getTime()}`,
-          type: 'ticket' as const,
-          voided_by_employee_id: loggedInUser.id,
-          created_at: new Date().toISOString(),
-          data: {
-              ...ticketToDelete,
-              ticket_name: ticketToDelete.ticket_name,
-              ticket_total: ticketToDelete.total,
-              customer_name: ticketToDelete.customers?.name
-          },
-          users: { name: loggedInUser.name },
-      };
-      setVoidedLogs(prev => [...prev, newLog]);
-
-      await deleteTicket(ticketId);
-      toast({ title: "Ticket Deleted", variant: "destructive", description: `Ticket "${ticketToDelete.ticket_name}" has been deleted.` });
-    } catch (error: any) {
-      toast({ title: "Error Deleting Ticket", description: error.message, variant: "destructive" });
-    }
-  };
-
-
   const filteredReceipts = useMemo(() => {
     return sales.filter((sale) => {
       if (sale.status !== 'Fulfilled') return false;
@@ -358,11 +257,6 @@ export default function KitchenPage() {
                                             <Button variant="outline" size="sm" onClick={() => onPrint(ticket, 'ticket')}>
                                               <Printer className="mr-2 h-4 w-4" /> Print
                                             </Button>
-                                            {loggedInUser?.permissions.includes('VOID_SAVED_ITEMS') && (
-                                              <Button variant="destructive" size="icon" onClick={() => handleDeleteTicket(ticket.id)}>
-                                                <Trash2 className="h-4 w-4" />
-                                              </Button>
-                                            )}
                                           </div>
                                         </TableCell>
                                     </TableRow>
@@ -526,11 +420,6 @@ export default function KitchenPage() {
                                     <Button variant="outline" size="sm" onClick={() => onPrint(sale, 'receipt')}>
                                         <Printer className="mr-2 h-4 w-4" /> Print
                                     </Button>
-                                    {loggedInUser?.permissions.includes('CANCEL_RECEIPTS') && (
-                                        <Button variant="destructive" size="sm" onClick={() => handleVoidReceipt(sale)}>
-                                            <Trash2 className="mr-2 h-4 w-4" /> Void
-                                        </Button>
-                                    )}
                                 </div>
                             </TableCell>
                         </TableRow>
