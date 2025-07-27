@@ -108,14 +108,15 @@ export default function KitchenPage() {
   }, []);
 
   const handleVoidReceipt = (receipt: Sale) => {
-    if (!loggedInUser) return;
+    if (!loggedInUser) {
+      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+      return;
+    }
     if (!window.confirm(`Are you sure you want to void Receipt #${receipt.order_number}? This action cannot be undone.`)) {
         return;
     }
 
     try {
-      // Step 1 & 2: Log the voided receipt and remove the sale immediately.
-      // This is the most critical part and should happen first.
       const newLog = {
           id: `void_${new Date().getTime()}`,
           type: 'receipt' as const,
@@ -130,21 +131,25 @@ export default function KitchenPage() {
           },
           users: { name: loggedInUser.name },
       };
+
       setVoidedLogs(prev => [...prev, newLog]);
       setSales(prev => prev.filter(s => s.id !== receipt.id));
-      
+
       toast({ title: "Receipt Voided", description: `Receipt #${receipt.order_number} has been voided and removed from sales.`, variant: "destructive" });
 
-      // Step 3: Attempt to restore stock, but don't let it block the void.
+      // Restore stock in a separate, non-blocking step.
       try {
-        const roomCategory = categories.find(c => c.name.toLowerCase() === 'room');
-        const stockUpdates = receipt.items.map(item => {
-          const product = products.find(p => p.id === item.id);
-          // Do not restore stock for rooms or if product doesn't exist
-          if (!product || (roomCategory && product.category_id === roomCategory.id)) return null;
-          
-          return { id: item.id, newStock: product.stock + item.quantity };
-        }).filter((item): item is { id: string; newStock: number; } => item !== null);
+        const stockUpdates = receipt.items
+          .map(item => {
+              const product = products.find(p => p.id === item.id);
+              // Do not restore stock for items that might be services (like rooms) or if product not found
+              const category = product ? categories.find(c => c.id === product.category_id) : null;
+              if (!product || category?.name === 'Room') {
+                  return null;
+              }
+              return { id: item.id, newStock: product.stock + item.quantity };
+          })
+          .filter((item): item is { id: string; newStock: number } => item !== null);
 
         if (stockUpdates.length > 0) {
             setProducts(prevProducts =>
@@ -155,12 +160,12 @@ export default function KitchenPage() {
             );
         }
       } catch (stockError) {
-          console.error("Failed to restore stock, but receipt was voided:", stockError);
-          toast({ title: "Stock Warning", description: "Receipt was voided, but there was an issue restoring stock.", variant: "destructive" });
+          console.error("Stock could not be restored, but receipt was voided:", stockError);
+          toast({ title: "Stock Warning", description: "Could not restore stock for voided items.", variant: "destructive" });
       }
 
     } catch(error: any) {
-        toast({ title: "Error Voiding Receipt", description: "An unexpected error occurred.", variant: "destructive" });
+        toast({ title: "Error Voiding Receipt", description: `An unexpected error occurred: ${error.message}`, variant: "destructive" });
     }
   };
 
