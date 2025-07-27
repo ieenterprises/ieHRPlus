@@ -4,6 +4,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
+import Papa from "papaparse";
 
 import { PageHeader } from "@/components/page-header";
 import {
@@ -23,7 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -41,6 +42,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
+import { useToast } from "@/hooks/use-toast";
 import { type VoidedLog, type SaleItem } from "@/lib/types";
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -59,13 +61,15 @@ const getPaymentBadgeVariant = (method: string) => {
 export default function VoidedPage() {
   const { voidedLogs, currency, users, products, categories } = useSettings();
   const [loading, setLoading] = useState(true);
-  
+  const { toast } = useToast();
+
   const [filters, setFilters] = useState({
     searchTerm: "",
     employee: "all",
     category: "all",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [activeTab, setActiveTab] = useState("receipts");
 
   const enrichedLogs = useMemo(() => {
     return voidedLogs.map(log => {
@@ -74,13 +78,8 @@ export default function VoidedPage() {
         ...log,
         users: user ? { id: user.id, name: user.name } : null
       }
-    }).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [voidedLogs, users]);
-
-  const getCategoryFromId = (id: string | null) => {
-    if (!id) return null;
-    return categories.find(c => c.id === id);
-  }
 
   const getSaleCategoryNames = (saleItems: SaleItem[]): string[] => {
     const categoryIds = new Set(
@@ -109,7 +108,7 @@ export default function VoidedPage() {
           log.data.items.some((item: SaleItem) => item.name.toLowerCase().includes(searchTermLower));
 
         const saleCategories = getSaleCategoryNames(log.data.items as SaleItem[]);
-        const categoryMatch = filters.category === "all" || saleCategories.includes(filters.category);
+        const categoryMatch = filters.category === "all" || saleCategories.some(cat => cat === filters.category);
 
         const employeeMatch = filters.employee === "all" || log.data.users?.name === filters.employee;
         
@@ -134,13 +133,73 @@ export default function VoidedPage() {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
+  const handleExport = () => {
+    let dataToExport: any[] = [];
+    let reportName = "";
+
+    if (activeTab === 'receipts') {
+      reportName = "voided_receipts";
+      dataToExport = filteredVoidedReceipts.map(log => ({
+        "Order #": log.data.order_number,
+        "Original Date": format(new Date(log.data.created_at!), "yyyy-MM-dd HH:mm"),
+        "Voided Date": format(new Date(log.created_at), "yyyy-MM-dd HH:mm"),
+        "Customer": log.data.customers?.name ?? 'Walk-in',
+        "Original Employee": log.data.users?.name || "N/A",
+        "Voided By": log.users?.name || "N/A",
+        "Total": log.data.total.toFixed(2),
+        "Payment Methods": log.data.payment_methods.join(", "),
+        "Items": log.data.items.map((item: SaleItem) => `${item.name} (x${item.quantity})`).join("; "),
+      }));
+    } else { // tickets
+      reportName = "voided_tickets";
+      dataToExport = filteredVoidedTickets.map(log => ({
+        "Ticket Name": log.data.ticket_name,
+        "Original Date": format(new Date(log.data.created_at!), "yyyy-MM-dd HH:mm"),
+        "Voided Date": format(new Date(log.created_at), "yyyy-MM-dd HH:mm"),
+        "Customer": log.data.customers?.name || "N/A",
+        "Original Employee": log.data.users?.name || "N/A",
+        "Voided By": log.users?.name || "N/A",
+        "Total": log.data.total.toFixed(2),
+        "Items": (log.data.items as SaleItem[]).map(item => `${item.name} (x${item.quantity})`).join("; "),
+      }));
+    }
+
+    if (dataToExport.length === 0) {
+      toast({
+        title: "No Data to Export",
+        description: "There are no voided items to export for the current filters.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${reportName}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete", description: "Voided logs report has been downloaded." });
+  };
+
+
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Voided Logs"
-        description="Review all voided tickets and completed receipts."
-      />
-      <Tabs defaultValue="receipts">
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Voided Logs"
+          description="Review all voided tickets and completed receipts."
+        />
+        <Button onClick={handleExport} variant="outline">
+          <Download className="mr-2 h-4 w-4" />
+          Export to CSV
+        </Button>
+      </div>
+
+      <Tabs defaultValue="receipts" onValueChange={setActiveTab}>
         <TabsList>
             <TabsTrigger value="tickets">Voided Tickets</TabsTrigger>
             <TabsTrigger value="receipts">Voided Receipts</TabsTrigger>
@@ -307,7 +366,7 @@ export default function VoidedPage() {
                                   </div>
                                 </TableCell>
                                 <TableCell>
-                                  <span className="text-muted-foreground text-xs">Voided by: {log.users?.name || 'N/A'} on {format(new Date(log.created_at), "LLL dd, y")}</span>
+                                  <span className="text-muted-foreground text-xs">Voided by: {log.users?.name || 'N/A'}</span>
                                 </TableCell>
                             </TableRow>
                           );
@@ -328,4 +387,3 @@ export default function VoidedPage() {
     </div>
   );
 }
- 
