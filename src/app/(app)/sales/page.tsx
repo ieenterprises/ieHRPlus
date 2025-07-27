@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket } from "lucide-react";
+import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -468,6 +468,26 @@ export default function SalesPage() {
     setIsTicketsDialogOpen(false);
   };
   
+  const handleMoveTicketToVoid = (ticketId: string) => {
+    const ticketToVoid = openTickets.find(t => t.id === ticketId);
+    if (!ticketToVoid) return;
+
+    setVoidedLogs(prev => [...prev, {
+        id: `void_${new Date().getTime()}`,
+        type: 'ticket',
+        voided_by_employee_id: loggedInUser?.id || 'unknown',
+        created_at: new Date().toISOString(),
+        data: ticketToVoid,
+        users: null,
+    }]);
+
+    deleteTicket(ticketId);
+
+    toast({ title: "Ticket Moved", description: `Ticket "${ticketToVoid.ticket_name}" has been moved to the voided logs.` });
+  }
+
+  const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
+  
   const currentPaymentType = configuredPaymentTypes.find(p => p.name === splitPaymentMethod);
 
   return (
@@ -835,6 +855,11 @@ export default function SalesPage() {
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as any)}>Load</Button>
+                                                    {hasPermission('CANCEL_RECEIPTS') && (
+                                                        <Button variant="destructive" size="sm" onClick={() => handleMoveTicketToVoid(ticket.id)}>
+                                                            <Trash2 className="mr-2 h-4 w-4" /> Move to Void
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
