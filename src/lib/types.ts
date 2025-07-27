@@ -78,20 +78,18 @@ export type VoidedLog = {
   id: string;
   type: 'ticket' | 'item' | 'receipt';
   voided_by_employee_id: string;
-  created_at: string;
-  data: {
+  created_at: string; // This is the date of the void action
+  data: Partial<Sale & OpenTicket & {
     ticket_name?: string;
     item_name?: string;
     quantity?: number;
     price?: number;
     ticket_total?: number;
     customer_name?: string | null;
-    // For receipt voids
     receipt_id?: string;
     order_number?: number;
     receipt_total?: number;
-    items?: string;
-  };
+  }>;
   users: { name: string | null } | null;
 };
 

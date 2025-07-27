@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Printer, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -41,7 +41,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
-import { type VoidedLog, type User } from "@/lib/types";
+import { type VoidedLog, type SaleItem } from "@/lib/types";
 
 const getPaymentBadgeVariant = (method: string) => {
     switch (method.toLowerCase()) {
@@ -57,12 +57,13 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function VoidedPage() {
-  const { voidedLogs, currency, users, categories } = useSettings();
+  const { voidedLogs, currency, users, products, categories } = useSettings();
   const [loading, setLoading] = useState(true);
   
   const [filters, setFilters] = useState({
     searchTerm: "",
     employee: "all",
+    category: "all",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
@@ -76,32 +77,53 @@ export default function VoidedPage() {
     }).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [voidedLogs, users]);
 
+  const getCategoryFromId = (id: string | null) => {
+    if (!id) return null;
+    return categories.find(c => c.id === id);
+  }
+
+  const getSaleCategoryNames = (saleItems: SaleItem[]): string[] => {
+    const categoryIds = new Set(
+        saleItems.map(item => {
+            const product = products.find(p => p.id === item.id);
+            return product?.category_id;
+        }).filter((id): id is string => !!id)
+    );
+
+    return Array.from(categoryIds).map(id =>
+        categories.find(c => c.id === id)?.name || 'Unknown'
+    );
+  };
+
   const filteredVoidedReceipts = useMemo(() => {
-    const receiptLogs = enrichedLogs.filter(log => log.type === 'receipt');
-    
-    return receiptLogs.filter((log) => {
-      const searchTermLower = filters.searchTerm.toLowerCase();
-      
-      const searchMatch =
-        filters.searchTerm === "" ||
-        log.data.order_number?.toString().includes(searchTermLower) ||
-        (log.data.customer_name ?? '').toLowerCase().includes(searchTermLower) ||
-        (log.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
-        (log.data.items ?? '').toLowerCase().includes(searchTermLower);
+    return enrichedLogs
+      .filter((log): log is VoidedLog & { type: 'receipt' } => log.type === 'receipt')
+      .filter((log) => {
+        const searchTermLower = filters.searchTerm.toLowerCase();
+        
+        const searchMatch =
+          filters.searchTerm === "" ||
+          log.data.order_number?.toString().includes(searchTermLower) ||
+          (log.data.customer_name ?? '').toLowerCase().includes(searchTermLower) ||
+          (log.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
+          (log.data.items ?? '').toLowerCase().includes(searchTermLower);
 
-      const employeeMatch = filters.employee === "all" || log.users?.name === filters.employee;
-      
-      const dateMatch =
-        !dateRange?.from ||
-        (new Date(log.created_at!) >= dateRange.from &&
-          (!dateRange.to || new Date(log.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
+        const saleCategories = getSaleCategoryNames(log.data.items as SaleItem[]);
+        const categoryMatch = filters.category === "all" || saleCategories.includes(filters.category);
 
-      return searchMatch && employeeMatch && dateMatch;
+        const employeeMatch = filters.employee === "all" || log.users?.name === filters.employee;
+        
+        const dateMatch =
+          !dateRange?.from ||
+          (new Date(log.created_at!) >= dateRange.from &&
+            (!dateRange.to || new Date(log.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
+
+        return searchMatch && employeeMatch && dateMatch && categoryMatch;
     });
-  }, [enrichedLogs, filters, dateRange]);
+  }, [enrichedLogs, filters, dateRange, products, categories]);
 
   const filteredVoidedTickets = useMemo(() => {
-    return enrichedLogs.filter(log => log.type === 'ticket');
+    return enrichedLogs.filter((log): log is VoidedLog & { type: 'ticket' } => log.type === 'ticket');
   }, [enrichedLogs]);
 
   useEffect(() => {
@@ -183,6 +205,15 @@ export default function VoidedPage() {
                     onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
                     className="max-w-xs"
                     />
+                     <Select value={filters.category} onValueChange={(value) => handleFilterChange('category', value)}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Filter by category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Categories</SelectItem>
+                            {categories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
                     <Select value={filters.employee} onValueChange={(value) => handleFilterChange('employee', value)}>
                         <SelectTrigger className="w-[180px]">
                             <SelectValue placeholder="Filter by employee" />
@@ -213,7 +244,7 @@ export default function VoidedPage() {
                                 format(dateRange.from, "LLL dd, y")
                                 )
                             ) : (
-                                <span>Pick a date range</span>
+                                <span>Pick a void date range</span>
                             )}
                             </Button>
                         </PopoverTrigger>
@@ -232,32 +263,56 @@ export default function VoidedPage() {
                     <TableHeader>
                     <TableRow>
                         <TableHead>Order #</TableHead>
-                        <TableHead>Date Voided</TableHead>
+                        <TableHead>Original Date</TableHead>
+                        <TableHead>Voided Date</TableHead>
                         <TableHead>Customer</TableHead>
                         <TableHead>Voided By</TableHead>
                         <TableHead>Items</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Payment</TableHead>
                         <TableHead className="text-right">Total</TableHead>
                     </TableRow>
                     </TableHeader>
                     <TableBody>
                     {loading ? (
-                        <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={9} className="h-24 text-center">Loading...</TableCell></TableRow>
                     ) : filteredVoidedReceipts.length > 0 ? (
-                        filteredVoidedReceipts.map((log) => (
-                        <TableRow key={log.id}>
-                            <TableCell className="font-medium">#{log.data.order_number}</TableCell>
-                            <TableCell>{format(new Date(log.created_at!), "LLL dd, y HH:mm")}</TableCell>
-                            <TableCell>{log.data.customer_name ?? 'Walk-in'}</TableCell>
-                            <TableCell>{log.users?.name}</TableCell>
-                            <TableCell>
-                                {log.data.items}
-                            </TableCell>
-                            <TableCell className="text-right">{currency}{log.data.receipt_total?.toFixed(2)}</TableCell>
-                        </TableRow>
-                        ))
+                        filteredVoidedReceipts.map((log) => {
+                          const saleData = log.data;
+                          const categoriesForDisplay = getSaleCategoryNames(saleData.items as SaleItem[]);
+                          return (
+                            <TableRow key={log.id}>
+                                <TableCell className="font-medium">#{saleData.order_number}</TableCell>
+                                <TableCell>{format(new Date(saleData.created_at!), "LLL dd, y HH:mm")}</TableCell>
+                                <TableCell>{format(new Date(log.created_at), "LLL dd, y HH:mm")}</TableCell>
+                                <TableCell>{saleData.customer_name ?? 'Walk-in'}</TableCell>
+                                <TableCell>{log.users?.name}</TableCell>
+                                <TableCell>
+                                    {(saleData.items as SaleItem[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                      {categoriesForDisplay.map(category => (
+                                          <Badge key={category} variant="outline" className="whitespace-nowrap">{category}</Badge>
+                                      ))}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center justify-center gap-1">
+                                      {(saleData.payment_methods as string[]).map((method: string) => (
+                                          <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">
+                                              {method}
+                                          </Badge>
+                                      ))}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">{currency}{saleData.receipt_total?.toFixed(2)}</TableCell>
+                            </TableRow>
+                          );
+                        })
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                            <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
                                 No voided receipts found for the selected filters.
                             </TableCell>
                         </TableRow>

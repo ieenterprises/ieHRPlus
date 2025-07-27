@@ -109,20 +109,20 @@ export default function KitchenPage() {
 
   const handleVoidReceipt = (receiptToVoid: Sale) => {
     if (!loggedInUser) {
-      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
-      return;
+        toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+        return;
     }
     if (!window.confirm(`Are you sure you want to void Receipt #${receiptToVoid.order_number}? This action cannot be undone.`)) {
         return;
     }
 
-    // 1. Create the log entry for the voided receipt.
     const newLog = {
         id: `void_${new Date().getTime()}`,
         type: 'receipt' as const,
         voided_by_employee_id: loggedInUser.id,
         created_at: new Date().toISOString(),
         data: {
+            ...receiptToVoid, // Store the entire sale object
             receipt_id: receiptToVoid.id,
             order_number: receiptToVoid.order_number,
             receipt_total: receiptToVoid.total,
@@ -132,43 +132,40 @@ export default function KitchenPage() {
         users: { name: loggedInUser.name },
     };
 
-    // 2. Add the log to the voided logs.
     setVoidedLogs(prevLogs => [...prevLogs, newLog]);
-
-    // 3. Remove the receipt from the sales list.
     setSales(prevSales => prevSales.filter(sale => sale.id !== receiptToVoid.id));
-
-    // 4. Handle stock restoration separately and safely.
+    
+    // Restore stock in a separate, safe block
     try {
-      const stockUpdates = receiptToVoid.items
-        .map(item => {
-            const product = products.find(p => p.id === item.id);
-            if (!product) return null;
+        const stockUpdates = receiptToVoid.items
+            .map(item => {
+                const product = products.find(p => p.id === item.id);
+                if (!product) return null;
 
-            const category = categories.find(c => c.id === product.category_id);
-            // Do not restore stock for items that might be services (like rooms).
-            if (category?.name === 'Room') {
-                return null;
-            }
-            return { id: item.id, newStock: product.stock + item.quantity };
-        })
-        .filter((item): item is { id: string; newStock: number } => item !== null);
+                const category = categories.find(c => c.id === product.category_id);
+                // Do not restore stock for items that might be services (like rooms).
+                if (category?.name === 'Room') {
+                    return null;
+                }
+                return { id: item.id, newStock: product.stock + item.quantity };
+            })
+            .filter((item): item is { id: string; newStock: number } => item !== null);
 
-      if (stockUpdates.length > 0) {
-          setProducts(prevProducts =>
-              prevProducts.map(p => {
-                  const update = stockUpdates.find(u => u.id === p.id);
-                  return update ? { ...p, stock: update.newStock } : p;
-              })
-          );
-      }
+        if (stockUpdates.length > 0) {
+            setProducts(prevProducts =>
+                prevProducts.map(p => {
+                    const update = stockUpdates.find(u => u.id === p.id);
+                    return update ? { ...p, stock: update.newStock } : p;
+                })
+            );
+        }
     } catch (stockError) {
         console.error("Stock could not be restored, but receipt was voided:", stockError);
         toast({ title: "Stock Warning", description: "Could not restore stock for voided items.", variant: "destructive" });
     }
 
     toast({ title: "Receipt Voided", description: `Receipt #${receiptToVoid.order_number} has been voided.`, variant: "destructive" });
-  };
+};
 
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
@@ -216,6 +213,7 @@ export default function KitchenPage() {
           voided_by_employee_id: loggedInUser.id,
           created_at: new Date().toISOString(),
           data: {
+              ...ticketToDelete,
               ticket_name: ticketToDelete.ticket_name,
               ticket_total: ticketToDelete.total,
               customer_name: ticketToDelete.customers?.name
