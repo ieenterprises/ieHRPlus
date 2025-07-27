@@ -22,7 +22,7 @@ import {
 import { type User, type UserRole, type Role } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Store } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Store, Download } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +54,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
+import Papa from "papaparse";
 
 const EMPTY_USER: Partial<User> = {
   name: "",
@@ -238,6 +239,25 @@ export default function TeamPage() {
   const isUserPermissionLocked = false;
   const isRoleNameLocked = systemRoles.includes(editingRole?.name || "");
 
+  const handleExport = () => {
+    const dataToExport = users.map(u => ({
+      "Name": u.name,
+      "Email": u.email,
+      "Role": u.role,
+    }));
+
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `team_members_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete", description: "Team list has been downloaded." });
+  };
+
   const renderPermissions = (
     permissions: AnyPermission[], 
     onToggle: (permission: AnyPermission, checked: boolean) => void,
@@ -285,7 +305,10 @@ export default function TeamPage() {
                 <CardHeader className="relative">
                     <CardTitle>Users</CardTitle>
                     <CardDescription>A list of all users in your system.</CardDescription>
-                    <div className="absolute top-6 right-6">
+                    <div className="absolute top-6 right-6 flex items-center gap-2">
+                        <Button onClick={handleExport} variant="outline">
+                            <Download className="mr-2 h-4 w-4" /> Export
+                        </Button>
                         <Button onClick={() => handleOpenUserDialog(null)}><PlusCircle className="mr-2 h-4 w-4" />Add User</Button>
                     </div>
                 </CardHeader>

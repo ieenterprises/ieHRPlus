@@ -20,7 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Customer } from "@/lib/types";
-import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Download } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +40,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
+import Papa from "papaparse";
 
 const EMPTY_CUSTOMER: Partial<Customer> = {
   name: "",
@@ -113,6 +114,25 @@ export default function CustomersPage() {
     }
   }
 
+  const handleExport = () => {
+    const dataToExport = customers.map(c => ({
+      "Name": c.name,
+      "Email": c.email,
+      "Phone": c.phone,
+    }));
+
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `customers_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete", description: "Customer list has been downloaded." });
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -120,10 +140,16 @@ export default function CustomersPage() {
           title="Customer Management"
           description="Manage your customer database."
         />
-        <Button onClick={() => handleOpenDialog(null)}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Customer
-        </Button>
+        <div className="flex items-center gap-2">
+            <Button onClick={handleExport} variant="outline">
+              <Download className="mr-2 h-4 w-4" />
+              Export to CSV
+            </Button>
+            <Button onClick={() => handleOpenDialog(null)}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Customer
+            </Button>
+        </div>
       </div>
 
       <Card>
