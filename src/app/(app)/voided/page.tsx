@@ -84,7 +84,7 @@ export default function VoidedPage() {
 
   const getSaleCategoryNames = (saleItems: SaleItem[]): string[] => {
     const categoryIds = new Set(
-        saleItems.map(item => {
+        (saleItems || []).map(item => {
             const product = products.find(p => p.id === item.id);
             return product?.category_id;
         }).filter((id): id is string => !!id)
@@ -97,21 +97,21 @@ export default function VoidedPage() {
 
   const filteredVoidedReceipts = useMemo(() => {
     return enrichedLogs
-      .filter((log): log is VoidedLog & { type: 'receipt' } => log.type === 'receipt')
+      .filter((log): log is VoidedLog & { type: 'receipt', data: any } => log.type === 'receipt')
       .filter((log) => {
         const searchTermLower = filters.searchTerm.toLowerCase();
         
         const searchMatch =
           filters.searchTerm === "" ||
           log.data.order_number?.toString().includes(searchTermLower) ||
-          (log.data.customer_name ?? '').toLowerCase().includes(searchTermLower) ||
-          (log.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
-          (log.data.items ?? '').toLowerCase().includes(searchTermLower);
+          (log.data.customers?.name ?? 'Walk-in').toLowerCase().includes(searchTermLower) ||
+          (log.data.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
+          log.data.items.some((item: SaleItem) => item.name.toLowerCase().includes(searchTermLower));
 
         const saleCategories = getSaleCategoryNames(log.data.items as SaleItem[]);
         const categoryMatch = filters.category === "all" || saleCategories.includes(filters.category);
 
-        const employeeMatch = filters.employee === "all" || log.users?.name === filters.employee;
+        const employeeMatch = filters.employee === "all" || log.data.users?.name === filters.employee;
         
         const dateMatch =
           !dateRange?.from ||
@@ -172,9 +172,9 @@ export default function VoidedPage() {
                                     <TableRow key={log.id}>
                                         <TableCell>{format(new Date(log.created_at!), 'LLL dd, y HH:mm')}</TableCell>
                                         <TableCell className="font-medium">{log.data.ticket_name}</TableCell>
-                                        <TableCell>{log.data.customer_name || 'N/A'}</TableCell>
+                                        <TableCell>{log.data.customers?.name || 'N/A'}</TableCell>
                                         <TableCell>{log.users?.name ?? 'N/A'}</TableCell>
-                                        <TableCell className="text-right">{currency}{log.data.ticket_total?.toFixed(2)}</TableCell>
+                                        <TableCell className="text-right">{currency}{log.data.total?.toFixed(2)}</TableCell>
                                     </TableRow>
                                 ))
                             ) : (
@@ -261,17 +261,17 @@ export default function VoidedPage() {
                 </div>
                 <Table>
                     <TableHeader>
-                    <TableRow>
-                        <TableHead>Order #</TableHead>
-                        <TableHead>Original Date</TableHead>
-                        <TableHead>Voided Date</TableHead>
-                        <TableHead>Customer</TableHead>
-                        <TableHead>Voided By</TableHead>
-                        <TableHead>Items</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Payment</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                    </TableRow>
+                      <TableRow>
+                          <TableHead>Order #</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Employee</TableHead>
+                          <TableHead>Items</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                          <TableHead className="text-center">Payment</TableHead>
+                          <TableHead>Actions</TableHead>
+                      </TableRow>
                     </TableHeader>
                     <TableBody>
                     {loading ? (
@@ -284,9 +284,8 @@ export default function VoidedPage() {
                             <TableRow key={log.id}>
                                 <TableCell className="font-medium">#{saleData.order_number}</TableCell>
                                 <TableCell>{format(new Date(saleData.created_at!), "LLL dd, y HH:mm")}</TableCell>
-                                <TableCell>{format(new Date(log.created_at), "LLL dd, y HH:mm")}</TableCell>
-                                <TableCell>{saleData.customer_name ?? 'Walk-in'}</TableCell>
-                                <TableCell>{log.users?.name}</TableCell>
+                                <TableCell>{saleData.customers?.name ?? 'Walk-in'}</TableCell>
+                                <TableCell>{saleData.users?.name}</TableCell>
                                 <TableCell>
                                     {(saleData.items as SaleItem[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}
                                 </TableCell>
@@ -297,7 +296,8 @@ export default function VoidedPage() {
                                       ))}
                                   </div>
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="text-right">{currency}{saleData.total?.toFixed(2)}</TableCell>
+                                <TableCell className="text-center">
                                   <div className="flex items-center justify-center gap-1">
                                       {(saleData.payment_methods as string[]).map((method: string) => (
                                           <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">
@@ -306,7 +306,9 @@ export default function VoidedPage() {
                                       ))}
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-right">{currency}{saleData.receipt_total?.toFixed(2)}</TableCell>
+                                <TableCell>
+                                  <span className="text-muted-foreground text-xs">Voided by: {log.users?.name || 'N/A'} on {format(new Date(log.created_at), "LLL dd, y")}</span>
+                                </TableCell>
                             </TableRow>
                           );
                         })
@@ -326,3 +328,4 @@ export default function VoidedPage() {
     </div>
   );
 }
+ 
