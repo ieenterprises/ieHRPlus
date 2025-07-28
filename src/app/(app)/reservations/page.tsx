@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -280,6 +279,7 @@ export default function ReservationsPage() {
     const dataToExport = reservations.map(r => {
       const sale = sales.find(s => s.id === r.sale_id);
       return {
+        "Order #": sale?.order_number || 'N/A',
         "Guest Name": r.guest_name,
         "Room": r.products?.name,
         "Check-in": format(new Date(r.check_in), "yyyy-MM-dd"),
@@ -472,6 +472,7 @@ export default function ReservationsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Order #</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Room</TableHead>
                 <TableHead>Dates</TableHead>
@@ -484,7 +485,7 @@ export default function ReservationsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
                     Loading...
                   </TableCell>
                 </TableRow>
@@ -493,6 +494,7 @@ export default function ReservationsPage() {
                   const sale = sales.find(s => s.id === reservation.sale_id);
                   return (
                     <TableRow key={reservation.id}>
+                      <TableCell className="font-medium">#{sale?.order_number}</TableCell>
                       <TableCell className="font-medium">{reservation.guest_name}</TableCell>
                       <TableCell>{reservation.products?.name}</TableCell>
                       <TableCell>
@@ -525,7 +527,7 @@ export default function ReservationsPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
                     No reservations found.
                   </TableCell>
                 </TableRow>
@@ -569,5 +571,3 @@ export default function ReservationsPage() {
     </div>
   );
 }
-
-    
