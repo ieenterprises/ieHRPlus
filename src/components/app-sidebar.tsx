@@ -45,12 +45,12 @@ const navItems: NavItem[] = [
   { href: "/sales", icon: ShoppingCart, label: "Sales", permission: "ACCEPT_PAYMENTS" },
   { href: "/kitchen", icon: ClipboardList, label: "Orders", permission: "VIEW_ALL_RECEIPTS" },
   { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"] },
-  { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "MANAGE_ITEMS_BO", featureFlag: "reservations" },
+  { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "ACCEPT_PAYMENTS", featureFlag: "reservations" },
   { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES" },
   { href: "/customers", icon: BookUser, label: "Customers", permission: ["MANAGE_CUSTOMERS", "VIEW_CUSTOMERS"] },
   { href: "/debts", icon: ReceiptText, label: "Debts", permission: "VIEW_ALL_RECEIPTS" },
-  { href: "/voided", icon: Trash2, label: "Voided", permission: "VIEW_SALES_REPORTS" },
+  { href: "/voided", icon: Trash2, label: "VIEW_SALES_REPORTS" },
 ];
 
 export function AppSidebar() {
