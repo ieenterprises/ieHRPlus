@@ -95,9 +95,8 @@ export default function VoidedPage() {
   const [activeTab, setActiveTab] = useState("receipts");
   const [logToDelete, setLogToDelete] = useState<string | null>(null);
 
-  const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
-  const hasDeletePermission = hasPermission('PERMANENTLY_DELETE_VOIDS');
-  const hasRestorePermission = hasPermission('CANCEL_RECEIPTS');
+  const hasDeletePermission = useMemo(() => loggedInUser?.permissions.includes('PERMANENTLY_DELETE_VOIDS') ?? false, [loggedInUser]);
+  const hasRestorePermission = useMemo(() => loggedInUser?.permissions.includes('CANCEL_RECEIPTS') ?? false, [loggedInUser]);
 
   const enrichedLogs = useMemo(() => {
     return voidedLogs.map(log => {

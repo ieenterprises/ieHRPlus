@@ -277,7 +277,7 @@ export default function TeamPage() {
     }
   };
 
-  const isUserPermissionLocked = false;
+  const isUserPermissionLocked = true; // Users inherit from roles, so individual permissions are locked.
   const isRoleNameLocked = systemRoles.includes(editingRole?.name || "");
 
   const handleExport = () => {
@@ -461,6 +461,7 @@ export default function TeamPage() {
                   </div>
                   <div className="space-y-4">
                       <h3 className="text-lg font-medium">Permissions</h3>
+                       <p className="text-sm text-muted-foreground">User permissions are inherited from their assigned role. To change permissions, please edit the role.</p>
                       {renderPermissions(selectedUserPermissions, handleUserPermissionToggle, isUserPermissionLocked)}
                   </div>
               </div>
@@ -501,7 +502,7 @@ export default function TeamPage() {
                           setSelectedRolePermissions(prev =>
                               checked ? [...prev, permission] : prev.filter(p => p !== permission)
                           );
-                      }, false)}
+                      }, isRoleNameLocked)}
                   </div>
               </div>
               <DialogFooter className="pt-4"><Button type="submit">Save Changes</Button></DialogFooter>
