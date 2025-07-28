@@ -2,6 +2,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { format } from "date-fns";
 import type { Sale, OpenTicket, SaleItem } from "@/lib/types";
 import { useSettings } from "@/hooks/use-settings";
@@ -12,18 +13,25 @@ type PrintableReceiptProps = {
 };
 
 export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
-  const { stores, receiptSettings, currency } = useSettings();
+  const { stores, posDevices, receiptSettings, currency } = useSettings();
   
-  // For now, we assume a single store or the first store for receipt settings.
-  // In a multi-store setup, you would need to determine the store from the sale/ticket.
-  const currentStore = stores[0];
-  const currentReceiptSettings = receiptSettings[currentStore?.id] || {
+  const isSale = (d: any): d is Sale => type === 'receipt' && 'order_number' in d;
+
+  const getStoreIdFromSale = (sale: Sale) => {
+    if (!sale.pos_device_id) return null;
+    const device = posDevices.find(d => d.id === sale.pos_device_id);
+    return device?.store_id || null;
+  }
+  
+  const storeId = isSale(data) ? getStoreIdFromSale(data) : (stores.length > 0 ? stores[0].id : null);
+  const currentStore = stores.find(s => s.id === storeId);
+
+  const currentReceiptSettings = (storeId && receiptSettings[storeId]) || {
     header: `Welcome to ${currentStore?.name || 'our store'}!`,
     footer: "Thank you for your purchase!",
+    printedLogo: null,
   };
 
-  const isSale = (d: any): d is Sale => type === 'receipt' && 'order_number' in d;
-  
   const items = data.items as SaleItem[];
   const total = data.total;
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -32,6 +40,17 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
   return (
     <div className="bg-white text-black font-mono text-xs w-[288px] p-2">
       <div className="text-center space-y-1">
+        {currentReceiptSettings.printedLogo && (
+          <div className="flex justify-center mb-2">
+            <Image
+              src={currentReceiptSettings.printedLogo}
+              alt={`${currentStore?.name || 'Store'} Logo`}
+              width={60}
+              height={60}
+              className="object-contain"
+            />
+          </div>
+        )}
         <h1 className="text-sm font-bold">{currentStore?.name || "OrderFlow POS"}</h1>
         <p>{currentStore?.address}</p>
         <p>{format(new Date(), "LLL dd, y HH:mm")}</p>

@@ -191,7 +191,7 @@ export default function SalesPage() {
         };
 
         if (status === 'Checked-in') {
-            handleCompleteSale(true);
+            await handleCompleteSale(true);
             addReservation(reservationData);
         } else {
              addReservation(reservationData);
