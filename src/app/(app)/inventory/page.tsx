@@ -397,22 +397,28 @@ export default function InventoryPage() {
                                         <TableCell className="text-right">{currency}{product.price.toFixed(2)}</TableCell>
                                         <TableCell className="text-right">{getCategoryName(product.category_id) === 'Room' ? 'N/A' : product.stock}</TableCell>
                                         <TableCell className="text-right">
-                                            <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                <MoreHorizontal className="h-4 w-4" />
-                                                <span className="sr-only">Toggle menu</span>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
+                                                    <Edit className="mr-2 h-4 w-4"/>
+                                                    Modify
                                                 </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => handleEditProduct(product)}>Edit</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                Delete
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                            </DropdownMenu>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                        <span className="sr-only">Toggle menu</span>
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                        <DropdownMenuItem onClick={() => handleEditProduct(product)}>Edit</DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
                                         </TableCell>
                                         </TableRow>
                                     ))
