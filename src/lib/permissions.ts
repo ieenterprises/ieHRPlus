@@ -21,6 +21,7 @@ export const backOfficePermissions = {
     LOGIN_WITH_EMAIL: { label: "Log in to the back office using their email and password" },
     VIEW_SALES_REPORTS: { label: "View sales reports" },
     CANCEL_RECEIPTS: { label: "Cancel receipts" },
+    PERMANENTLY_DELETE_VOIDS: { label: "Permanently delete voided logs" },
     MANAGE_ITEMS_BO: { label: "Manage items (Back Office)" },
     VIEW_ITEM_COST_BO: { label: "View cost of items (Back Office)" },
     MANAGE_EMPLOYEES: { label: "Manage employees" },

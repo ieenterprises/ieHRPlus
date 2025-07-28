@@ -70,7 +70,7 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function VoidedPage() {
-  const { voidedLogs, setVoidedLogs, currency, users, products, categories } = useSettings();
+  const { voidedLogs, setVoidedLogs, currency, users, products, categories, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -82,6 +82,10 @@ export default function VoidedPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [activeTab, setActiveTab] = useState("receipts");
   const [logToDelete, setLogToDelete] = useState<string | null>(null);
+
+  const hasDeletePermission = useMemo(() => {
+    return loggedInUser?.permissions.includes('PERMANENTLY_DELETE_VOIDS') ?? false;
+  }, [loggedInUser]);
 
   const enrichedLogs = useMemo(() => {
     return voidedLogs.map(log => {
@@ -275,7 +279,7 @@ export default function VoidedPage() {
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <span className="text-muted-foreground text-xs">Voided by: {log.users?.name || 'N/A'}</span>
-                                                <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)}>
+                                                <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)} disabled={!hasDeletePermission}>
                                                   <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
@@ -414,7 +418,7 @@ export default function VoidedPage() {
                                 <TableCell>
                                     <div className="flex items-center gap-2">
                                         <span className="text-muted-foreground text-xs whitespace-nowrap">Voided by: {log.users?.name || 'N/A'}</span>
-                                        <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)}>
+                                        <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)} disabled={!hasDeletePermission}>
                                           <Trash2 className="h-4 w-4" />
                                         </Button>
                                     </div>
