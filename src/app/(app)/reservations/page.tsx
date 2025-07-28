@@ -261,7 +261,7 @@ export default function ReservationsPage() {
     return nights > 0 ? nights * reservation.products.price : reservation.products.price;
   };
 
-  const handleExport = () => {
+  const handleExportBookings = () => {
     const dataToExport = reservations.map(r => ({
       "Guest Name": r.guest_name,
       "Room": r.products?.name,
@@ -281,6 +281,26 @@ export default function ReservationsPage() {
     link.click();
     document.body.removeChild(link);
     toast({ title: "Export Complete", description: "Bookings report has been downloaded." });
+  };
+  
+  const handleExportRoomStatus = () => {
+    const dataToExport = rooms.map(room => ({
+        "Room Name": room.name,
+        "Category": getCategoryName(room.category_id),
+        "Price": room.price.toFixed(2),
+        "Status": room.status,
+    }));
+    
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `room_status_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete", description: "Room status report has been downloaded." });
   };
 
   if (!featureSettings.reservations) {
@@ -303,9 +323,13 @@ export default function ReservationsPage() {
           description="Manage room bookings and availability."
         />
         <div className="flex items-center gap-2">
-           <Button onClick={handleExport} variant="outline">
+           <Button onClick={handleExportRoomStatus} variant="outline">
               <Download className="mr-2 h-4 w-4" />
-              Export to CSV
+              Export Status
+           </Button>
+           <Button onClick={handleExportBookings} variant="outline">
+              <Download className="mr-2 h-4 w-4" />
+              Export Bookings
            </Button>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
@@ -511,5 +535,3 @@ export default function ReservationsPage() {
     </div>
   );
 }
-
-    
