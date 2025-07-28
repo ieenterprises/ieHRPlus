@@ -13,17 +13,21 @@ type PrintableReceiptProps = {
 };
 
 export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
-  const { stores, posDevices, receiptSettings, currency, selectedStore } = useSettings();
+  const { stores, posDevices, receiptSettings, currency, loggedInUser } = useSettings();
   
   const isSale = (d: any): d is Sale => type === 'receipt' && 'order_number' in d;
 
   const getStoreIdFromSale = (sale: Sale) => {
-    if (!sale.pos_device_id) return selectedStore?.id || null;
+    if (!sale.pos_device_id) {
+        // Fallback for owner or if device isn't set
+        const mainBranch = stores.find(s => s.name === 'Main Branch');
+        return mainBranch?.id || stores[0]?.id || null;
+    }
     const device = posDevices.find(d => d.id === sale.pos_device_id);
-    return device?.store_id || selectedStore?.id || null;
+    return device?.store_id || null;
   }
   
-  const storeId = isSale(data) ? getStoreIdFromSale(data) : selectedStore?.id || (stores.length > 0 ? stores[0].id : null);
+  const storeId = isSale(data) ? getStoreIdFromSale(data) : (stores.find(s => s.name === 'Main Branch')?.id || stores[0]?.id);
   const currentStore = stores.find(s => s.id === storeId);
 
   const defaultSettings = {
