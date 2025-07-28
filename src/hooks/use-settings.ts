@@ -1,7 +1,7 @@
 
 "use client";
 
-import { createContext, useContext, useState, ReactNode, createElement, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
 import type { AnyPermission } from '@/lib/permissions';
 import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
@@ -24,8 +24,8 @@ const MOCK_ROLES: Role[] = [
   { id: "role_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
   { id: "role_manager", name: "Manager", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS"] },
   { id: "role_cashier", name: "Cashier", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "MANAGE_CUSTOMERS", "VIEW_SALES_REPORTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
-  { id: "role_waitress", name: "Waitress", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS"] },
-  { id: "role_barman", name: "Bar Man", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS"] },
+  { id: "role_waitress", name: "Waitress", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
+  { id: "role_barman", name: "Bar Man", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
 ];
 
 const MOCK_USERS: User[] = [
@@ -120,6 +120,7 @@ type SettingsContextType = {
     debts: Debt[];
     reservations: Reservation[];
     voidedLogs: VoidedLog[];
+    openTickets: OpenTicket[];
     
     // Data setters
     setFeatureSettings: React.Dispatch<React.SetStateAction<FeatureSettings>>;
@@ -138,7 +139,6 @@ type SettingsContextType = {
     setDebts: React.Dispatch<React.SetStateAction<Debt[]>>;
     setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
     setVoidedLogs: React.Dispatch<React.SetStateAction<VoidedLog[]>>;
-    setOpenTickets: React.Dispatch<React.SetStateAction<OpenTicket[]>>;
     
     // Auth and session state
     loggedInUser: User | null;
@@ -158,9 +158,11 @@ type SettingsContextType = {
     debtToSettle: Sale | null;
     setDebtToSettle: React.Dispatch<React.SetStateAction<Sale | null>>;
 
-    // Voiding logic
+    // Voiding and ticket logic
     voidSale: (saleId: string, voidedByEmployeeId: string) => void;
     voidTicket: (ticketId: string, voidedByEmployeeId: string) => void;
+    saveTicket: (ticket: any) => Promise<void>;
+    deleteTicket: (ticketId: string) => Promise<void>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -227,7 +229,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         router.push('/sign-in');
     };
 
-    const voidSale = (saleId: string, voidedByEmployeeId: string) => {
+    const voidSale = useCallback((saleId: string, voidedByEmployeeId: string) => {
         const saleToVoid = sales.find(s => s.id === saleId);
         if (!saleToVoid) return;
 
@@ -242,19 +244,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         setSales(prev => prev.filter(s => s.id !== saleId));
         
-        // Also remove associated debt and reservation
         setDebts(prev => prev.filter(d => d.sale_id !== saleId));
         const reservationToVoid = reservations.find(r => r.sale_id === saleId);
         if (reservationToVoid) {
             setReservations(prev => prev.filter(r => r.id !== reservationToVoid.id));
-            // Set room status back to available
             setProducts(prev => prev.map(p => 
                 p.id === reservationToVoid.product_id ? { ...p, status: 'Available' } : p
             ));
         }
-    };
+    }, [sales, reservations, setSales, setVoidedLogs, setDebts, setReservations, setProducts]);
 
-    const voidTicket = (ticketId: string, voidedByEmployeeId: string) => {
+    const voidTicket = useCallback((ticketId: string, voidedByEmployeeId: string) => {
         const ticketToVoid = openTickets.find(t => t.id === ticketId);
         if (!ticketToVoid) return;
 
@@ -268,8 +268,25 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         }]);
 
         setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
-    };
+    }, [openTickets, setOpenTickets, setVoidedLogs]);
 
+    const saveTicket = useCallback(async (ticketData: any) => {
+        setOpenTickets(prev => {
+            const existingIndex = prev.findIndex(t => t.id === ticketData.id);
+            if (existingIndex > -1) {
+                const updatedTickets = [...prev];
+                updatedTickets[existingIndex] = { ...updatedTickets[existingIndex], ...ticketData };
+                return updatedTickets;
+            } else {
+                const newTicket = { ...ticketData, id: `ticket_${new Date().getTime()}`, created_at: new Date().toISOString() };
+                return [...prev, newTicket];
+            }
+        });
+    }, [setOpenTickets]);
+    
+    const deleteTicket = useCallback(async (ticketId: string) => {
+        setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
+    }, [setOpenTickets]);
 
     const value: SettingsContextType = {
         featureSettings, setFeatureSettings,
@@ -288,7 +305,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         debts, setDebts,
         reservations, setReservations,
         voidedLogs, setVoidedLogs,
-        setOpenTickets,
+        openTickets,
         loggedInUser, setLoggedInUser,
         loadingUser,
         logout,
@@ -299,6 +316,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         debtToSettle, setDebtToSettle,
         voidSale,
         voidTicket,
+        saveTicket,
+        deleteTicket
     };
 
     return createElement(SettingsContext.Provider, { value }, children);
