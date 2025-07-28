@@ -39,7 +39,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -84,10 +84,6 @@ export default function KitchenPage() {
 
   const handlePrint = useReactToPrint({
     content: () => printableRef.current,
-    onAfterPrint: () => {
-        setIsPrintDialogOpen(false);
-        setPrintableData(null);
-    },
   });
 
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
@@ -96,12 +92,10 @@ export default function KitchenPage() {
   };
   
   const handleDialogChange = (open: boolean) => {
-    setIsPrintDialogOpen(open);
-    if (open && printableData) {
-      setTimeout(() => {
-        handlePrint();
-      }, 100);
+    if (!open) {
+      setPrintableData(null);
     }
+    setIsPrintDialogOpen(open);
   }
   
   useEffect(() => {
@@ -223,8 +217,13 @@ export default function KitchenPage() {
           <DialogHeader className="sr-only">
             <DialogTitle>Printable {printableData?.type}</DialogTitle>
           </DialogHeader>
-          <div ref={printableRef} className="bg-white">
-            {printableData && <PrintableReceipt data={printableData} type={printableData.type} />}
+          <div className="bg-white rounded-lg overflow-hidden">
+            <div ref={printableRef}>
+                {printableData && <PrintableReceipt data={printableData} type={printableData.type} />}
+            </div>
+             <DialogFooter className="bg-white p-4 border-t">
+                <Button onClick={handlePrint}><Printer className="mr-2 h-4 w-4" /> Print</Button>
+            </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>
