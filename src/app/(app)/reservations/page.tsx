@@ -117,6 +117,7 @@ export default function ReservationsPage() {
     reservations, setReservations, 
     products, setProducts,
     categories,
+    sales,
     currency,
     featureSettings
   } = useSettings();
@@ -141,7 +142,7 @@ export default function ReservationsPage() {
     setLoading(false);
   }, []);
 
-  const addReservation = (reservationData: Omit<Omit<import("/Users/user/Downloads/work/studio-f3/studio-f3/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; }) => {
+  const addReservation = (reservationData: Omit<Omit<import("/Users/user/Downloads/work/studio-f3/studio-f3/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status" | "sale_id"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; sale_id: any; }) => {
      setReservations(prev => [...prev, {
         id: `res_${new Date().getTime()}`,
         created_at: new Date().toISOString(),
@@ -167,6 +168,7 @@ export default function ReservationsPage() {
       check_in: dateRange.from.toISOString(),
       check_out: dateRange.to.toISOString(),
       status: "Confirmed" as const,
+      sale_id: null,
     };
 
     try {
@@ -250,6 +252,19 @@ export default function ReservationsPage() {
     }
   };
 
+  const getPaymentBadgeVariant = (method: string) => {
+    switch (method.toLowerCase()) {
+        case 'cash':
+            return 'default';
+        case 'card':
+            return 'secondary';
+        case 'credit':
+            return 'destructive';
+        default:
+            return 'outline';
+    }
+  }
+
   const getCategoryName = (categoryId: string | null) => {
     if(!categoryId) return 'N/A';
     return categories.find(c => c.id === categoryId)?.name || 'N/A';
@@ -262,14 +277,18 @@ export default function ReservationsPage() {
   };
 
   const handleExportBookings = () => {
-    const dataToExport = reservations.map(r => ({
-      "Guest Name": r.guest_name,
-      "Room": r.products?.name,
-      "Check-in": format(new Date(r.check_in), "yyyy-MM-dd"),
-      "Check-out": format(new Date(r.check_out), "yyyy-MM-dd"),
-      "Total": calculateTotal(r).toFixed(2),
-      "Status": r.status,
-    }));
+    const dataToExport = reservations.map(r => {
+      const sale = sales.find(s => s.id === r.sale_id);
+      return {
+        "Guest Name": r.guest_name,
+        "Room": r.products?.name,
+        "Check-in": format(new Date(r.check_in), "yyyy-MM-dd"),
+        "Check-out": format(new Date(r.check_out), "yyyy-MM-dd"),
+        "Total": calculateTotal(r).toFixed(2),
+        "Payment": sale?.payment_methods.join(', ') || 'N/A',
+        "Status": r.status,
+      }
+    });
 
     const csv = Papa.unparse(dataToExport);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -457,6 +476,7 @@ export default function ReservationsPage() {
                 <TableHead>Room</TableHead>
                 <TableHead>Dates</TableHead>
                 <TableHead className="text-right">Total</TableHead>
+                <TableHead>Payment</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -464,34 +484,48 @@ export default function ReservationsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : reservations.length > 0 ? (
-                reservations.map((reservation) => (
-                  <TableRow key={reservation.id}>
-                    <TableCell className="font-medium">{reservation.guest_name}</TableCell>
-                    <TableCell>{reservation.products?.name}</TableCell>
-                    <TableCell>
-                        {format(new Date(reservation.check_in), "LLL dd, y")} - {format(new Date(reservation.check_out), "LLL dd, y")}
-                    </TableCell>
-                    <TableCell className="text-right">{currency}{calculateTotal(reservation).toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusVariant(reservation.status as any)}>
-                        {reservation.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => handleEditReservation(reservation)}>
-                            <Edit className="h-4 w-4" />
-                        </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                reservations.map((reservation) => {
+                  const sale = sales.find(s => s.id === reservation.sale_id);
+                  return (
+                    <TableRow key={reservation.id}>
+                      <TableCell className="font-medium">{reservation.guest_name}</TableCell>
+                      <TableCell>{reservation.products?.name}</TableCell>
+                      <TableCell>
+                          {format(new Date(reservation.check_in), "LLL dd, y")} - {format(new Date(reservation.check_out), "LLL dd, y")}
+                      </TableCell>
+                      <TableCell className="text-right">{currency}{calculateTotal(reservation).toFixed(2)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {sale ? (
+                              sale.payment_methods.map(method => (
+                                <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">{method}</Badge>
+                              ))
+                          ) : (
+                              <Badge variant="outline">Unpaid</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusVariant(reservation.status as any)}>
+                          {reservation.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                          <Button variant="ghost" size="icon" onClick={() => handleEditReservation(reservation)}>
+                              <Edit className="h-4 w-4" />
+                          </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
                     No reservations found.
                   </TableCell>
                 </TableRow>
@@ -535,3 +569,5 @@ export default function ReservationsPage() {
     </div>
   );
 }
+
+    

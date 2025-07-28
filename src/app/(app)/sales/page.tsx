@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -171,7 +172,7 @@ export default function SalesPage() {
     setLoading(false);
   }, [customers, debtToSettle, products]);
 
-  const addReservation = (reservationData: Omit<Omit<import("/Users/user/Downloads/work/studio-f3/studio-f3/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; }) => {
+  const addReservation = (reservationData: Omit<Omit<import("/Users/user/Downloads/work/studio-f3/studio-f3/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status" | "sale_id"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; sale_id: any; }) => {
      setReservations(prev => [...prev, {
         id: `res_${new Date().getTime()}`,
         created_at: new Date().toISOString(),
@@ -200,7 +201,8 @@ export default function SalesPage() {
             product_id: roomItem.product.id,
             check_in: dateRange.from.toISOString(),
             check_out: dateRange.to.toISOString(),
-            status: status
+            status: status,
+            sale_id: null,
         };
 
         addReservation(reservationData);
@@ -385,7 +387,7 @@ export default function SalesPage() {
           
           newSale = {
             ...originalSale,
-            payment_methods: [...originalSale.payment_methods, ...paymentMethods],
+            payment_methods: [...originalSale.payment_methods.filter(pm => pm !== 'Credit'), ...paymentMethods],
           };
 
           setSales(prevSales => prevSales.map(s => s.id === newSale.id ? newSale : s));
@@ -441,7 +443,8 @@ export default function SalesPage() {
                     product_id: roomItem.product.id,
                     check_in: dateRange.from.toISOString(),
                     check_out: dateRange.to.toISOString(),
-                    status: 'Checked-in'
+                    status: 'Checked-in',
+                    sale_id: newSale.id,
                 });
 
                 setProducts(prevProducts => 
@@ -981,3 +984,5 @@ export default function SalesPage() {
     </TooltipProvider>
   );
 }
+
+    

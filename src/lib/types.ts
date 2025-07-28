@@ -22,6 +22,7 @@ export type Debt = Database['public']['Tables']['debts']['Row'] & {
 };
 export type Reservation = Database['public']['Tables']['reservations']['Row'] & {
   products: { name: string | null; price: number | null; } | null;
+  sale_id: string | null;
 };
 export type OpenTicket = Database['public']['Tables']['open_tickets']['Row'] & {
   users: { name: string | null } | null;
@@ -315,6 +316,7 @@ export type Database = {
           id: string
           product_id: string | null
           status: string
+          sale_id: string | null
         }
         Insert: {
           check_in: string
@@ -324,6 +326,7 @@ export type Database = {
           id?: string
           product_id?: string | null
           status: string
+          sale_id?: string | null
         }
         Update: {
           check_in?: string
@@ -333,6 +336,7 @@ export type Database = {
           id?: string
           product_id?: string | null
           status?: string
+          sale_id?: string | null
         }
         Relationships: [
           {
@@ -340,6 +344,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservations_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
             referencedColumns: ["id"]
           }
         ]
@@ -559,3 +570,5 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
+
+    
