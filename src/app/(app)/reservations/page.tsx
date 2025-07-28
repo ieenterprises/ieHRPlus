@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from "react";
 import { format, differenceInDays } from "date-fns";
-import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download } from "lucide-react";
+import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
 
@@ -117,7 +117,8 @@ export default function ReservationsPage() {
     reservations, setReservations, 
     products, setProducts,
     categories,
-    currency 
+    currency,
+    featureSettings
   } = useSettings();
   const [loading, setLoading] = useState(true);
   
@@ -282,6 +283,17 @@ export default function ReservationsPage() {
     toast({ title: "Export Complete", description: "Bookings report has been downloaded." });
   };
 
+  if (!featureSettings.reservations) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] text-center">
+        <ShieldOff className="h-16 w-16 text-muted-foreground mb-4" />
+        <h2 className="text-2xl font-semibold">Reservations Feature Disabled</h2>
+        <p className="text-muted-foreground mt-2 max-w-md">
+          This feature is currently turned off. To enable room bookings and reservation management, please go to Settings &gt; Features and turn on the Reservations toggle.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

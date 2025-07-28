@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -81,14 +81,26 @@ export default function InventoryPage() {
   
   const { toast } = useToast();
 
-  useEffect(() => {
-    setLoading(false);
-  }, []);
+  const isReservationsEnabled = featureSettings.reservations;
 
   const getCategoryName = (categoryId: string | null) => {
     if (!categoryId) return "N/A";
     return categories.find(c => c.id === categoryId)?.name || "N/A";
   };
+
+  const visibleCategories = useMemo(() => {
+    if (isReservationsEnabled) return categories;
+    return categories.filter(c => c.name.toLowerCase() !== 'room');
+  }, [categories, isReservationsEnabled]);
+
+  const visibleProducts = useMemo(() => {
+    if (isReservationsEnabled) return products;
+    return products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
+  }, [products, categories, isReservationsEnabled, getCategoryName]);
+
+  useEffect(() => {
+    setLoading(false);
+  }, []);
   
   // Product Handlers
   const handleEditProduct = (product: Product) => {
@@ -201,7 +213,7 @@ export default function InventoryPage() {
     const categoryName = formData.get("name") as string;
 
     if (
-      !featureSettings.reservations &&
+      !isReservationsEnabled &&
       (categoryName.toLowerCase() === 'room' || categoryName.toLowerCase() === 'rooms')
     ) {
       toast({
@@ -273,8 +285,8 @@ export default function InventoryPage() {
                             <TableBody>
                                 {loading ? (
                                     <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
-                                ) : products.length > 0 ? (
-                                    products.map((product) => (
+                                ) : visibleProducts.length > 0 ? (
+                                    visibleProducts.map((product) => (
                                         <TableRow key={product.id}>
                                         <TableCell className="hidden sm:table-cell">
                                             <Image
@@ -343,8 +355,8 @@ export default function InventoryPage() {
                              <TableBody>
                                 {loading ? (
                                      <TableRow><TableCell colSpan={2} className="h-24 text-center">Loading...</TableCell></TableRow>
-                                ) : categories.length > 0 ? (
-                                    categories.map((category) => (
+                                ) : visibleCategories.length > 0 ? (
+                                    visibleCategories.map((category) => (
                                         <TableRow key={category.id}>
                                             <TableCell className="font-medium">{category.name}</TableCell>
                                             <TableCell className="text-right">
@@ -410,7 +422,7 @@ export default function InventoryPage() {
                             <SelectValue placeholder="Select a category" />
                         </SelectTrigger>
                         <SelectContent>
-                            {categories.map((category) => (
+                            {visibleCategories.map((category) => (
                                 <SelectItem key={category.id} value={category.id}>
                                     {category.name}
                                 </SelectItem>

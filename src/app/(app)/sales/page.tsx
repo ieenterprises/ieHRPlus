@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
@@ -145,6 +145,7 @@ export default function SalesPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
+  const isReservationsEnabled = featureSettings.reservations;
 
   useEffect(() => {
     const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
@@ -413,9 +414,16 @@ export default function SalesPage() {
   
   const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
   
-  const filteredProducts = products.filter(
-    (product) => categoryFilter === "all" || product.category_id === categoryFilter
-  );
+  const visibleCategories = useMemo(() => {
+    if (isReservationsEnabled) return categories;
+    return categories.filter(c => c.name.toLowerCase() !== 'room');
+  }, [categories, isReservationsEnabled]);
+  
+  const filteredProducts = useMemo(() => {
+    const prods = isReservationsEnabled ? products : products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
+    if (categoryFilter === 'all') return prods;
+    return prods.filter(p => p.category_id === categoryFilter);
+  }, [products, categoryFilter, isReservationsEnabled, getCategoryName]);
 
   const handleClearOrder = () => {
     setOrderItems([]);
@@ -521,7 +529,7 @@ export default function SalesPage() {
                 <Tabs defaultValue="all" onValueChange={setCategoryFilter}>
                 <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
                     <TabsTrigger value="all">All</TabsTrigger>
-                    {categories.map((category) => (
+                    {visibleCategories.map((category) => (
                     <TabsTrigger key={category.id} value={category.id}>
                         {category.name}
                     </TabsTrigger>
