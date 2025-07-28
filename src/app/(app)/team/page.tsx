@@ -60,6 +60,7 @@ const EMPTY_USER: Partial<User> = {
   name: "",
   email: "",
   role: "Cashier",
+  password: "",
   avatar_url: "https://placehold.co/100x100.png",
   permissions: [],
 };
@@ -73,6 +74,7 @@ const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermis
 const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
 
 const systemRoles = ["Owner"];
+const juniorRoles = ["Cashier", "Waitress", "Bar Man"];
 
 export default function TeamPage() {
   const { users, setUsers, roles, setRoles, getPermissionsForRole } = useSettings();
@@ -86,6 +88,8 @@ export default function TeamPage() {
   const [editingRole, setEditingRole] = useState<Partial<Role> | null>(null);
   const [selectedRolePermissions, setSelectedRolePermissions] = useState<AnyPermission[]>([]);
   const [passwordVisible, setPasswordVisible] = useState(false);
+
+  const [juniorAccess, setJuniorAccess] = useState(false);
 
   const { toast } = useToast();
 
@@ -101,7 +105,10 @@ export default function TeamPage() {
   
   useEffect(() => {
     if (editingRole) {
-        setSelectedRolePermissions(editingRole.permissions || []);
+        const rolePerms = editingRole.permissions || [];
+        setSelectedRolePermissions(rolePerms);
+        const hasJuniorPerms = ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS"].every(p => rolePerms.includes(p as AnyPermission));
+        setJuniorAccess(hasJuniorPerms);
     }
   }, [editingRole]);
 
@@ -129,8 +136,9 @@ export default function TeamPage() {
     if (!editingUser) return;
 
     const formData = new FormData(event.currentTarget);
+    const newPassword = formData.get("password") as string;
     
-    const userData = {
+    const userData: Partial<User> = {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       role: formData.get("role") as UserRole,
@@ -138,14 +146,23 @@ export default function TeamPage() {
       avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
     };
 
+    if (newPassword) {
+      userData.password = newPassword;
+    }
+
     try {
         if ('id' in editingUser && editingUser.id) {
             setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...userData } as User : u));
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
-            const newUser = {
-              ...userData,
+            const newUser: User = {
               id: `user_${new Date().getTime()}`,
+              name: userData.name!,
+              email: userData.email!,
+              role: userData.role!,
+              password: userData.password!,
+              permissions: userData.permissions!,
+              avatar_url: userData.avatar_url!,
               created_at: new Date().toISOString(),
             }
             setUsers(prevUsers => [...prevUsers, newUser]);
@@ -236,11 +253,20 @@ export default function TeamPage() {
     toast({ title: "Role Deleted" });
   };
   
-  const handleRolePermissionToggle = (permission: AnyPermission, checked: boolean) => {
-    setSelectedRolePermissions(prev =>
-        checked ? [...prev, permission] : prev.filter(p => p !== permission)
-    );
-  }
+  const handleJuniorAccessToggle = (checked: boolean) => {
+    setJuniorAccess(checked);
+    const juniorPerms: AnyPermission[] = ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS"];
+    
+    setSelectedRolePermissions(prev => {
+      let newPerms = [...prev];
+      if (checked) {
+        newPerms = [...new Set([...newPerms, ...juniorPerms])];
+      } else {
+        newPerms = newPerms.filter(p => !juniorPerms.includes(p));
+      }
+      return newPerms;
+    });
+  };
 
   const getRoleBadgeVariant = (role: UserRole): BadgeProps['variant'] => {
     switch (role) {
@@ -413,7 +439,14 @@ export default function TeamPage() {
                     <div className="space-y-2">
                         <Label htmlFor="password">Password</Label>
                         <div className="relative">
-                          <Input id="password" name="password" type={passwordVisible ? "text" : "password"} placeholder={editingUser?.id ? "Leave blank to keep current password" : "Required for new user"} required={!editingUser?.id} />
+                          <Input 
+                            id="password" 
+                            name="password" 
+                            type={passwordVisible ? "text" : "password"} 
+                            placeholder={editingUser?.id ? "Leave blank to keep current" : ""}
+                            defaultValue={editingUser?.password}
+                            required={!editingUser?.id} 
+                          />
                           <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2 h-7 w-7" onClick={() => setPasswordVisible(!passwordVisible)}>
                             {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </Button>
@@ -445,10 +478,30 @@ export default function TeamPage() {
               <div className="grid md:grid-cols-2 gap-8 py-4">
                   <div className="space-y-4">
                     <div className="space-y-2"><Label htmlFor="name">Role Name</Label><Input id="name" name="name" defaultValue={editingRole?.name} required disabled={isRoleNameLocked} /></div>
+                    {editingRole && juniorRoles.includes(editingRole.name!) && (
+                       <Card className="bg-muted/50">
+                          <CardHeader className="pb-4">
+                            <CardTitle className="text-base">Junior POS Access</CardTitle>
+                            <CardDescription className="text-xs">
+                              A quick way to grant essential permissions for daily operations on the Sales, Orders, and Debts pages.
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                              <div className="flex items-center justify-between">
+                                  <Label htmlFor="junior-access" className="font-normal text-sm">Enable Access</Label>
+                                  <Switch id="junior-access" checked={juniorAccess} onCheckedChange={handleJuniorAccessToggle} />
+                              </div>
+                          </CardContent>
+                       </Card>
+                    )}
                   </div>
                   <div className="space-y-4">
                       <h3 className="text-lg font-medium">Permissions</h3>
-                      {renderPermissions(selectedRolePermissions, handleRolePermissionToggle, false)}
+                       {renderPermissions(selectedRolePermissions, (permission, checked) => {
+                          setSelectedRolePermissions(prev =>
+                              checked ? [...prev, permission] : prev.filter(p => p !== permission)
+                          );
+                      }, false)}
                   </div>
               </div>
               <DialogFooter className="pt-4"><Button type="submit">Save Changes</Button></DialogFooter>

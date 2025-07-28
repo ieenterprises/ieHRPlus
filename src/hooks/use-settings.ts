@@ -3,15 +3,13 @@
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect } from 'react';
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog } from '@/lib/types';
+import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 
 export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
 
 export type FeatureSettings = Record<string, boolean>;
-
-export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier";
 
 // --- MOCK DATA ---
 
@@ -24,13 +22,15 @@ const MOCK_ROLES: Role[] = [
   { id: "role_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
   { id: "role_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
   { id: "role_manager", name: "Manager", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS"] },
-  { id: "role_cashier", name: "Cashier", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS"] },
+  { id: "role_cashier", name: "Cashier", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS"] },
+  { id: "role_waitress", name: "Waitress", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS"] },
+  { id: "role_barman", name: "Bar Man", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS"] },
 ];
 
 const MOCK_USERS: User[] = [
-    { id: 'user_1', name: 'Ada Lovelace', email: 'owner@example.com', role: 'Owner', avatar_url: 'https://placehold.co/100x100.png?text=A', permissions: getPermissionsForRole('Owner', MOCK_ROLES), created_at: new Date().toISOString() },
-    { id: 'user_2', name: 'Grace Hopper', email: 'manager@example.com', role: 'Manager', avatar_url: 'https://placehold.co/100x100.png?text=G', permissions: getPermissionsForRole('Manager', MOCK_ROLES), created_at: new Date().toISOString() },
-    { id: 'user_3', name: 'Charles Babbage', email: 'cashier@example.com', role: 'Cashier', avatar_url: 'https://placehold.co/100x100.png?text=C', permissions: getPermissionsForRole('Cashier', MOCK_ROLES), created_at: new Date().toISOString() },
+    { id: 'user_1', name: 'Ada Lovelace', email: 'owner@example.com', role: 'Owner', password: 'password', avatar_url: 'https://placehold.co/100x100.png?text=A', permissions: getPermissionsForRole('Owner', MOCK_ROLES), created_at: new Date().toISOString() },
+    { id: 'user_2', name: 'Grace Hopper', email: 'manager@example.com', role: 'Manager', password: 'password', avatar_url: 'https://placehold.co/100x100.png?text=G', permissions: getPermissionsForRole('Manager', MOCK_ROLES), created_at: new Date().toISOString() },
+    { id: 'user_3', name: 'Charles Babbage', email: 'cashier@example.com', role: 'Cashier', password: 'password', avatar_url: 'https://placehold.co/100x100.png?text=C', permissions: getPermissionsForRole('Cashier', MOCK_ROLES), created_at: new Date().toISOString() },
 ];
 
 const MOCK_CATEGORIES: Category[] = [
