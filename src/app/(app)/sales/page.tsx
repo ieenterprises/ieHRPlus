@@ -596,6 +596,7 @@ export default function SalesPage() {
                                 size="icon"
                                 className="h-6 w-6 ml-2"
                                 onClick={() => handleRemoveItem(item.product.id)}
+                                disabled={!!activeTicketId}
                             >
                                 <X className="h-4 w-4" />
                             </Button>
