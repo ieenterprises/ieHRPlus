@@ -149,6 +149,8 @@ export default function SalesPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
+
   const isReservationsEnabled = featureSettings.reservations;
 
   useEffect(() => {
@@ -181,6 +183,13 @@ export default function SalesPage() {
         toast({ title: "Missing Information", description: "Please provide guest name and reservation dates.", variant: "destructive" });
         return;
     }
+
+    if (status === 'Checked-in') {
+      setIsCheckingIn(true);
+      setIsReservationPaymentDialogOpen(false);
+      handlePayment(true); // Open payment dialog
+      return;
+    }
     
     try {
         const reservationData = {
@@ -191,12 +200,7 @@ export default function SalesPage() {
             status: status
         };
 
-        if (status === 'Checked-in') {
-            await handleCompleteSale(true);
-            addReservation(reservationData);
-        } else {
-             addReservation(reservationData);
-        }
+        addReservation(reservationData);
         
         if (activeTicketId) await deleteTicket(activeTicketId);
 
@@ -206,7 +210,7 @@ export default function SalesPage() {
         handleClearOrder();
 
         toast({
-          title: status === 'Checked-in' ? "Room Checked In" : "Room Reserved",
+          title: "Room Reserved",
           description: `Booking for ${guestName} in ${roomItem.product.name} has been confirmed.`,
         });
 
@@ -291,13 +295,13 @@ export default function SalesPage() {
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
   const remainingBalance = total - totalPaid;
 
-  const handlePayment = () => {
+  const handlePayment = (forcePaymentDialog = false) => {
     if (orderItems.length === 0) {
       toast({ title: "Empty Order", description: "Please add items to the order before proceeding to payment.", variant: "destructive" });
       return;
     }
     const hasRoom = orderItems.some(item => getCategoryName(item.product.category_id) === 'Room');
-    if (hasRoom) {
+    if (hasRoom && !forcePaymentDialog) {
         setIsReservationPaymentDialogOpen(true);
     } else {
         setPayments([]);
@@ -317,7 +321,7 @@ export default function SalesPage() {
         toast({ title: "Customer Required", description: "Please select a customer.", variant: "destructive" });
         return;
       }
-      handleCompleteSale(false, { customerId: creditCustomerId, amount: remainingBalance });
+      handleCompleteSale({ creditInfo: { customerId: creditCustomerId, amount: remainingBalance } });
       return;
     }
 
@@ -343,8 +347,9 @@ export default function SalesPage() {
       setPayments(payments.filter((_, i) => i !== index));
   };
 
-  const handleCompleteSale = async (isRoomCheckout = false, creditInfo?: { customerId: string, amount: number }) => {
-    if (remainingBalance > 0.001 && !creditInfo && !isRoomCheckout) {
+  const handleCompleteSale = async (options: { creditInfo?: { customerId: string; amount: number; } } = {}) => {
+    const { creditInfo } = options;
+    if (remainingBalance > 0.001 && !creditInfo && !isCheckingIn) {
         toast({ title: "Payment Incomplete", description: `There is still a remaining balance of ${currency}${remainingBalance.toFixed(2)}.`, variant: "destructive" });
         return;
     }
@@ -416,7 +421,27 @@ export default function SalesPage() {
             setDebts(prev => [...prev, newDebt]);
         }
         
-        if (activeTicketId && !isRoomCheckout) await deleteTicket(activeTicketId);
+        if (activeTicketId && !isCheckingIn) await deleteTicket(activeTicketId);
+
+        if (isCheckingIn) {
+            const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
+            if (roomItem && guestName && dateRange?.from && dateRange.to) {
+                addReservation({
+                    guest_name: guestName,
+                    product_id: roomItem.product.id,
+                    check_in: dateRange.from.toISOString(),
+                    check_out: dateRange.to.toISOString(),
+                    status: 'Checked-in'
+                });
+                toast({
+                  title: "Room Checked In",
+                  description: `Booking for ${guestName} in ${roomItem.product.name} has been paid and confirmed.`,
+                });
+            }
+            setIsCheckingIn(false);
+            setGuestName("");
+            setDateRange(undefined);
+        }
 
         const stockUpdates = orderItems
             .filter(item => getCategoryName(item.product.category_id) !== 'Room')
@@ -431,7 +456,7 @@ export default function SalesPage() {
             );
         }
         
-        if (!isRoomCheckout) {
+        if (!isCheckingIn) {
             let toastDescription = debtToSettle 
               ? `Debt settled. Total: ${currency}${total.toFixed(2)}.`
               : `Order complete. Total: ${currency}${total.toFixed(2)}.`;
@@ -442,14 +467,12 @@ export default function SalesPage() {
             }
 
             toast({ title: debtToSettle ? "Debt Settled" : "Sale Completed", description: toastDescription });
-
-            handleClearOrder();
         }
+        
+        handleClearOrder();
+
     } catch (error: any) {
         toast({ title: "Error completing sale", description: error.message, variant: "destructive" });
-        if (!isRoomCheckout) {
-          throw error;
-        }
     }
   };
   
@@ -699,7 +722,7 @@ export default function SalesPage() {
                          <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className="w-full">
-                                    <Button size="lg" className="w-full" onClick={handlePayment} disabled={!loggedInUser}>
+                                    <Button size="lg" className="w-full" onClick={() => handlePayment(false)} disabled={!loggedInUser}>
                                         <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
                                     </Button>
                                 </div>
