@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -44,11 +44,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Upload, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Product, type Category } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
+import Papa from "papaparse";
 
 
 const EMPTY_PRODUCT: Partial<Product> = {
@@ -78,6 +79,9 @@ export default function InventoryPage() {
 
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
+
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { toast } = useToast();
 
@@ -243,6 +247,91 @@ export default function InventoryPage() {
     }
   };
 
+  // Import/Export Handlers
+  const handleExportProducts = () => {
+    const dataToExport = visibleProducts.map(p => ({
+      name: p.name,
+      category_name: getCategoryName(p.category_id),
+      price: p.price,
+      stock: p.stock
+    }));
+
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `products_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete", description: "Product list has been downloaded." });
+  };
+
+  const handleDownloadTemplate = () => {
+    const templateData = [{ name: "Sample Burger", category_name: "Food", price: 10.99, stock: 50 }];
+    const csv = Papa.unparse(templateData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "product_import_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportProducts = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      toast({ title: "No file selected", variant: "destructive" });
+      return;
+    }
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const importedData = results.data as any[];
+        let newProducts: Product[] = [];
+        let errors = 0;
+
+        importedData.forEach((row, index) => {
+          const { name, category_name, price, stock } = row;
+          const category = categories.find(c => c.name.toLowerCase() === category_name?.toLowerCase());
+
+          if (!name || !category || isNaN(parseFloat(price)) || isNaN(parseInt(stock))) {
+            errors++;
+            console.warn(`Skipping invalid row ${index + 1}:`, row);
+            return;
+          }
+
+          newProducts.push({
+            id: `prod_${new Date().getTime()}_${index}`,
+            name,
+            category_id: category.id,
+            price: parseFloat(price),
+            stock: parseInt(stock),
+            image_url: "https://placehold.co/300x200.png",
+            created_at: new Date().toISOString(),
+            status: 'Available',
+          });
+        });
+
+        setProducts(prev => [...prev, ...newProducts]);
+        toast({
+          title: "Import Complete",
+          description: `${newProducts.length} products imported successfully. ${errors > 0 ? `${errors} rows failed.` : ''}`,
+        });
+        setIsImportDialogOpen(false);
+      },
+      error: (error) => {
+        toast({ title: "Import Failed", description: error.message, variant: "destructive" });
+      }
+    });
+  };
+
+
   return (
     <div className="space-y-8">
         <PageHeader
@@ -264,6 +353,12 @@ export default function InventoryPage() {
                             A list of all products in your inventory.
                         </CardDescription>
                         <div className="absolute top-6 right-6 flex items-center gap-2">
+                            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+                              <Upload className="mr-2 h-4 w-4" /> Import
+                            </Button>
+                            <Button variant="outline" onClick={handleExportProducts}>
+                               <Download className="mr-2 h-4 w-4" /> Export
+                            </Button>
                             <Button onClick={handleAddProduct}>
                                 <PlusCircle className="mr-2 h-4 w-4" />
                                 Add Product
@@ -466,6 +561,37 @@ export default function InventoryPage() {
               </DialogFooter>
             </form>
           </DialogContent>
+      </Dialog>
+
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Products</DialogTitle>
+            <DialogDescription>
+              Upload a CSV file to add multiple products at once.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-sm">
+              Your CSV file should have the following columns: `name`, `category_name`, `price`, `stock`. The `category_name` must match an existing category in your system.
+            </p>
+            <Button variant="link" onClick={handleDownloadTemplate} className="p-0 h-auto">
+              Download Template
+            </Button>
+            <Input
+              id="import-file"
+              type="file"
+              accept=".csv"
+              ref={fileInputRef}
+              onChange={handleImportProducts}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );
