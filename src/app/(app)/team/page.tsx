@@ -22,7 +22,7 @@ import {
 import { type User, type UserRole, type Role } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Store, Download } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Store, Download, Eye, EyeOff } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,6 +85,7 @@ export default function TeamPage() {
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Partial<Role> | null>(null);
   const [selectedRolePermissions, setSelectedRolePermissions] = useState<AnyPermission[]>([]);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   const { toast } = useToast();
 
@@ -111,6 +112,7 @@ export default function TeamPage() {
         targetUser.permissions = defaultRole?.permissions || [];
     }
     setEditingUser(targetUser);
+    setPasswordVisible(false);
     setIsUserDialogOpen(true);
   };
   
@@ -410,7 +412,12 @@ export default function TeamPage() {
                     <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" defaultValue={editingUser?.email} required /></div>
                     <div className="space-y-2">
                         <Label htmlFor="password">Password</Label>
-                        <Input id="password" name="password" type="password" placeholder={editingUser?.id ? "Leave blank to keep current password" : "Required for new user"} required={!editingUser?.id} />
+                        <div className="relative">
+                          <Input id="password" name="password" type={passwordVisible ? "text" : "password"} placeholder={editingUser?.id ? "Leave blank to keep current password" : "Required for new user"} required={!editingUser?.id} />
+                          <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2 h-7 w-7" onClick={() => setPasswordVisible(!passwordVisible)}>
+                            {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
                     </div>
                     <div className="space-y-2"><Label htmlFor="role">Role</Label>
                         <Select name="role" required defaultValue={editingUser?.role} onValueChange={handleUserRoleChange}>
