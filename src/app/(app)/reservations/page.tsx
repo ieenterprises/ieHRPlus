@@ -1,9 +1,10 @@
 
+
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { format, differenceInDays } from "date-fns";
-import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff } from "lucide-react";
+import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff, Trash2 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
 
@@ -37,6 +38,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -116,9 +118,13 @@ export default function ReservationsPage() {
     reservations, setReservations, 
     products, setProducts,
     categories,
-    sales,
+    sales, setSales,
     currency,
-    featureSettings
+    featureSettings,
+    loggedInUser,
+    setVoidedLogs,
+    setDebts,
+    debts,
   } = useSettings();
   const [loading, setLoading] = useState(true);
   
@@ -136,6 +142,8 @@ export default function ReservationsPage() {
     const category = categories.find(c => c.id === p.category_id);
     return category?.name === 'Room';
   });
+
+  const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
 
   useEffect(() => {
     setLoading(false);
@@ -235,6 +243,44 @@ export default function ReservationsPage() {
         toast({ title: "Error updating reservation", description: error.message, variant: "destructive" });
     }
   }
+
+  const handleVoidReservation = (reservation: Reservation) => {
+    const saleToVoid = sales.find(s => s.id === reservation.sale_id);
+
+    if (!saleToVoid) {
+      toast({ title: "Error", description: "Associated sale not found.", variant: "destructive" });
+      return;
+    }
+
+    // Add to void logs
+    setVoidedLogs(prev => [...prev, {
+      id: `void_${new Date().getTime()}`,
+      type: 'receipt', // Treat as a receipt void
+      voided_by_employee_id: loggedInUser?.id || 'unknown',
+      created_at: new Date().toISOString(),
+      data: saleToVoid,
+      users: null,
+    }]);
+
+    // Remove from sales
+    setSales(prev => prev.filter(s => s.id !== saleToVoid.id));
+
+    // Remove reservation
+    setReservations(prev => prev.filter(r => r.id !== reservation.id));
+
+    // If it was a credit sale, remove the debt
+    if (saleToVoid.payment_methods.includes('Credit')) {
+      setDebts(prev => prev.filter(d => d.sale_id !== saleToVoid.id));
+    }
+
+    // Set room status to available
+    if (reservation.product_id) {
+      handleStatusChange(reservation.product_id, 'Available');
+    }
+
+    toast({ title: "Booking Voided", description: `Booking for ${reservation.guest_name} has been voided.` });
+  };
+
 
   const getStatusVariant = (status: Reservation['status']) => {
     switch (status) {
@@ -518,9 +564,25 @@ export default function ReservationsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                          <Button variant="ghost" size="icon" onClick={() => handleEditReservation(reservation)}>
-                              <Edit className="h-4 w-4" />
-                          </Button>
+                         <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => handleEditReservation(reservation)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Update Status
+                            </DropdownMenuItem>
+                            {hasPermission('CANCEL_RECEIPTS') && (
+                               <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleVoidReservation(reservation)}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Move to Void
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   )
@@ -571,3 +633,4 @@ export default function ReservationsPage() {
     </div>
   );
 }
+

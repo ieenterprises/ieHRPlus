@@ -78,7 +78,7 @@ export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier" | "Wait
 
 export type VoidedLog = {
   id: string;
-  type: 'ticket' | 'item' | 'receipt';
+  type: 'ticket' | 'item' | 'receipt' | 'reservation';
   voided_by_employee_id: string;
   created_at: string; // This is the date of the void action
   data: Partial<Sale & OpenTicket & {
