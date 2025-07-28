@@ -117,16 +117,16 @@ export default function InventoryPage() {
   const handleInlineEditSave = () => {
     if (!editingCell) return;
 
+    const { productId, field } = editingCell;
+    const value = editingValue;
+
     setProducts(prevProducts =>
-      prevProducts.map(p => {
-        if (p.id === editingCell.productId) {
-          const updatedProduct = { ...p, [editingCell.field]: editingValue };
-          toast({ title: `Product updated`, description: `Set ${editingCell.field} to ${editingValue}.` });
-          return updatedProduct;
-        }
-        return p;
-      })
+      prevProducts.map(p => 
+        p.id === productId ? { ...p, [field]: value } : p
+      )
     );
+
+    toast({ title: `Product updated`, description: `Set ${field} to ${value}.` });
     setEditingCell(null);
   };
   
