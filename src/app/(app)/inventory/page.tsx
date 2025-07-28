@@ -138,7 +138,6 @@ export default function InventoryPage() {
       ? Number(editingValue)
       : editingValue;
   
-    // Only update and show toast if value has changed
     if (originalProduct[field] !== updatedValue) {
       setProducts(prevProducts =>
         prevProducts.map(p =>
