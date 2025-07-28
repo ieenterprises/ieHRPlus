@@ -90,7 +90,7 @@ export default function InventoryPage() {
   const [editingCell, setEditingCell] = useState<{ productId: string; field: keyof Product } | null>(null);
   const [editingValue, setEditingValue] = useState<string | number>('');
   
-  const [activeTab, setActiveTab] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
 
@@ -107,8 +107,8 @@ export default function InventoryPage() {
   const filteredProducts = useMemo(() => {
     let prods = isReservationsEnabled ? products : products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
     
-    if (activeTab !== "all") {
-        prods = prods.filter(p => p.category_id === activeTab);
+    if (categoryFilter !== "all") {
+        prods = prods.filter(p => p.category_id === categoryFilter);
     }
 
     if (searchTerm) {
@@ -116,7 +116,7 @@ export default function InventoryPage() {
     }
     
     return prods;
-  }, [products, categories, isReservationsEnabled, getCategoryName, activeTab, searchTerm]);
+  }, [products, categories, isReservationsEnabled, getCategoryName, categoryFilter, searchTerm]);
 
   useEffect(() => {
     setLoading(false);
@@ -129,17 +129,26 @@ export default function InventoryPage() {
   
   const handleInlineEditSave = () => {
     if (!editingCell) return;
-
+  
     const { productId, field } = editingCell;
-    
-    setProducts(prevProducts =>
-      prevProducts.map(p => 
-        p.id === productId ? { ...p, [field]: editingValue } : p
-      )
-    );
-    
+    const originalProduct = products.find(p => p.id === productId);
+    if (!originalProduct) return;
+  
+    const updatedValue = field === 'price' || field === 'stock'
+      ? Number(editingValue)
+      : editingValue;
+  
+    // Only update and show toast if value has changed
+    if (originalProduct[field] !== updatedValue) {
+      setProducts(prevProducts =>
+        prevProducts.map(p =>
+          p.id === productId ? { ...p, [field]: updatedValue } : p
+        )
+      );
+      toast({ title: `Product updated`, description: `Set ${field} to ${editingValue}.` });
+    }
+  
     setEditingCell(null);
-    toast({ title: `Product updated`, description: `Set ${field} to ${editingValue}.` });
   };
   
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -465,18 +474,21 @@ export default function InventoryPage() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex justify-between items-center mb-4 gap-4">
                             <div className="flex items-center gap-2">
-                                <Tabs defaultValue="all" onValueChange={setActiveTab}>
-                                <TabsList>
-                                    <TabsTrigger value="all">All</TabsTrigger>
+                                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                                  <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Filter by category" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">All Categories</SelectItem>
                                     {visibleCategories.map((category) => (
-                                        <TabsTrigger key={category.id} value={category.id}>
-                                            {category.name}
-                                        </TabsTrigger>
+                                      <SelectItem key={category.id} value={category.id}>
+                                        {category.name}
+                                      </SelectItem>
                                     ))}
-                                </TabsList>
-                                </Tabs>
+                                  </SelectContent>
+                                </Select>
                             </div>
                             <div className="relative w-full max-w-sm">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
