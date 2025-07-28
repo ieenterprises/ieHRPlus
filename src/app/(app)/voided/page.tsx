@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Download, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Trash2, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -54,7 +54,7 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
-import { type VoidedLog, type SaleItem } from "@/lib/types";
+import { type VoidedLog, type SaleItem, Sale, OpenTicket, Reservation, Debt } from "@/lib/types";
 
 const getPaymentBadgeVariant = (method: string) => {
     switch (method.toLowerCase()) {
@@ -70,7 +70,19 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function VoidedPage() {
-  const { voidedLogs, setVoidedLogs, currency, users, products, categories, loggedInUser } = useSettings();
+  const { 
+    voidedLogs, setVoidedLogs, 
+    currency, 
+    users, 
+    products, 
+    categories, 
+    loggedInUser,
+    setSales,
+    setOpenTickets,
+    setDebts,
+    setReservations,
+    setProducts,
+  } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -83,9 +95,9 @@ export default function VoidedPage() {
   const [activeTab, setActiveTab] = useState("receipts");
   const [logToDelete, setLogToDelete] = useState<string | null>(null);
 
-  const hasDeletePermission = useMemo(() => {
-    return loggedInUser?.permissions.includes('PERMANENTLY_DELETE_VOIDS') ?? false;
-  }, [loggedInUser]);
+  const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
+  const hasDeletePermission = hasPermission('PERMANENTLY_DELETE_VOIDS');
+  const hasRestorePermission = hasPermission('CANCEL_RECEIPTS');
 
   const enrichedLogs = useMemo(() => {
     return voidedLogs.map(log => {
@@ -158,6 +170,63 @@ export default function VoidedPage() {
     });
     setLogToDelete(null);
   };
+
+  const handleRestoreLog = (logToRestore: VoidedLog) => {
+    if (!logToRestore) return;
+
+    if (logToRestore.type === 'receipt') {
+        const saleToRestore = logToRestore.data as Sale;
+        setSales(prev => [...prev, saleToRestore]);
+        
+        // If it was a reservation, restore it
+        if (saleToRestore.items.some(item => {
+            const product = products.find(p => p.id === item.id);
+            const category = categories.find(c => c.id === product?.category_id);
+            return category?.name === 'Room';
+        })) {
+            const reservationToRestore = {
+                id: `res_${new Date().getTime()}`,
+                guest_name: saleToRestore.customers?.name || 'Unknown Guest',
+                product_id: saleToRestore.items[0].id,
+                check_in: saleToRestore.created_at!,
+                check_out: new Date().toISOString(), // This is an approximation
+                status: 'Checked-in' as const,
+                sale_id: saleToRestore.id,
+                created_at: saleToRestore.created_at!,
+                products: { name: saleToRestore.items[0].name, price: saleToRestore.items[0].price }
+            };
+            setReservations(prev => [...prev, reservationToRestore]);
+            
+            // Set room status to occupied
+            setProducts(prevProds => prevProds.map(p => p.id === reservationToRestore.product_id ? {...p, status: 'Occupied'} : p));
+        }
+
+        // If it was a credit sale, restore the debt
+        if (saleToRestore.payment_methods.includes('Credit')) {
+            const debtToRestore = {
+                id: `debt_${new Date().getTime()}`,
+                sale_id: saleToRestore.id,
+                customer_id: saleToRestore.customer_id,
+                amount: saleToRestore.total,
+                status: 'Unpaid' as const,
+                created_at: saleToRestore.created_at!,
+                sales: { order_number: saleToRestore.order_number },
+                customers: saleToRestore.customers ? { name: saleToRestore.customers.name } : null,
+            };
+            setDebts(prev => [...prev, debtToRestore as Debt]);
+        }
+        
+        toast({ title: "Receipt Restored", description: `Receipt #${saleToRestore.order_number} has been restored.` });
+
+    } else if (logToRestore.type === 'ticket') {
+        const ticketToRestore = logToRestore.data as OpenTicket;
+        setOpenTickets(prev => [...prev, ticketToRestore]);
+        toast({ title: "Ticket Restored", description: `Ticket "${ticketToRestore.ticket_name}" has been restored.` });
+    }
+
+    setVoidedLogs(prev => prev.filter(log => log.id !== logToRestore.id));
+  };
+
 
   const handleExport = () => {
     let dataToExport: any[] = [];
@@ -279,6 +348,9 @@ export default function VoidedPage() {
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <span className="text-muted-foreground text-xs">Voided by: {log.users?.name || 'N/A'}</span>
+                                                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleRestoreLog(log)} disabled={!hasRestorePermission}>
+                                                    <RotateCcw className="h-4 w-4" />
+                                                </Button>
                                                 <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)} disabled={!hasDeletePermission}>
                                                   <Trash2 className="h-4 w-4" />
                                                 </Button>
@@ -418,6 +490,9 @@ export default function VoidedPage() {
                                 <TableCell>
                                     <div className="flex items-center gap-2">
                                         <span className="text-muted-foreground text-xs whitespace-nowrap">Voided by: {log.users?.name || 'N/A'}</span>
+                                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleRestoreLog(log)} disabled={!hasRestorePermission}>
+                                            <RotateCcw className="h-4 w-4" />
+                                        </Button>
                                         <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)} disabled={!hasDeletePermission}>
                                           <Trash2 className="h-4 w-4" />
                                         </Button>

@@ -19,6 +19,7 @@ type PosContextType = {
     ticket_name?: string;
   }) => Promise<void>;
   deleteTicket: (ticketId: string) => Promise<void>;
+  setOpenTickets: React.Dispatch<React.SetStateAction<OpenTicket[]>>;
 };
 
 const PosContext = createContext<PosContextType | undefined>(undefined);
@@ -78,7 +79,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
   };
   
   return createElement(PosContext.Provider, {
-    value: { openTickets, saveTicket, deleteTicket }
+    value: { openTickets, saveTicket, deleteTicket, setOpenTickets: setOpenTicketsData }
   }, children);
 }
 

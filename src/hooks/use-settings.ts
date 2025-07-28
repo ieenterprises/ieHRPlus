@@ -138,6 +138,7 @@ type SettingsContextType = {
     setDebts: React.Dispatch<React.SetStateAction<Debt[]>>;
     setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
     setVoidedLogs: React.Dispatch<React.SetStateAction<VoidedLog[]>>;
+    setOpenTickets: React.Dispatch<React.SetStateAction<OpenTicket[]>>;
     
     // Auth and session state
     loggedInUser: User | null;
@@ -198,6 +199,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [debts, setDebts] = useLocalStorage<Debt[]>('debts', MOCK_DEBTS);
     const [reservations, setReservations] = useLocalStorage<Reservation[]>('reservations', MOCK_RESERVATIONS);
     const [voidedLogs, setVoidedLogs] = useLocalStorage<VoidedLog[]>('voidedLogs', []);
+    const [openTickets, setOpenTickets] = useLocalStorage<OpenTicket[]>('openTickets', []);
     
     const [loggedInUser, setLoggedInUser] = useLocalStorage<User | null>('loggedInUser', null);
     const [loadingUser, setLoadingUser] = useState(true);
@@ -238,6 +240,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         debts, setDebts,
         reservations, setReservations,
         voidedLogs, setVoidedLogs,
+        setOpenTickets,
         loggedInUser, setLoggedInUser,
         loadingUser,
         logout,
