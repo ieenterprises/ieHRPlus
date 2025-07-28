@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
-import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole } from "@/lib/types";
+import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole, Sale } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -118,6 +118,7 @@ export default function SalesPage() {
     setProducts,
     categories,
     customers,
+    sales,
     setSales,
     debts,
     setDebts,
@@ -356,15 +357,23 @@ export default function SalesPage() {
             price: item.product.price,
         }));
 
-        let newSale;
+        let newSale: Sale;
 
         if (debtToSettle) {
-          // This is a debt settlement, reuse existing sale details but update what's needed
+          // This is a debt settlement, find and update the original sale
+          const originalSale = sales.find(s => s.id === debtToSettle.id);
+          
+          if (!originalSale) {
+            toast({ title: "Error", description: "Original sale not found for this debt.", variant: "destructive" });
+            return;
+          }
+          
           newSale = {
-            ...debtToSettle,
+            ...originalSale,
             payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
-            // The rest of the sale data (items, total, etc.) is implicitly the same
           };
+
+          setSales(prevSales => prevSales.map(s => s.id === newSale.id ? newSale : s));
 
           // Mark the debt as paid
           const originalDebt = debts.find(d => d.sale_id === debtToSettle.id);
