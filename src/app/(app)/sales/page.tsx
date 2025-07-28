@@ -129,8 +129,9 @@ export default function SalesPage() {
     setReservations,
     debtToSettle,
     setDebtToSettle,
+    voidTicket,
   } = useSettings();
-  const { openTickets, saveTicket, deleteTicket, voidTicket } = usePos();
+  const { openTickets, saveTicket, deleteTicket } = usePos();
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   
