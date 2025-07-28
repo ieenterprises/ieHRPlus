@@ -37,6 +37,7 @@ type NavItem = {
   icon: React.ElementType;
   label: string;
   permission?: AnyPermission;
+  featureFlag?: string;
 };
 
 const navItems: NavItem[] = [
@@ -44,7 +45,7 @@ const navItems: NavItem[] = [
   { href: "/sales", icon: ShoppingCart, label: "Sales", permission: "ACCEPT_PAYMENTS" },
   { href: "/kitchen", icon: ClipboardList, label: "Orders", permission: "VIEW_ALL_RECEIPTS" },
   { href: "/inventory", icon: Package, label: "Inventory", permission: "MANAGE_ITEMS_BO" },
-  { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "MANAGE_ITEMS_BO" }, // Assuming managers handle this
+  { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "MANAGE_ITEMS_BO", featureFlag: "reservations" },
   { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES" },
   { href: "/customers", icon: BookUser, label: "Customers", permission: "MANAGE_CUSTOMERS" },
@@ -54,7 +55,7 @@ const navItems: NavItem[] = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { loggedInUser, logout } = useSettings();
+  const { loggedInUser, logout, featureSettings } = useSettings();
 
   const handleLogout = async () => {
     await logout();
@@ -66,7 +67,12 @@ export function AppSidebar() {
     return loggedInUser.permissions.includes(permission);
   };
 
-  const visibleNavItems = navItems.filter(item => hasPermission(item.permission));
+  const isFeatureEnabled = (featureFlag?: string) => {
+    if (!featureFlag) return true; // No feature flag means it's always enabled
+    return featureSettings[featureFlag] === true;
+  };
+
+  const visibleNavItems = navItems.filter(item => hasPermission(item.permission) && isFeatureEnabled(item.featureFlag));
 
   return (
     <Sidebar collapsible="icon">

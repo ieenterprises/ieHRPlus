@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Percent, SlidersHorizontal, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, Receipt } from "lucide-react";
+import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Percent, SlidersHorizontal, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, Receipt, CalendarCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -33,6 +33,7 @@ const settingsNav = [
 
 const featureToggles = [
   { id: "open_tickets", label: "Open tickets", description: "Save and manage orders before payment is complete.", icon: Ticket, defaultEnabled: true },
+  { id: "reservations", label: "Reservations", description: "Enable room booking and reservation management.", icon: CalendarCheck, defaultEnabled: true },
   { id: "shifts", label: "Shifts", description: "Track cash that is put in and taken out of the drawer.", icon: Clock, defaultEnabled: true },
   { id: "time_management", label: "Time management", description: "Track employee check-in and check-out times.", icon: Users, defaultEnabled: false },
   { id: "kitchen_printers", label: "Kitchen printers", description: "Send orders to the kitchen or bar printers.", icon: Printer, defaultEnabled: true },

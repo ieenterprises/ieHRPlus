@@ -170,7 +170,7 @@ const useLocalStorage = <T,>(key: string, defaultValue: T): [T, React.Dispatch<R
 };
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-    const [featureSettings, setFeatureSettings] = useLocalStorage<FeatureSettings>('featureSettings', { open_tickets: true, shifts: true, time_management: false, kitchen_printers: true, dining_options: true, customer_displays: false });
+    const [featureSettings, setFeatureSettings] = useLocalStorage<FeatureSettings>('featureSettings', { open_tickets: true, reservations: true, shifts: true, time_management: false, kitchen_printers: true, dining_options: true, customer_displays: false });
     const [stores, setStores] = useLocalStorage<StoreType[]>('stores', MOCK_STORES);
     const [posDevices, setPosDevices] = useLocalStorage<PosDeviceType[]>('posDevices', MOCK_POS_DEVICES);
     const [printers, setPrinters] = useLocalStorage<PrinterType[]>('printers', MOCK_PRINTERS);
