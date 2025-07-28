@@ -43,8 +43,8 @@ const MOCK_PRODUCTS: Product[] = [
     { id: 'prod_1', name: 'Cheeseburger', price: 12.99, stock: 50, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
     { id: 'prod_2', name: 'Fries', price: 4.99, stock: 100, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
     { id: 'prod_3', name: 'Coca-Cola', price: 2.50, stock: 200, category_id: 'cat_2', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
-    { id: 'prod_4', name: 'Standard Room', price: 150.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
-    { id: 'prod_5', name: 'Deluxe Suite', price: 250.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Occupied' },
+    { id: 'prod_4', name: 'Room 210', price: 150.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
+    { id: 'prod_5', name: 'Room 211', price: 250.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
 ];
 
 const MOCK_CUSTOMERS: Customer[] = [
@@ -248,3 +248,5 @@ export function useSettings() {
     }
     return context;
 }
+
+    
