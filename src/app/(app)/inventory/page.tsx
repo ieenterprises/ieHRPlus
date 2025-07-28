@@ -44,7 +44,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Trash2, Edit, Upload, Download } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Upload, Download, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Product, type Category } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -89,6 +89,10 @@ export default function InventoryPage() {
 
   const [editingCell, setEditingCell] = useState<{ productId: string; field: keyof Product } | null>(null);
   const [editingValue, setEditingValue] = useState<string | number>('');
+  
+  const [activeTab, setActiveTab] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+
 
   const getCategoryName = (categoryId: string | null) => {
     if (!categoryId) return "N/A";
@@ -100,10 +104,19 @@ export default function InventoryPage() {
     return categories.filter(c => c.name.toLowerCase() !== 'room');
   }, [categories, isReservationsEnabled]);
 
-  const visibleProducts = useMemo(() => {
-    if (isReservationsEnabled) return products;
-    return products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
-  }, [products, categories, isReservationsEnabled, getCategoryName]);
+  const filteredProducts = useMemo(() => {
+    let prods = isReservationsEnabled ? products : products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
+    
+    if (activeTab !== "all") {
+        prods = prods.filter(p => p.category_id === activeTab);
+    }
+
+    if (searchTerm) {
+        prods = prods.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    }
+    
+    return prods;
+  }, [products, categories, isReservationsEnabled, getCategoryName, activeTab, searchTerm]);
 
   useEffect(() => {
     setLoading(false);
@@ -118,16 +131,15 @@ export default function InventoryPage() {
     if (!editingCell) return;
 
     const { productId, field } = editingCell;
-    const value = editingValue;
-
+    
     setProducts(prevProducts =>
       prevProducts.map(p => 
-        p.id === productId ? { ...p, [field]: value } : p
+        p.id === productId ? { ...p, [field]: editingValue } : p
       )
     );
-
-    toast({ title: `Product updated`, description: `Set ${field} to ${value}.` });
+    
     setEditingCell(null);
+    toast({ title: `Product updated`, description: `Set ${field} to ${editingValue}.` });
   };
   
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -281,7 +293,7 @@ export default function InventoryPage() {
 
   // Import/Export Handlers
   const handleExportProducts = () => {
-    const dataToExport = visibleProducts.map(p => ({
+    const dataToExport = filteredProducts.map(p => ({
       name: p.name,
       category_name: getCategoryName(p.category_id),
       price: p.price,
@@ -453,6 +465,30 @@ export default function InventoryPage() {
                         </div>
                     </CardHeader>
                     <CardContent>
+                        <div className="flex justify-between items-center mb-4">
+                            <div className="flex items-center gap-2">
+                                <Tabs defaultValue="all" onValueChange={setActiveTab}>
+                                <TabsList>
+                                    <TabsTrigger value="all">All</TabsTrigger>
+                                    {visibleCategories.map((category) => (
+                                        <TabsTrigger key={category.id} value={category.id}>
+                                            {category.name}
+                                        </TabsTrigger>
+                                    ))}
+                                </TabsList>
+                                </Tabs>
+                            </div>
+                            <div className="relative w-full max-w-sm">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    placeholder="Search products by name..."
+                                    className="pl-9"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -467,8 +503,8 @@ export default function InventoryPage() {
                             <TableBody>
                                 {loading ? (
                                     <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
-                                ) : visibleProducts.length > 0 ? (
-                                    visibleProducts.map((product) => (
+                                ) : filteredProducts.length > 0 ? (
+                                    filteredProducts.map((product) => (
                                         <TableRow key={product.id}>
                                             <TableCell className="hidden sm:table-cell">
                                                 <Image
@@ -506,7 +542,7 @@ export default function InventoryPage() {
                                         </TableRow>
                                     ))
                                 ) : (
-                                    <TableRow><TableCell colSpan={6} className="h-24 text-center">No products found.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={6} className="h-24 text-center">No products found for the current filters.</TableCell></TableRow>
                                 )}
                             </TableBody>
                         </Table>
