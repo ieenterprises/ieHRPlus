@@ -506,8 +506,8 @@ export default function InventoryPage() {
                                     <TableHead className="w-[80px] hidden sm:table-cell">Image</TableHead>
                                     <TableHead>Name</TableHead>
                                     <TableHead>Category</TableHead>
-                                    <TableHead className="text-right">Price</TableHead>
-                                    <TableHead className="text-right">Stock</TableHead>
+                                    <TableHead>Price</TableHead>
+                                    <TableHead>Stock</TableHead>
                                     <TableHead><span className="sr-only">Actions</span></TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -528,8 +528,8 @@ export default function InventoryPage() {
                                             </TableCell>
                                             <TableCell className="font-medium">{renderCell(product, 'name')}</TableCell>
                                             <TableCell>{renderCell(product, 'category_id')}</TableCell>
-                                            <TableCell className="text-right">{renderCell(product, 'price')}</TableCell>
-                                            <TableCell className="text-right">{renderCell(product, 'stock')}</TableCell>
+                                            <TableCell>{renderCell(product, 'price')}</TableCell>
+                                            <TableCell>{renderCell(product, 'stock')}</TableCell>
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
