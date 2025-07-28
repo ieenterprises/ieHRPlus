@@ -62,7 +62,7 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function KitchenPage() {
-  const { sales, setSales, products, setProducts, categories, users, loggedInUser, setVoidedLogs } = useSettings();
+  const { sales, products, categories, users, loggedInUser, voidSale, voidTicket } = useSettings();
   const { openTickets, deleteTicket } = usePos();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -206,39 +206,13 @@ export default function KitchenPage() {
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
 
   const handleMoveReceiptToVoid = (saleId: string) => {
-    const saleToVoid = sales.find(s => s.id === saleId);
-    if (!saleToVoid) return;
-
-    setVoidedLogs(prev => [...prev, {
-        id: `void_${new Date().getTime()}`,
-        type: 'receipt',
-        voided_by_employee_id: loggedInUser?.id || 'unknown',
-        created_at: new Date().toISOString(),
-        data: saleToVoid,
-        users: null,
-    }]);
-
-    setSales(prev => prev.filter(s => s.id !== saleId));
-
-    toast({ title: "Receipt Moved", description: `Receipt #${saleToVoid.order_number} has been moved to the voided logs.` });
+    voidSale(saleId, loggedInUser?.id || 'unknown');
+    toast({ title: "Receipt Moved", description: `The receipt has been moved to the voided logs.` });
   };
   
   const handleMoveTicketToVoid = (ticketId: string) => {
-    const ticketToVoid = openTickets.find(t => t.id === ticketId);
-    if (!ticketToVoid) return;
-
-    setVoidedLogs(prev => [...prev, {
-        id: `void_${new Date().getTime()}`,
-        type: 'ticket',
-        voided_by_employee_id: loggedInUser?.id || 'unknown',
-        created_at: new Date().toISOString(),
-        data: ticketToVoid,
-        users: null,
-    }]);
-
-    deleteTicket(ticketId);
-
-    toast({ title: "Ticket Moved", description: `Ticket "${ticketToVoid.ticket_name}" has been moved to the voided logs.` });
+    voidTicket(ticketId, loggedInUser?.id || 'unknown');
+    toast({ title: "Ticket Moved", description: `The ticket has been moved to the voided logs.` });
   }
 
   return (

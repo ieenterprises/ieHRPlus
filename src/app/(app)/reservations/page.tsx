@@ -118,13 +118,11 @@ export default function ReservationsPage() {
     reservations, setReservations, 
     products, setProducts,
     categories,
-    sales, setSales,
+    sales,
     currency,
     featureSettings,
     loggedInUser,
-    setVoidedLogs,
-    setDebts,
-    debts,
+    voidSale,
   } = useSettings();
   const [loading, setLoading] = useState(true);
   
@@ -245,39 +243,11 @@ export default function ReservationsPage() {
   }
 
   const handleVoidReservation = (reservation: Reservation) => {
-    const saleToVoid = sales.find(s => s.id === reservation.sale_id);
-
-    if (!saleToVoid) {
-      toast({ title: "Error", description: "Associated sale not found.", variant: "destructive" });
+    if (!reservation.sale_id) {
+      toast({ title: "Error", description: "Cannot void a reservation without an associated sale.", variant: "destructive" });
       return;
     }
-
-    // Add to void logs
-    setVoidedLogs(prev => [...prev, {
-      id: `void_${new Date().getTime()}`,
-      type: 'receipt', // Treat as a receipt void
-      voided_by_employee_id: loggedInUser?.id || 'unknown',
-      created_at: new Date().toISOString(),
-      data: saleToVoid,
-      users: null,
-    }]);
-
-    // Remove from sales
-    setSales(prev => prev.filter(s => s.id !== saleToVoid.id));
-
-    // Remove reservation
-    setReservations(prev => prev.filter(r => r.id !== reservation.id));
-
-    // If it was a credit sale, remove the debt
-    if (saleToVoid.payment_methods.includes('Credit')) {
-      setDebts(prev => prev.filter(d => d.sale_id !== saleToVoid.id));
-    }
-
-    // Set room status to available
-    if (reservation.product_id) {
-      handleStatusChange(reservation.product_id, 'Available');
-    }
-
+    voidSale(reservation.sale_id, loggedInUser?.id || 'unknown');
     toast({ title: "Booking Voided", description: `Booking for ${reservation.guest_name} has been voided.` });
   };
 
@@ -633,4 +603,3 @@ export default function ReservationsPage() {
     </div>
   );
 }
-

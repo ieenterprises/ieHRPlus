@@ -157,6 +157,10 @@ type SettingsContextType = {
     // Cross-page state
     debtToSettle: Sale | null;
     setDebtToSettle: React.Dispatch<React.SetStateAction<Sale | null>>;
+
+    // Voiding logic
+    voidSale: (saleId: string, voidedByEmployeeId: string) => void;
+    voidTicket: (ticketId: string, voidedByEmployeeId: string) => void;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -223,6 +227,50 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         router.push('/sign-in');
     };
 
+    const voidSale = (saleId: string, voidedByEmployeeId: string) => {
+        const saleToVoid = sales.find(s => s.id === saleId);
+        if (!saleToVoid) return;
+
+        setVoidedLogs(prev => [...prev, {
+            id: `void_${new Date().getTime()}`,
+            type: 'receipt',
+            voided_by_employee_id: voidedByEmployeeId,
+            created_at: new Date().toISOString(),
+            data: saleToVoid,
+            users: null,
+        }]);
+
+        setSales(prev => prev.filter(s => s.id !== saleId));
+        
+        // Also remove associated debt and reservation
+        setDebts(prev => prev.filter(d => d.sale_id !== saleId));
+        const reservationToVoid = reservations.find(r => r.sale_id === saleId);
+        if (reservationToVoid) {
+            setReservations(prev => prev.filter(r => r.id !== reservationToVoid.id));
+            // Set room status back to available
+            setProducts(prev => prev.map(p => 
+                p.id === reservationToVoid.product_id ? { ...p, status: 'Available' } : p
+            ));
+        }
+    };
+
+    const voidTicket = (ticketId: string, voidedByEmployeeId: string) => {
+        const ticketToVoid = openTickets.find(t => t.id === ticketId);
+        if (!ticketToVoid) return;
+
+        setVoidedLogs(prev => [...prev, {
+            id: `void_${new Date().getTime()}`,
+            type: 'ticket',
+            voided_by_employee_id: voidedByEmployeeId,
+            created_at: new Date().toISOString(),
+            data: ticketToVoid,
+            users: null,
+        }]);
+
+        setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
+    };
+
+
     const value: SettingsContextType = {
         featureSettings, setFeatureSettings,
         stores, setStores,
@@ -249,6 +297,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         currency, setCurrency,
         getPermissionsForRole: (role: UserRole) => getPermissionsForRole(role, roles),
         debtToSettle, setDebtToSettle,
+        voidSale,
+        voidTicket,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);

@@ -127,7 +127,7 @@ export default function SalesPage() {
     debts,
     setDebts,
     setReservations,
-    setVoidedLogs,
+    voidTicket,
     debtToSettle,
     setDebtToSettle,
   } = useSettings();
@@ -569,21 +569,8 @@ export default function SalesPage() {
   };
   
   const handleMoveTicketToVoid = (ticketId: string) => {
-    const ticketToVoid = openTickets.find(t => t.id === ticketId);
-    if (!ticketToVoid) return;
-
-    setVoidedLogs(prev => [...prev, {
-        id: `void_${new Date().getTime()}`,
-        type: 'ticket',
-        voided_by_employee_id: loggedInUser?.id || 'unknown',
-        created_at: new Date().toISOString(),
-        data: ticketToVoid,
-        users: null,
-    }]);
-
-    deleteTicket(ticketId);
-
-    toast({ title: "Ticket Moved", description: `Ticket "${ticketToVoid.ticket_name}" has been moved to the voided logs.` });
+    voidTicket(ticketId, loggedInUser?.id || 'unknown');
+    toast({ title: "Ticket Moved", description: `Ticket has been moved to the voided logs.` });
   }
 
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
@@ -984,5 +971,3 @@ export default function SalesPage() {
     </TooltipProvider>
   );
 }
-
-    
