@@ -946,7 +946,7 @@ export default function SalesPage() {
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as any)}>Load</Button>
-                                                    {hasPermission('CANCEL_RECEIPTS') && (
+                                                    {hasPermission('VOID_SAVED_ITEMS') && (
                                                         <Button variant="destructive" size="sm" onClick={() => handleMoveTicketToVoid(ticket.id)}>
                                                             <Trash2 className="mr-2 h-4 w-4" /> Move to Void
                                                         </Button>

@@ -5,7 +5,7 @@ export const posPermissions = {
     APPLY_DISCOUNTS: { label: "Apply discounts with restricted access" },
     CHANGE_TAXES: { label: "Change taxes in a sale" },
     MANAGE_OPEN_TICKETS: { label: "Manage all open tickets" },
-    VOID_SAVED_ITEMS: { label: "Void saved items in open tickets" },
+    VOID_SAVED_ITEMS: { label: "Void open tickets" },
     OPEN_CASH_DRAWER_NO_SALE: { label: "Open cash drawer without making a sale" },
     VIEW_ALL_RECEIPTS: { label: "View all receipts" },
     PERFORM_REFUNDS: { label: "Perform refunds" },
