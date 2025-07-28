@@ -87,9 +87,7 @@ const MOCK_TAXES: Tax[] = [
 
 const MOCK_SALES: Sale[] = []; // Start with no sales, they will be created by the user
 const MOCK_DEBTS: Debt[] = [];
-const MOCK_RESERVATIONS: Reservation[] = [
-    { id: 'res_1', guest_name: 'Jane Smith', product_id: 'prod_5', check_in: new Date().toISOString(), check_out: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString(), status: 'Checked-in', created_at: new Date().toISOString(), products: MOCK_PRODUCTS.find(p => p.id === 'prod_5') || null },
-];
+const MOCK_RESERVATIONS: Reservation[] = [];
 const MOCK_OPEN_TICKETS: OpenTicket[] = [];
 
 // --- Context and Provider ---
