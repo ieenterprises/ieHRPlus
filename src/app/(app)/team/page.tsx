@@ -182,7 +182,7 @@ export default function TeamPage() {
     );
   }
 
-  // Role Handlers (remains the same, using localStorage via useSettings)
+  // Role Handlers
   const handleOpenRoleDialog = (role: Partial<Role> | null) => {
     setEditingRole(role ? { ...role } : { ...EMPTY_ROLE });
     setIsRoleDialogOpen(true);
@@ -201,9 +201,22 @@ export default function TeamPage() {
       name: formData.get("name") as string,
       permissions: selectedRolePermissions,
     };
+    
     if (editingRole.id) {
-        setRoles(roles.map(r => r.id === editingRole.id ? { ...r, ...roleData } as Role : r));
-        toast({ title: "Role Updated" });
+        const updatedRoles = roles.map(r => 
+            r.id === editingRole.id ? { ...r, ...roleData } as Role : r
+        );
+        setRoles(updatedRoles);
+
+        setUsers(currentUsers =>
+            currentUsers.map(user =>
+                user.role === roleData.name
+                    ? { ...user, permissions: roleData.permissions }
+                    : user
+            )
+        );
+        
+        toast({ title: "Role Updated", description: `Permissions for all users with the '${roleData.name}' role have been updated.` });
     } else {
         setRoles([...roles, { id: `role_${new Date().getTime()}`, ...roleData }]);
         toast({ title: "Role Added" });
