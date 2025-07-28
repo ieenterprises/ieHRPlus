@@ -38,7 +38,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -245,6 +245,9 @@ export default function KitchenPage() {
     <div className="space-y-8">
       <Dialog open={isPrintDialogOpen} onOpenChange={handleDialogChange}>
         <DialogContent className="p-0 w-auto bg-transparent border-none shadow-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Printable {printableData?.type}</DialogTitle>
+          </DialogHeader>
           <div ref={printableRef} className="bg-white">
             {printableData && <PrintableReceipt data={printableData} type={printableData.type} />}
           </div>
