@@ -6,6 +6,7 @@ import type { AnyPermission } from '@/lib/permissions';
 import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
+import { subDays, addDays } from 'date-fns';
 
 export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
 
@@ -43,13 +44,14 @@ const MOCK_PRODUCTS: Product[] = [
     { id: 'prod_1', name: 'Cheeseburger', price: 12.99, stock: 50, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
     { id: 'prod_2', name: 'Fries', price: 4.99, stock: 100, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
     { id: 'prod_3', name: 'Coca-Cola', price: 2.50, stock: 200, category_id: 'cat_2', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
-    { id: 'prod_4', name: 'Room 210', price: 150.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
-    { id: 'prod_5', name: 'Room 211', price: 250.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
+    { id: 'prod_4', name: 'Room 210', price: 150.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Occupied' },
+    { id: 'prod_5', name: 'Room 211', price: 250.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Occupied' },
 ];
 
 const MOCK_CUSTOMERS: Customer[] = [
     { id: 'cust_1', name: 'Walk-in Customer', email: 'walkin@example.com', phone: null, created_at: new Date().toISOString() },
     { id: 'cust_2', name: 'John Doe', email: 'john.doe@example.com', phone: '555-1234', created_at: new Date().toISOString() },
+    { id: 'cust_3', name: 'Jane Smith', email: 'jane.smith@example.com', phone: '555-5678', created_at: new Date().toISOString() },
 ];
 
 const MOCK_STORES: StoreType[] = [
@@ -85,9 +87,17 @@ const MOCK_TAXES: Tax[] = [
     { id: 'tax_2', name: 'Service Charge', rate: 10, is_default: false, type: 'Added' },
 ];
 
-const MOCK_SALES: Sale[] = []; // Start with no sales, they will be created by the user
-const MOCK_DEBTS: Debt[] = [];
-const MOCK_RESERVATIONS: Reservation[] = [];
+const MOCK_SALES: Sale[] = [
+    { id: 'sale_res_1', order_number: 1001, created_at: subDays(new Date(), 2).toISOString(), items: [{id: 'prod_4', name: 'Room 210', quantity: 1, price: 150.00}], total: 150.00, payment_methods: ['Cash'], customer_id: 'cust_2', employee_id: 'user_2', pos_device_id: 'pos_1', status: 'Fulfilled', customers: MOCK_CUSTOMERS[1], users: {name: MOCK_USERS[1].name}, pos_devices: {store_id: 'store_1'} },
+    { id: 'sale_res_2', order_number: 1002, created_at: subDays(new Date(), 1).toISOString(), items: [{id: 'prod_5', name: 'Room 211', quantity: 1, price: 250.00}], total: 250.00, payment_methods: ['Credit'], customer_id: 'cust_3', employee_id: 'user_2', pos_device_id: 'pos_1', status: 'Fulfilled', customers: MOCK_CUSTOMERS[2], users: {name: MOCK_USERS[1].name}, pos_devices: {store_id: 'store_1'} },
+]; 
+const MOCK_DEBTS: Debt[] = [
+    { id: 'debt_res_1', sale_id: 'sale_res_2', customer_id: 'cust_3', amount: 250.00, status: 'Unpaid', created_at: subDays(new Date(), 1).toISOString(), sales: {order_number: 1002}, customers: {name: MOCK_CUSTOMERS[2].name} }
+];
+const MOCK_RESERVATIONS: Reservation[] = [
+    { id: 'res_1', guest_name: 'John Doe', product_id: 'prod_4', check_in: subDays(new Date(), 2).toISOString(), check_out: addDays(new Date(), 3).toISOString(), status: 'Checked-in', sale_id: 'sale_res_1', created_at: subDays(new Date(), 2).toISOString(), products: {name: 'Room 210', price: 150.00} },
+    { id: 'res_2', guest_name: 'Jane Smith', product_id: 'prod_5', check_in: subDays(new Date(), 1).toISOString(), check_out: addDays(new Date(), 5).toISOString(), status: 'Checked-in', sale_id: 'sale_res_2', created_at: subDays(new Date(), 1).toISOString(), products: {name: 'Room 211', price: 250.00} },
+];
 const MOCK_OPEN_TICKETS: OpenTicket[] = [];
 
 // --- Context and Provider ---
@@ -248,5 +258,3 @@ export function useSettings() {
     }
     return context;
 }
-
-    
