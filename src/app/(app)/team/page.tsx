@@ -479,22 +479,6 @@ export default function TeamPage() {
               <div className="grid md:grid-cols-2 gap-8 py-4">
                   <div className="space-y-4">
                     <div className="space-y-2"><Label htmlFor="name">Role Name</Label><Input id="name" name="name" defaultValue={editingRole?.name} required disabled={isRoleNameLocked} /></div>
-                    {editingRole && juniorRoles.includes(editingRole.name!) && (
-                       <Card className="bg-muted/50">
-                          <CardHeader className="pb-4">
-                            <CardTitle className="text-base">Junior POS Access</CardTitle>
-                            <CardDescription className="text-xs">
-                              A quick way to grant essential permissions for daily operations on the Sales, Orders, and Debts pages.
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                              <div className="flex items-center justify-between">
-                                  <Label htmlFor="junior-access" className="font-normal text-sm">Enable Access</Label>
-                                  <Switch id="junior-access" checked={juniorAccess} onCheckedChange={handleJuniorAccessToggle} />
-                              </div>
-                          </CardContent>
-                       </Card>
-                    )}
                   </div>
                   <div className="space-y-4">
                       <h3 className="text-lg font-medium">Permissions</h3>
