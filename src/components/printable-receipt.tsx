@@ -13,26 +13,29 @@ type PrintableReceiptProps = {
 };
 
 export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
-  const { stores, posDevices, receiptSettings, currency } = useSettings();
+  const { stores, posDevices, receiptSettings, currency, selectedStore } = useSettings();
   
   const isSale = (d: any): d is Sale => type === 'receipt' && 'order_number' in d;
 
   const getStoreIdFromSale = (sale: Sale) => {
-    if (!sale.pos_device_id) return null;
+    if (!sale.pos_device_id) return selectedStore?.id || null;
     const device = posDevices.find(d => d.id === sale.pos_device_id);
-    return device?.store_id || null;
+    return device?.store_id || selectedStore?.id || null;
   }
   
-  const storeId = isSale(data) ? getStoreIdFromSale(data) : (stores.length > 0 ? stores[0].id : null);
+  const storeId = isSale(data) ? getStoreIdFromSale(data) : selectedStore?.id || (stores.length > 0 ? stores[0].id : null);
   const currentStore = stores.find(s => s.id === storeId);
 
-  const currentReceiptSettings = (storeId && receiptSettings[storeId]) || {
+  const defaultSettings = {
     header: `Welcome to ${currentStore?.name || 'our store'}!`,
     footer: "Thank you for your purchase!",
     printedLogo: null,
     showCustomerInfo: true,
-    showComments: false
+    showComments: false,
+    language: 'en',
   };
+
+  const currentReceiptSettings = (storeId && receiptSettings[storeId]) || defaultSettings;
 
   const items = data.items as SaleItem[];
   const total = data.total;
@@ -40,15 +43,15 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
   const tax = total - subtotal;
   
   return (
-    <div className="bg-white text-black font-mono text-xs w-[288px] p-2">
+    <div className="bg-white text-black font-mono text-xs w-[302px] p-2">
       <div className="text-center space-y-1">
         {currentReceiptSettings.printedLogo && (
           <div className="flex justify-center mb-2">
             <Image
               src={currentReceiptSettings.printedLogo}
               alt={`${currentStore?.name || 'Store'} Logo`}
-              width={60}
-              height={60}
+              width={80}
+              height={80}
               className="object-contain"
             />
           </div>
@@ -56,6 +59,8 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
         <h1 className="text-sm font-bold">{currentStore?.name || "OrderFlow POS"}</h1>
         <p>{currentStore?.address}</p>
         <p>{format(new Date(data.created_at!), "LLL dd, y HH:mm")}</p>
+        
+        {currentReceiptSettings.header && <p className="pt-1">{currentReceiptSettings.header}</p>}
       </div>
 
       <div className="my-2 border-t border-dashed border-black"></div>
@@ -132,7 +137,6 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
       <div className="my-2 border-t border-dashed border-black"></div>
       
       <div className="text-center space-y-1">
-        <p>{currentReceiptSettings.header}</p>
         <p>{currentReceiptSettings.footer}</p>
       </div>
     </div>
