@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,11 +49,13 @@ const EMPTY_CUSTOMER: Partial<Customer> = {
 };
 
 export default function CustomersPage() {
-  const { customers, setCustomers, debts } = useSettings();
+  const { customers, setCustomers, debts, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Partial<Customer> | null>(null);
   const { toast } = useToast();
+
+  const canManageCustomers = useMemo(() => loggedInUser?.permissions.includes('MANAGE_CUSTOMERS') ?? false, [loggedInUser]);
 
   useEffect(() => {
     setLoading(false);
@@ -145,10 +147,12 @@ export default function CustomersPage() {
               <Download className="mr-2 h-4 w-4" />
               Export to CSV
             </Button>
-            <Button onClick={() => handleOpenDialog(null)}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add Customer
-            </Button>
+            {canManageCustomers && (
+              <Button onClick={() => handleOpenDialog(null)}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Customer
+              </Button>
+            )}
         </div>
       </div>
 
@@ -166,15 +170,17 @@ export default function CustomersPage() {
                 <TableHead>Name</TableHead>
                 <TableHead className="hidden md:table-cell">Email</TableHead>
                 <TableHead className="hidden sm:table-cell">Phone</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
+                {canManageCustomers && (
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={canManageCustomers ? 4 : 3} className="text-center text-muted-foreground h-24">
                     Loading...
                   </TableCell>
                 </TableRow>
@@ -184,30 +190,32 @@ export default function CustomersPage() {
                     <TableCell className="font-medium">{customer.name}</TableCell>
                     <TableCell className="hidden md:table-cell">{customer.email}</TableCell>
                     <TableCell className="hidden sm:table-cell">{customer.phone}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button aria-haspopup="true" size="icon" variant="ghost">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Toggle menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleOpenDialog(customer)}>
-                            <Edit className="mr-2 h-4 w-4" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteCustomer(customer.id)}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {canManageCustomers && (
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Toggle menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => handleOpenDialog(customer)}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteCustomer(customer.id)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={canManageCustomers ? 4 : 3} className="text-center text-muted-foreground h-24">
                     No customers found.
                   </TableCell>
                 </TableRow>

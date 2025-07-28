@@ -69,7 +69,8 @@ export default function InventoryPage() {
     products, setProducts, 
     categories, setCategories, 
     currency,
-    featureSettings
+    featureSettings,
+    loggedInUser,
   } = useSettings();
   const [loading, setLoading] = useState(true);
 
@@ -93,6 +94,7 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
+  const canManageInventory = useMemo(() => loggedInUser?.permissions.includes('MANAGE_ITEMS_BO') ?? false, [loggedInUser]);
 
   const getCategoryName = (categoryId: string | null) => {
     if (!categoryId) return "N/A";
@@ -123,12 +125,13 @@ export default function InventoryPage() {
   }, []);
 
   const handleInlineEditClick = (product: Product, field: keyof Product) => {
+    if (!canManageInventory) return;
     setEditingCell({ productId: product.id, field });
     setEditingValue(product[field] as string | number);
   };
   
   const handleInlineEditSave = () => {
-    if (!editingCell) return;
+    if (!editingCell || !canManageInventory) return;
   
     const { productId, field } = editingCell;
     const originalProduct = products.find(p => p.id === productId);
@@ -457,20 +460,22 @@ export default function InventoryPage() {
                     <CardHeader className="relative">
                         <CardTitle>Products</CardTitle>
                         <CardDescription>
-                            A list of all products in your inventory. Click on a cell to edit.
+                           {canManageInventory ? "A list of all products in your inventory. Click on a cell to edit." : "A list of all products in your inventory."}
                         </CardDescription>
-                        <div className="absolute top-6 right-6 flex items-center gap-2">
-                            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
-                              <Upload className="mr-2 h-4 w-4" /> Import
-                            </Button>
-                            <Button variant="outline" onClick={handleExportProducts}>
-                               <Download className="mr-2 h-4 w-4" /> Export
-                            </Button>
-                            <Button onClick={handleAddProduct}>
-                                <PlusCircle className="mr-2 h-4 w-4" />
-                                Add Product
-                            </Button>
-                        </div>
+                         {canManageInventory && (
+                            <div className="absolute top-6 right-6 flex items-center gap-2">
+                                <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+                                <Upload className="mr-2 h-4 w-4" /> Import
+                                </Button>
+                                <Button variant="outline" onClick={handleExportProducts}>
+                                <Download className="mr-2 h-4 w-4" /> Export
+                                </Button>
+                                <Button onClick={handleAddProduct}>
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Add Product
+                                </Button>
+                            </div>
+                         )}
                     </CardHeader>
                     <CardContent>
                         <div className="flex justify-between items-center mb-4 gap-4">
@@ -508,12 +513,12 @@ export default function InventoryPage() {
                                     <TableHead>Category</TableHead>
                                     <TableHead>Price</TableHead>
                                     <TableHead>Stock</TableHead>
-                                    <TableHead><span className="sr-only">Actions</span></TableHead>
+                                    {canManageInventory && <TableHead><span className="sr-only">Actions</span></TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
-                                    <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={canManageInventory ? 6 : 5} className="h-24 text-center">Loading...</TableCell></TableRow>
                                 ) : filteredProducts.length > 0 ? (
                                     filteredProducts.map((product) => (
                                         <TableRow key={product.id}>
@@ -530,30 +535,32 @@ export default function InventoryPage() {
                                             <TableCell>{renderCell(product, 'category_id')}</TableCell>
                                             <TableCell>{renderCell(product, 'price')}</TableCell>
                                             <TableCell>{renderCell(product, 'stock')}</TableCell>
-                                            <TableCell className="text-right">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                        <span className="sr-only">Toggle menu</span>
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuItem onClick={() => handleEditProduct(product)}>
-                                                            <Edit className="mr-2 h-4 w-4" /> Edit Full Details
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Delete
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </TableCell>
+                                             {canManageInventory && (
+                                                <TableCell className="text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                            <span className="sr-only">Toggle menu</span>
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                            <DropdownMenuItem onClick={() => handleEditProduct(product)}>
+                                                                <Edit className="mr-2 h-4 w-4" /> Edit Full Details
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </TableCell>
+                                             )}
                                         </TableRow>
                                     ))
                                 ) : (
-                                    <TableRow><TableCell colSpan={6} className="h-24 text-center">No products found for the current filters.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={canManageInventory ? 6 : 5} className="h-24 text-center">No products found for the current filters.</TableCell></TableRow>
                                 )}
                             </TableBody>
                         </Table>
@@ -568,37 +575,41 @@ export default function InventoryPage() {
                         <CardDescription>
                             A list of all product categories.
                         </CardDescription>
-                         <div className="absolute top-6 right-6">
-                            <Button onClick={handleAddCategory}>
-                                <PlusCircle className="mr-2 h-4 w-4" />
-                                Add Category
-                            </Button>
-                        </div>
+                         {canManageInventory && (
+                             <div className="absolute top-6 right-6">
+                                <Button onClick={handleAddCategory}>
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Add Category
+                                </Button>
+                            </div>
+                         )}
                     </CardHeader>
                     <CardContent>
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Name</TableHead>
-                                    <TableHead className="w-[120px] text-right">Actions</TableHead>
+                                    {canManageInventory && <TableHead className="w-[120px] text-right">Actions</TableHead>}
                                 </TableRow>
                             </TableHeader>
                              <TableBody>
                                 {loading ? (
-                                     <TableRow><TableCell colSpan={2} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                     <TableRow><TableCell colSpan={canManageInventory ? 2 : 1} className="h-24 text-center">Loading...</TableCell></TableRow>
                                 ) : visibleCategories.length > 0 ? (
                                     visibleCategories.map((category) => (
                                         <TableRow key={category.id}>
                                             <TableCell className="font-medium">{category.name}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Button variant="ghost" size="icon" onClick={() => handleEditCategory(category)}><Edit className="h-4 w-4" /></Button>
-                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(category.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                            </TableCell>
+                                            {canManageInventory && (
+                                                <TableCell className="text-right">
+                                                    <Button variant="ghost" size="icon" onClick={() => handleEditCategory(category)}><Edit className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(category.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                                </TableCell>
+                                            )}
                                         </TableRow>
                                     ))
                                 ) : (
                                   <TableRow>
-                                    <TableCell colSpan={2} className="text-center text-muted-foreground h-24">
+                                    <TableCell colSpan={canManageInventory ? 2 : 1} className="text-center text-muted-foreground h-24">
                                       No categories created yet.
                                     </TableCell>
                                   </TableRow>

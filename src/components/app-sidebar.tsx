@@ -36,7 +36,7 @@ type NavItem = {
   href: string;
   icon: React.ElementType;
   label: string;
-  permission?: AnyPermission;
+  permission?: AnyPermission | AnyPermission[];
   featureFlag?: string;
 };
 
@@ -44,11 +44,11 @@ const navItems: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permission: "VIEW_SALES_REPORTS" },
   { href: "/sales", icon: ShoppingCart, label: "Sales", permission: "ACCEPT_PAYMENTS" },
   { href: "/kitchen", icon: ClipboardList, label: "Orders", permission: "VIEW_ALL_RECEIPTS" },
-  { href: "/inventory", icon: Package, label: "Inventory", permission: "MANAGE_ITEMS_BO" },
+  { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"] },
   { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "MANAGE_ITEMS_BO", featureFlag: "reservations" },
   { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES" },
-  { href: "/customers", icon: BookUser, label: "Customers", permission: "MANAGE_CUSTOMERS" },
+  { href: "/customers", icon: BookUser, label: "Customers", permission: ["MANAGE_CUSTOMERS", "VIEW_CUSTOMERS"] },
   { href: "/debts", icon: ReceiptText, label: "Debts", permission: "VIEW_ALL_RECEIPTS" },
   { href: "/voided", icon: Trash2, label: "Voided", permission: "VIEW_SALES_REPORTS" },
 ];
@@ -61,10 +61,15 @@ export function AppSidebar() {
     await logout();
   };
   
-  const hasPermission = (permission?: AnyPermission) => {
-    if (!permission) return true; // Public route within the app
+  const hasPermission = (permission?: AnyPermission | AnyPermission[]) => {
+    if (!permission) return true;
     if (!loggedInUser) return false;
-    return loggedInUser.permissions.includes(permission);
+
+    const userPermissions = new Set(loggedInUser.permissions);
+    if (Array.isArray(permission)) {
+      return permission.some(p => userPermissions.has(p));
+    }
+    return userPermissions.has(permission);
   };
 
   const isFeatureEnabled = (featureFlag?: string) => {
