@@ -30,6 +30,8 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
     header: `Welcome to ${currentStore?.name || 'our store'}!`,
     footer: "Thank you for your purchase!",
     printedLogo: null,
+    showCustomerInfo: true,
+    showComments: false
   };
 
   const items = data.items as SaleItem[];
@@ -53,7 +55,7 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
         )}
         <h1 className="text-sm font-bold">{currentStore?.name || "OrderFlow POS"}</h1>
         <p>{currentStore?.address}</p>
-        <p>{format(new Date(), "LLL dd, y HH:mm")}</p>
+        <p>{format(new Date(data.created_at!), "LLL dd, y HH:mm")}</p>
       </div>
 
       <div className="my-2 border-t border-dashed border-black"></div>
@@ -63,6 +65,9 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
           <>
             <p className="font-bold">RECEIPT #{data.order_number}</p>
             <p>Cashier: {data.users?.name || 'N/A'}</p>
+            {currentReceiptSettings.showCustomerInfo && data.customers && (
+              <p>Customer: {data.customers.name}</p>
+            )}
           </>
         ) : (
           <p className="font-bold">OPEN TICKET: {data.ticket_name}</p>
