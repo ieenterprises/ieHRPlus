@@ -119,9 +119,12 @@ export default function SalesPage() {
     categories,
     customers,
     setSales,
+    debts,
     setDebts,
     setReservations,
     setVoidedLogs,
+    debtToSettle,
+    setDebtToSettle,
   } = useSettings();
   const { openTickets, saveTicket, deleteTicket } = usePos();
 
@@ -148,10 +151,19 @@ export default function SalesPage() {
   const isReservationsEnabled = featureSettings.reservations;
 
   useEffect(() => {
-    const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
-    if (walkIn) setSelectedCustomerId(walkIn.id);
+    if (debtToSettle) {
+      const debtItems: OrderItem[] = debtToSettle.items.map(item => {
+        const product = products.find(p => p.id === item.id);
+        return product ? { product, quantity: item.quantity } : null;
+      }).filter((item): item is OrderItem => item !== null);
+      setOrderItems(debtItems);
+      setSelectedCustomerId(debtToSettle.customer_id);
+    } else {
+      const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
+      if (walkIn) setSelectedCustomerId(walkIn.id);
+    }
     setLoading(false);
-  }, [customers]);
+  }, [customers, debtToSettle, products]);
 
   const addReservation = (reservationData: Omit<Omit<import("/Users/user/Downloads/work/studio-f3/studio-f3/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; }) => {
      setReservations(prev => [...prev, {
@@ -344,23 +356,42 @@ export default function SalesPage() {
             price: item.product.price,
         }));
 
-        const newSale = {
-            id: `sale_${new Date().getTime()}`,
-            order_number: Math.floor(Math.random() * 100000),
-            created_at: new Date().toISOString(),
-            items: saleItems,
-            total: total,
-            payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
-            customer_id: creditInfo ? creditInfo.customerId : selectedCustomerId,
-            employee_id: loggedInUser?.id || null,
-            pos_device_id: selectedDevice?.id || null,
-            status: 'Fulfilled' as const,
-            customers: customers.find(c => c.id === (creditInfo ? creditInfo.customerId : selectedCustomerId)) || null,
-            users: { name: loggedInUser?.name || null },
-            pos_devices: selectedDevice ? { store_id: selectedDevice.store_id } : null,
-        };
+        let newSale;
 
-        setSales(prev => [...prev, newSale]);
+        if (debtToSettle) {
+          // This is a debt settlement, reuse existing sale details but update what's needed
+          newSale = {
+            ...debtToSettle,
+            payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
+            // The rest of the sale data (items, total, etc.) is implicitly the same
+          };
+
+          // Mark the debt as paid
+          const originalDebt = debts.find(d => d.sale_id === debtToSettle.id);
+          if (originalDebt) {
+            setDebts(prevDebts => prevDebts.map(d => 
+              d.id === originalDebt.id ? { ...d, status: 'Paid' } : d
+            ));
+          }
+        } else {
+          // This is a new sale
+          newSale = {
+              id: `sale_${new Date().getTime()}`,
+              order_number: Math.floor(Math.random() * 100000),
+              created_at: new Date().toISOString(),
+              items: saleItems,
+              total: total,
+              payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
+              customer_id: creditInfo ? creditInfo.customerId : selectedCustomerId,
+              employee_id: loggedInUser?.id || null,
+              pos_device_id: selectedDevice?.id || null,
+              status: 'Fulfilled' as const,
+              customers: customers.find(c => c.id === (creditInfo ? creditInfo.customerId : selectedCustomerId)) || null,
+              users: { name: loggedInUser?.name || null },
+              pos_devices: selectedDevice ? { store_id: selectedDevice.store_id } : null,
+          };
+          setSales(prev => [...prev, newSale]);
+        }
         
         if (creditInfo) {
             const newDebt = {
@@ -392,17 +423,18 @@ export default function SalesPage() {
         }
         
         if (!isRoomCheckout) {
-            let toastDescription = `Order complete. Total: ${currency}${total.toFixed(2)}.`;
+            let toastDescription = debtToSettle 
+              ? `Debt settled. Total: ${currency}${total.toFixed(2)}.`
+              : `Order complete. Total: ${currency}${total.toFixed(2)}.`;
+
             if (creditInfo) {
                 const customer = customers.find(c => c.id === creditInfo.customerId);
                 toastDescription += ` ${currency}${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
             }
 
-            toast({ title: "Sale Completed", description: toastDescription });
+            toast({ title: debtToSettle ? "Debt Settled" : "Sale Completed", description: toastDescription });
 
             handleClearOrder();
-            setPayments([]);
-            setIsSplitPaymentDialogOpen(false);
         }
     } catch (error: any) {
         toast({ title: "Error completing sale", description: error.message, variant: "destructive" });
@@ -429,6 +461,12 @@ export default function SalesPage() {
     setOrderItems([]);
     setActiveTicketId(null);
     setLoadedTicketItemIds([]);
+    setPayments([]);
+    setIsSplitPaymentDialogOpen(false);
+    if(debtToSettle) setDebtToSettle(null);
+    // Reset customer to walk-in
+    const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
+    if (walkIn) setSelectedCustomerId(walkIn.id);
   };
 
   const handleSaveOrder = async () => {
@@ -457,7 +495,7 @@ export default function SalesPage() {
   };
 
   const handleLoadTicket = (ticket: OpenTicket) => {
-    if (orderItems.length > 0 && !activeTicketId) {
+    if (orderItems.length > 0 && !activeTicketId && !debtToSettle) {
       if (!window.confirm("Loading this ticket will replace your current unsaved order. Are you sure?")) {
         return;
       }
@@ -501,6 +539,8 @@ export default function SalesPage() {
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
   
   const currentPaymentType = configuredPaymentTypes.find(p => p.name === splitPaymentMethod);
+  
+  const cardTitle = debtToSettle ? "Settle Debt" : activeTicketId ? "Saved Order" : "Current Order";
 
   return (
     <TooltipProvider>
@@ -508,7 +548,7 @@ export default function SalesPage() {
             <div className="flex items-center justify-between">
                 <PageHeader title="Sales" description="Create a new order for products or room bookings." />
                 <div className="flex items-center gap-2">
-                    <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId}>
+                    <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId} disabled={!!debtToSettle}>
                         <SelectTrigger className="w-[200px]">
                             <SelectValue placeholder="Select Customer" />
                         </SelectTrigger>
@@ -516,7 +556,7 @@ export default function SalesPage() {
                             {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
-                    {featureSettings.open_tickets && (
+                    {featureSettings.open_tickets && !debtToSettle && (
                         <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
                             <Ticket className="mr-2 h-4 w-4" />
                             Open Tickets ({openTickets.length})
@@ -560,8 +600,9 @@ export default function SalesPage() {
             <div className="lg:sticky lg:top-8">
                 <Card>
                 <CardHeader>
-                    <CardTitle>{activeTicketId ? "Saved Order" : "Current Order"}</CardTitle>
+                    <CardTitle>{cardTitle}</CardTitle>
                     {activeTicketId && <CardDescription>Now editing a saved ticket.</CardDescription>}
+                    {debtToSettle && <CardDescription>Paying off order #{debtToSettle.order_number}</CardDescription>}
                 </CardHeader>
                 <CardContent className="p-0">
                     {orderItems.length === 0 ? (
@@ -585,7 +626,7 @@ export default function SalesPage() {
                                 size="icon"
                                 className="h-6 w-6"
                                 onClick={() => handleUpdateQuantity(item.product.id, -1)}
-                                disabled={getCategoryName(item.product.category_id) === 'Room'}
+                                disabled={getCategoryName(item.product.category_id) === 'Room' || !!debtToSettle}
                                 >
                                 <Minus className="h-3 w-3" />
                                 </Button>
@@ -595,7 +636,7 @@ export default function SalesPage() {
                                 size="icon"
                                 className="h-6 w-6"
                                 onClick={() => handleUpdateQuantity(item.product.id, 1)}
-                                disabled={getCategoryName(item.product.category_id) === 'Room'}
+                                disabled={getCategoryName(item.product.category_id) === 'Room' || !!debtToSettle}
                                 >
                                 <Plus className="h-3 w-3" />
                                 </Button>
@@ -608,7 +649,7 @@ export default function SalesPage() {
                                 size="icon"
                                 className="h-6 w-6 ml-2"
                                 onClick={() => handleRemoveItem(item.product.id)}
-                                disabled={activeTicketId !== null && loadedTicketItemIds.includes(item.product.id)}
+                                disabled={(activeTicketId !== null && loadedTicketItemIds.includes(item.product.id)) || !!debtToSettle}
                             >
                                 <X className="h-4 w-4" />
                             </Button>
@@ -636,13 +677,13 @@ export default function SalesPage() {
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                         {featureSettings.open_tickets && (
+                         {featureSettings.open_tickets && !debtToSettle && (
                             <Button variant="secondary" onClick={handleSaveOrder}>
                                 <Save className="mr-2 h-4 w-4" /> {activeTicketId ? "Update" : "Save"} Order
                             </Button>
                          )}
-                         <Button variant="outline" onClick={handleClearOrder} className={cn(!featureSettings.open_tickets && "col-span-2")}>
-                            <X className="mr-2 h-4 w-4" /> {activeTicketId ? "Cancel" : "Clear"}
+                         <Button variant="outline" onClick={handleClearOrder} className={cn(!featureSettings.open_tickets || !!debtToSettle ? "col-span-2" : "")}>
+                            <X className="mr-2 h-4 w-4" /> {activeTicketId || debtToSettle ? "Cancel" : "Clear"}
                         </Button>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -726,11 +767,11 @@ export default function SalesPage() {
           </DialogContent>
         </Dialog>
         <Dialog open={isSplitPaymentDialogOpen} onOpenChange={(isOpen) => {
-            setIsSplitPaymentDialogOpen(isOpen);
             if (!isOpen) {
                 setPayments([]);
                 setSplitPaymentMethod(configuredPaymentTypes[0]?.name || "Cash");
             }
+            setIsSplitPaymentDialogOpen(isOpen);
         }}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>

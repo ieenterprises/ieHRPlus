@@ -144,6 +144,10 @@ type SettingsContextType = {
     currency: string;
     setCurrency: React.Dispatch<React.SetStateAction<string>>;
     getPermissionsForRole: (role: UserRole) => AnyPermission[];
+
+    // Cross-page state
+    debtToSettle: Sale | null;
+    setDebtToSettle: React.Dispatch<React.SetStateAction<Sale | null>>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -193,6 +197,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [selectedStore, setSelectedStore] = useLocalStorage<StoreType | null>('selectedStore', null);
     const [selectedDevice, setSelectedDevice] = useLocalStorage<PosDeviceType | null>('selectedDevice', null);
     const [currency, setCurrency] = useLocalStorage<string>('currency', '$');
+
+    const [debtToSettle, setDebtToSettle] = useLocalStorage<Sale | null>('debtToSettle', null);
     
     const router = useRouter();
 
@@ -231,6 +237,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         selectedDevice, setSelectedDevice,
         currency, setCurrency,
         getPermissionsForRole: (role: UserRole) => getPermissionsForRole(role, roles),
+        debtToSettle, setDebtToSettle,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);

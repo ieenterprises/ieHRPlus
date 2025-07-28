@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,25 +20,26 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type Debt } from "@/lib/types";
+import { type Debt, type Sale } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { CheckCircle2, Download } from "lucide-react";
+import { CheckCircle2, Download, Coins } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
 import Papa from "papaparse";
 
 export default function DebtsPage() {
-  const { debts, setDebts, sales, users, customers, currency } = useSettings();
+  const { debts, setDebts, sales, users, customers, currency, setDebtToSettle } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const router = useRouter();
 
   const enrichedDebts = useMemo(() => {
     return debts.map(debt => {
       const sale = sales.find(s => s.id === debt.sale_id);
       return {
         ...debt,
-        sales: sale ? { order_number: sale.order_number } : null,
+        sales: sale ? { ...sale, order_number: sale.order_number } : null,
         customers: customers.find(c => c.id === debt.customer_id) || null,
         users: users.find(u => u.id === sale?.employee_id) || null,
       }
@@ -49,20 +51,17 @@ export default function DebtsPage() {
     setLoading(false);
   }, []);
 
-  const handleMarkAsPaid = async (debtId: string) => {
-    try {
-      setDebts((prevDebts) =>
-        prevDebts.map((debt) =>
-          debt.id === debtId ? { ...debt, status: "Paid" } : debt
-        )
-      );
+  const handleSettleDebt = (debt: (typeof enrichedDebts)[0]) => {
+    if (!debt.sales) {
       toast({
-        title: "Debt Paid",
-        description: "The debt has been marked as paid.",
+        title: "Sale Not Found",
+        description: "The original sale for this debt could not be found.",
+        variant: "destructive",
       });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
     }
+    setDebtToSettle(debt.sales as Sale);
+    router.push("/sales");
   };
 
   const handleExport = () => {
@@ -142,9 +141,9 @@ export default function DebtsPage() {
                     </TableCell>
                     <TableCell>
                       {debt.status === "Unpaid" && (
-                        <Button variant="outline" size="sm" onClick={() => handleMarkAsPaid(debt.id)}>
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Mark as Paid
+                        <Button variant="outline" size="sm" onClick={() => handleSettleDebt(debt)}>
+                          <Coins className="mr-2 h-4 w-4" />
+                          Settle Debt
                         </Button>
                       )}
                     </TableCell>
