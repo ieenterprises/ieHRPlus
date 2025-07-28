@@ -248,7 +248,7 @@ export default function SettingsPage() {
   }
 
   // Receipt Settings Handler
-  const handleReceiptSettingChange = (storeId: string, field: keyof ReceiptSettings, value: string | boolean) => {
+  const handleReceiptSettingChange = (storeId: string, field: keyof ReceiptSettings, value: string | boolean | null) => {
       setReceiptSettings(prev => ({
           ...prev,
           [storeId]: {
@@ -551,8 +551,15 @@ export default function SettingsPage() {
                         <div className="space-y-2">
                           <Label>Logo</Label>
                           <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1">
-                                <span className="text-sm text-muted-foreground">Emailed receipt</span>
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-muted-foreground">Emailed receipt</span>
+                                  {currentReceiptSettings.emailedLogo && (
+                                    <Button variant="link" size="sm" className="h-auto p-0 text-destructive" onClick={() => handleReceiptSettingChange(selectedStoreForReceipt, 'emailedLogo', null)}>
+                                      Remove
+                                    </Button>
+                                  )}
+                                </div>
                                 <Input
                                   type="file"
                                   ref={emailedLogoInputRef}
@@ -571,8 +578,15 @@ export default function SettingsPage() {
                                   )}
                                 </div>
                               </div>
-                               <div className="space-y-1">
-                                <span className="text-sm text-muted-foreground">Printed receipt</span>
+                               <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-muted-foreground">Printed receipt</span>
+                                   {currentReceiptSettings.printedLogo && (
+                                    <Button variant="link" size="sm" className="h-auto p-0 text-destructive" onClick={() => handleReceiptSettingChange(selectedStoreForReceipt, 'printedLogo', null)}>
+                                      Remove
+                                    </Button>
+                                  )}
+                                </div>
                                 <Input
                                   type="file"
                                   ref={printedLogoInputRef}
