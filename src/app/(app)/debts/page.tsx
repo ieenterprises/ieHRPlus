@@ -35,15 +35,18 @@ export default function DebtsPage() {
   const router = useRouter();
 
   const enrichedDebts = useMemo(() => {
-    return debts.map(debt => {
-      const sale = sales.find(s => s.id === debt.sale_id);
-      return {
-        ...debt,
-        sales: sale ? { ...sale, order_number: sale.order_number } : null,
-        customers: customers.find(c => c.id === debt.customer_id) || null,
-        users: users.find(u => u.id === sale?.employee_id) || null,
-      }
-    });
+    return debts
+      .map(debt => {
+        const sale = sales.find(s => s.id === debt.sale_id);
+        if (!sale) return null; // Filter out debts with no matching sale
+        return {
+          ...debt,
+          sales: sale ? { ...sale, order_number: sale.order_number } : null,
+          customers: customers.find(c => c.id === debt.customer_id) || null,
+          users: users.find(u => u.id === sale?.employee_id) || null,
+        }
+      })
+      .filter((debt): debt is NonNullable<typeof debt> => debt !== null);
   }, [debts, sales, customers, users]);
 
 
