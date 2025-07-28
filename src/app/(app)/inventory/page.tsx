@@ -87,6 +87,9 @@ export default function InventoryPage() {
 
   const isReservationsEnabled = featureSettings.reservations;
 
+  const [editingCell, setEditingCell] = useState<{ productId: string; field: keyof Product } | null>(null);
+  const [editingValue, setEditingValue] = useState<string | number>('');
+
   const getCategoryName = (categoryId: string | null) => {
     if (!categoryId) return "N/A";
     return categories.find(c => c.id === categoryId)?.name || "N/A";
@@ -105,6 +108,35 @@ export default function InventoryPage() {
   useEffect(() => {
     setLoading(false);
   }, []);
+
+  const handleInlineEditClick = (product: Product, field: keyof Product) => {
+    setEditingCell({ productId: product.id, field });
+    setEditingValue(product[field] as string | number);
+  };
+  
+  const handleInlineEditSave = () => {
+    if (!editingCell) return;
+
+    setProducts(prevProducts =>
+      prevProducts.map(p => {
+        if (p.id === editingCell.productId) {
+          const updatedProduct = { ...p, [editingCell.field]: editingValue };
+          toast({ title: `Product updated`, description: `Set ${editingCell.field} to ${editingValue}.` });
+          return updatedProduct;
+        }
+        return p;
+      })
+    );
+    setEditingCell(null);
+  };
+  
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (e.key === 'Enter') {
+      handleInlineEditSave();
+    } else if (e.key === 'Escape') {
+      setEditingCell(null);
+    }
+  };
   
   // Product Handlers
   const handleEditProduct = (product: Product) => {
@@ -331,6 +363,61 @@ export default function InventoryPage() {
     });
   };
 
+  const renderCell = (product: Product, field: keyof Product) => {
+    if (editingCell?.productId === product.id && editingCell.field === field) {
+      if (field === 'category_id') {
+        return (
+          <Select
+            value={editingValue as string}
+            onValueChange={(value) => setEditingValue(value)}
+            onOpenChange={(isOpen) => !isOpen && handleInlineEditSave()}
+          >
+            <SelectTrigger className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {visibleCategories.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      }
+      return (
+        <Input
+          autoFocus
+          value={editingValue}
+          onChange={(e) => setEditingValue(field === 'name' ? e.target.value : Number(e.target.value))}
+          onBlur={handleInlineEditSave}
+          onKeyDown={handleKeyDown}
+          type={field === 'name' ? 'text' : 'number'}
+          className="h-8"
+        />
+      );
+    }
+
+    let displayValue: React.ReactNode;
+    switch (field) {
+        case 'category_id':
+            displayValue = getCategoryName(product.category_id);
+            break;
+        case 'price':
+            displayValue = `${currency}${product.price.toFixed(2)}`;
+            break;
+        case 'stock':
+            displayValue = getCategoryName(product.category_id) === 'Room' ? 'N/A' : product.stock;
+            break;
+        default:
+            displayValue = product[field];
+    }
+    
+    return (
+      <div onClick={() => handleInlineEditClick(product, field)} className="cursor-pointer min-h-[2rem] flex items-center">
+        {displayValue}
+      </div>
+    );
+  };
+
 
   return (
     <div className="space-y-8">
@@ -350,7 +437,7 @@ export default function InventoryPage() {
                     <CardHeader className="relative">
                         <CardTitle>Products</CardTitle>
                         <CardDescription>
-                            A list of all products in your inventory.
+                            A list of all products in your inventory. Click on a cell to edit.
                         </CardDescription>
                         <div className="absolute top-6 right-6 flex items-center gap-2">
                             <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
@@ -383,25 +470,20 @@ export default function InventoryPage() {
                                 ) : visibleProducts.length > 0 ? (
                                     visibleProducts.map((product) => (
                                         <TableRow key={product.id}>
-                                        <TableCell className="hidden sm:table-cell">
-                                            <Image
-                                                src={product.image_url || 'https://placehold.co/80x80.png'}
-                                                alt={product.name}
-                                                width={40}
-                                                height={40}
-                                                className="rounded-md object-cover"
-                                            />
-                                        </TableCell>
-                                        <TableCell className="font-medium">{product.name}</TableCell>
-                                        <TableCell>{getCategoryName(product.category_id)}</TableCell>
-                                        <TableCell className="text-right">{currency}{product.price.toFixed(2)}</TableCell>
-                                        <TableCell className="text-right">{getCategoryName(product.category_id) === 'Room' ? 'N/A' : product.stock}</TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
-                                                    <Edit className="mr-2 h-4 w-4"/>
-                                                    Modify
-                                                </Button>
+                                            <TableCell className="hidden sm:table-cell">
+                                                <Image
+                                                    src={product.image_url || 'https://placehold.co/80x80.png'}
+                                                    alt={product.name}
+                                                    width={40}
+                                                    height={40}
+                                                    className="rounded-md object-cover"
+                                                />
+                                            </TableCell>
+                                            <TableCell className="font-medium">{renderCell(product, 'name')}</TableCell>
+                                            <TableCell>{renderCell(product, 'category_id')}</TableCell>
+                                            <TableCell className="text-right">{renderCell(product, 'price')}</TableCell>
+                                            <TableCell className="text-right">{renderCell(product, 'stock')}</TableCell>
+                                            <TableCell className="text-right">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button aria-haspopup="true" size="icon" variant="ghost">
@@ -411,15 +493,16 @@ export default function InventoryPage() {
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
                                                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuItem onClick={() => handleEditProduct(product)}>Edit</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleEditProduct(product)}>
+                                                            <Edit className="mr-2 h-4 w-4" /> Edit Full Details
+                                                        </DropdownMenuItem>
                                                         <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
                                                         <Trash2 className="mr-2 h-4 w-4" />
                                                         Delete
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
-                                            </div>
-                                        </TableCell>
+                                            </TableCell>
                                         </TableRow>
                                     ))
                                 ) : (
