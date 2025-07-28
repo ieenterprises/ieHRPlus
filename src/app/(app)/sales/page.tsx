@@ -131,6 +131,7 @@ export default function SalesPage() {
 
   const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+  const [loadedTicketItemIds, setLoadedTicketItemIds] = useState<string[]>([]);
 
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
@@ -419,6 +420,7 @@ export default function SalesPage() {
   const handleClearOrder = () => {
     setOrderItems([]);
     setActiveTicketId(null);
+    setLoadedTicketItemIds([]);
   };
 
   const handleSaveOrder = async () => {
@@ -453,18 +455,20 @@ export default function SalesPage() {
       }
     }
 
-    const newOrderItems: OrderItem[] = (ticket.items as SaleItem[]).map(item => {
+    const ticketItems = ticket.items as SaleItem[];
+    const newOrderItems: OrderItem[] = ticketItems.map(item => {
         const product = products.find(p => p.id === item.id);
         return product ? { product, quantity: item.quantity } : null;
     }).filter((item): item is OrderItem => item !== null);
     
-    if (newOrderItems.length !== (ticket.items as SaleItem[]).length) {
+    if (newOrderItems.length !== ticketItems.length) {
         toast({ title: "Error Loading Ticket", description: "Some items in this ticket no longer exist and were removed.", variant: "destructive" });
     }
 
     setOrderItems(newOrderItems);
     setActiveTicketId(ticket.id);
     setSelectedCustomerId(ticket.customer_id);
+    setLoadedTicketItemIds(ticketItems.map(item => item.id));
     setIsTicketsDialogOpen(false);
   };
   
@@ -596,7 +600,7 @@ export default function SalesPage() {
                                 size="icon"
                                 className="h-6 w-6 ml-2"
                                 onClick={() => handleRemoveItem(item.product.id)}
-                                disabled={!!activeTicketId}
+                                disabled={activeTicketId !== null && loadedTicketItemIds.includes(item.product.id)}
                             >
                                 <X className="h-4 w-4" />
                             </Button>
