@@ -67,7 +67,8 @@ export default function InventoryPage() {
   const { 
     products, setProducts, 
     categories, setCategories, 
-    currency 
+    currency,
+    featureSettings
   } = useSettings();
   const [loading, setLoading] = useState(true);
 
@@ -197,8 +198,22 @@ export default function InventoryPage() {
     event.preventDefault();
     if (!editingCategory) return;
     const formData = new FormData(event.currentTarget);
+    const categoryName = formData.get("name") as string;
+
+    if (
+      !featureSettings.reservations &&
+      (categoryName.toLowerCase() === 'room' || categoryName.toLowerCase() === 'rooms')
+    ) {
+      toast({
+        title: "Feature Disabled",
+        description: "Cannot create 'Room' category while Reservations feature is disabled.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const categoryData = {
-      name: formData.get("name") as string,
+      name: categoryName,
     };
 
     try {
