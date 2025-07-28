@@ -88,6 +88,9 @@ function ProductCard({
       {product.stock === 0 && !isRoom && (
         <Badge variant="destructive" className="absolute top-2 right-2 z-10">Out of Stock</Badge>
       )}
+       {(product.status === 'Occupied' || product.status === 'Maintenance') && isRoom && (
+        <Badge variant="destructive" className="absolute top-2 right-2 z-10">{product.status}</Badge>
+      )}
       <Image
         src={product.image_url || 'https://placehold.co/300x200.png'}
         alt={product.name}
@@ -227,6 +230,11 @@ export default function SalesPage() {
     if (!productInStock || (productInStock.stock <= 0 && categoryName !== 'Room')) {
       toast({ title: "Out of Stock", description: `${product.name} is currently unavailable.`, variant: "destructive" });
       return;
+    }
+    
+    if (categoryName === 'Room' && productInStock.status !== 'Available') {
+        toast({ title: "Room Not Available", description: `${product.name} is currently ${product.status}.`, variant: "destructive" });
+        return;
     }
 
     setOrderItems((prevItems) => {
@@ -373,9 +381,11 @@ export default function SalesPage() {
             return;
           }
           
+          const paymentMethods = creditInfo ? ['Credit'] : payments.map(p => p.method);
+          
           newSale = {
             ...originalSale,
-            payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
+            payment_methods: [...originalSale.payment_methods, ...paymentMethods],
           };
 
           setSales(prevSales => prevSales.map(s => s.id === newSale.id ? newSale : s));
@@ -433,6 +443,11 @@ export default function SalesPage() {
                     check_out: dateRange.to.toISOString(),
                     status: 'Checked-in'
                 });
+
+                setProducts(prevProducts => 
+                    prevProducts.map(room => room.id === roomItem.product.id ? { ...room, status: 'Occupied' } : room)
+                );
+
                 toast({
                   title: "Room Checked In",
                   description: `Booking for ${guestName} in ${roomItem.product.name} has been paid and confirmed.`,
