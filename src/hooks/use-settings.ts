@@ -2,20 +2,17 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
-import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole } from '@/lib/types';
+import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
-import { subDays, addDays } from 'date-fns';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, Unsubscribe } from "firebase/auth";
 
 export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
 
 export type FeatureSettings = Record<string, boolean>;
-
-// --- MOCK DATA ---
 
 const MOCK_INITIAL_ROLES: Role[] = [
   { id: "role_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
@@ -26,71 +23,12 @@ const MOCK_INITIAL_ROLES: Role[] = [
   { id: "role_barman", name: "Bar Man", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
 ];
 
-const MOCK_CATEGORIES: Category[] = [
-    { id: 'cat_1', name: 'Food', created_at: new Date().toISOString() },
-    { id: 'cat_2', name: 'Beverage', created_at: new Date().toISOString() },
-    { id: 'cat_3', name: 'Room', created_at: new Date().toISOString() },
-];
-
-const MOCK_PRODUCTS: Product[] = [
-    { id: 'prod_1', name: 'Cheeseburger', price: 12.99, stock: 50, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
-    { id: 'prod_2', name: 'Fries', price: 4.99, stock: 100, category_id: 'cat_1', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
-    { id: 'prod_3', name: 'Coca-Cola', price: 2.50, stock: 200, category_id: 'cat_2', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Available' },
-    { id: 'prod_4', name: 'Room 210', price: 150.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Occupied' },
-    { id: 'prod_5', name: 'Room 211', price: 250.00, stock: 1, category_id: 'cat_3', image_url: 'https://placehold.co/300x200.png', created_at: new Date().toISOString(), status: 'Occupied' },
-];
-
-const MOCK_CUSTOMERS: Customer[] = [
-    { id: 'cust_1', name: 'Walk-in Customer', email: 'walkin@example.com', phone: null, created_at: new Date().toISOString() },
-    { id: 'cust_2', name: 'John Doe', email: 'john.doe@example.com', phone: '555-1234', created_at: new Date().toISOString() },
-    { id: 'cust_3', name: 'Jane Smith', email: 'jane.smith@example.com', phone: '555-5678', created_at: new Date().toISOString() },
-];
-
-const MOCK_STORES: StoreType[] = [
-    { id: 'store_1', name: 'Main Branch', address: '123 Main St, Anytown, USA' },
-    { id: 'store_2', name: 'Casoni Outdoor Bar', address: '456 Oak Ave, Sometown, USA' },
-];
-
-const MOCK_POS_DEVICES: PosDeviceType[] = [
-    { id: 'pos_1', name: 'Front Counter', store_id: 'store_1' },
-    { id: 'pos_2', name: 'Bar Terminal', store_id: 'store_1' },
-    { id: 'pos_3', name: 'Outdoor Bar POS', store_id: 'store_2' },
-];
-
-const MOCK_PRINTERS: PrinterType[] = [
-    { id: 'printer_1', name: 'Kitchen Printer', connection_type: 'Network', ip_address: '192.168.1.100', pos_device_id: 'pos_1' },
-    { id: 'printer_2', name: 'Receipt Printer', connection_type: 'Bluetooth', pos_device_id: 'pos_1' },
-    { id: 'printer_3', name: 'Bar Receipt Printer', connection_type: 'Network', ip_address: '192.168.1.102', pos_device_id: 'pos_3' },
-];
-
-const MOCK_RECEIPT_SETTINGS: Record<string, ReceiptSettings> = {
-  'store_1': { header: "Welcome to Main Branch!", footer: "Thanks for visiting Main Branch!", emailedLogo: null, printedLogo: 'https://placehold.co/100x100.png?text=MB', showCustomerInfo: true, showComments: true, language: 'en' },
-  'store_2': { header: 'CASONI PREMIUM CLUB Experience Luxury & Lifestyle', footer: 'Thank you for choosing Casoni Premium Club!', emailedLogo: null, printedLogo: null, showCustomerInfo: false, showComments: false, language: 'en' },
-};
-
 const MOCK_PAYMENT_TYPES: PaymentType[] = [
     { id: 'pay_1', name: 'Cash', type: 'Cash' },
     { id: 'pay_2', name: 'Card', type: 'Card' },
     { id: 'pay_3', name: 'Credit', type: 'Credit' },
 ];
 
-const MOCK_TAXES: Tax[] = [
-    { id: 'tax_1', name: 'VAT', rate: 8, is_default: true, type: 'Added' },
-    { id: 'tax_2', name: 'Service Charge', rate: 10, is_default: false, type: 'Added' },
-];
-
-const MOCK_SALES: Sale[] = [
-    { id: 'sale_res_1', order_number: 1001, created_at: subDays(new Date(), 2).toISOString(), items: [{id: 'prod_4', name: 'Room 210', quantity: 1, price: 150.00}], total: 150.00, payment_methods: ['Cash'], customer_id: 'cust_2', employee_id: 'user_1', pos_device_id: 'pos_1', status: 'Fulfilled', customers: MOCK_CUSTOMERS[1], users: {name: 'Ada Lovelace'}, pos_devices: {store_id: 'store_1'} },
-    { id: 'sale_res_2', order_number: 1002, created_at: subDays(new Date(), 1).toISOString(), items: [{id: 'prod_5', name: 'Room 211', quantity: 1, price: 250.00}], total: 250.00, payment_methods: ['Credit'], customer_id: 'cust_3', employee_id: 'user_2', pos_device_id: 'pos_1', status: 'Fulfilled', customers: MOCK_CUSTOMERS[2], users: {name: 'Grace Hopper'}, pos_devices: {store_id: 'store_1'} },
-]; 
-const MOCK_DEBTS: Debt[] = [
-    { id: 'debt_res_1', sale_id: 'sale_res_2', customer_id: 'cust_3', amount: 250.00, status: 'Unpaid', created_at: subDays(new Date(), 1).toISOString(), sales: {order_number: 1002}, customers: {name: MOCK_CUSTOMERS[2].name} }
-];
-const MOCK_RESERVATIONS: Reservation[] = [
-    { id: 'res_1', guest_name: 'John Doe', product_id: 'prod_4', check_in: subDays(new Date(), 2).toISOString(), check_out: addDays(new Date(), 3).toISOString(), status: 'Checked-in', sale_id: 'sale_res_1', created_at: subDays(new Date(), 2).toISOString(), products: {name: 'Room 210', price: 150.00} },
-    { id: 'res_2', guest_name: 'Jane Smith', product_id: 'prod_5', check_in: subDays(new Date(), 1).toISOString(), check_out: addDays(new Date(), 5).toISOString(), status: 'Checked-in', sale_id: 'sale_res_2', created_at: subDays(new Date(), 1).toISOString(), products: {name: 'Room 211', price: 250.00} },
-];
-const MOCK_OPEN_TICKETS: OpenTicket[] = [];
 
 // --- Context and Provider ---
 
@@ -114,12 +52,12 @@ type SettingsContextType = {
     voidedLogs: VoidedLog[];
     openTickets: OpenTicket[];
     
-    // Data setters
-    setFeatureSettings: React.Dispatch<React.SetStateAction<FeatureSettings>>;
-    setStores: React.Dispatch<React.SetStateAction<StoreType[]>>;
+    // Data setters (now write to DB)
+    setFeatureSettings: (settings: FeatureSettings) => Promise<void>;
+    setStores: React.Dispatch<React.SetStateAction<StoreType[]>>; // Keep simple setters for complex page logic
     setPosDevices: React.Dispatch<React.SetStateAction<PosDeviceType[]>>;
     setPrinters: React.Dispatch<React.SetStateAction<PrinterType[]>>;
-    setReceiptSettings: React.Dispatch<React.SetStateAction<Record<string, ReceiptSettings>>>;
+    setReceiptSettings: (settings: Record<string, ReceiptSettings>) => Promise<void>;
     setPaymentTypes: React.Dispatch<React.SetStateAction<PaymentType[]>>;
     setTaxes: React.Dispatch<React.SetStateAction<Tax[]>>;
     setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
@@ -141,7 +79,7 @@ type SettingsContextType = {
     selectedDevice: PosDeviceType | null;
     setSelectedDevice: React.Dispatch<React.SetStateAction<PosDeviceType | null>>;
     currency: string;
-    setCurrency: React.Dispatch<React.SetStateAction<string>>;
+    setCurrency: (currency: string) => Promise<void>;
     getPermissionsForRole: (role: UserRole) => AnyPermission[];
 
     // Cross-page state
@@ -152,8 +90,8 @@ type SettingsContextType = {
 
 
     // Voiding and ticket logic
-    voidSale: (saleId: string, voidedByEmployeeId: string) => void;
-    voidTicket: (ticketId: string, voidedByEmployeeId: string) => void;
+    voidSale: (saleId: string, voidedByEmployeeId: string) => Promise<void>;
+    voidTicket: (ticketId: string, voidedByEmployeeId: string) => Promise<void>;
     saveTicket: (ticket: any) => Promise<void>;
     deleteTicket: (ticketId: string) => Promise<void>;
 };
@@ -182,90 +120,130 @@ const useLocalStorage = <T,>(key: string, defaultValue: T): [T, React.Dispatch<R
 };
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-    const [featureSettings, setFeatureSettings] = useLocalStorage<FeatureSettings>('featureSettings', { open_tickets: true, reservations: true, shifts: true, time_management: false, kitchen_printers: true, dining_options: true, customer_displays: false });
-    const [stores, setStores] = useLocalStorage<StoreType[]>('stores', MOCK_STORES);
-    const [posDevices, setPosDevices] = useLocalStorage<PosDeviceType[]>('posDevices', MOCK_POS_DEVICES);
-    const [printers, setPrinters] = useLocalStorage<PrinterType[]>('printers', MOCK_PRINTERS);
-    const [receiptSettings, setReceiptSettings] = useLocalStorage<Record<string, ReceiptSettings>>('receiptSettings', MOCK_RECEIPT_SETTINGS);
-    const [paymentTypes, setPaymentTypes] = useLocalStorage<PaymentType[]>('paymentTypes', MOCK_PAYMENT_TYPES);
-    const [taxes, setTaxes] = useLocalStorage<Tax[]>('taxes', MOCK_TAXES);
-    
+    // States for data fetched from Firestore
+    const [featureSettings, setFeatureSettingsState] = useState<FeatureSettings>({ open_tickets: true, reservations: true, shifts: true, time_management: false, kitchen_printers: true, dining_options: true, customer_displays: false });
+    const [stores, setStores] = useState<StoreType[]>([]);
+    const [posDevices, setPosDevices] = useState<PosDeviceType[]>([]);
+    const [printers, setPrinters] = useState<PrinterType[]>([]);
+    const [receiptSettings, setReceiptSettingsState] = useState<Record<string, ReceiptSettings>>({});
+    const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(MOCK_PAYMENT_TYPES);
+    const [taxes, setTaxes] = useState<Tax[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [roles, setRoles] = useState<Role[]>(MOCK_INITIAL_ROLES);
-    
-    const [products, setProducts] = useLocalStorage<Product[]>('products', MOCK_PRODUCTS);
-    const [categories, setCategories] = useLocalStorage<Category[]>('categories', MOCK_CATEGORIES);
-    const [customers, setCustomers] = useLocalStorage<Customer[]>('customers', MOCK_CUSTOMERS);
-    const [sales, setSales] = useLocalStorage<Sale[]>('sales', MOCK_SALES);
-    const [debts, setDebts] = useLocalStorage<Debt[]>('debts', MOCK_DEBTS);
-    const [reservations, setReservations] = useLocalStorage<Reservation[]>('reservations', MOCK_RESERVATIONS);
-    const [voidedLogs, setVoidedLogs] = useLocalStorage<VoidedLog[]>('voidedLogs', []);
-    const [openTickets, setOpenTickets] = useLocalStorage<OpenTicket[]>('openTickets', []);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [sales, setSales] = useState<Sale[]>([]);
+    const [debts, setDebts] = useState<Debt[]>([]);
+    const [reservations, setReservations] = useState<Reservation[]>([]);
+    const [voidedLogs, setVoidedLogs] = useState<VoidedLog[]>([]);
+    const [openTickets, setOpenTickets] = useState<OpenTicket[]>([]);
+    const [currency, setCurrencyState] = useState<string>('$');
     
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
     
+    // Local session state
     const [selectedStore, setSelectedStore] = useLocalStorage<StoreType | null>('selectedStore', null);
     const [selectedDevice, setSelectedDevice] = useLocalStorage<PosDeviceType | null>('selectedDevice', null);
-    const [currency, setCurrency] = useLocalStorage<string>('currency', '$');
-
     const [debtToSettle, setDebtToSettle] = useLocalStorage<Sale | null>('debtToSettle', null);
     const [printableData, setPrintableData] = useLocalStorage<any | null>('printableData', null);
     
     const router = useRouter();
 
     const fetchAndSetUser = useCallback(async (uid: string) => {
-        const userDocRef = doc(db, "users", uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-            const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
+        setLoadingUser(true);
+        let userProfile: User | null = null;
+        let attempts = 0;
+        while (userProfile === null && attempts < 5) {
+            try {
+                const userDocRef = doc(db, "users", uid);
+                const userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    userProfile = { id: userDoc.id, ...userDoc.data() } as User;
+                } else {
+                    attempts++;
+                    await new Promise(res => setTimeout(res, 500)); // Wait before retrying
+                }
+            } catch (error) {
+                console.error("Error fetching user profile:", error);
+                break; // Exit loop on error
+            }
+        }
+
+        if (userProfile) {
             setLoggedInUser(userProfile);
-            return userProfile;
         } else {
             console.error("User profile not found in database for UID:", uid);
-            return null;
         }
+        setLoadingUser(false);
+        return userProfile;
     }, []);
 
     useEffect(() => {
-        let unsubUsers: Unsubscribe | null = null;
-        let unsubRoles: Unsubscribe | null = null;
+        const subscriptions: Unsubscribe[] = [];
     
         const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                await fetchAndSetUser(user.uid);
-                
-                const usersCollection = collection(db, "users");
-                unsubUsers = onSnapshot(usersCollection, (snapshot) => {
-                    const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-                    setUsers(usersData);
-                });
-    
-                const rolesCollection = collection(db, "roles");
-                unsubRoles = onSnapshot(rolesCollection, (snapshot) => {
-                    const rolesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Role));
-                    if (rolesData.length > 0) {
-                        setRoles(rolesData);
-                    } else {
-                        // This case is for initial setup if roles aren't in the DB yet
-                        setRoles(MOCK_INITIAL_ROLES);
-                    }
-                });
+            // Clean up old listeners
+            subscriptions.forEach(sub => sub());
+            subscriptions.length = 0;
 
+            if (user) {
+                const userProfile = await fetchAndSetUser(user.uid);
+                if (userProfile) {
+                    const collections = {
+                        users: setUsers,
+                        roles: setRoles,
+                        categories: setCategories,
+                        products: setProducts,
+                        customers: setCustomers,
+                        sales: setSales,
+                        debts: setDebts,
+                        reservations: setReservations,
+                        open_tickets: setOpenTickets,
+                        voided_logs: setVoidedLogs,
+                        stores: setStores,
+                        pos_devices: setPosDevices,
+                        printers: setPrinters,
+                        taxes: setTaxes,
+                    };
+
+                    Object.entries(collections).forEach(([name, setter]) => {
+                        const q = collection(db, name);
+                        const unsubscribe = onSnapshot(q, (snapshot) => {
+                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            // This is a type assertion, be careful with it.
+                            setter(data as any);
+                        });
+                        subscriptions.push(unsubscribe);
+                    });
+
+                    // Settings are often a single doc
+                    const settingsDocRef = doc(db, 'settings', 'global');
+                    const settingsUnsub = onSnapshot(settingsDocRef, (doc) => {
+                        if (doc.exists()) {
+                            const settingsData = doc.data();
+                            setFeatureSettingsState(settingsData.featureSettings || {});
+                            setReceiptSettingsState(settingsData.receiptSettings || {});
+                            setCurrencyState(settingsData.currency || '$');
+                        }
+                    });
+                    subscriptions.push(settingsUnsub);
+                }
             } else {
                 setLoggedInUser(null);
-                if (unsubUsers) unsubUsers();
-                if (unsubRoles) unsubRoles();
-                setUsers([]);
-                setRoles(MOCK_INITIAL_ROLES);
+                setLoadingUser(false);
+                // Clear all local data on logout
+                setUsers([]); setRoles(MOCK_INITIAL_ROLES); setCategories([]); setProducts([]);
+                setCustomers([]); setSales([]); setDebts([]); setReservations([]);
+                setOpenTickets([]); setVoidedLogs([]); setStores([]); setPosDevices([]);
+                setPrinters([]); setTaxes([]);
             }
-            setLoadingUser(false);
         });
     
         return () => {
             unsubscribeAuth();
-            if (unsubUsers) unsubUsers();
-            if (unsubRoles) unsubRoles();
+            subscriptions.forEach(sub => sub());
         };
     }, [fetchAndSetUser]);
     
@@ -275,6 +253,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setLoggedInUser(null);
         setSelectedStore(null);
         setSelectedDevice(null);
+        // Clear local storage manually for session-specific items
+        window.localStorage.removeItem('selectedStore');
+        window.localStorage.removeItem('selectedDevice');
         router.push('/sign-in');
     };
 
@@ -283,64 +264,87 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         return roleData?.permissions || [];
     }, [roles]);
 
-    const voidSale = useCallback((saleId: string, voidedByEmployeeId: string) => {
+    // DB Write Functions
+    const setSettingsDoc = async (data: any) => {
+        const settingsDocRef = doc(db, 'settings', 'global');
+        await setDoc(settingsDocRef, data, { merge: true });
+    };
+
+    const setFeatureSettings = (settings: FeatureSettings) => setSettingsDoc({ featureSettings: settings });
+    const setReceiptSettings = (settings: Record<string, ReceiptSettings>) => setSettingsDoc({ receiptSettings: settings });
+    const setCurrency = (currency: string) => setSettingsDoc({ currency });
+    
+    const voidSale = async (saleId: string, voidedByEmployeeId: string) => {
         const saleToVoid = sales.find(s => s.id === saleId);
         if (!saleToVoid) return;
 
-        setVoidedLogs(prev => [...prev, {
-            id: `void_${new Date().getTime()}`,
+        const batch = writeBatch(db);
+
+        // 1. Add to voided logs
+        const voidedLogRef = doc(collection(db, 'voided_logs'));
+        batch.set(voidedLogRef, {
             type: 'receipt',
             voided_by_employee_id: voidedByEmployeeId,
             created_at: new Date().toISOString(),
             data: saleToVoid,
-            users: null,
-        }]);
+        });
 
-        setSales(prev => prev.filter(s => s.id !== saleId));
-        
-        setDebts(prev => prev.filter(d => d.sale_id !== saleId));
-        const reservationToVoid = reservations.find(r => r.sale_id === saleId);
-        if (reservationToVoid) {
-            setReservations(prev => prev.filter(r => r.id !== reservationToVoid.id));
-            setProducts(prev => prev.map(p => 
-                p.id === reservationToVoid.product_id ? { ...p, status: 'Available' } : p
-            ));
-        }
-    }, [sales, reservations, setSales, setVoidedLogs, setDebts, setReservations, setProducts]);
+        // 2. Delete original sale
+        batch.delete(doc(db, 'sales', saleId));
 
-    const voidTicket = useCallback((ticketId: string, voidedByEmployeeId: string) => {
+        // 3. Delete associated debt if exists
+        const debtQuery = query(collection(db, 'debts'), where('sale_id', '==', saleId));
+        const debtSnapshot = await getDocs(debtQuery);
+        debtSnapshot.forEach(doc => batch.delete(doc.ref));
+
+        // 4. Delete associated reservation and update room status
+        const resQuery = query(collection(db, 'reservations'), where('sale_id', '==', saleId));
+        const resSnapshot = await getDocs(resQuery);
+        resSnapshot.forEach(doc => {
+            const reservation = doc.data() as Reservation;
+            if (reservation.product_id) {
+                const productRef = doc(db, 'products', reservation.product_id);
+                batch.update(productRef, { status: 'Available' });
+            }
+            batch.delete(doc.ref);
+        });
+
+        await batch.commit();
+    };
+
+    const voidTicket = async (ticketId: string, voidedByEmployeeId: string) => {
         const ticketToVoid = openTickets.find(t => t.id === ticketId);
         if (!ticketToVoid) return;
 
-        setVoidedLogs(prev => [...prev, {
-            id: `void_${new Date().getTime()}`,
+        const batch = writeBatch(db);
+        // 1. Add to voided logs
+        const voidedLogRef = doc(collection(db, 'voided_logs'));
+        batch.set(voidedLogRef, {
             type: 'ticket',
             voided_by_employee_id: voidedByEmployeeId,
             created_at: new Date().toISOString(),
             data: ticketToVoid,
-            users: null,
-        }]);
-
-        setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
-    }, [openTickets, setOpenTickets, setVoidedLogs]);
-
-    const saveTicket = useCallback(async (ticketData: any) => {
-        setOpenTickets(prev => {
-            const existingIndex = prev.findIndex(t => t.id === ticketData.id);
-            if (existingIndex > -1) {
-                const updatedTickets = [...prev];
-                updatedTickets[existingIndex] = { ...updatedTickets[existingIndex], ...ticketData };
-                return updatedTickets;
-            } else {
-                const newTicket = { ...ticketData, id: `ticket_${new Date().getTime()}`, created_at: new Date().toISOString() };
-                return [...prev, newTicket];
-            }
         });
-    }, [setOpenTickets]);
+        // 2. Delete original ticket
+        batch.delete(doc(db, 'open_tickets', ticketId));
+        await batch.commit();
+    };
+
+    const saveTicket = async (ticketData: any) => {
+        if (ticketData.id) {
+            const ticketRef = doc(db, 'open_tickets', ticketData.id);
+            await updateDoc(ticketRef, ticketData);
+        } else {
+            await addDoc(collection(db, 'open_tickets'), {
+                ...ticketData,
+                created_at: new Date().toISOString(),
+            });
+        }
+    };
     
-    const deleteTicket = useCallback(async (ticketId: string) => {
-        setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
-    }, [setOpenTickets]);
+    const deleteTicket = async (ticketId: string) => {
+        await deleteDoc(doc(db, 'open_tickets', ticketId));
+    };
 
     const value: SettingsContextType = {
         featureSettings, setFeatureSettings,
@@ -372,7 +376,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         voidSale,
         voidTicket,
         saveTicket,
-        deleteTicket
+        deleteTicket,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);

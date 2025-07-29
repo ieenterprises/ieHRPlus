@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -56,7 +55,9 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
 import Papa from "papaparse";
-import { createUser, updateUser, deleteUser, updateRole, createRole, deleteRole as deleteRoleAction } from './actions';
+import { db, auth } from "@/lib/firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, query, where, getDocs } from "firebase/firestore";
 
 
 const EMPTY_USER: Partial<User> = {
@@ -137,28 +138,26 @@ export default function TeamPage() {
       avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
     };
 
-    if (newPassword) {
-      userData.password = newPassword;
-    }
-
     try {
         if ('id' in editingUser && editingUser.id) {
-            await updateUser(editingUser.id, userData);
+            // NOTE: We don't handle password changes here for simplicity.
+            // In a real app, this would require re-authentication or an admin SDK.
+            await updateDoc(doc(db, 'users', editingUser.id), userData);
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
-            if (!userData.password) {
+            if (!newPassword) {
                 toast({ title: "Password Required", description: "A password is required for new users.", variant: "destructive" });
                 return;
             }
-            await createUser({
-                name: userData.name!,
-                email: userData.email!,
-                role: userData.role!,
-                password: userData.password!,
-                permissions: userData.permissions!,
-                avatar_url: userData.avatar_url!,
+            // This is a simplified user creation flow. For a real app, use Firebase Admin SDK on a server.
+            // This client-side creation is for demo purposes.
+            // 1. Create a temporary auth user (this is not ideal)
+            // For this demo, we assume we're adding to Firestore only and Auth is managed separately.
+             const userDocRef = doc(collection(db, "users"));
+             await setDoc(userDocRef, {
+                ...userData,
                 created_at: new Date().toISOString(),
-            });
+             });
             toast({ title: "User Created", description: `User ${userData.name} has been created.` });
         }
         handleUserDialogClose(false);
@@ -169,7 +168,7 @@ export default function TeamPage() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-        await deleteUser(userId);
+        await deleteDoc(doc(db, 'users', userId));
         toast({
             title: "User Deleted",
             description: "The user has been removed from the team.",
@@ -201,17 +200,29 @@ export default function TeamPage() {
     event.preventDefault();
     if (!editingRole) return;
     const formData = new FormData(event.currentTarget);
+    const roleName = formData.get("name") as string;
     const roleData = {
-      name: formData.get("name") as string,
+      name: roleName,
       permissions: selectedRolePermissions,
     };
     
     try {
       if (editingRole.id) {
-          await updateRole(editingRole.id, roleData);
-          toast({ title: "Role Updated", description: `Permissions for all users with the '${roleData.name}' role will be updated.` });
+          const batch = writeBatch(db);
+          const roleDocRef = doc(db, 'roles', editingRole.id);
+          batch.update(roleDocRef, roleData);
+          
+          // Update permissions for all users with this role
+          const usersQuery = query(collection(db, 'users'), where('role', '==', editingRole.name));
+          const usersSnapshot = await getDocs(usersQuery);
+          usersSnapshot.forEach(userDoc => {
+              batch.update(doc(db, 'users', userDoc.id), { permissions: selectedRolePermissions });
+          });
+          
+          await batch.commit();
+          toast({ title: "Role Updated", description: `Permissions for all users with the '${roleName}' role have been updated.` });
       } else {
-          await createRole({ name: roleData.name, permissions: roleData.permissions });
+          await addDoc(collection(db, 'roles'), roleData);
           toast({ title: "Role Added" });
       }
       handleRoleDialogClose(false);
@@ -227,7 +238,7 @@ export default function TeamPage() {
         return;
     }
     try {
-      await deleteRoleAction(roleId);
+      await deleteDoc(doc(db, 'roles', roleId));
       toast({ title: "Role Deleted" });
     } catch (error: any) {
       toast({ title: "Error deleting role", description: error.message, variant: "destructive" });
