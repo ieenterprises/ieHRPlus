@@ -60,7 +60,7 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
             />
           </div>
         )}
-        <h1 className="text-sm font-bold">{currentStore?.name || "OrderFlow POS"}</h1>
+        <h1 className="text-sm font-bold">{currentStore?.name || "ieOrderFlow POS"}</h1>
         <p>{currentStore?.address}</p>
         <p>{format(new Date(data.created_at!), "LLL dd, y HH:mm")}</p>
         
