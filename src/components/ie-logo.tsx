@@ -7,7 +7,7 @@ interface IELogoProps {
 
 export function IELogo({ className }: IELogoProps) {
   return (
-    <div className={cn("relative overflow-hidden", className)} data-ai-logo-container>
+    <div className={cn("relative rounded-full overflow-hidden", className)} data-ai-logo-container>
       <Image
         src="https://i.im.ge/2025/06/09/vewzUc.Company-Logo-3-1.th.png"
         alt="OrderFlow Logo"
