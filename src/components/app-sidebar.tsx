@@ -20,17 +20,22 @@ import {
   Users,
   Settings,
   LogOut,
-  ChevronRight,
   ReceiptText,
   CalendarCheck,
   Package,
   BookUser,
   Trash2,
+  Cloud,
+  CloudOff,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
 import { useSettings } from "@/hooks/use-settings";
 import type { AnyPermission } from "@/lib/permissions";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
+import { useEffect, useRef } from "react";
 
 type NavItem = {
   href: string;
@@ -56,6 +61,19 @@ const navItems: NavItem[] = [
 export function AppSidebar() {
   const pathname = usePathname();
   const { loggedInUser, logout, featureSettings } = useSettings();
+  const isOnline = useOnlineStatus();
+  const { toast } = useToast();
+  const wasOffline = useRef(!isOnline);
+
+  useEffect(() => {
+    if (wasOffline.current && isOnline) {
+      toast({
+        title: "Back Online",
+        description: "Your data has been successfully synced.",
+      });
+    }
+    wasOffline.current = !isOnline;
+  }, [isOnline, toast]);
 
   const handleLogout = async () => {
     await logout();
@@ -128,7 +146,7 @@ export function AppSidebar() {
           )}
           <SidebarMenuItem>
             <div className="flex items-center justify-between w-full p-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 truncate">
                     <Avatar className="h-8 w-8">
                         <AvatarImage src={loggedInUser?.avatar_url || "https://placehold.co/100x100.png"} alt={loggedInUser?.name || "User"} data-ai-hint="person portrait" />
                         <AvatarFallback>
@@ -140,9 +158,25 @@ export function AppSidebar() {
                         <span className="text-muted-foreground truncate">{loggedInUser?.email}</span>
                     </div>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 group-data-[collapsible=icon]:hidden" onClick={handleLogout}>
-                    <LogOut className="h-4 w-4" />
-                </Button>
+                 <div className="flex items-center gap-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="group-data-[collapsible=icon]:hidden">
+                          {isOnline ? (
+                            <Cloud className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <CloudOff className="h-5 w-5 text-muted-foreground" />
+                          )}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="center">
+                        {isOnline ? "Online" : "Offline Mode"}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 group-data-[collapsible=icon]:hidden" onClick={handleLogout}>
+                        <LogOut className="h-4 w-4" />
+                    </Button>
+                 </div>
             </div>
           </SidebarMenuItem>
         </SidebarMenu>
