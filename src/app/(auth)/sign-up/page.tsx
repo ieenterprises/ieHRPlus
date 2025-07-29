@@ -18,14 +18,14 @@ import Link from "next/link";
 import { useSettings } from "@/hooks/use-settings";
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, writeBatch, collection, getDocs } from "firebase/firestore";
+import { doc, writeBatch, collection, getDocs, query, where } from "firebase/firestore";
 import { posPermissions, backOfficePermissions } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
 
 export default function SignUpPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { getPermissionsForRole, roles } = useSettings();
+  const { getPermissionsForRole, roles: MOCK_INITIAL_ROLES } = useSettings();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -40,31 +40,43 @@ export default function SignUpPage() {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // 2. Prepare user profile for Firestore
+        const batch = writeBatch(db);
+
+        // 2. Check if roles exist, if not, create them FIRST
+        const rolesCollectionRef = collection(db, "roles");
+        const rolesQuery = query(rolesCollectionRef, where("name", "==", "Owner"));
+        const rolesSnapshot = await getDocs(rolesQuery);
+        
+        let ownerRolePermissions: string[] = [];
+
+        if (rolesSnapshot.empty) {
+            MOCK_INITIAL_ROLES.forEach(role => {
+                const roleDocRef = doc(rolesCollectionRef, role.id);
+                batch.set(roleDocRef, role);
+                if (role.name === "Owner") {
+                    ownerRolePermissions = role.permissions;
+                }
+            });
+        } else {
+             const ownerRole = MOCK_INITIAL_ROLES.find(r => r.name === 'Owner');
+             if (ownerRole) {
+                ownerRolePermissions = ownerRole.permissions;
+             }
+        }
+
+        // 3. Prepare user profile for Firestore
         const newUserProfile = {
           name: ownerName,
           email: email,
           role: 'Owner' as const,
           avatar_url: `https://placehold.co/100x100.png?text=${ownerName.charAt(0)}`,
-          permissions: getPermissionsForRole('Owner'),
+          permissions: ownerRolePermissions,
           created_at: new Date().toISOString(),
         };
 
-        const batch = writeBatch(db);
-
-        // 3. Add user profile to 'users' collection
+        // 4. Add user profile to 'users' collection
         const userDocRef = doc(db, "users", user.uid);
         batch.set(userDocRef, newUserProfile);
-
-        // 4. Check if roles exist, if not, create them
-        const rolesCollectionRef = collection(db, "roles");
-        const rolesSnapshot = await getDocs(rolesCollectionRef);
-        if (rolesSnapshot.empty) {
-            roles.forEach(role => {
-                const roleDocRef = doc(rolesCollectionRef, role.id);
-                batch.set(roleDocRef, role);
-            });
-        }
         
         // 5. Commit all database writes at once
         await batch.commit();
