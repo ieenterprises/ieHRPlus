@@ -18,14 +18,14 @@ import Link from "next/link";
 import { useSettings } from "@/hooks/use-settings";
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, writeBatch, collection, getDocs, query, where } from "firebase/firestore";
+import { doc, writeBatch, collection, getDocs, query, where, setDoc } from "firebase/firestore";
 import { posPermissions, backOfficePermissions, AnyPermission } from "@/lib/permissions";
-import type { Role } from "@/lib/types";
+import { MOCK_INITIAL_ROLES } from "@/hooks/use-settings";
+import { seedDatabaseWithMockData } from "@/lib/mock-data";
 
 export default function SignUpPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { roles: MOCK_INITIAL_ROLES } = useSettings();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -34,6 +34,7 @@ export default function SignUpPage() {
     const email = formData.get("email") as string;
     const ownerName = formData.get("owner_name") as string;
     const password = formData.get("password") as string;
+    const businessName = formData.get("business_name") as string;
 
     try {
         // 1. Create user in Firebase Auth
@@ -42,24 +43,30 @@ export default function SignUpPage() {
 
         const batch = writeBatch(db);
 
-        // 2. Check if roles exist, if not, create them FIRST
+        // 2. Check if roles exist. If not, this is a fresh setup.
         const rolesCollectionRef = collection(db, "roles");
         const rolesSnapshot = await getDocs(rolesCollectionRef);
         
-        if (rolesSnapshot.empty) {
+        let isFirstUser = rolesSnapshot.empty;
+
+        if (isFirstUser) {
+            // A. Seed roles
             MOCK_INITIAL_ROLES.forEach(role => {
                 const roleDocRef = doc(rolesCollectionRef, role.id);
                 batch.set(roleDocRef, role);
             });
+            
+            // B. Seed the rest of the database with mock data
+            seedDatabaseWithMockData(batch, user.uid, businessName);
         }
         
-        // Define all permissions for the Owner
+        // 3. Define all permissions for the Owner
         const ownerRolePermissions: AnyPermission[] = [
           ...Object.keys(posPermissions) as (keyof typeof posPermissions)[],
           ...Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[]
         ];
 
-        // 3. Prepare user profile for Firestore
+        // 4. Prepare user profile for Firestore
         const newUserProfile = {
           name: ownerName,
           email: email,
@@ -69,11 +76,12 @@ export default function SignUpPage() {
           created_at: new Date().toISOString(),
         };
 
-        // 4. Add user profile to 'users' collection, using the auth UID as the document ID
+        // 5. Add user profile to 'users' collection, using the auth UID as the document ID
+        // Note: We use setDoc directly on the batch, not inside seedDatabase to ensure it's part of the same transaction
         const userDocRef = doc(db, "users", user.uid);
         batch.set(userDocRef, newUserProfile);
         
-        // 5. Commit all database writes at once
+        // 6. Commit all database writes at once
         await batch.commit();
         
         toast({

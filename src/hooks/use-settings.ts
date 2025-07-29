@@ -14,7 +14,7 @@ export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSet
 
 export type FeatureSettings = Record<string, boolean>;
 
-const MOCK_INITIAL_ROLES: Role[] = [
+export const MOCK_INITIAL_ROLES: Role[] = [
   { id: "role_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
   { id: "role_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
   { id: "role_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS"] },
@@ -129,7 +129,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(MOCK_PAYMENT_TYPES);
     const [taxes, setTaxes] = useState<Tax[]>([]);
     const [users, setUsers] = useState<User[]>([]);
-    const [roles, setRoles] = useState<Role[]>(MOCK_INITIAL_ROLES);
+    const [roles, setRoles] = useState<Role[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
@@ -214,6 +214,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                             // This is a type assertion, be careful with it.
                             setter(data as any);
+                        }, (error) => {
+                            console.error(`Error fetching ${name}:`, error);
                         });
                         subscriptions.push(unsubscribe);
                     });
@@ -234,7 +236,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all local data on logout
-                setUsers([]); setRoles(MOCK_INITIAL_ROLES); setCategories([]); setProducts([]);
+                setUsers([]); setRoles([]); setCategories([]); setProducts([]);
                 setCustomers([]); setSales([]); setDebts([]); setReservations([]);
                 setOpenTickets([]); setVoidedLogs([]); setStores([]); setPosDevices([]);
                 setPrinters([]); setTaxes([]);
