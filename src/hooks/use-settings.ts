@@ -53,11 +53,11 @@ type SettingsContextType = {
     openTickets: OpenTicket[];
     
     // Data setters (now write to DB)
-    setFeatureSettings: (settings: FeatureSettings) => Promise<void>;
+    setFeatureSettings: React.Dispatch<React.SetStateAction<FeatureSettings>>;
     setStores: React.Dispatch<React.SetStateAction<StoreType[]>>; // Keep simple setters for complex page logic
     setPosDevices: React.Dispatch<React.SetStateAction<PosDeviceType[]>>;
     setPrinters: React.Dispatch<React.SetStateAction<PrinterType[]>>;
-    setReceiptSettings: (settings: Record<string, ReceiptSettings>) => Promise<void>;
+    setReceiptSettings: React.Dispatch<React.SetStateAction<Record<string, ReceiptSettings>>>;
     setPaymentTypes: React.Dispatch<React.SetStateAction<PaymentType[]>>;
     setTaxes: React.Dispatch<React.SetStateAction<Tax[]>>;
     setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
@@ -79,7 +79,7 @@ type SettingsContextType = {
     selectedDevice: PosDeviceType | null;
     setSelectedDevice: React.Dispatch<React.SetStateAction<PosDeviceType | null>>;
     currency: string;
-    setCurrency: (currency: string) => Promise<void>;
+    setCurrency: React.Dispatch<React.SetStateAction<string>>;
     getPermissionsForRole: (role: UserRole) => AnyPermission[];
 
     // Cross-page state
@@ -271,10 +271,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const settingsDocRef = doc(db, 'settings', 'global');
         await setDoc(settingsDocRef, data, { merge: true });
     };
+    
+    const createSetterWithDbSync = <T,>(
+        state: T,
+        setter: React.Dispatch<React.SetStateAction<T>>,
+        dbField: string
+    ) => {
+        return (newValue: React.SetStateAction<T>) => {
+            const updatedValue = typeof newValue === 'function'
+                ? (newValue as (prevState: T) => T)(state)
+                : newValue;
+            setter(updatedValue);
+            setSettingsDoc({ [dbField]: updatedValue });
+        };
+    };
 
-    const setFeatureSettings = (settings: FeatureSettings) => setSettingsDoc({ featureSettings: settings });
-    const setReceiptSettings = (settings: Record<string, ReceiptSettings>) => setSettingsDoc({ receiptSettings: settings });
-    const setCurrency = (currency: string) => setSettingsDoc({ currency });
+    const setFeatureSettings = createSetterWithDbSync(featureSettings, setFeatureSettingsState, 'featureSettings');
+    const setReceiptSettings = createSetterWithDbSync(receiptSettings, setReceiptSettingsState, 'receiptSettings');
+    const setCurrency = createSetterWithDbSync(currency, setCurrencyState, 'currency');
     
     const voidSale = async (saleId: string, voidedByEmployeeId: string) => {
         const saleToVoid = sales.find(s => s.id === saleId);
