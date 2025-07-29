@@ -79,7 +79,10 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
             )}
           </>
         ) : (
-          <p className="font-bold">OPEN TICKET: {data.ticket_name}</p>
+          <>
+            <p className="font-bold">OPEN TICKET: {data.ticket_name}</p>
+            <p>Employee: {(data as OpenTicket).users?.name || 'N/A'}</p>
+          </>
         )}
       </div>
 
@@ -118,7 +121,7 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
           <span>{currency}{tax.toFixed(2)}</span>
         </div>
         <div className="flex justify-between font-bold text-sm">
-          <span>TOTAL:</span>
+          <span>{isSale(data) ? 'TOTAL:' : 'AMOUNT DUE:'}</span>
           <span>{currency}{total.toFixed(2)}</span>
         </div>
       </div>
