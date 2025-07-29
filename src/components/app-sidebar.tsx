@@ -37,6 +37,7 @@ import { useOnlineStatus } from "@/hooks/use-online-status";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useRef, useState } from "react";
+import { IELogo } from "./ie-logo";
 
 type NavItem = {
   href: string;
@@ -120,16 +121,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              className="w-5 h-5 text-primary-foreground"
-              fill="currentColor"
-            >
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5-10-5-10 5z" />
-            </svg>
-          </div>
+          <IELogo className="w-8 h-8" />
           <span className="text-xl font-bold font-headline">OrderFlow</span>
         </div>
       </SidebarHeader>
