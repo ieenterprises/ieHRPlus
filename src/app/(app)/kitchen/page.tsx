@@ -2,7 +2,8 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { PageHeader } from "@/components/page-header";
@@ -39,14 +40,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePos } from "@/hooks/use-pos";
 import { useSettings } from "@/hooks/use-settings";
-import { useReactToPrint } from "react-to-print";
-import { PrintableReceipt } from "@/components/printable-receipt";
 
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -63,9 +61,10 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function KitchenPage() {
-  const { sales, products, categories, users, loggedInUser, voidSale, voidTicket } = useSettings();
-  const { openTickets, deleteTicket } = usePos();
+  const { sales, products, categories, users, loggedInUser, voidSale, voidTicket, setPrintableData } = useSettings();
+  const { openTickets } = usePos();
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
   const { toast } = useToast();
   
   const [filters, setFilters] = useState({
@@ -77,26 +76,11 @@ export default function KitchenPage() {
     maxAmount: "",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-
-  const [printableData, setPrintableData] = useState<any>(null);
-  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
-  const printableRef = useRef(null);
-
-  const handlePrint = useReactToPrint({
-    content: () => printableRef.current,
-  });
-
+  
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
     setPrintableData({ ...data, type });
-    setIsPrintDialogOpen(true);
+    router.push('/print');
   };
-  
-  const handleDialogChange = (open: boolean) => {
-    if (!open) {
-      setPrintableData(null);
-    }
-    setIsPrintDialogOpen(open);
-  }
   
   useEffect(() => {
     setLoading(false);
@@ -212,21 +196,6 @@ export default function KitchenPage() {
 
   return (
     <div className="space-y-8">
-      <Dialog open={isPrintDialogOpen} onOpenChange={handleDialogChange}>
-        <DialogContent className="p-0 w-auto bg-transparent border-none shadow-none">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Printable {printableData?.type}</DialogTitle>
-          </DialogHeader>
-          <div className="bg-white rounded-lg overflow-hidden">
-            <div ref={printableRef}>
-                {printableData && <PrintableReceipt data={printableData} type={printableData.type} />}
-            </div>
-             <DialogFooter className="bg-white p-4 border-t">
-                <Button onClick={handlePrint}><Printer className="mr-2 h-4 w-4" /> Print</Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
       <PageHeader
         title="Orders"
         description="View open tickets and completed receipts."

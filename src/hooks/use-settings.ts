@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
@@ -157,6 +158,9 @@ type SettingsContextType = {
     // Cross-page state
     debtToSettle: Sale | null;
     setDebtToSettle: React.Dispatch<React.SetStateAction<Sale | null>>;
+    printableData: any | null;
+    setPrintableData: React.Dispatch<React.SetStateAction<any | null>>;
+
 
     // Voiding and ticket logic
     voidSale: (saleId: string, voidedByEmployeeId: string) => void;
@@ -215,6 +219,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [currency, setCurrency] = useLocalStorage<string>('currency', '$');
 
     const [debtToSettle, setDebtToSettle] = useLocalStorage<Sale | null>('debtToSettle', null);
+    const [printableData, setPrintableData] = useLocalStorage<any | null>('printableData', null);
     
     const router = useRouter();
 
@@ -314,6 +319,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         currency, setCurrency,
         getPermissionsForRole: (role: UserRole) => getPermissionsForRole(role, roles),
         debtToSettle, setDebtToSettle,
+        printableData, setPrintableData,
         voidSale,
         voidTicket,
         saveTicket,
