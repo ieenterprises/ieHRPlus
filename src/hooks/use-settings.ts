@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
@@ -175,6 +176,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             setLoggedInUser(userProfile);
         } else {
             console.error("User profile not found in database for UID:", uid);
+            return null;
         }
         setLoadingUser(false);
         return userProfile;
@@ -344,6 +346,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         // 2. Delete original ticket
         batch.delete(doc(db, 'open_tickets', ticketId));
         await batch.commit();
+        setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
     };
 
     const saveTicket = async (ticketData: any) => {
