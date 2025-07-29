@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
@@ -10,7 +9,7 @@ import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { subDays, addDays } from 'date-fns';
 import { auth, db } from '@/lib/firebase';
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, Unsubscribe } from "firebase/auth";
 
 export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
 
@@ -217,18 +216,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     const fetchAndSetUser = useCallback(async (uid: string) => {
         try {
-            // Add a small delay and retry mechanism
-            let userDoc;
-            for (let i = 0; i < 3; i++) {
-                const userDocRef = doc(db, "users", uid);
-                userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    break;
-                }
-                await new Promise(resolve => setTimeout(resolve, 500)); // wait 500ms
-            }
-
-            if (userDoc && userDoc.exists()) {
+            const userDocRef = doc(db, "users", uid);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
                 const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
                 setLoggedInUser(userProfile);
                 return userProfile;
@@ -246,41 +236,51 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }, []);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        let unsubUsers: Unsubscribe | null = null;
+        let unsubRoles: Unsubscribe | null = null;
+    
+        const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+            // If there's an authenticated user
             if (user) {
                 await fetchAndSetUser(user.uid);
+    
+                // Set up Firestore listeners only for authenticated users
+                const usersCollection = collection(db, "users");
+                unsubUsers = onSnapshot(usersCollection, (snapshot) => {
+                    const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+                    setUsers(usersData);
+                });
+    
+                const rolesCollection = collection(db, "roles");
+                unsubRoles = onSnapshot(rolesCollection, (snapshot) => {
+                    const rolesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Role));
+                    if (rolesData.length > 0) {
+                        setRoles(rolesData);
+                    } else {
+                        setRoles(MOCK_INITIAL_ROLES);
+                    }
+                });
             } else {
+                // If no user is authenticated
                 setLoggedInUser(null);
                 setLoadingUser(false);
+    
+                // Clean up any existing listeners
+                if (unsubUsers) unsubUsers();
+                if (unsubRoles) unsubRoles();
+                setUsers([]);
+                setRoles([]);
             }
         });
-        return () => unsubscribe();
+    
+        // Cleanup function for the main auth listener
+        return () => {
+            unsubscribeAuth();
+            if (unsubUsers) unsubUsers();
+            if (unsubRoles) unsubRoles();
+        };
     }, [fetchAndSetUser]);
     
-    // Set up real-time listeners for users and roles
-    useEffect(() => {
-        const usersCollection = collection(db, "users");
-        const rolesCollection = collection(db, "roles");
-
-        const unsubUsers = onSnapshot(usersCollection, (snapshot) => {
-            const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-            setUsers(usersData);
-        });
-
-        const unsubRoles = onSnapshot(rolesCollection, (snapshot) => {
-            const rolesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Role));
-            if (rolesData.length > 0) {
-                setRoles(rolesData);
-            } else {
-                 setRoles(MOCK_INITIAL_ROLES)
-            }
-        });
-
-        return () => {
-            unsubUsers();
-            unsubRoles();
-        };
-    }, []);
 
     const logout = async () => {
         await auth.signOut();
