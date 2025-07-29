@@ -130,6 +130,7 @@ type SettingsContextType = {
     setDebts: React.Dispatch<React.SetStateAction<Debt[]>>;
     setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
     setVoidedLogs: React.Dispatch<React.SetStateAction<VoidedLog[]>>;
+    setOpenTickets: React.Dispatch<React.SetStateAction<OpenTicket[]>>;
     
     // Auth and session state
     loggedInUser: User | null;
@@ -216,9 +217,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     const fetchAndSetUser = useCallback(async (uid: string) => {
         try {
-            const userDocRef = doc(db, "users", uid);
-            const userDoc = await getDoc(userDocRef);
-            if (userDoc.exists()) {
+            // Add a small delay and retry mechanism
+            let userDoc;
+            for (let i = 0; i < 3; i++) {
+                const userDocRef = doc(db, "users", uid);
+                userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    break;
+                }
+                await new Promise(resolve => setTimeout(resolve, 500)); // wait 500ms
+            }
+
+            if (userDoc && userDoc.exists()) {
                 const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
                 setLoggedInUser(userProfile);
                 return userProfile;
@@ -361,7 +371,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         debts, setDebts,
         reservations, setReservations,
         voidedLogs, setVoidedLogs,
-        openTickets,
+        openTickets, setOpenTickets,
         loggedInUser,
         loadingUser,
         logout,
