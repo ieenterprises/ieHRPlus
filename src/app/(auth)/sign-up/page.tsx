@@ -17,12 +17,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useSettings } from "@/hooks/use-settings";
+import { auth, db } from "@/lib/firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, writeBatch, collection, getDocs } from "firebase/firestore";
 import { posPermissions, backOfficePermissions } from "@/lib/permissions";
+import type { Role } from "@/lib/types";
 
 export default function SignUpPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { setUsers, roles, getPermissionsForRole } = useSettings();
+  const { getPermissionsForRole, roles } = useSettings();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -30,25 +34,56 @@ export default function SignUpPage() {
     const formData = new FormData(event.currentTarget);
     const email = formData.get("email") as string;
     const ownerName = formData.get("owner_name") as string;
+    const password = formData.get("password") as string;
 
-    const newUser = {
-      id: `user_${new Date().getTime()}`,
-      name: ownerName,
-      email: email,
-      role: 'Owner' as const,
-      avatar_url: `https://placehold.co/100x100.png?text=${ownerName.charAt(0)}`,
-      permissions: getPermissionsForRole('Owner'),
-      created_at: new Date().toISOString(),
-    };
-    
-    setUsers(prev => [...prev, newUser]);
-    
-    toast({
-        title: "Account Created",
-        description: "Your business has been registered successfully. Please sign in.",
-    });
+    try {
+        // 1. Create user in Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
 
-    router.push("/sign-in");
+        // 2. Prepare user profile for Firestore
+        const newUserProfile = {
+          name: ownerName,
+          email: email,
+          role: 'Owner' as const,
+          avatar_url: `https://placehold.co/100x100.png?text=${ownerName.charAt(0)}`,
+          permissions: getPermissionsForRole('Owner'),
+          created_at: new Date().toISOString(),
+        };
+
+        const batch = writeBatch(db);
+
+        // 3. Add user profile to 'users' collection
+        const userDocRef = doc(db, "users", user.uid);
+        batch.set(userDocRef, newUserProfile);
+
+        // 4. Check if roles exist, if not, create them
+        const rolesCollectionRef = collection(db, "roles");
+        const rolesSnapshot = await getDocs(rolesCollectionRef);
+        if (rolesSnapshot.empty) {
+            roles.forEach(role => {
+                const roleDocRef = doc(rolesCollectionRef, role.id);
+                batch.set(roleDocRef, role);
+            });
+        }
+        
+        // 5. Commit all database writes at once
+        await batch.commit();
+        
+        toast({
+            title: "Account Created",
+            description: "Your business has been registered successfully. Please sign in.",
+        });
+
+        router.push("/sign-in");
+
+    } catch (error: any) {
+         toast({
+            title: "Sign Up Failed",
+            description: error.message,
+            variant: "destructive",
+        });
+    }
   };
 
   return (
@@ -91,3 +126,5 @@ export default function SignUpPage() {
     </Card>
   );
 }
+
+    

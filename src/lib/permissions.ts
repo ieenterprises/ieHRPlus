@@ -1,6 +1,6 @@
 
+
 export const posPermissions = {
-    LOGIN_WITH_PIN: { label: "Log in to the app using personal PIN code" },
     ACCEPT_PAYMENTS: { label: "Accept payments" },
     APPLY_DISCOUNTS: { label: "Apply discounts with restricted access" },
     CHANGE_TAXES: { label: "Change taxes in a sale" },
@@ -18,7 +18,6 @@ export const posPermissions = {
 };
 
 export const backOfficePermissions = {
-    LOGIN_WITH_EMAIL: { label: "Log in to the back office using their email and password" },
     VIEW_SALES_REPORTS: { label: "View sales reports" },
     CANCEL_RECEIPTS: { label: "Void completed receipts" },
     RESTORE_VOIDED_ITEMS: { label: "Restore items from the voided logs" },
@@ -42,3 +41,5 @@ export const backOfficePermissions = {
 export type PosPermission = keyof typeof posPermissions;
 export type BackOfficePermission = keyof typeof backOfficePermissions;
 export type AnyPermission = PosPermission | BackOfficePermission;
+
+    

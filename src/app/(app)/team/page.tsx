@@ -56,6 +56,8 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
 import Papa from "papaparse";
+import { createUser, updateUser, deleteUser, updateRole, createRole, deleteRole as deleteRoleAction } from './actions';
+
 
 const EMPTY_USER: Partial<User> = {
   name: "",
@@ -75,41 +77,29 @@ const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermis
 const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
 
 const systemRoles = ["Owner"];
-const juniorRoles = ["Cashier", "Waitress", "Bar Man"];
 
 export default function TeamPage() {
-  const { users, setUsers, roles, setRoles, getPermissionsForRole } = useSettings();
+  const { users, roles, getPermissionsForRole } = useSettings();
   const [loading, setLoading] = useState(true);
   
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
-  const [selectedUserPermissions, setSelectedUserPermissions] = useState<AnyPermission[]>([]);
   
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Partial<Role> | null>(null);
   const [selectedRolePermissions, setSelectedRolePermissions] = useState<AnyPermission[]>([]);
   const [passwordVisible, setPasswordVisible] = useState(false);
 
-  const [juniorAccess, setJuniorAccess] = useState(false);
-
   const { toast } = useToast();
 
   useEffect(() => {
     setLoading(false);
   }, []);
-
-  useEffect(() => {
-    if (editingUser) {
-        setSelectedUserPermissions(editingUser.permissions || []);
-    }
-  }, [editingUser]);
   
   useEffect(() => {
     if (editingRole) {
         const rolePerms = editingRole.permissions || [];
         setSelectedRolePermissions(rolePerms);
-        const hasJuniorPerms = ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS"].every(p => rolePerms.includes(p as AnyPermission));
-        setJuniorAccess(hasJuniorPerms);
     }
   }, [editingRole]);
 
@@ -127,7 +117,6 @@ export default function TeamPage() {
   const handleUserDialogClose = (open: boolean) => {
     if (!open) {
       setEditingUser(null);
-      setSelectedUserPermissions([]);
     }
     setIsUserDialogOpen(open);
   }
@@ -139,11 +128,11 @@ export default function TeamPage() {
     const formData = new FormData(event.currentTarget);
     const newPassword = formData.get("password") as string;
     
-    const userData: Partial<User> = {
+    const userData: Partial<User> & { password?: string } = {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       role: formData.get("role") as UserRole,
-      permissions: selectedUserPermissions,
+      permissions: getPermissionsForRole(formData.get("role") as UserRole),
       avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
     };
 
@@ -153,20 +142,18 @@ export default function TeamPage() {
 
     try {
         if ('id' in editingUser && editingUser.id) {
-            setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...userData } as User : u));
+            await updateUser(editingUser.id, userData);
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
-            const newUser: User = {
-              id: `user_${new Date().getTime()}`,
-              name: userData.name!,
-              email: userData.email!,
-              role: userData.role!,
-              password: userData.password!,
-              permissions: userData.permissions!,
-              avatar_url: userData.avatar_url!,
-              created_at: new Date().toISOString(),
-            }
-            setUsers(prevUsers => [...prevUsers, newUser]);
+            await createUser({
+                name: userData.name!,
+                email: userData.email!,
+                role: userData.role!,
+                password: userData.password!,
+                permissions: userData.permissions!,
+                avatar_url: userData.avatar_url!,
+                created_at: new Date().toISOString(),
+            });
             toast({ title: "User Created", description: `User ${userData.name} has been created.` });
         }
         handleUserDialogClose(false);
@@ -177,7 +164,7 @@ export default function TeamPage() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-        setUsers(users.filter(u => u.id !== userId));
+        await deleteUser(userId);
         toast({
             title: "User Deleted",
             description: "The user has been removed from the team.",
@@ -189,19 +176,11 @@ export default function TeamPage() {
   }
 
   const handleUserRoleChange = (roleName: string) => {
-    const role = roles.find(r => r.name === roleName);
-    if(role) {
-      setEditingUser(prev => ({ ...prev, role: role.name as UserRole, permissions: role.permissions }));
-      setSelectedUserPermissions(role.permissions);
+    if(editingUser) {
+        setEditingUser({ ...editingUser, role: roleName as UserRole });
     }
   }
   
-  const handleUserPermissionToggle = (permission: AnyPermission, checked: boolean) => {
-    setSelectedUserPermissions(prev =>
-        checked ? [...prev, permission] : prev.filter(p => p !== permission)
-    );
-  }
-
   // Role Handlers
   const handleOpenRoleDialog = (role: Partial<Role> | null) => {
     setEditingRole(role ? { ...role } : { ...EMPTY_ROLE });
@@ -222,26 +201,18 @@ export default function TeamPage() {
       permissions: selectedRolePermissions,
     };
     
-    if (editingRole.id) {
-        const updatedRoles = roles.map(r => 
-            r.id === editingRole.id ? { ...r, ...roleData } as Role : r
-        );
-        setRoles(updatedRoles);
-
-        setUsers(currentUsers =>
-            currentUsers.map(user =>
-                user.role === roleData.name
-                    ? { ...user, permissions: roleData.permissions }
-                    : user
-            )
-        );
-        
-        toast({ title: "Role Updated", description: `Permissions for all users with the '${roleData.name}' role have been updated.` });
-    } else {
-        setRoles([...roles, { id: `role_${new Date().getTime()}`, ...roleData }]);
-        toast({ title: "Role Added" });
+    try {
+      if (editingRole.id) {
+          await updateRole(editingRole.id, roleData);
+          toast({ title: "Role Updated", description: `Permissions for all users with the '${roleData.name}' role will be updated.` });
+      } else {
+          await createRole({ name: roleData.name, permissions: roleData.permissions });
+          toast({ title: "Role Added" });
+      }
+      handleRoleDialogClose(false);
+    } catch(error: any) {
+       toast({ title: "Error Saving Role", description: error.message, variant: "destructive" });
     }
-    handleRoleDialogClose(false);
   };
 
   const handleDeleteRole = async (roleId: string) => {
@@ -250,25 +221,14 @@ export default function TeamPage() {
         toast({ title: "Cannot Delete Role", description: "This role is assigned to one or more users.", variant: "destructive" });
         return;
     }
-    setRoles(roles.filter(r => r.id !== roleId));
-    toast({ title: "Role Deleted" });
+    try {
+      await deleteRoleAction(roleId);
+      toast({ title: "Role Deleted" });
+    } catch (error: any) {
+      toast({ title: "Error deleting role", description: error.message, variant: "destructive" });
+    }
   };
   
-  const handleJuniorAccessToggle = (checked: boolean) => {
-    setJuniorAccess(checked);
-    const juniorPerms: AnyPermission[] = ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS"];
-    
-    setSelectedRolePermissions(prev => {
-      let newPerms = [...prev];
-      if (checked) {
-        newPerms = [...new Set([...newPerms, ...juniorPerms])];
-      } else {
-        newPerms = newPerms.filter(p => !juniorPerms.includes(p));
-      }
-      return newPerms;
-    });
-  };
-
   const getRoleBadgeVariant = (role: UserRole): BadgeProps['variant'] => {
     switch (role) {
       case "Owner": return "destructive";
@@ -278,7 +238,6 @@ export default function TeamPage() {
     }
   };
 
-  const isUserPermissionLocked = true; // Users inherit from roles, so individual permissions are locked.
   const isRoleNameLocked = systemRoles.includes(editingRole?.name || "");
 
   const handleExport = () => {
@@ -427,44 +386,37 @@ export default function TeamPage() {
         </TabsContent>
       </Tabs>
       <Dialog open={isUserDialogOpen} onOpenChange={handleUserDialogClose}>
-          <DialogContent className="sm:max-w-4xl">
+          <DialogContent className="sm:max-w-xl">
             <form onSubmit={handleSaveUser}>
               <DialogHeader>
                 <DialogTitle>{editingUser?.id ? 'Edit User' : 'Add New User'}</DialogTitle>
                 <DialogDescription>{editingUser?.id ? "Update the user's details and permissions." : "Fill in the details for a new team member."}</DialogDescription>
               </DialogHeader>
-              <div className="grid md:grid-cols-2 gap-8 py-4">
-                  <div className="space-y-4">
-                    <div className="space-y-2"><Label htmlFor="name">Name</Label><Input id="name" name="name" defaultValue={editingUser?.name} required /></div>
-                    <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" defaultValue={editingUser?.email} required /></div>
-                    <div className="space-y-2">
-                        <Label htmlFor="password">Password</Label>
-                        <div className="relative">
-                          <Input 
-                            id="password" 
-                            name="password" 
-                            type={passwordVisible ? "text" : "password"} 
-                            placeholder={editingUser?.id ? "Leave blank to keep current" : ""}
-                            defaultValue={editingUser?.password}
-                            required={!editingUser?.id} 
-                          />
-                          <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2 h-7 w-7" onClick={() => setPasswordVisible(!passwordVisible)}>
-                            {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                    </div>
-                    <div className="space-y-2"><Label htmlFor="role">Role</Label>
-                        <Select name="role" required defaultValue={editingUser?.role} onValueChange={handleUserRoleChange}>
-                        <SelectTrigger id="role"><SelectValue placeholder="Select a role" /></SelectTrigger>
-                        <SelectContent>{roles.map(role => (<SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>))}</SelectContent>
-                        </Select>
-                    </div>
+              <div className="space-y-4 py-4">
+                  <div className="space-y-2"><Label htmlFor="name">Name</Label><Input id="name" name="name" defaultValue={editingUser?.name} required /></div>
+                  <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" defaultValue={editingUser?.email} required /></div>
+                  <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <div className="relative">
+                        <Input 
+                          id="password" 
+                          name="password" 
+                          type={passwordVisible ? "text" : "password"} 
+                          placeholder={editingUser?.id ? "Leave blank to keep current" : ""}
+                          required={!editingUser?.id} 
+                        />
+                        <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2 h-7 w-7" onClick={() => setPasswordVisible(!passwordVisible)}>
+                          {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
                   </div>
-                  <div className="space-y-4">
-                      <h3 className="text-lg font-medium">Permissions</h3>
-                       <p className="text-sm text-muted-foreground">User permissions are inherited from their assigned role. To change permissions, please edit the role.</p>
-                      {renderPermissions(selectedUserPermissions, handleUserPermissionToggle, isUserPermissionLocked)}
+                  <div className="space-y-2"><Label htmlFor="role">Role</Label>
+                      <Select name="role" required defaultValue={editingUser?.role} onValueChange={handleUserRoleChange}>
+                      <SelectTrigger id="role"><SelectValue placeholder="Select a role" /></SelectTrigger>
+                      <SelectContent>{roles.map(role => (<SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>))}</SelectContent>
+                      </Select>
                   </div>
+                  <p className="text-sm text-muted-foreground pt-2">Permissions are inherited from the assigned role. To change permissions, please edit the role.</p>
               </div>
               <DialogFooter className="pt-4"><Button type="submit">Save Changes</Button></DialogFooter>
             </form>
@@ -497,3 +449,5 @@ export default function TeamPage() {
     </div>
   );
 }
+
+    

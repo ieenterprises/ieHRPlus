@@ -3,11 +3,14 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
+import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
 import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { subDays, addDays } from 'date-fns';
+import { auth, db } from '@/lib/firebase';
+import { onAuthStateChanged } from "firebase/auth";
 
 export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
 
@@ -15,24 +18,13 @@ export type FeatureSettings = Record<string, boolean>;
 
 // --- MOCK DATA ---
 
-const getPermissionsForRole = (role: UserRole, allRoles: Role[]): AnyPermission[] => {
-    const roleData = allRoles.find(r => r.name === role);
-    return roleData?.permissions || [];
-};
-
-const MOCK_ROLES: Role[] = [
+const MOCK_INITIAL_ROLES: Role[] = [
   { id: "role_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
   { id: "role_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
-  { id: "role_manager", name: "Manager", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "LOGIN_WITH_EMAIL", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS"] },
-  { id: "role_cashier", name: "Cashier", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "MANAGE_CUSTOMERS", "VIEW_SALES_REPORTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
-  { id: "role_waitress", name: "Waitress", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
-  { id: "role_barman", name: "Bar Man", permissions: ["LOGIN_WITH_PIN", "ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
-];
-
-const MOCK_USERS: User[] = [
-    { id: 'user_1', name: 'Ada Lovelace', email: 'owner@example.com', role: 'Owner', password: 'password', avatar_url: 'https://placehold.co/100x100.png?text=A', permissions: getPermissionsForRole('Owner', MOCK_ROLES), created_at: new Date().toISOString() },
-    { id: 'user_2', name: 'Grace Hopper', email: 'manager@example.com', role: 'Manager', password: 'password', avatar_url: 'https://placehold.co/100x100.png?text=G', permissions: getPermissionsForRole('Manager', MOCK_ROLES), created_at: new Date().toISOString() },
-    { id: 'user_3', name: 'Charles Babbage', email: 'cashier@example.com', role: 'Cashier', password: 'password', avatar_url: 'https://placehold.co/100x100.png?text=C', permissions: getPermissionsForRole('Cashier', MOCK_ROLES), created_at: new Date().toISOString() },
+  { id: "role_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS"] },
+  { id: "role_cashier", name: "Cashier", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "MANAGE_CUSTOMERS", "VIEW_SALES_REPORTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
+  { id: "role_waitress", name: "Waitress", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
+  { id: "role_barman", name: "Bar Man", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
 ];
 
 const MOCK_CATEGORIES: Category[] = [
@@ -89,8 +81,8 @@ const MOCK_TAXES: Tax[] = [
 ];
 
 const MOCK_SALES: Sale[] = [
-    { id: 'sale_res_1', order_number: 1001, created_at: subDays(new Date(), 2).toISOString(), items: [{id: 'prod_4', name: 'Room 210', quantity: 1, price: 150.00}], total: 150.00, payment_methods: ['Cash'], customer_id: 'cust_2', employee_id: 'user_2', pos_device_id: 'pos_1', status: 'Fulfilled', customers: MOCK_CUSTOMERS[1], users: {name: MOCK_USERS[1].name}, pos_devices: {store_id: 'store_1'} },
-    { id: 'sale_res_2', order_number: 1002, created_at: subDays(new Date(), 1).toISOString(), items: [{id: 'prod_5', name: 'Room 211', quantity: 1, price: 250.00}], total: 250.00, payment_methods: ['Credit'], customer_id: 'cust_3', employee_id: 'user_2', pos_device_id: 'pos_1', status: 'Fulfilled', customers: MOCK_CUSTOMERS[2], users: {name: MOCK_USERS[1].name}, pos_devices: {store_id: 'store_1'} },
+    { id: 'sale_res_1', order_number: 1001, created_at: subDays(new Date(), 2).toISOString(), items: [{id: 'prod_4', name: 'Room 210', quantity: 1, price: 150.00}], total: 150.00, payment_methods: ['Cash'], customer_id: 'cust_2', employee_id: 'user_1', pos_device_id: 'pos_1', status: 'Fulfilled', customers: MOCK_CUSTOMERS[1], users: {name: 'Ada Lovelace'}, pos_devices: {store_id: 'store_1'} },
+    { id: 'sale_res_2', order_number: 1002, created_at: subDays(new Date(), 1).toISOString(), items: [{id: 'prod_5', name: 'Room 211', quantity: 1, price: 250.00}], total: 250.00, payment_methods: ['Credit'], customer_id: 'cust_3', employee_id: 'user_2', pos_device_id: 'pos_1', status: 'Fulfilled', customers: MOCK_CUSTOMERS[2], users: {name: 'Grace Hopper'}, pos_devices: {store_id: 'store_1'} },
 ]; 
 const MOCK_DEBTS: Debt[] = [
     { id: 'debt_res_1', sale_id: 'sale_res_2', customer_id: 'cust_3', amount: 250.00, status: 'Unpaid', created_at: subDays(new Date(), 1).toISOString(), sales: {order_number: 1002}, customers: {name: MOCK_CUSTOMERS[2].name} }
@@ -131,8 +123,6 @@ type SettingsContextType = {
     setReceiptSettings: React.Dispatch<React.SetStateAction<Record<string, ReceiptSettings>>>;
     setPaymentTypes: React.Dispatch<React.SetStateAction<PaymentType[]>>;
     setTaxes: React.Dispatch<React.SetStateAction<Tax[]>>;
-    setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
-    setUsers: React.Dispatch<React.SetStateAction<User[]>>;
     setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
     setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
     setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
@@ -143,7 +133,6 @@ type SettingsContextType = {
     
     // Auth and session state
     loggedInUser: User | null;
-    setLoggedInUser: React.Dispatch<React.SetStateAction<User | null>>;
     loadingUser: boolean;
     logout: () => void;
     
@@ -200,8 +189,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [receiptSettings, setReceiptSettings] = useLocalStorage<Record<string, ReceiptSettings>>('receiptSettings', MOCK_RECEIPT_SETTINGS);
     const [paymentTypes, setPaymentTypes] = useLocalStorage<PaymentType[]>('paymentTypes', MOCK_PAYMENT_TYPES);
     const [taxes, setTaxes] = useLocalStorage<Tax[]>('taxes', MOCK_TAXES);
-    const [roles, setRoles] = useLocalStorage<Role[]>('roles', MOCK_ROLES);
-    const [users, setUsers] = useLocalStorage<User[]>('users', MOCK_USERS);
+    
+    const [users, setUsers] = useState<User[]>([]);
+    const [roles, setRoles] = useState<Role[]>([]);
+    
     const [products, setProducts] = useLocalStorage<Product[]>('products', MOCK_PRODUCTS);
     const [categories, setCategories] = useLocalStorage<Category[]>('categories', MOCK_CATEGORIES);
     const [customers, setCustomers] = useLocalStorage<Customer[]>('customers', MOCK_CUSTOMERS);
@@ -211,7 +202,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [voidedLogs, setVoidedLogs] = useLocalStorage<VoidedLog[]>('voidedLogs', []);
     const [openTickets, setOpenTickets] = useLocalStorage<OpenTicket[]>('openTickets', []);
     
-    const [loggedInUser, setLoggedInUser] = useLocalStorage<User | null>('loggedInUser', null);
+    const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
     
     const [selectedStore, setSelectedStore] = useLocalStorage<StoreType | null>('selectedStore', null);
@@ -223,16 +214,76 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     
     const router = useRouter();
 
-    useEffect(() => {
-        setLoadingUser(false);
+    const fetchAndSetUser = useCallback(async (uid: string) => {
+        try {
+            const userDocRef = doc(db, "users", uid);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
+                setLoggedInUser(userProfile);
+                return userProfile;
+            } else {
+                console.error("User profile not found in database for UID:", uid);
+                return null;
+            }
+        } catch(error) {
+            console.error("Error fetching user profile:", error);
+            setLoggedInUser(null);
+            return null;
+        } finally {
+            setLoadingUser(false);
+        }
     }, []);
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                await fetchAndSetUser(user.uid);
+            } else {
+                setLoggedInUser(null);
+                setLoadingUser(false);
+            }
+        });
+        return () => unsubscribe();
+    }, [fetchAndSetUser]);
     
-    const logout = () => {
+    // Set up real-time listeners for users and roles
+    useEffect(() => {
+        const usersCollection = collection(db, "users");
+        const rolesCollection = collection(db, "roles");
+
+        const unsubUsers = onSnapshot(usersCollection, (snapshot) => {
+            const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+            setUsers(usersData);
+        });
+
+        const unsubRoles = onSnapshot(rolesCollection, (snapshot) => {
+            const rolesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Role));
+            if (rolesData.length > 0) {
+                setRoles(rolesData);
+            } else {
+                 setRoles(MOCK_INITIAL_ROLES)
+            }
+        });
+
+        return () => {
+            unsubUsers();
+            unsubRoles();
+        };
+    }, []);
+
+    const logout = async () => {
+        await auth.signOut();
         setLoggedInUser(null);
         setSelectedStore(null);
         setSelectedDevice(null);
         router.push('/sign-in');
     };
+
+    const getPermissionsForRole = useCallback((role: UserRole) => {
+        const roleData = roles.find(r => r.name === role);
+        return roleData?.permissions || [];
+    }, [roles]);
 
     const voidSale = useCallback((saleId: string, voidedByEmployeeId: string) => {
         const saleToVoid = sales.find(s => s.id === saleId);
@@ -301,8 +352,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         receiptSettings, setReceiptSettings,
         paymentTypes, setPaymentTypes,
         taxes, setTaxes,
-        roles, setRoles,
-        users, setUsers,
+        roles,
+        users,
         products, setProducts,
         categories, setCategories,
         customers, setCustomers,
@@ -311,13 +362,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         reservations, setReservations,
         voidedLogs, setVoidedLogs,
         openTickets,
-        loggedInUser, setLoggedInUser,
+        loggedInUser,
         loadingUser,
         logout,
         selectedStore, setSelectedStore,
         selectedDevice, setSelectedDevice,
         currency, setCurrency,
-        getPermissionsForRole: (role: UserRole) => getPermissionsForRole(role, roles),
+        getPermissionsForRole,
         debtToSettle, setDebtToSettle,
         printableData, setPrintableData,
         voidSale,
@@ -336,3 +387,5 @@ export function useSettings() {
     }
     return context;
 }
+
+    

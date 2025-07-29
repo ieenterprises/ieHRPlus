@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
@@ -16,43 +17,52 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { auth } from '@/lib/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 export default function SignInPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { users, setLoggedInUser, setSelectedStore, setSelectedDevice } = useSettings();
+  const { loggedInUser } = useSettings();
 
   const handlePasswordSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const email = formData.get("email") as string;
-    const password = formData.get("password") as string; // In demo mode, we ignore the password
+    const password = formData.get("password") as string;
 
-    const user = users.find(u => u.email === email);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
-    if (!user) {
+      toast({
+        title: "Signed In",
+        description: `Welcome!`,
+      });
+
+      // The useSettings hook will react to the auth state change
+      // and redirect appropriately after fetching the user profile.
+      
+    } catch (error: any) {
       toast({
         title: "Invalid Credentials",
-        description: "The email you entered does not match any user.",
+        description: error.message,
         variant: "destructive",
       });
-      return;
-    }
-    
-    setLoggedInUser(user);
-    toast({
-      title: "Signed In",
-      description: `Welcome back, ${user.name}!`,
-    });
-    
-    if (user.role === 'Owner' || user.role === 'Administrator') {
-      router.push("/dashboard");
-    } else {
-      setSelectedStore(null);
-      setSelectedDevice(null);
-      router.push("/select-device");
     }
   };
+
+  // This effect handles the redirection after the user is set in the context
+  useEffect(() => {
+    if (loggedInUser) {
+        if (loggedInUser.role === 'Owner' || loggedInUser.role === 'Administrator' || loggedInUser.role === 'Manager') {
+            router.push("/dashboard");
+        } else {
+            router.push("/select-device");
+        }
+    }
+  }, [loggedInUser, router]);
+
 
   return (
     <Card className="w-full max-w-sm">
@@ -60,7 +70,7 @@ export default function SignInPage() {
         <CardHeader>
           <CardTitle className="text-2xl">Sign In</CardTitle>
           <CardDescription>
-            Sign in to your business account. (Demo mode: any password works)
+            Sign in to your business account.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
