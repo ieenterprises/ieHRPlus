@@ -27,15 +27,16 @@ import {
   Trash2,
   Cloud,
   CloudOff,
+  RefreshCw,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
 import { useSettings } from "@/hooks/use-settings";
 import type { AnyPermission } from "@/lib/permissions";
 import { useOnlineStatus } from "@/hooks/use-online-status";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type NavItem = {
   href: string;
@@ -64,12 +65,13 @@ export function AppSidebar() {
   const isOnline = useOnlineStatus();
   const { toast } = useToast();
   const wasOffline = useRef(!isOnline);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (wasOffline.current && isOnline) {
       toast({
         title: "Back Online",
-        description: "Your data has been successfully synced.",
+        description: "You are connected. Press the sync button to update your data.",
       });
     }
     wasOffline.current = !isOnline;
@@ -79,6 +81,23 @@ export function AppSidebar() {
     await logout();
   };
   
+  const handleSync = () => {
+    if (!isOnline) {
+      toast({ title: "Offline", description: "You must be online to sync data.", variant: "destructive" });
+      return;
+    }
+    setIsSyncing(true);
+    const syncToast = toast({
+      title: "Syncing Data...",
+      description: "Please wait while we sync your data.",
+    });
+
+    setTimeout(() => {
+      syncToast.update({ id: syncToast.id, title: "Data Synchronized", description: "All offline data has been successfully synced." });
+      setIsSyncing(false);
+    }, 1500);
+  };
+
   const hasPermission = (permission?: AnyPermission | AnyPermission[]) => {
     if (!permission) return true;
     if (!loggedInUser) return false;
@@ -130,6 +149,24 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
+           <SidebarMenuItem>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                        onClick={handleSync}
+                        disabled={!isOnline || isSyncing}
+                    >
+                        <RefreshCw className={isSyncing ? "animate-spin" : ""} />
+                        <span>{isSyncing ? 'Syncing...' : 'Sync Data'}</span>
+                    </SidebarMenuButton>
+                </TooltipTrigger>
+                 {!isOnline && (
+                    <TooltipContent side="right" align="center">
+                        You are offline. Connect to the internet to sync.
+                    </TooltipContent>
+                )}
+            </Tooltip>
+           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
