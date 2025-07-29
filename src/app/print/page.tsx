@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSettings } from '@/hooks/use-settings';
 import { PrintableReceipt } from '@/components/printable-receipt';
@@ -12,14 +12,20 @@ import { Card, CardContent } from '@/components/ui/card';
 export default function PrintPage() {
     const router = useRouter();
     const { printableData, setPrintableData } = useSettings();
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
-        // If there's no data, redirect back to dashboard.
-        // This prevents users from accessing this page directly.
-        if (!printableData) {
+        setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        // This effect runs only on the client, after the component has mounted.
+        if (mounted && !printableData) {
+            // If there's no data, redirect back to dashboard.
+            // This prevents users from accessing this page directly.
             router.replace('/dashboard');
         }
-    }, [printableData, router]);
+    }, [printableData, router, mounted]);
     
     const handlePrint = () => {
         window.print();
@@ -31,8 +37,9 @@ export default function PrintPage() {
         router.back();
     }
 
-    if (!printableData) {
-        // Render nothing or a loading state while redirecting
+    // Don't render anything on the server or on the initial client render
+    // to prevent hydration mismatch.
+    if (!mounted || !printableData) {
         return null; 
     }
 
