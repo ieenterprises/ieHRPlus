@@ -19,13 +19,13 @@ import { useSettings } from "@/hooks/use-settings";
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, writeBatch, collection, getDocs, query, where } from "firebase/firestore";
-import { posPermissions, backOfficePermissions } from "@/lib/permissions";
+import { posPermissions, backOfficePermissions, AnyPermission } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
 
 export default function SignUpPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { getPermissionsForRole, roles: MOCK_INITIAL_ROLES } = useSettings();
+  const { roles: MOCK_INITIAL_ROLES } = useSettings();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -44,25 +44,20 @@ export default function SignUpPage() {
 
         // 2. Check if roles exist, if not, create them FIRST
         const rolesCollectionRef = collection(db, "roles");
-        const rolesQuery = query(rolesCollectionRef, where("name", "==", "Owner"));
-        const rolesSnapshot = await getDocs(rolesQuery);
+        const rolesSnapshot = await getDocs(rolesCollectionRef);
         
-        let ownerRolePermissions: string[] = [];
-
         if (rolesSnapshot.empty) {
             MOCK_INITIAL_ROLES.forEach(role => {
                 const roleDocRef = doc(rolesCollectionRef, role.id);
                 batch.set(roleDocRef, role);
-                if (role.name === "Owner") {
-                    ownerRolePermissions = role.permissions;
-                }
             });
-        } else {
-             const ownerRole = MOCK_INITIAL_ROLES.find(r => r.name === 'Owner');
-             if (ownerRole) {
-                ownerRolePermissions = ownerRole.permissions;
-             }
         }
+        
+        // Define all permissions for the Owner
+        const ownerRolePermissions: AnyPermission[] = [
+          ...Object.keys(posPermissions) as (keyof typeof posPermissions)[],
+          ...Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[]
+        ];
 
         // 3. Prepare user profile for Firestore
         const newUserProfile = {
@@ -74,7 +69,7 @@ export default function SignUpPage() {
           created_at: new Date().toISOString(),
         };
 
-        // 4. Add user profile to 'users' collection
+        // 4. Add user profile to 'users' collection, using the auth UID as the document ID
         const userDocRef = doc(db, "users", user.uid);
         batch.set(userDocRef, newUserProfile);
         

@@ -191,7 +191,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [taxes, setTaxes] = useLocalStorage<Tax[]>('taxes', MOCK_TAXES);
     
     const [users, setUsers] = useState<User[]>([]);
-    const [roles, setRoles] = useState<Role[]>([]);
+    const [roles, setRoles] = useState<Role[]>(MOCK_INITIAL_ROLES);
     
     const [products, setProducts] = useLocalStorage<Product[]>('products', MOCK_PRODUCTS);
     const [categories, setCategories] = useLocalStorage<Category[]>('categories', MOCK_CATEGORIES);
@@ -216,32 +216,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     const fetchAndSetUser = useCallback(async (uid: string) => {
         const userDocRef = doc(db, "users", uid);
-        
-        // Retry logic for fetching user profile
-        const maxRetries = 5;
-        const delay = 500; // 500ms delay between retries
-        for (let i = 0; i < maxRetries; i++) {
-            try {
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
-                    setLoggedInUser(userProfile);
-                    return userProfile;
-                }
-                // Wait before the next retry
-                await new Promise(res => setTimeout(res, delay));
-            } catch (error) {
-                console.error(`Attempt ${i + 1} failed:`, error);
-                if (i === maxRetries - 1) {
-                    console.error("All attempts to fetch user profile failed:", error);
-                    setLoggedInUser(null);
-                    return null;
-                }
-            }
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+            const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
+            setLoggedInUser(userProfile);
+            return userProfile;
+        } else {
+            console.error("User profile not found in database for UID:", uid);
+            return null;
         }
-        
-        console.error("User profile not found in database for UID:", uid);
-        return null;
     }, []);
 
     useEffect(() => {
@@ -249,42 +232,36 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         let unsubRoles: Unsubscribe | null = null;
     
         const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-            // If there's an authenticated user
             if (user) {
-                const userProfile = await fetchAndSetUser(user.uid);
+                await fetchAndSetUser(user.uid);
+                
+                const usersCollection = collection(db, "users");
+                unsubUsers = onSnapshot(usersCollection, (snapshot) => {
+                    const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+                    setUsers(usersData);
+                });
     
-                if (userProfile) {
-                    // Set up Firestore listeners only for authenticated users
-                    const usersCollection = collection(db, "users");
-                    unsubUsers = onSnapshot(usersCollection, (snapshot) => {
-                        const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-                        setUsers(usersData);
-                    });
-        
-                    const rolesCollection = collection(db, "roles");
-                    unsubRoles = onSnapshot(rolesCollection, (snapshot) => {
-                        const rolesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Role));
-                        if (rolesData.length > 0) {
-                            setRoles(rolesData);
-                        } else {
-                            setRoles(MOCK_INITIAL_ROLES);
-                        }
-                    });
-                }
+                const rolesCollection = collection(db, "roles");
+                unsubRoles = onSnapshot(rolesCollection, (snapshot) => {
+                    const rolesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Role));
+                    if (rolesData.length > 0) {
+                        setRoles(rolesData);
+                    } else {
+                        // This case is for initial setup if roles aren't in the DB yet
+                        setRoles(MOCK_INITIAL_ROLES);
+                    }
+                });
+
             } else {
-                // If no user is authenticated
                 setLoggedInUser(null);
-    
-                // Clean up any existing listeners
                 if (unsubUsers) unsubUsers();
                 if (unsubRoles) unsubRoles();
                 setUsers([]);
-                setRoles([]);
+                setRoles(MOCK_INITIAL_ROLES);
             }
             setLoadingUser(false);
         });
     
-        // Cleanup function for the main auth listener
         return () => {
             unsubscribeAuth();
             if (unsubUsers) unsubUsers();

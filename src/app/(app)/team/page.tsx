@@ -127,12 +127,13 @@ export default function TeamPage() {
 
     const formData = new FormData(event.currentTarget);
     const newPassword = formData.get("password") as string;
+    const roleName = formData.get("role") as UserRole;
     
     const userData: Partial<User> & { password?: string } = {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
-      role: formData.get("role") as UserRole,
-      permissions: getPermissionsForRole(formData.get("role") as UserRole),
+      role: roleName,
+      permissions: getPermissionsForRole(roleName),
       avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
     };
 
@@ -145,6 +146,10 @@ export default function TeamPage() {
             await updateUser(editingUser.id, userData);
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
+            if (!userData.password) {
+                toast({ title: "Password Required", description: "A password is required for new users.", variant: "destructive" });
+                return;
+            }
             await createUser({
                 name: userData.name!,
                 email: userData.email!,
@@ -449,5 +454,3 @@ export default function TeamPage() {
     </div>
   );
 }
-
-    
