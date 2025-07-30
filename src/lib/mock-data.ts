@@ -29,7 +29,7 @@ const MOCK_PRODUCTS = [
   { id: "prod_fries", name: "French Fries", price: 4.50, stock: 80, category_id: "cat_snacks", image_url: "https://placehold.co/300x200.png", status: 'Available' },
   // Rooms
   { id: "prod_room_101", name: "Standard Room 101", price: 150.00, stock: 1, category_id: "cat_room", image_url: "https://placehold.co/300x200.png", status: 'Available' },
-  { id: "prod_room_102", name: "Standard Room 102", price: 150.00, stock: 1, category_id: "cat_room", image_url: "https://placehold.co/300x200.png", status: 'Occupied' },
+  { id: "prod_room_102", name: "Standard Room 102", price: 150.00, stock: 1, category_id: "cat_room", image_url: "https://placehold.co/300x200.png", status: 'Available' },
   { id: "prod_room_201", name: "Deluxe Suite 201", price: 250.00, stock: 1, category_id: "cat_room", image_url: "https://placehold.co/300x200.png", status: 'Maintenance' },
 ];
 
@@ -95,19 +95,6 @@ const generateDynamicMockData = (ownerId: string, businessName: string) => {
       employee_id: ownerId,
       pos_device_id: "pos_bar",
     },
-    // Sale 3: Room booking for Jane Smith
-     {
-      id: "sale_3",
-      order_number: 1003,
-      total: 150.00,
-      payment_methods: ["Card"],
-      items: [{ id: "prod_room_102", name: "Standard Room 102", quantity: 1, price: 150.00 }],
-      status: "Fulfilled",
-      created_at: subDays(now, 2).toISOString(),
-      customer_id: "cust_janesmith",
-      employee_id: ownerId,
-      pos_device_id: "pos_front",
-    },
     // Sale 4: Voided sale
     {
       id: "sale_4_voided",
@@ -135,16 +122,7 @@ const generateDynamicMockData = (ownerId: string, businessName: string) => {
   ];
 
   const reservations = [
-     {
-      id: "res_1",
-      guest_name: "Jane Smith",
-      product_id: "prod_room_102",
-      check_in: subDays(now, 2).toISOString(),
-      check_out: addDays(now, 1).toISOString(),
-      status: "Checked-in",
-      sale_id: "sale_3",
-      created_at: subDays(now, 2).toISOString(),
-    },
+     
   ];
   
   const openTickets = [
