@@ -563,19 +563,21 @@ export default function SalesPage() {
       toast({ title: "Empty Order", description: "Cannot save an empty order.", variant: "destructive" });
       return;
     }
-
+  
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
     try {
-        const ticketPayload: Partial<OpenTicket> & { items: SaleItem[], total: number } = {
-            id: activeTicket?.id, // if this was a loaded ticket, we update it, otherwise it's undefined for a new ticket
+        const basePayload = {
             items: saleItems,
             total: total,
             employee_id: loggedInUser?.id ?? null,
             customer_id: selectedCustomerId,
-            // If it's a new ticket, give it an order number
             order_number: activeTicket?.order_number || Math.floor(Math.random() * 100000),
         };
+
+        const ticketPayload = activeTicket?.id 
+            ? { ...basePayload, id: activeTicket.id } 
+            : basePayload;
 
         const savedTicket = await saveTicket(ticketPayload);
         
