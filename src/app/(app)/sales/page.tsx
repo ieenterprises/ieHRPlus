@@ -130,7 +130,7 @@ export default function SalesPage() {
     debtToSettle,
     setDebtToSettle,
   } = useSettings();
-  const { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode } = usePos();
+  const { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode, ticketToLoad, setTicketToLoad } = usePos();
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   
@@ -156,8 +156,35 @@ export default function SalesPage() {
 
   const isReservationsEnabled = featureSettings.reservations;
 
+  const handleLoadTicket = (ticket: OpenTicket) => {
+    if (orderItems.length > 0 && !activeTicketId && !debtToSettle) {
+      if (!window.confirm("Loading this ticket will replace your current unsaved order. Are you sure?")) {
+        return;
+      }
+    }
+
+    const ticketItems = ticket.items as SaleItem[];
+    const newOrderItems: OrderItem[] = ticketItems.map(item => {
+        const product = products.find(p => p.id === item.id);
+        return product ? { product, quantity: item.quantity } : null;
+    }).filter((item): item is OrderItem => item !== null);
+    
+    if (newOrderItems.length !== ticketItems.length) {
+        toast({ title: "Error Loading Ticket", description: "Some items in this ticket no longer exist and were removed.", variant: "destructive" });
+    }
+
+    setOrderItems(newOrderItems);
+    setActiveTicketId(ticket.id);
+    setSelectedCustomerId(ticket.customer_id);
+    setLoadedTicketItemIds(ticketItems.map(item => item.id));
+    setIsTicketsDialogOpen(false);
+    setTicketToLoad(null); // Clear the ticket from context after loading
+  };
+
   useEffect(() => {
-    if (debtToSettle) {
+    if (ticketToLoad) {
+      handleLoadTicket(ticketToLoad);
+    } else if (debtToSettle) {
       const debtItems: OrderItem[] = debtToSettle.items.map(item => {
         const product = products.find(p => p.id === item.id);
         return product ? { product, quantity: item.quantity } : null;
@@ -169,7 +196,7 @@ export default function SalesPage() {
       if (walkIn) setSelectedCustomerId(walkIn.id);
     }
     setLoading(false);
-  }, [customers, debtToSettle, products]);
+  }, [customers, debtToSettle, products, ticketToLoad]);
 
   const addReservation = (reservationData: Omit<Omit<import("/Users/user/Downloads/work/studio-f3/studio-f3/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status" | "sale_id"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; sale_id: any; }) => {
      setReservations(prev => [...prev, {
@@ -555,6 +582,7 @@ export default function SalesPage() {
             employee_id: loggedInUser?.id ?? null,
             customer_id: selectedCustomerId,
             ticket_name: `Ticket @ ${format(new Date(), 'HH:mm')}`,
+            order_number: Math.floor(Math.random() * 100000),
         };
         const newTicketId = await saveTicket(ticketPayload);
 
@@ -567,30 +595,6 @@ export default function SalesPage() {
     } catch (error: any) {
         toast({ title: "Error Saving Order", description: error.message, variant: "destructive" });
     }
-  };
-
-  const handleLoadTicket = (ticket: OpenTicket) => {
-    if (orderItems.length > 0 && !activeTicketId && !debtToSettle) {
-      if (!window.confirm("Loading this ticket will replace your current unsaved order. Are you sure?")) {
-        return;
-      }
-    }
-
-    const ticketItems = ticket.items as SaleItem[];
-    const newOrderItems: OrderItem[] = ticketItems.map(item => {
-        const product = products.find(p => p.id === item.id);
-        return product ? { product, quantity: item.quantity } : null;
-    }).filter((item): item is OrderItem => item !== null);
-    
-    if (newOrderItems.length !== ticketItems.length) {
-        toast({ title: "Error Loading Ticket", description: "Some items in this ticket no longer exist and were removed.", variant: "destructive" });
-    }
-
-    setOrderItems(newOrderItems);
-    setActiveTicketId(ticket.id);
-    setSelectedCustomerId(ticket.customer_id);
-    setLoadedTicketItemIds(ticketItems.map(item => item.id));
-    setIsTicketsDialogOpen(false);
   };
   
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
@@ -950,7 +954,7 @@ export default function SalesPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Ticket Name</TableHead>
+                                    <TableHead>Order #</TableHead>
                                     <TableHead>Employee</TableHead>
                                     <TableHead>Date</TableHead>
                                     <TableHead className="text-right">Total</TableHead>
@@ -961,7 +965,7 @@ export default function SalesPage() {
                                 {openTickets.length > 0 ? (
                                     openTickets.map(ticket => (
                                         <TableRow key={ticket.id}>
-                                            <TableCell className="font-medium">{ticket.ticket_name}</TableCell>
+                                            <TableCell className="font-medium">#{ticket.order_number}</TableCell>
                                             <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
                                             <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
                                             <TableCell className="text-right">{currency}{ticket.total.toFixed(2)}</TableCell>

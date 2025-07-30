@@ -61,7 +61,7 @@ const getPaymentBadgeVariant = (method: string) => {
 
 export default function KitchenPage() {
   const { sales, products, categories, users, loggedInUser, voidSale, setPrintableData } = useSettings();
-  const { openTickets } = usePos();
+  const { openTickets, setTicketToLoad } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
@@ -187,7 +187,7 @@ export default function KitchenPage() {
 
       const searchMatch =
         filters.searchTerm === "" ||
-        ticket.ticket_name?.toLowerCase().includes(searchTermLower) ||
+        ticket.order_number?.toString().includes(searchTermLower) ||
         (ticket.customers?.name ?? '').toLowerCase().includes(searchTermLower) ||
         (ticket.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
         (ticket.items as any[]).some((item) => item.name.toLowerCase().includes(searchTermLower));
@@ -220,6 +220,10 @@ export default function KitchenPage() {
     toast({ title: "Receipt Moved", description: `The receipt has been moved to the voided logs.` });
   };
   
+  const handleLoadTicket = (ticket: OpenTicket) => {
+    setTicketToLoad(ticket);
+    router.push('/sales');
+  };
 
   return (
     <div className="space-y-8">
@@ -243,7 +247,7 @@ export default function KitchenPage() {
                 <CardContent>
                     <div className="flex flex-wrap items-center gap-2 mb-4">
                         <Input
-                        placeholder="Search by ticket, customer, item..."
+                        placeholder="Search by order #, customer, item..."
                         value={filters.searchTerm}
                         onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
                         className="max-w-xs"
@@ -277,7 +281,7 @@ export default function KitchenPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Ticket Name</TableHead>
+                                <TableHead>Order #</TableHead>
                                 <TableHead>Employee</TableHead>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Items</TableHead>
@@ -291,13 +295,16 @@ export default function KitchenPage() {
                             ) : filteredTickets.length > 0 ? (
                                 filteredTickets.map(ticket => (
                                     <TableRow key={ticket.id}>
-                                        <TableCell className="font-medium">{ticket.ticket_name}</TableCell>
+                                        <TableCell className="font-medium">#{ticket.order_number}</TableCell>
                                         <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
                                         <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
                                         <TableCell>{(ticket.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
                                         <TableCell className="text-right">${ticket.total.toFixed(2)}</TableCell>
                                         <TableCell className="text-right">
                                           <div className="flex justify-end gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as OpenTicket)}>
+                                              Load
+                                            </Button>
                                             <Button variant="outline" size="sm" onClick={() => onPrint(ticket, 'ticket')}>
                                               <Printer className="mr-2 h-4 w-4" /> Print
                                             </Button>
