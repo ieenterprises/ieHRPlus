@@ -967,7 +967,7 @@ export default function SalesPage() {
                             <TableBody>
                                 {openTickets.length > 0 ? (
                                     openTickets.map(ticket => (
-                                        <TableRow key={ticket.id}>
+                                        <TableRow key={ticket.id || ticket.order_number}>
                                             <TableCell className="font-medium">#{ticket.order_number}</TableCell>
                                             <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
                                             <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
