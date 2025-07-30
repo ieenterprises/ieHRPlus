@@ -25,6 +25,7 @@ export type Reservation = Database['public']['Tables']['reservations']['Row'] & 
   sale_id: string | null;
 };
 export type OpenTicket = Database['public']['Tables']['open_tickets']['Row'] & {
+  id: string; // Ensure id is always present
   users: { name: string | null } | null;
   customers: { name: string | null } | null;
 };
@@ -88,6 +89,7 @@ export type VoidedLog = {
     receipt_id?: string;
     order_number?: number;
     receipt_total?: number;
+    reservation_check_out?: string;
   }>;
   users: { name: string | null } | null;
 };
@@ -198,7 +200,7 @@ export type Database = {
           items: Json
           total: number
           notes: string | null
-          ticket_name: string | null
+          order_number: number | null
         }
         Insert: {
           id?: string
@@ -208,7 +210,7 @@ export type Database = {
           items: Json
           total: number
           notes?: string | null
-          ticket_name?: string | null
+          order_number?: number | null
         }
         Update: {
           id?: string
@@ -218,7 +220,7 @@ export type Database = {
           items?: Json
           total?: number
           notes?: string | null
-          ticket_name?: string | null
+          order_number?: number | null
         }
         Relationships: [
           {

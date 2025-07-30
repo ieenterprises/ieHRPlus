@@ -173,7 +173,11 @@ export default function VoidedPage() {
   const handleRestoreLog = (logToRestore: VoidedLog) => {
     if (!logToRestore || logToRestore.type !== 'receipt') return;
   
-    const saleToRestore = logToRestore.data as Sale;
+    const saleToRestore = {
+        ...logToRestore.data,
+        customers: users.find(c => c.id === logToRestore.data.customer_id) || null,
+        users: users.find(u => u.id === logToRestore.data.employee_id) || null,
+    } as Sale;
     
     const roomCategory = categories.find(c => c.name.toLowerCase() === 'room');
     const isRoomBooking = saleToRestore.items.some(item => {
@@ -193,9 +197,9 @@ export default function VoidedPage() {
             const reservationToRestore: Omit<Reservation, 'id'> = {
                 guest_name: saleToRestore.customers?.name || 'Unknown Guest',
                 product_id: roomItem.id,
-                check_in: saleToRestore.created_at!,
-                // Note: check_out date is an approximation here, might need manual adjustment.
-                check_out: new Date(new Date(saleToRestore.created_at!).getTime() + 24 * 60 * 60 * 1000).toISOString(),
+                // These dates are from the original sale, which is what we want.
+                check_in: saleToRestore.created_at!, 
+                check_out: logToRestore.data.reservation_check_out || new Date(new Date(saleToRestore.created_at!).getTime() + 24 * 60 * 60 * 1000).toISOString(),
                 status: 'Checked-in' as const,
                 sale_id: saleToRestore.id,
                 created_at: saleToRestore.created_at!,

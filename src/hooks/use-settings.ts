@@ -506,29 +506,36 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const voidSale = async (saleId: string, voidedByEmployeeId: string) => {
         const saleToVoid = sales.find(s => s.id === saleId);
         if (!saleToVoid) return;
-
+    
         const reservationToVoid = reservations.find(r => r.sale_id === saleId);
-
+    
         const batch = writeBatch(db);
-
+    
         // 1. Add to voided logs
         const voidedLogRef = doc(collection(db, 'voided_logs'));
         const { customers, users, pos_devices, ...saleData } = saleToVoid;
+        
+        // Add reservation check-out date to the voided log if it exists
+        const dataToLog = { ...saleData };
+        if (reservationToVoid) {
+            (dataToLog as any).reservation_check_out = reservationToVoid.check_out;
+        }
+
         batch.set(voidedLogRef, {
             type: 'receipt',
             voided_by_employee_id: voidedByEmployeeId,
             created_at: new Date().toISOString(),
-            data: saleData,
+            data: dataToLog,
         });
-
+    
         // 2. Delete original sale
         batch.delete(doc(db, 'sales', saleId));
-
+    
         // 3. Delete associated debt if exists
         const debtQuery = query(collection(db, 'debts'), where('sale_id', '==', saleId));
         const debtSnapshot = await getDocs(debtQuery);
         debtSnapshot.forEach(doc => batch.delete(doc.ref));
-
+    
         // 4. Delete associated reservation and update room status
         if (reservationToVoid) {
             if (reservationToVoid.product_id) {
@@ -537,7 +544,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             }
             batch.delete(doc(db, 'reservations', reservationToVoid.id));
         }
-
+    
         await batch.commit();
     };
 
