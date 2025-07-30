@@ -168,9 +168,6 @@ export default function SalesPage() {
         return;
     }
 
-    // Immediately delete ticket from backend and state
-    await deleteTicket(ticket.id);
-
     const ticketItems = ticket.items as SaleItem[];
     const newOrderItems: OrderItem[] = ticketItems.map(item => {
         const product = products.find(p => p.id === item.id);
@@ -182,10 +179,13 @@ export default function SalesPage() {
     }
 
     setOrderItems(newOrderItems);
-    setActiveTicket(ticket); // Keep the ticket data (including ID) in memory for saving/updating
+    setActiveTicket(ticket);
     setSelectedCustomerId(ticket.customer_id);
     setIsTicketsDialogOpen(false);
-    setTicketToLoad(null); // Clear the ticket from context after loading
+    setTicketToLoad(null);
+
+    // Immediately delete ticket from backend and state after loading
+    await deleteTicket(ticket.id);
     
     toast({ title: "Ticket Loaded", description: `Order #${ticket.order_number} has been loaded and removed from open tickets.`});
   };
@@ -470,9 +470,6 @@ export default function SalesPage() {
         
         // If an active ticket was paid for, its ID is in activeTicket.
         // It has already been deleted on load, so no action is needed here.
-        // if (activeTicket?.id) {
-        //     await deleteTicket(activeTicket.id);
-        // }
 
         if (isCheckingIn) {
             const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
@@ -567,21 +564,18 @@ export default function SalesPage() {
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
     try {
-        const basePayload = {
+        const ticketPayload = {
             items: saleItems,
             total: total,
             employee_id: loggedInUser?.id ?? null,
             customer_id: selectedCustomerId,
             order_number: activeTicket?.order_number || Math.floor(Math.random() * 100000),
         };
-
-        const ticketPayload = activeTicket?.id 
-            ? { ...basePayload, id: activeTicket.id } 
-            : basePayload;
-
-        const savedTicket = await saveTicket(ticketPayload);
         
-        toast({ title: activeTicket ? "Order Updated" : "Order Saved", description: "The order has been saved as an open ticket." });
+        // When saving an updated ticket, we create a new one. The old one was already deleted on load.
+        await saveTicket(ticketPayload);
+        
+        toast({ title: "Order Saved", description: "The order has been saved as a new open ticket." });
         handleClearOrder();
     } catch (error: any) {
         toast({ title: "Error Saving Order", description: error.message, variant: "destructive" });
@@ -981,3 +975,4 @@ export default function SalesPage() {
     </TooltipProvider>
   );
 }
+
