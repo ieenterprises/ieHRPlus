@@ -5,6 +5,8 @@ import { createContext, useContext, useState, useEffect, ReactNode, createElemen
 import type { OpenTicket, User, Customer, SaleItem } from '@/lib/types';
 import { useToast } from './use-toast';
 import { useSettings } from './use-settings';
+import { collection, doc, addDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { db } from '@/lib/firebase';
 
 type OpenTicketWithRelations = OpenTicket & { 
     users: Pick<User, 'name'> | null, 
@@ -13,15 +15,7 @@ type OpenTicketWithRelations = OpenTicket & {
 
 type PosContextType = {
   openTickets: OpenTicketWithRelations[];
-  saveTicket: (ticket: {
-    id: string | null;
-    items: SaleItem[];
-    total: number;
-    employee_id: string | null;
-    customer_id?: string | null;
-    ticket_name?: string;
-    order_number: number;
-  }) => Promise<string | null>;
+  saveTicket: (ticket: Partial<OpenTicket>) => Promise<OpenTicket | null>;
   deleteTicket: (ticketId: string) => Promise<void>;
   reservationMode: boolean;
   setReservationMode: (mode: boolean) => void;
@@ -32,7 +26,7 @@ type PosContextType = {
 const PosContext = createContext<PosContextType | undefined>(undefined);
 
 export function PosProvider({ children }: { children: ReactNode }) {
-  const { openTickets: openTicketsData, users, customers, saveTicket, deleteTicket } = useSettings();
+  const { openTickets: openTicketsData, setOpenTickets: setOpenTicketsData, users, customers } = useSettings();
   const [openTickets, setOpenTickets] = useState<OpenTicketWithRelations[]>([]);
   const [reservationMode, setReservationMode] = useState(false);
   const [ticketToLoad, setTicketToLoad] = useState<OpenTicket | null>(null);
@@ -46,6 +40,35 @@ export function PosProvider({ children }: { children: ReactNode }) {
     }));
     setOpenTickets(enrichedTickets as OpenTicketWithRelations[]);
   }, [openTicketsData, users, customers]);
+
+  const saveTicket = async (ticketData: Partial<OpenTicket>): Promise<OpenTicket | null> => {
+      try {
+          if (ticketData.id) {
+              const ticketRef = doc(db, 'open_tickets', ticketData.id);
+              await updateDoc(ticketRef, ticketData);
+              return { ...ticketData, id: ticketData.id } as OpenTicket;
+          } else {
+              const newDocRef = await addDoc(collection(db, 'open_tickets'), {
+                  ...ticketData,
+                  created_at: new Date().toISOString(),
+              });
+              return { ...ticketData, id: newDocRef.id, created_at: new Date().toISOString() } as OpenTicket;
+          }
+      } catch (error) {
+          console.error("Error saving ticket:", error);
+          return null;
+      }
+  };
+  
+  const deleteTicket = async (ticketId: string) => {
+      try {
+          if (ticketId) {
+              await deleteDoc(doc(db, 'open_tickets', ticketId));
+          }
+      } catch (error) {
+          console.error("Error deleting ticket:", error);
+      }
+  };
   
   return createElement(PosContext.Provider, {
     value: { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode, ticketToLoad, setTicketToLoad }

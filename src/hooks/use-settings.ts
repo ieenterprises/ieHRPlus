@@ -96,8 +96,6 @@ type SettingsContextType = {
 
     // Voiding and ticket logic
     voidSale: (saleId: string, voidedByEmployeeId: string) => Promise<void>;
-    saveTicket: (ticket: any) => Promise<string | null>;
-    deleteTicket: (ticketId: string) => Promise<void>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -543,26 +541,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         await batch.commit();
     };
 
-    const saveTicket = async (ticketData: any): Promise<string | null> => {
-        if (ticketData.id) {
-            const ticketRef = doc(db, 'open_tickets', ticketData.id);
-            await updateDoc(ticketRef, ticketData);
-            return ticketData.id;
-        } else {
-            const newDocRef = await addDoc(collection(db, 'open_tickets'), {
-                ...ticketData,
-                created_at: new Date().toISOString(),
-            });
-            return newDocRef.id;
-        }
-    };
-    
-    const deleteTicket = async (ticketId: string) => {
-        if (ticketId) {
-            await deleteDoc(doc(db, 'open_tickets', ticketId));
-        }
-    };
-
     const value: SettingsContextType = {
         featureSettings, setFeatureSettings,
         stores, addStore, updateStore, deleteStore,
@@ -591,8 +569,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         debtToSettle, setDebtToSettle,
         printableData, setPrintableData,
         voidSale,
-        saveTicket,
-        deleteTicket,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);

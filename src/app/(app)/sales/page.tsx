@@ -137,7 +137,8 @@ export default function SalesPage() {
   const [loading, setLoading] = useState(true);
 
   const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
-  const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+  const [activeTicket, setActiveTicket] = useState<OpenTicket | null>(null);
+
 
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
@@ -155,12 +156,20 @@ export default function SalesPage() {
 
   const isReservationsEnabled = featureSettings.reservations;
 
-  const handleLoadTicket = (ticket: OpenTicket) => {
-    if (orderItems.length > 0 && !activeTicketId && !debtToSettle) {
+  const handleLoadTicket = async (ticket: OpenTicket) => {
+    if (orderItems.length > 0 && !activeTicket && !debtToSettle) {
       if (!window.confirm("Loading this ticket will replace your current unsaved order. Are you sure?")) {
         return;
       }
     }
+    
+    if (!ticket.id) {
+        toast({ title: "Error", description: "This ticket has an invalid ID and cannot be loaded.", variant: "destructive" });
+        return;
+    }
+
+    // Immediately delete ticket from backend and state
+    await deleteTicket(ticket.id);
 
     const ticketItems = ticket.items as SaleItem[];
     const newOrderItems: OrderItem[] = ticketItems.map(item => {
@@ -173,16 +182,12 @@ export default function SalesPage() {
     }
 
     setOrderItems(newOrderItems);
-    setActiveTicketId(ticket.id);
+    setActiveTicket(ticket); // Keep the ticket data (including ID) in memory for saving/updating
     setSelectedCustomerId(ticket.customer_id);
     setIsTicketsDialogOpen(false);
     setTicketToLoad(null); // Clear the ticket from context after loading
     
-    // Immediately delete the ticket from the open tickets list
-    if(ticket.id) {
-        deleteTicket(ticket.id);
-        toast({ title: "Ticket Loaded", description: "The ticket has been loaded and removed from open tickets."});
-    }
+    toast({ title: "Ticket Loaded", description: `Order #${ticket.order_number} has been loaded and removed from open tickets.`});
   };
 
   useEffect(() => {
@@ -202,7 +207,7 @@ export default function SalesPage() {
     setLoading(false);
   }, [customers, debtToSettle, products, ticketToLoad]);
 
-  const addReservation = (reservationData: Omit<Omit<import("/Users/user/Downloads/work/studio-f3/studio-f3/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status" | "sale_id"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; sale_id: any; }) => {
+  const addReservation = (reservationData: Omit<Omit<import("/Users/user/studio/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status" | "sale_id"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; sale_id: any; }) => {
      setReservations(prev => [...prev, {
         id: `res_${new Date().getTime()}`,
         created_at: new Date().toISOString(),
@@ -237,7 +242,7 @@ export default function SalesPage() {
 
         addReservation(reservationData);
         
-        if (activeTicketId) await deleteTicket(activeTicketId);
+        if (activeTicket?.id) await deleteTicket(activeTicket.id);
 
         setIsReservationPaymentDialogOpen(false);
         setGuestName("");
@@ -463,9 +468,11 @@ export default function SalesPage() {
             setDebts(prev => [...prev, newDebt]);
         }
         
-        if (activeTicketId) {
-            await deleteTicket(activeTicketId);
-        }
+        // If an active ticket was paid for, its ID is in activeTicket.
+        // It has already been deleted on load, so no action is needed here.
+        // if (activeTicket?.id) {
+        //     await deleteTicket(activeTicket.id);
+        // }
 
         if (isCheckingIn) {
             const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
@@ -542,7 +549,7 @@ export default function SalesPage() {
 
   const handleClearOrder = () => {
     setOrderItems([]);
-    setActiveTicketId(null);
+    setActiveTicket(null);
     setPayments([]);
     setIsSplitPaymentDialogOpen(false);
     if(debtToSettle) setDebtToSettle(null);
@@ -560,22 +567,19 @@ export default function SalesPage() {
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
     try {
-        const ticketPayload = {
-            id: activeTicketId, // can be null
+        const ticketPayload: Partial<OpenTicket> & { items: SaleItem[], total: number } = {
+            id: activeTicket?.id, // if this was a loaded ticket, we update it, otherwise it's undefined for a new ticket
             items: saleItems,
             total: total,
             employee_id: loggedInUser?.id ?? null,
             customer_id: selectedCustomerId,
-            ticket_name: `Ticket @ ${format(new Date(), 'HH:mm')}`,
-            order_number: Math.floor(Math.random() * 100000),
+            // If it's a new ticket, give it an order number
+            order_number: activeTicket?.order_number || Math.floor(Math.random() * 100000),
         };
-        const newTicketId = await saveTicket(ticketPayload);
 
-        if (newTicketId) {
-            setActiveTicketId(newTicketId);
-        }
+        const savedTicket = await saveTicket(ticketPayload);
         
-        toast({ title: activeTicketId ? "Order Updated" : "Order Saved", description: "The order has been saved as an open ticket." });
+        toast({ title: activeTicket ? "Order Updated" : "Order Saved", description: "The order has been saved as an open ticket." });
         handleClearOrder();
     } catch (error: any) {
         toast({ title: "Error Saving Order", description: error.message, variant: "destructive" });
@@ -586,7 +590,7 @@ export default function SalesPage() {
   
   const currentPaymentType = configuredPaymentTypes.find(p => p.name === splitPaymentMethod);
   
-  const cardTitle = debtToSettle ? "Settle Debt" : activeTicketId ? "Editing Order" : "Current Order";
+  const cardTitle = debtToSettle ? "Settle Debt" : activeTicket ? `Editing Order #${activeTicket.order_number}` : "Current Order";
 
   return (
     <TooltipProvider>
@@ -647,7 +651,7 @@ export default function SalesPage() {
                 <Card>
                 <CardHeader>
                     <CardTitle>{cardTitle}</CardTitle>
-                    {activeTicketId && <CardDescription>This order is now active. Previous ticket has been removed.</CardDescription>}
+                    {activeTicket && <CardDescription>This ticket is now active and has been removed from the open tickets list.</CardDescription>}
                     {debtToSettle && <CardDescription>Paying off order #{debtToSettle.order_number}</CardDescription>}
                 </CardHeader>
                 <CardContent className="p-0">
@@ -954,7 +958,7 @@ export default function SalesPage() {
                                             <TableCell className="text-right">{currency}{ticket.total.toFixed(2)}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as any)}>Load</Button>
+                                                    <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket)}>Load</Button>
                                                 </div>
                                             </TableCell>
                                         </TableRow>
