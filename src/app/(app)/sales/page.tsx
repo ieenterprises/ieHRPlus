@@ -131,7 +131,7 @@ export default function SalesPage() {
     setDebtToSettle,
     voidTicket,
   } = useSettings();
-  const { openTickets, saveTicket, deleteTicket } = usePos();
+  const { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode } = usePos();
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   
@@ -497,15 +497,35 @@ export default function SalesPage() {
   const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
   
   const visibleCategories = useMemo(() => {
-    if (isReservationsEnabled) return categories;
+    if (reservationMode || isReservationsEnabled) {
+      if (reservationMode) return categories.filter(c => c.name.toLowerCase() === 'room');
+      return categories;
+    }
     return categories.filter(c => c.name.toLowerCase() !== 'room');
-  }, [categories, isReservationsEnabled]);
+  }, [categories, isReservationsEnabled, reservationMode]);
   
   const filteredProducts = useMemo(() => {
-    const prods = isReservationsEnabled ? products : products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
+    let prods;
+    if (reservationMode) {
+        prods = products.filter(p => getCategoryName(p.category_id)?.toLowerCase() === 'room');
+    } else {
+        prods = isReservationsEnabled ? products : products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
+    }
+    
     if (categoryFilter === 'all') return prods;
     return prods.filter(p => p.category_id === categoryFilter);
-  }, [products, categoryFilter, isReservationsEnabled, getCategoryName]);
+  }, [products, categoryFilter, isReservationsEnabled, getCategoryName, reservationMode]);
+
+  useEffect(() => {
+    if(reservationMode) {
+      const roomCategory = categories.find(c => c.name.toLowerCase() === 'room');
+      if (roomCategory) {
+        setCategoryFilter(roomCategory.id);
+      }
+    } else {
+      setCategoryFilter('all');
+    }
+  }, [reservationMode, categories]);
 
   const handleClearOrder = () => {
     setOrderItems([]);
@@ -517,6 +537,7 @@ export default function SalesPage() {
     // Reset customer to walk-in
     const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
     if (walkIn) setSelectedCustomerId(walkIn.id);
+    if (reservationMode) setReservationMode(false);
   };
 
   const handleSaveOrder = async () => {
@@ -528,7 +549,7 @@ export default function SalesPage() {
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
     try {
-        await saveTicket({
+        const newTicketId = await saveTicket({
             id: activeTicketId, // can be null
             items: saleItems,
             total: total,
@@ -536,6 +557,10 @@ export default function SalesPage() {
             customer_id: selectedCustomerId,
             ticket_name: `Ticket @ ${format(new Date(), 'HH:mm')}`,
         });
+
+        if (newTicketId) {
+            setActiveTicketId(newTicketId);
+        }
         
         toast({ title: activeTicketId ? "Order Updated" : "Order Saved", description: "The order has been saved as an open ticket." });
         handleClearOrder();
@@ -577,35 +602,37 @@ export default function SalesPage() {
   
   const currentPaymentType = configuredPaymentTypes.find(p => p.name === splitPaymentMethod);
   
-  const cardTitle = debtToSettle ? "Settle Debt" : activeTicketId ? "Saved Order" : "Current Order";
+  const cardTitle = debtToSettle ? "Settle Debt" : activeTicketId ? "Saved Order" : reservationMode ? "New Reservation" : "Current Order";
 
   return (
     <TooltipProvider>
         <div className="space-y-8">
             <div className="flex items-center justify-between">
-                <PageHeader title="Sales" description="Create a new order for products or room bookings." />
-                <div className="flex items-center gap-2">
-                    <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId} disabled={!!debtToSettle}>
-                        <SelectTrigger className="w-[200px]">
-                            <SelectValue placeholder="Select Customer" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    {featureSettings.open_tickets && !debtToSettle && (
-                        <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
-                            <Ticket className="mr-2 h-4 w-4" />
-                            Open Tickets ({openTickets.length})
-                        </Button>
-                    )}
-                </div>
+                <PageHeader title="Sales" description={reservationMode ? "Select a room to begin the reservation process." : "Create a new order for products or room bookings."} />
+                {!reservationMode && (
+                  <div className="flex items-center gap-2">
+                      <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId} disabled={!!debtToSettle}>
+                          <SelectTrigger className="w-[200px]">
+                              <SelectValue placeholder="Select Customer" />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                          </SelectContent>
+                      </Select>
+                      {featureSettings.open_tickets && !debtToSettle && (
+                          <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
+                              <Ticket className="mr-2 h-4 w-4" />
+                              Open Tickets ({openTickets.length})
+                          </Button>
+                      )}
+                  </div>
+                )}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             <div className="lg:col-span-2 space-y-4">
-                <Tabs defaultValue="all" onValueChange={setCategoryFilter}>
+                <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
                 <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
-                    <TabsTrigger value="all">All</TabsTrigger>
+                    {!reservationMode && <TabsTrigger value="all">All</TabsTrigger>}
                     {visibleCategories.map((category) => (
                     <TabsTrigger key={category.id} value={category.id}>
                         {category.name}
@@ -714,13 +741,13 @@ export default function SalesPage() {
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                         {featureSettings.open_tickets && !debtToSettle && (
+                         {featureSettings.open_tickets && !debtToSettle && !reservationMode && (
                             <Button variant="secondary" onClick={handleSaveOrder}>
                                 <Save className="mr-2 h-4 w-4" /> {activeTicketId ? "Update" : "Save"} Order
                             </Button>
                          )}
-                         <Button variant="outline" onClick={handleClearOrder} className={cn(!featureSettings.open_tickets || !!debtToSettle ? "col-span-2" : "")}>
-                            <X className="mr-2 h-4 w-4" /> {activeTicketId || debtToSettle ? "Cancel" : "Clear"}
+                         <Button variant="outline" onClick={handleClearOrder} className={cn(!featureSettings.open_tickets || !!debtToSettle || reservationMode ? "col-span-2" : "")}>
+                            <X className="mr-2 h-4 w-4" /> {activeTicketId || debtToSettle || reservationMode ? "Cancel" : "Clear"}
                         </Button>
                     </div>
                     <div className="flex flex-col gap-2">

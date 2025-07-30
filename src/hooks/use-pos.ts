@@ -17,8 +17,10 @@ type PosContextType = {
     employee_id: string | null;
     customer_id?: string | null;
     ticket_name?: string;
-  }) => Promise<void>;
+  }) => Promise<string | null>;
   deleteTicket: (ticketId: string) => Promise<void>;
+  reservationMode: boolean;
+  setReservationMode: (mode: boolean) => void;
 };
 
 const PosContext = createContext<PosContextType | undefined>(undefined);
@@ -26,10 +28,12 @@ const PosContext = createContext<PosContextType | undefined>(undefined);
 export function PosProvider({ children }: { children: ReactNode }) {
   const { openTickets: openTicketsData, users, customers, saveTicket, deleteTicket } = useSettings();
   const [openTickets, setOpenTickets] = useState<OpenTicketWithRelations[]>([]);
+  const [reservationMode, setReservationMode] = useState(false);
 
   useEffect(() => {
     const enrichedTickets = openTicketsData.map(ticket => ({
       ...ticket,
+      id: ticket.id, // Ensure the id is carried over
       users: users.find(u => u.id === ticket.employee_id) || null,
       customers: customers.find(c => c.id === ticket.customer_id) || null,
     }));
@@ -37,7 +41,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
   }, [openTicketsData, users, customers]);
   
   return createElement(PosContext.Provider, {
-    value: { openTickets, saveTicket, deleteTicket }
+    value: { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode }
   }, children);
 }
 
