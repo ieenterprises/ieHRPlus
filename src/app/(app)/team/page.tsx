@@ -181,20 +181,29 @@ export default function TeamPage() {
                 created_at: new Date().toISOString(),
             });
 
-            // 3. IMPORTANT: Re-authenticate as the admin/owner user
-            // This is a workaround for client-side user creation.
-            const ownerCredentials = prompt("To continue, please re-enter your (owner) password:");
-            if (ownerCredentials && ownerUser?.email) {
+            // 3. IMPORTANT: Re-authenticate as the currently logged-in user (owner/admin)
+            // This is necessary because createUserWithEmailAndPassword signs in the new user automatically.
+            const currentUser = auth.currentUser;
+            if (ownerUser && ownerUser.email && (!currentUser || currentUser.uid !== ownerUser.id)) {
+              const ownerPassword = prompt(`To finalize user creation, please re-enter your password for ${ownerUser.email}:`);
+              if (ownerPassword) {
                 try {
-                    await signInWithEmailAndPassword(auth, ownerUser.email, ownerCredentials);
-                } catch(reauthError) {
-                    console.error("Re-authentication failed:", reauthError);
-                    toast({
-                        title: "Session Warning",
-                        description: "Could not re-authenticate as owner. You may need to sign in again.",
-                        variant: "destructive",
-                    });
+                  await signInWithEmailAndPassword(auth, ownerUser.email, ownerPassword);
+                } catch (reauthError) {
+                  console.error("Re-authentication failed:", reauthError);
+                  toast({
+                    title: "Session Warning",
+                    description: "Could not re-authenticate as owner after creating user. You may need to sign in again.",
+                    variant: "destructive",
+                  });
                 }
+              } else {
+                 toast({
+                    title: "Re-authentication Cancelled",
+                    description: "New user was created, but your session might be interrupted. Please sign in again if you experience issues.",
+                    variant: "destructive",
+                  });
+              }
             }
   
             toast({ title: "User Created", description: `User ${userData.name} has been created and can now sign in.` });

@@ -156,27 +156,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const fetchAndSetUser = useCallback(async (uid: string) => {
         setLoadingUser(true);
         try {
-            // Wait for the ready flag to ensure the user document is created.
-            let ready = false;
-            let attempts = 0;
-            while (!ready && attempts < 10) { // 5 seconds timeout
-                const readyFlagDoc = await getDoc(doc(db, "_user_ready_flags", uid));
-                if (readyFlagDoc.exists()) {
-                    ready = true;
-                } else {
-                    attempts++;
-                    await new Promise(res => setTimeout(res, 500));
-                }
-            }
-
-            if (!ready) {
-                console.error("User profile ready flag not found after timeout for UID:", uid);
-                setLoadingUser(false);
-                logout(); // Log out user if profile cannot be found
-                return null;
-            }
-            
-            // Once ready, fetch the actual user profile
+            // Fetch the actual user profile directly
             const userDocRef = doc(db, "users", uid);
             const userDoc = await getDoc(userDocRef);
 

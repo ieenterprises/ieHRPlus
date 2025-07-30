@@ -80,12 +80,8 @@ export default function SignUpPage() {
         // 5. Add user profile to 'users' collection, using the auth UID as the document ID
         const userDocRef = doc(db, "users", user.uid);
         batch.set(userDocRef, newUserProfile);
-
-        // 6. Set a ready flag to signal profile completion
-        const readyFlagRef = doc(db, "_user_ready_flags", user.uid);
-        batch.set(readyFlagRef, { ready: true, createdAt: new Date() });
         
-        // 7. Commit all database writes at once
+        // 6. Commit all database writes at once
         await batch.commit();
         
         toast({
