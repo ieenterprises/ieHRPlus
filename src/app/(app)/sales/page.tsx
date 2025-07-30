@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -138,6 +137,7 @@ export default function SalesPage() {
 
   const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState<OpenTicket | null>(null);
+  const [loadedTicketItemIds, setLoadedTicketItemIds] = useState<Set<string>>(new Set());
 
 
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
@@ -178,14 +178,15 @@ export default function SalesPage() {
         toast({ title: "Error Loading Ticket", description: "Some items in this ticket no longer exist and were removed.", variant: "destructive" });
     }
 
+    // Immediately delete ticket from backend and state after loading
+    await deleteTicket(ticket.id);
+
     setOrderItems(newOrderItems);
     setActiveTicket(ticket);
     setSelectedCustomerId(ticket.customer_id);
+    setLoadedTicketItemIds(new Set(ticketItems.map(item => item.id))); // Track original items
     setIsTicketsDialogOpen(false);
     setTicketToLoad(null);
-
-    // Immediately delete ticket from backend and state after loading
-    await deleteTicket(ticket.id);
     
     toast({ title: "Ticket Loaded", description: `Order #${ticket.order_number} has been loaded and removed from open tickets.`});
   };
@@ -468,9 +469,6 @@ export default function SalesPage() {
             setDebts(prev => [...prev, newDebt]);
         }
         
-        // If an active ticket was paid for, its ID is in activeTicket.
-        // It has already been deleted on load, so no action is needed here.
-
         if (isCheckingIn) {
             const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
             if (roomItem && guestName && dateRange?.from && dateRange.to) {
@@ -549,6 +547,7 @@ export default function SalesPage() {
     setActiveTicket(null);
     setPayments([]);
     setIsSplitPaymentDialogOpen(false);
+    setLoadedTicketItemIds(new Set()); // Clear tracked items
     if(debtToSettle) setDebtToSettle(null);
     // Reset customer to walk-in
     const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
@@ -572,7 +571,6 @@ export default function SalesPage() {
             order_number: activeTicket?.order_number || Math.floor(Math.random() * 100000),
         };
         
-        // When saving an updated ticket, we create a new one. The old one was already deleted on load.
         await saveTicket(ticketPayload);
         
         toast({ title: "Order Saved", description: "The order has been saved as a new open ticket." });
@@ -695,7 +693,7 @@ export default function SalesPage() {
                                 size="icon"
                                 className="h-6 w-6 ml-2"
                                 onClick={() => handleRemoveItem(item.product.id)}
-                                disabled={!!debtToSettle}
+                                disabled={!!debtToSettle || loadedTicketItemIds.has(item.product.id)}
                             >
                                 <X className="h-4 w-4" />
                             </Button>
@@ -976,3 +974,6 @@ export default function SalesPage() {
   );
 }
 
+
+
+    
