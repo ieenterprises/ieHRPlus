@@ -121,7 +121,7 @@ const generateDynamicMockData = (ownerId: string, businessName: string) => {
     },
   ];
 
-  const reservations = [
+  const reservations: any[] = [
      
   ];
   
