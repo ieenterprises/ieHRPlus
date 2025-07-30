@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -95,9 +94,9 @@ export default function KitchenPage() {
     return categories.find(c => c.id === id);
   }
 
-  const getSaleCategoryNames = (saleItems: Sale['items']): string[] => {
+  const getItemCategoryNames = (items: Sale['items']): string[] => {
     const categoryIds = new Set(
-        saleItems.map(item => {
+        items.map(item => {
             const product = products.find(p => p.id === item.id);
             return product?.category_id;
         }).filter((id): id is string => !!id)
@@ -121,7 +120,7 @@ export default function KitchenPage() {
         (sale.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
         sale.items.some((item) => item.name.toLowerCase().includes(searchTermLower));
       
-      const saleCategories = getSaleCategoryNames(sale.items);
+      const saleCategories = getItemCategoryNames(sale.items);
       const categoryMatch = filters.category === "all" || saleCategories.includes(filters.category);
       
       const paymentMatch =
@@ -181,6 +180,38 @@ export default function KitchenPage() {
       };
     });
   }, [sales, filters, dateRange, products, categories]);
+
+  const filteredTickets = useMemo(() => {
+    return openTickets.filter((ticket) => {
+      const searchTermLower = filters.searchTerm.toLowerCase();
+
+      const searchMatch =
+        filters.searchTerm === "" ||
+        ticket.ticket_name?.toLowerCase().includes(searchTermLower) ||
+        (ticket.customers?.name ?? '').toLowerCase().includes(searchTermLower) ||
+        (ticket.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
+        (ticket.items as any[]).some((item) => item.name.toLowerCase().includes(searchTermLower));
+
+      const ticketCategories = getItemCategoryNames(ticket.items as any[]);
+      const categoryMatch = filters.category === "all" || ticketCategories.includes(filters.category);
+      
+      const employeeMatch = filters.employee === "all" || ticket.users?.name === filters.employee;
+      
+      const dateMatch =
+        !dateRange?.from ||
+        (new Date(ticket.created_at!) >= dateRange.from &&
+          (!dateRange.to || new Date(ticket.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
+      
+      const minAmount = parseFloat(filters.minAmount);
+      const maxAmount = parseFloat(filters.maxAmount);
+
+      const amountMatch =
+        (isNaN(minAmount) || ticket.total >= minAmount) &&
+        (isNaN(maxAmount) || ticket.total <= maxAmount);
+
+      return searchMatch && categoryMatch && employeeMatch && dateMatch && amountMatch;
+    });
+  }, [openTickets, filters, dateRange, products, categories]);
   
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
 
@@ -214,6 +245,39 @@ export default function KitchenPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                        <Input
+                        placeholder="Search by ticket, customer, item..."
+                        value={filters.searchTerm}
+                        onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
+                        className="max-w-xs"
+                        />
+                        <Select value={filters.category} onValueChange={(value) => handleFilterChange('category', value)}>
+                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by category" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Categories</SelectItem>
+                                {categories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <Select value={filters.employee} onValueChange={(value) => handleFilterChange('employee', value)}>
+                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by employee" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Employees</SelectItem>
+                                {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <Input placeholder="Min Amount" type="number" value={filters.minAmount} onChange={(e) => handleFilterChange("minAmount", e.target.value)} className="w-32" />
+                        <Input placeholder="Max Amount" type="number" value={filters.maxAmount} onChange={(e) => handleFilterChange("maxAmount", e.target.value)} className="w-32" />
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button id="date" variant={"outline"} className={cn("w-[260px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {dateRange?.from ? (dateRange.to ? (<>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>) : (format(dateRange.from, "LLL dd, y"))) : (<span>Pick a date range</span>)}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start"><Calendar initialFocus mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2}/></PopoverContent>
+                        </Popover>
+                    </div>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -228,8 +292,8 @@ export default function KitchenPage() {
                         <TableBody>
                            {loading ? (
                                 <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
-                            ) : openTickets.length > 0 ? (
-                                openTickets.map(ticket => (
+                            ) : filteredTickets.length > 0 ? (
+                                filteredTickets.map(ticket => (
                                     <TableRow key={ticket.id}>
                                         <TableCell className="font-medium">{ticket.ticket_name}</TableCell>
                                         <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
@@ -253,7 +317,7 @@ export default function KitchenPage() {
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                                        No open tickets found.
+                                        No open tickets found for the selected filters.
                                     </TableCell>
                                 </TableRow>
                             )}
@@ -376,7 +440,7 @@ export default function KitchenPage() {
                         <TableRow><TableCell colSpan={9} className="h-24 text-center">Loading...</TableCell></TableRow>
                     ) : filteredReceipts.length > 0 ? (
                         filteredReceipts.map((sale) => {
-                        const categoriesForDisplay = getSaleCategoryNames(sale.displayItems);
+                        const categoriesForDisplay = getItemCategoryNames(sale.displayItems);
         
                         return (
                         <TableRow key={sale.id}>
