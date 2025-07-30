@@ -135,7 +135,7 @@ export default function LandingPage() {
             </div>
             <div className="order-1 md:order-2">
               <Image
-                src="https://placehold.co/600x400.png"
+                src="https://images.unsplash.com/photo-1726065235239-b20b88d43eea?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxQb3MlMjBTeXN0ZW18ZW58MHx8fHwxNzUzODkyNjE4fDA&ixlib=rb-4.1.0&q=80&w=1080"
                 alt="Dashboard Screenshot"
                 width={600}
                 height={400}
