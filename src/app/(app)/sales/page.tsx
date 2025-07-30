@@ -130,7 +130,7 @@ export default function SalesPage() {
     debtToSettle,
     setDebtToSettle,
   } = useSettings();
-  const { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode, ticketToLoad, setTicketToLoad } = usePos();
+  const { openTickets, saveTicket, deleteTicket, ticketToLoad, setTicketToLoad } = usePos();
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   
@@ -138,7 +138,6 @@ export default function SalesPage() {
 
   const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
-  const [loadedTicketItemIds, setLoadedTicketItemIds] = useState<string[]>([]);
 
   const [isReservationPaymentDialogOpen, setIsReservationPaymentDialogOpen] = useState(false);
   const [isSplitPaymentDialogOpen, setIsSplitPaymentDialogOpen] = useState(false);
@@ -176,9 +175,14 @@ export default function SalesPage() {
     setOrderItems(newOrderItems);
     setActiveTicketId(ticket.id);
     setSelectedCustomerId(ticket.customer_id);
-    setLoadedTicketItemIds(ticketItems.map(item => item.id));
     setIsTicketsDialogOpen(false);
     setTicketToLoad(null); // Clear the ticket from context after loading
+    
+    // Immediately delete the ticket from the open tickets list
+    if(ticket.id) {
+        deleteTicket(ticket.id);
+        toast({ title: "Ticket Loaded", description: "The ticket has been loaded and removed from open tickets."});
+    }
   };
 
   useEffect(() => {
@@ -459,7 +463,6 @@ export default function SalesPage() {
             setDebts(prev => [...prev, newDebt]);
         }
         
-        // This is the key change: always delete the ticket if one was active
         if (activeTicketId) {
             await deleteTicket(activeTicketId);
         }
@@ -526,47 +529,26 @@ export default function SalesPage() {
   const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
   
   const visibleCategories = useMemo(() => {
-    if (reservationMode || isReservationsEnabled) {
-      if (reservationMode) return categories.filter(c => c.name.toLowerCase() === 'room');
-      return categories;
-    }
+    if (isReservationsEnabled) return categories;
     return categories.filter(c => c.name.toLowerCase() !== 'room');
-  }, [categories, isReservationsEnabled, reservationMode]);
+  }, [categories, isReservationsEnabled]);
   
   const filteredProducts = useMemo(() => {
-    let prods;
-    if (reservationMode) {
-        prods = products.filter(p => getCategoryName(p.category_id)?.toLowerCase() === 'room');
-    } else {
-        prods = isReservationsEnabled ? products : products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
-    }
+    let prods = isReservationsEnabled ? products : products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
     
     if (categoryFilter === 'all') return prods;
     return prods.filter(p => p.category_id === categoryFilter);
-  }, [products, categoryFilter, isReservationsEnabled, getCategoryName, reservationMode]);
-
-  useEffect(() => {
-    if(reservationMode) {
-      const roomCategory = categories.find(c => c.name.toLowerCase() === 'room');
-      if (roomCategory) {
-        setCategoryFilter(roomCategory.id);
-      }
-    } else {
-      setCategoryFilter('all');
-    }
-  }, [reservationMode, categories]);
+  }, [products, categoryFilter, isReservationsEnabled, getCategoryName]);
 
   const handleClearOrder = () => {
     setOrderItems([]);
     setActiveTicketId(null);
-    setLoadedTicketItemIds([]);
     setPayments([]);
     setIsSplitPaymentDialogOpen(false);
     if(debtToSettle) setDebtToSettle(null);
     // Reset customer to walk-in
     const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
     if (walkIn) setSelectedCustomerId(walkIn.id);
-    if (reservationMode) setReservationMode(false);
   };
 
   const handleSaveOrder = async () => {
@@ -604,37 +586,35 @@ export default function SalesPage() {
   
   const currentPaymentType = configuredPaymentTypes.find(p => p.name === splitPaymentMethod);
   
-  const cardTitle = debtToSettle ? "Settle Debt" : activeTicketId ? "Saved Order" : reservationMode ? "New Reservation" : "Current Order";
+  const cardTitle = debtToSettle ? "Settle Debt" : activeTicketId ? "Editing Order" : "Current Order";
 
   return (
     <TooltipProvider>
         <div className="space-y-8">
             <div className="flex items-center justify-between">
-                <PageHeader title="Sales" description={reservationMode ? "Select a room to begin the reservation process." : "Create a new order for products or room bookings."} />
-                {!reservationMode && (
-                  <div className="flex items-center gap-2">
-                      <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId} disabled={!!debtToSettle}>
-                          <SelectTrigger className="w-[200px]">
-                              <SelectValue placeholder="Select Customer" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                          </SelectContent>
-                      </Select>
-                      {featureSettings.open_tickets && !debtToSettle && (
-                          <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
-                              <Ticket className="mr-2 h-4 w-4" />
-                              Open Tickets ({openTickets.length})
-                          </Button>
-                      )}
-                  </div>
-                )}
+                <PageHeader title="Sales" description="Create a new order for products or room bookings." />
+                <div className="flex items-center gap-2">
+                    <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId} disabled={!!debtToSettle}>
+                        <SelectTrigger className="w-[200px]">
+                            <SelectValue placeholder="Select Customer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    {featureSettings.open_tickets && !debtToSettle && (
+                        <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
+                            <Ticket className="mr-2 h-4 w-4" />
+                            Open Tickets ({openTickets.length})
+                        </Button>
+                    )}
+                </div>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             <div className="lg:col-span-2 space-y-4">
                 <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
                 <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
-                    {!reservationMode && <TabsTrigger value="all">All</TabsTrigger>}
+                    <TabsTrigger value="all">All</TabsTrigger>
                     {visibleCategories.map((category) => (
                     <TabsTrigger key={category.id} value={category.id}>
                         {category.name}
@@ -667,7 +647,7 @@ export default function SalesPage() {
                 <Card>
                 <CardHeader>
                     <CardTitle>{cardTitle}</CardTitle>
-                    {activeTicketId && <CardDescription>Now editing a saved ticket.</CardDescription>}
+                    {activeTicketId && <CardDescription>This order is now active. Previous ticket has been removed.</CardDescription>}
                     {debtToSettle && <CardDescription>Paying off order #{debtToSettle.order_number}</CardDescription>}
                 </CardHeader>
                 <CardContent className="p-0">
@@ -715,7 +695,7 @@ export default function SalesPage() {
                                 size="icon"
                                 className="h-6 w-6 ml-2"
                                 onClick={() => handleRemoveItem(item.product.id)}
-                                disabled={(activeTicketId !== null && loadedTicketItemIds.includes(item.product.id)) || !!debtToSettle}
+                                disabled={!!debtToSettle}
                             >
                                 <X className="h-4 w-4" />
                             </Button>
@@ -743,13 +723,13 @@ export default function SalesPage() {
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                         {featureSettings.open_tickets && !debtToSettle && !reservationMode && (
+                         {featureSettings.open_tickets && !debtToSettle && (
                             <Button variant="secondary" onClick={handleSaveOrder}>
-                                <Save className="mr-2 h-4 w-4" /> {activeTicketId ? "Update" : "Save"} Order
+                                <Save className="mr-2 h-4 w-4" /> Save Order
                             </Button>
                          )}
-                         <Button variant="outline" onClick={handleClearOrder} className={cn(!featureSettings.open_tickets || !!debtToSettle || reservationMode ? "col-span-2" : "")}>
-                            <X className="mr-2 h-4 w-4" /> {activeTicketId || debtToSettle || reservationMode ? "Cancel" : "Clear"}
+                         <Button variant="outline" onClick={handleClearOrder} className={cn(!featureSettings.open_tickets || !!debtToSettle ? "col-span-2" : "")}>
+                            <X className="mr-2 h-4 w-4" /> {debtToSettle ? "Cancel" : "Clear"}
                         </Button>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -949,7 +929,7 @@ export default function SalesPage() {
                 <DialogHeader>
                     <DialogTitle>Open Tickets</DialogTitle>
                     <DialogDescription>
-                        Select a saved ticket to load it.
+                        Select a saved ticket to load it. This will remove it from the open tickets list.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
