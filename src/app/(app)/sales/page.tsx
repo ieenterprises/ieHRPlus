@@ -459,7 +459,10 @@ export default function SalesPage() {
             setDebts(prev => [...prev, newDebt]);
         }
         
-        if (activeTicketId && !isCheckingIn) await deleteTicket(activeTicketId);
+        // This is the key change: always delete the ticket if one was active
+        if (activeTicketId) {
+            await deleteTicket(activeTicketId);
+        }
 
         if (isCheckingIn) {
             const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
