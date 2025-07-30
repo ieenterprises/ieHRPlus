@@ -56,8 +56,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
 import Papa from "papaparse";
 import { db, auth } from "@/lib/firebase";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, query, where, getDocs } from "firebase/firestore";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, query, where, getDocs, addDoc } from "firebase/firestore";
 
 
 const EMPTY_USER: Partial<User> = {
@@ -80,7 +80,7 @@ const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof ty
 const systemRoles = ["Owner"];
 
 export default function TeamPage() {
-  const { users, roles, getPermissionsForRole } = useSettings();
+  const { users, setUsers, roles, setRoles, getPermissionsForRole } = useSettings();
   const [loading, setLoading] = useState(true);
   
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -92,6 +92,8 @@ export default function TeamPage() {
   const [passwordVisible, setPasswordVisible] = useState(false);
 
   const { toast } = useToast();
+  
+  const ownerUser = users.find(u => u.role === "Owner");
 
   useEffect(() => {
     setLoading(false);
@@ -125,7 +127,7 @@ export default function TeamPage() {
   const handleSaveUser = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editingUser) return;
-
+  
     const formData = new FormData(event.currentTarget);
     const newPassword = formData.get("password") as string;
     const roleName = formData.get("role") as UserRole;
@@ -137,28 +139,48 @@ export default function TeamPage() {
       permissions: getPermissionsForRole(roleName),
       avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
     };
-
+  
     try {
         if ('id' in editingUser && editingUser.id) {
             // NOTE: We don't handle password changes here for simplicity.
             // In a real app, this would require re-authentication or an admin SDK.
-            await updateDoc(doc(db, 'users', editingUser.id), userData);
+            const { password, ...updateData } = userData; // Exclude password from update
+            await updateDoc(doc(db, 'users', editingUser.id), updateData);
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
             if (!newPassword) {
                 toast({ title: "Password Required", description: "A password is required for new users.", variant: "destructive" });
                 return;
             }
-            // This is a simplified user creation flow. For a real app, use Firebase Admin SDK on a server.
-            // This client-side creation is for demo purposes.
-            // 1. Create a temporary auth user (this is not ideal)
-            // For this demo, we assume we're adding to Firestore only and Auth is managed separately.
-             const userDocRef = doc(collection(db, "users"));
-             await setDoc(userDocRef, {
+  
+            // 1. Create user in Firebase Auth
+            const userCredential = await createUserWithEmailAndPassword(auth, userData.email!, newPassword);
+            const newAuthUser = userCredential.user;
+  
+            // 2. Create user profile in Firestore
+            const userDocRef = doc(db, "users", newAuthUser.uid);
+            await setDoc(userDocRef, {
                 ...userData,
                 created_at: new Date().toISOString(),
-             });
-            toast({ title: "User Created", description: `User ${userData.name} has been created.` });
+            });
+
+            // 3. IMPORTANT: Re-authenticate as the admin/owner user
+            // This is a workaround for client-side user creation.
+            const ownerCredentials = prompt("To continue, please re-enter your (owner) password:");
+            if (ownerCredentials && ownerUser?.email) {
+                try {
+                    await signInWithEmailAndPassword(auth, ownerUser.email, ownerCredentials);
+                } catch(reauthError) {
+                    console.error("Re-authentication failed:", reauthError);
+                    toast({
+                        title: "Session Warning",
+                        description: "Could not re-authenticate as owner. You may need to sign in again.",
+                        variant: "destructive",
+                    });
+                }
+            }
+  
+            toast({ title: "User Created", description: `User ${userData.name} has been created and can now sign in.` });
         }
         handleUserDialogClose(false);
     } catch(error: any) {
@@ -168,10 +190,11 @@ export default function TeamPage() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
+        // NOTE: This only deletes from Firestore. Deleting from Auth requires Admin SDK.
         await deleteDoc(doc(db, 'users', userId));
         toast({
             title: "User Deleted",
-            description: "The user has been removed from the team.",
+            description: "The user has been removed from the team's database.",
             variant: "destructive"
         });
     } catch (error: any) {
