@@ -549,14 +549,15 @@ export default function SalesPage() {
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
     try {
-        const newTicketId = await saveTicket({
+        const ticketPayload = {
             id: activeTicketId, // can be null
             items: saleItems,
             total: total,
             employee_id: loggedInUser?.id ?? null,
             customer_id: selectedCustomerId,
             ticket_name: `Ticket @ ${format(new Date(), 'HH:mm')}`,
-        });
+        };
+        const newTicketId = await saveTicket(ticketPayload);
 
         if (newTicketId) {
             setActiveTicketId(newTicketId);

@@ -306,7 +306,7 @@ export default function KitchenPage() {
                                               <Printer className="mr-2 h-4 w-4" /> Print
                                             </Button>
                                              {hasPermission('VOID_SAVED_ITEMS') && (
-                                                <Button variant="destructive" size="sm" onClick={() => handleMoveTicketToVoid(ticket.id)}>
+                                                <Button variant="destructive" size="sm" onClick={() => handleMoveTicketToVoid(ticket.id!)}>
                                                     <Trash2 className="mr-2 h-4 w-4" /> Move to Void
                                                 </Button>
                                             )}

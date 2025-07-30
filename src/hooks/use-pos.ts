@@ -2,17 +2,20 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode, createElement, useCallback } from 'react';
-import type { OpenTicket } from '@/lib/types';
+import type { OpenTicket, User, Customer, SaleItem } from '@/lib/types';
 import { useToast } from './use-toast';
 import { useSettings } from './use-settings';
 
-type OpenTicketWithRelations = OpenTicket & { users: {name: string | null} | null, customers: {name: string | null} | null };
+type OpenTicketWithRelations = OpenTicket & { 
+    users: Pick<User, 'name'> | null, 
+    customers: Pick<Customer, 'name'> | null 
+};
 
 type PosContextType = {
   openTickets: OpenTicketWithRelations[];
   saveTicket: (ticket: {
     id: string | null;
-    items: any[];
+    items: SaleItem[];
     total: number;
     employee_id: string | null;
     customer_id?: string | null;
@@ -37,7 +40,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
       users: users.find(u => u.id === ticket.employee_id) || null,
       customers: customers.find(c => c.id === ticket.customer_id) || null,
     }));
-    setOpenTickets(enrichedTickets);
+    setOpenTickets(enrichedTickets as OpenTicketWithRelations[]);
   }, [openTicketsData, users, customers]);
   
   return createElement(PosContext.Provider, {
