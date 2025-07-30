@@ -3,8 +3,9 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { format, differenceInDays, isWithinInterval } from "date-fns";
-import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff, Trash2, Search } from "lucide-react";
+import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff, Trash2 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
 
@@ -126,55 +127,17 @@ export default function ReservationsPage() {
   } = useSettings();
   const [loading, setLoading] = useState(true);
   
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
 
   const { toast } = useToast();
 
-  // State for new reservation form
-  const [guestName, setGuestName] = useState("");
-  const [roomId, setRoomId] = useState<string>("");
-  const [newReservationDateRange, setNewReservationDateRange] = useState<DateRange | undefined>();
-
-  // State for filtering
-  const [roomSearchTerm, setRoomSearchTerm] = useState("");
-  const [roomStatusFilter, setRoomStatusFilter] = useState("all");
-  const [bookingSearchTerm, setBookingSearchTerm] = useState("");
-  const [bookingStatusFilter, setBookingStatusFilter] = useState("all");
-  const [bookingRoomFilter, setBookingRoomFilter] = useState("all");
-  const [bookingDateRange, setBookingDateRange] = useState<DateRange | undefined>();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
   
   const rooms = products.filter(p => {
     const category = categories.find(c => c.id === p.category_id);
     return category?.name === 'Room';
   });
-
-  const filteredRooms = useMemo(() => {
-    return rooms.filter(room => {
-      const searchMatch = room.name.toLowerCase().includes(roomSearchTerm.toLowerCase());
-      const statusMatch = roomStatusFilter === 'all' || room.status === roomStatusFilter;
-      return searchMatch && statusMatch;
-    });
-  }, [rooms, roomSearchTerm, roomStatusFilter]);
-  
-  const filteredReservations = useMemo(() => {
-    return reservations.filter(res => {
-      const searchTermLower = bookingSearchTerm.toLowerCase();
-      const searchMatch =
-        bookingSearchTerm === "" ||
-        res.guest_name.toLowerCase().includes(searchTermLower) ||
-        res.products?.name?.toLowerCase().includes(searchTermLower);
-
-      const statusMatch = bookingStatusFilter === 'all' || res.status === bookingStatusFilter;
-      const roomMatch = bookingRoomFilter === 'all' || res.product_id === bookingRoomFilter;
-      
-      const dateMatch = !bookingDateRange?.from || isWithinInterval(new Date(res.check_in), { start: bookingDateRange.from, end: bookingDateRange.to || bookingDateRange.from });
-      
-      return searchMatch && statusMatch && roomMatch && dateMatch;
-    });
-  }, [reservations, bookingSearchTerm, bookingStatusFilter, bookingRoomFilter, bookingDateRange]);
-
 
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
 
@@ -182,55 +145,6 @@ export default function ReservationsPage() {
     setLoading(false);
   }, []);
 
-  const addReservation = (reservationData: Omit<Omit<import("/Users/user/Downloads/work/studio-f3/studio-f3/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status" | "sale_id"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; sale_id: any; }) => {
-     setReservations(prev => [...prev, {
-        id: `res_${new Date().getTime()}`,
-        created_at: new Date().toISOString(),
-        products: products.find(p => p.id === reservationData.product_id) || null,
-        ...reservationData
-     }]);
-  };
-
-  const handleAddReservation = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!guestName || !roomId || !newReservationDateRange?.from || !newReservationDateRange?.to) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill out all fields to create a reservation.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newReservationData = {
-      guest_name: guestName,
-      product_id: roomId,
-      check_in: newReservationDateRange.from.toISOString(),
-      check_out: newReservationDateRange.to.toISOString(),
-      status: "Confirmed" as const,
-      sale_id: null,
-    };
-
-    try {
-      addReservation(newReservationData);
-      
-      setIsAddDialogOpen(false);
-      setGuestName("");
-      setRoomId("");
-      setNewReservationDateRange(undefined);
-
-      toast({
-        title: "Reservation Created",
-        description: `Booking for ${guestName} has been confirmed.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error creating reservation",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
   
   const handleStatusChange = async (roomId: string, status: RoomStatus) => {
     try {
@@ -327,7 +241,7 @@ export default function ReservationsPage() {
   };
 
   const handleExportBookings = () => {
-    const dataToExport = filteredReservations.map(r => {
+    const dataToExport = reservations.map(r => {
       const sale = sales.find(s => s.id === r.sale_id);
       return {
         "Order #": sale?.order_number || 'N/A',
@@ -354,7 +268,7 @@ export default function ReservationsPage() {
   };
   
   const handleExportRoomStatus = () => {
-    const dataToExport = filteredRooms.map(room => ({
+    const dataToExport = rooms.map(room => ({
         "Room Name": room.name,
         "Category": getCategoryName(room.category_id),
         "Price": room.price.toFixed(2),
@@ -401,122 +315,22 @@ export default function ReservationsPage() {
               <Download className="mr-2 h-4 w-4" />
               Export Bookings
            </Button>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
+            <Button asChild>
+              <Link href="/sales">
                 <PlusCircle className="mr-2 h-4 w-4" />
                 New Reservation
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <form onSubmit={handleAddReservation}>
-                <DialogHeader>
-                  <DialogTitle>New Reservation</DialogTitle>
-                  <DialogDescription>
-                    Fill in the details to book a room for a guest.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="guestName" className="text-right">
-                      Guest Name
-                    </Label>
-                    <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} className="col-span-3" required />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="room" className="text-right">
-                      Room
-                    </Label>
-                    <Select onValueChange={setRoomId} value={roomId} required>
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Select a room" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {rooms.filter(r => r.status === 'Available').map((room) => (
-                          <SelectItem key={room.id} value={room.id}>
-                            {room.name} ({currency}{room.price.toFixed(2)}/night)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label className="text-right">Dates</Label>
-                    <div className="col-span-3">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !newReservationDateRange && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {newReservationDateRange?.from ? (
-                              newReservationDateRange.to ? (
-                                <>
-                                  {format(newReservationDateRange.from, "LLL dd, y")} -{" "}
-                                  {format(newReservationDateRange.to, "LLL dd, y")}
-                                </>
-                              ) : (
-                                format(newReservationDateRange.from, "LLL dd, y")
-                              )
-                            ) : (
-                              <span>Pick check-in and check-out dates</span>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            initialFocus
-                            mode="range"
-                            defaultMonth={newReservationDateRange?.from}
-                            selected={newReservationDateRange}
-                            onSelect={setNewReservationDateRange}
-                            numberOfMonths={1}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Confirm Reservation</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+              </Link>
+            </Button>
         </div>
       </div>
       
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Room Status</h2>
-        <div className="flex items-center gap-2">
-            <div className="relative w-full max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                    placeholder="Search rooms..."
-                    className="pl-9"
-                    value={roomSearchTerm}
-                    onChange={(e) => setRoomSearchTerm(e.target.value)}
-                />
-            </div>
-            <Select value={roomStatusFilter} onValueChange={setRoomStatusFilter}>
-                <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="Available">Available</SelectItem>
-                    <SelectItem value="Occupied">Occupied</SelectItem>
-                    <SelectItem value="Maintenance">Maintenance</SelectItem>
-                </SelectContent>
-            </Select>
-        </div>
         {loading ? (
              <p>Loading room statuses...</p>
-        ): filteredRooms.length > 0 ? (
+        ): rooms.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                {filteredRooms.map(room => (
+                {rooms.map(room => (
                     <RoomStatusCard 
                         key={room.id} 
                         room={room} 
@@ -527,7 +341,7 @@ export default function ReservationsPage() {
             </div>
         ) : (
              <Card className="flex items-center justify-center h-32">
-                <p className="text-muted-foreground">No rooms found for the current filters.</p>
+                <p className="text-muted-foreground">No rooms found. Please add products to the 'Room' category.</p>
              </Card>
         )}
       </div>
@@ -540,40 +354,6 @@ export default function ReservationsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-              <Input
-                placeholder="Search by Guest or Room..."
-                value={bookingSearchTerm}
-                onChange={(e) => setBookingSearchTerm(e.target.value)}
-                className="max-w-xs"
-              />
-               <Select value={bookingStatusFilter} onValueChange={setBookingStatusFilter}>
-                  <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="Confirmed">Confirmed</SelectItem>
-                      <SelectItem value="Checked-in">Checked-in</SelectItem>
-                      <SelectItem value="Checked-out">Checked-out</SelectItem>
-                      <SelectItem value="Maintenance">Maintenance</SelectItem>
-                  </SelectContent>
-              </Select>
-               <Select value={bookingRoomFilter} onValueChange={setBookingRoomFilter}>
-                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by room" /></SelectTrigger>
-                  <SelectContent>
-                      <SelectItem value="all">All Rooms</SelectItem>
-                      {rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                  </SelectContent>
-              </Select>
-              <Popover>
-                  <PopoverTrigger asChild>
-                      <Button id="date" variant={"outline"} className={cn("w-[260px] justify-start text-left font-normal", !bookingDateRange && "text-muted-foreground")}>
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {bookingDateRange?.from ? (bookingDateRange.to ? (<>{format(bookingDateRange.from, "LLL dd, y")} - {format(bookingDateRange.to, "LLL dd, y")}</>) : (format(bookingDateRange.from, "LLL dd, y"))) : (<span>Pick a date range</span>)}
-                      </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start"><Calendar initialFocus mode="range" selected={bookingDateRange} onSelect={setBookingDateRange} numberOfMonths={2}/></PopoverContent>
-              </Popover>
-          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -594,8 +374,8 @@ export default function ReservationsPage() {
                     Loading...
                   </TableCell>
                 </TableRow>
-              ) : filteredReservations.length > 0 ? (
-                filteredReservations.map((reservation) => {
+              ) : reservations.length > 0 ? (
+                reservations.map((reservation) => {
                   const sale = sales.find(s => s.id === reservation.sale_id);
                   return (
                     <TableRow key={reservation.id}>
@@ -649,7 +429,7 @@ export default function ReservationsPage() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
-                    No reservations found for the current filters.
+                    No reservations found.
                   </TableCell>
                 </TableRow>
               )}
