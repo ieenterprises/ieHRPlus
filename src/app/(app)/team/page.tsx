@@ -159,9 +159,7 @@ export default function TeamPage() {
   
     try {
         if ('id' in editingUser && editingUser.id) {
-            // NOTE: We don't handle password changes here for simplicity.
-            // In a real app, this would require re-authentication or an admin SDK.
-            const { password, ...updateData } = userData; // Exclude password from update
+            const { password, ...updateData } = userData;
             await updateDoc(doc(db, 'users', editingUser.id), updateData);
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
@@ -170,40 +168,34 @@ export default function TeamPage() {
                 return;
             }
   
-            // 1. Create user in Firebase Auth
             const userCredential = await createUserWithEmailAndPassword(auth, userData.email!, newPassword);
             const newAuthUser = userCredential.user;
   
-            // 2. Create user profile in Firestore
             const userDocRef = doc(db, "users", newAuthUser.uid);
             await setDoc(userDocRef, {
                 ...userData,
                 created_at: new Date().toISOString(),
             });
 
-            // 3. IMPORTANT: Re-authenticate as the currently logged-in user (owner/admin)
-            // This is necessary because createUserWithEmailAndPassword signs in the new user automatically.
-            const currentUser = auth.currentUser;
-            if (ownerUser && ownerUser.email && (!currentUser || currentUser.uid !== ownerUser.id)) {
-              const ownerPassword = prompt(`To finalize user creation, please re-enter your password for ${ownerUser.email}:`);
-              if (ownerPassword) {
-                try {
-                  await signInWithEmailAndPassword(auth, ownerUser.email, ownerPassword);
-                } catch (reauthError) {
-                  console.error("Re-authentication failed:", reauthError);
-                  toast({
-                    title: "Session Warning",
-                    description: "Could not re-authenticate as owner after creating user. You may need to sign in again.",
-                    variant: "destructive",
-                  });
+            if (ownerUser && ownerUser.email) {
+                const ownerPassword = prompt(`To finalize user creation, please re-enter your password for ${ownerUser.email}:`);
+                if (ownerPassword) {
+                    try {
+                        await signInWithEmailAndPassword(auth, ownerUser.email, ownerPassword);
+                    } catch (reauthError) {
+                        toast({
+                            title: "Session Warning",
+                            description: "Could not re-authenticate as owner after creating user. You may need to sign in again.",
+                            variant: "destructive",
+                        });
+                    }
+                } else {
+                    toast({
+                        title: "Re-authentication Cancelled",
+                        description: "New user was created, but your session might be interrupted. Please sign in again if you experience issues.",
+                        variant: "destructive",
+                    });
                 }
-              } else {
-                 toast({
-                    title: "Re-authentication Cancelled",
-                    description: "New user was created, but your session might be interrupted. Please sign in again if you experience issues.",
-                    variant: "destructive",
-                  });
-              }
             }
   
             toast({ title: "User Created", description: `User ${userData.name} has been created and can now sign in.` });
@@ -216,7 +208,6 @@ export default function TeamPage() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-        // NOTE: This only deletes from Firestore. Deleting from Auth requires Admin SDK.
         await deleteDoc(doc(db, 'users', userId));
         toast({
             title: "User Deleted",
@@ -261,7 +252,6 @@ export default function TeamPage() {
           const roleDocRef = doc(db, 'roles', editingRole.id);
           batch.update(roleDocRef, roleData);
           
-          // Update permissions for all users with this role
           const usersQuery = query(collection(db, 'users'), where('role', '==', editingRole.name));
           const usersSnapshot = await getDocs(usersQuery);
           usersSnapshot.forEach(userDoc => {
@@ -536,3 +526,5 @@ export default function TeamPage() {
     </div>
   );
 }
+
+    
