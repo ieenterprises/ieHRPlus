@@ -24,13 +24,6 @@ export const MOCK_INITIAL_ROLES: Role[] = [
   { id: "role_barman", name: "Bar Man", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
 ];
 
-const MOCK_PAYMENT_TYPES: PaymentType[] = [
-    { id: 'pay_1', name: 'Cash', type: 'Cash' },
-    { id: 'pay_2', name: 'Card', type: 'Card' },
-    { id: 'pay_3', name: 'Credit', type: 'Credit' },
-];
-
-
 // --- Context and Provider ---
 
 type SettingsContextType = {
@@ -127,7 +120,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [posDevices, setPosDevices] = useState<PosDeviceType[]>([]);
     const [printers, setPrinters] = useState<PrinterType[]>([]);
     const [receiptSettings, setReceiptSettingsState] = useState<Record<string, ReceiptSettings>>({});
-    const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(MOCK_PAYMENT_TYPES);
+    const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>([]);
     const [taxes, setTaxes] = useState<Tax[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [roles, setRoles] = useState<Role[]>([]);
@@ -208,6 +201,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         pos_devices: setPosDevices,
                         printers: setPrinters,
                         taxes: setTaxes,
+                        payment_types: setPaymentTypes,
                     };
 
                     Object.entries(collections).forEach(([name, setter]) => {

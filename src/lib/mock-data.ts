@@ -57,6 +57,13 @@ const MOCK_TAXES = [
     { id: uid("tax"), name: "Sales Tax", rate: 8.0, type: "Added", is_default: true },
 ];
 
+const MOCK_PAYMENT_TYPES = [
+    { id: 'pay_1', name: 'Cash', type: 'Cash' },
+    { id: 'pay_2', name: 'Card', type: 'Card' },
+    { id: 'pay_3', name: 'Credit', type: 'Credit' },
+    { id: 'pay_4', name: 'Other', type: 'Other' },
+];
+
 // 2. Define function to generate dynamic data
 const generateDynamicMockData = (ownerId: string, businessName: string) => {
   const now = new Date();
@@ -214,6 +221,8 @@ export const seedDatabaseWithMockData = (batch: WriteBatch, ownerId: string, bus
   MOCK_POS_DEVICES.forEach(item => batch.set(doc(db, "pos_devices", item.id), item));
   MOCK_PRINTERS.forEach(item => batch.set(doc(db, "printers", item.id), item));
   MOCK_TAXES.forEach(item => batch.set(doc(db, "taxes", item.id), item));
+  MOCK_PAYMENT_TYPES.forEach(item => batch.set(doc(db, "payment_types", item.id), item));
+
 
   // --- Generate and add dynamic data to batch ---
   const { sales, debts, reservations, settings, openTickets, voidedLogs } = generateDynamicMockData(ownerId, businessName);

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Percent, SlidersHorizontal, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, Receipt, CalendarCheck } from "lucide-react";
+import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Percent, SlidersHorizontal, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, Receipt, CalendarCheck, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -29,6 +29,7 @@ const settingsNav = [
   { id: "printers", label: "Printers", icon: Printer },
   { id: "receipt", label: "Receipt", icon: Receipt },
   { id: "taxes", label: "Taxes & Currency", icon: Percent },
+  { id: "payment_types", label: "Payment Types", icon: CreditCard },
 ];
 
 const featureToggles = [
@@ -59,6 +60,7 @@ const EMPTY_STORE: Partial<StoreType> = { name: '', address: '' };
 const EMPTY_POS_DEVICE: Partial<PosDeviceType> = { name: '', store_id: '' };
 const EMPTY_PRINTER: Partial<PrinterType> = { name: '', connection_type: 'Network', pos_device_id: ''};
 const EMPTY_TAX: Partial<Tax> = { name: '', rate: 0, type: 'Added', is_default: false };
+const EMPTY_PAYMENT_TYPE: Partial<PaymentType> = { name: '', type: 'Other' };
 
 export default function SettingsPage() {
   const { 
@@ -69,6 +71,7 @@ export default function SettingsPage() {
     receiptSettings,
     taxes,
     currency,
+    paymentTypes,
     setFeatureSettings,
     setStores,
     setPosDevices,
@@ -76,6 +79,7 @@ export default function SettingsPage() {
     setReceiptSettings,
     setTaxes,
     setCurrency,
+    setPaymentTypes,
   } = useSettings();
   
   const [activeSection, setActiveSection] = useState("features");
@@ -92,6 +96,7 @@ export default function SettingsPage() {
         receiptSettings,
         taxes,
         currency,
+        paymentTypes,
     });
   }, []); // Capture initial state on mount
 
@@ -103,6 +108,7 @@ export default function SettingsPage() {
     receiptSettings,
     taxes,
     currency,
+    paymentTypes,
   }) !== JSON.stringify(initialSettings);
 
   const [isStoreDialogOpen, setIsStoreDialogOpen] = useState(false);
@@ -116,6 +122,9 @@ export default function SettingsPage() {
 
   const [isTaxDialogOpen, setIsTaxDialogOpen] = useState(false);
   const [editingTax, setEditingTax] = useState<Partial<Tax> | null>(null);
+
+  const [isPaymentTypeDialogOpen, setIsPaymentTypeDialogOpen] = useState(false);
+  const [editingPaymentType, setEditingPaymentType] = useState<Partial<PaymentType> | null>(null);
 
   const [selectedStoreForReceipt, setSelectedStoreForReceipt] = useState<string>(stores[0]?.id || '');
 
@@ -133,7 +142,7 @@ export default function SettingsPage() {
   };
 
   const handleSaveChanges = () => {
-    setInitialSettings({ featureSettings, stores, posDevices, printers, receiptSettings, taxes, currency }); // Update baseline
+    setInitialSettings({ featureSettings, stores, posDevices, printers, receiptSettings, taxes, currency, paymentTypes }); // Update baseline
     toast({ title: "Settings Saved", description: "Your changes have been successfully saved." });
   };
 
@@ -146,6 +155,7 @@ export default function SettingsPage() {
     setReceiptSettings(s.receiptSettings);
     setTaxes(s.taxes);
     setCurrency(s.currency);
+    setPaymentTypes(s.paymentTypes);
     toast({ title: "Changes Discarded", description: "Your changes have been discarded." });
   };
   
@@ -299,7 +309,36 @@ export default function SettingsPage() {
     }
     setIsTaxDialogOpen(false);
   }
-  
+
+  // Payment Type Handlers
+  const handleOpenPaymentTypeDialog = (pt: Partial<PaymentType> | null) => {
+    setEditingPaymentType(pt ? { ...pt } : EMPTY_PAYMENT_TYPE);
+    setIsPaymentTypeDialogOpen(true);
+  };
+
+  const handleDeletePaymentType = (id: string) => {
+    setPaymentTypes(paymentTypes.filter(pt => pt.id !== id));
+    toast({ title: "Payment Type Deleted" });
+  };
+
+  const handlePaymentTypeFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const ptData = {
+      name: formData.get('name') as string,
+      type: formData.get('type') as 'Cash' | 'Card' | 'Credit' | 'Other',
+    };
+
+    if (editingPaymentType?.id) {
+      setPaymentTypes(paymentTypes.map(pt => (pt.id === editingPaymentType.id ? { ...pt, ...ptData } : pt)));
+      toast({ title: "Payment Type Updated" });
+    } else {
+      setPaymentTypes([...paymentTypes, { id: `pay_${new Date().getTime()}`, ...ptData }]);
+      toast({ title: "Payment Type Added" });
+    }
+    setIsPaymentTypeDialogOpen(false);
+  };
+
   const getStoreName = (storeId: string) => stores.find(s => s.id === storeId)?.name || 'N/A';
   const getDeviceName = (deviceId: string) => posDevices.find(d => d.id === deviceId)?.name || 'N/A';
   
@@ -751,6 +790,57 @@ export default function SettingsPage() {
                     </Card>
                  </div>
             )}
+
+            {activeSection === 'payment_types' && (
+                <Card>
+                    <CardHeader className="flex flex-row items-start justify-between">
+                        <div>
+                        <CardTitle>Payment Types</CardTitle>
+                        <CardDescription>Manage the payment methods available at checkout.</CardDescription>
+                        </div>
+                        <Button onClick={() => handleOpenPaymentTypeDialog(null)}>
+                        <PlusCircle className="mr-2 h-4" /> Add Payment Type
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                        <TableHeader>
+                            <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead><span className="sr-only">Actions</span></TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {paymentTypes.map(pt => (
+                            <TableRow key={pt.id}>
+                                <TableCell className="font-medium">{pt.name}</TableCell>
+                                <TableCell><Badge variant="outline">{pt.type}</Badge></TableCell>
+                                <TableCell className="text-right">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuItem onClick={() => handleOpenPaymentTypeDialog(pt)}>
+                                        <Edit className="mr-2 h-4 w-4" /> Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeletePaymentType(pt.id)}>
+                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                    </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                </TableCell>
+                            </TableRow>
+                            ))}
+                        </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
         </main>
       </div>
 
@@ -885,6 +975,35 @@ export default function SettingsPage() {
                 </div>
                 <DialogFooter><Button type="submit">Save</Button></DialogFooter>
             </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPaymentTypeDialogOpen} onOpenChange={setIsPaymentTypeDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handlePaymentTypeFormSubmit}>
+            <DialogHeader>
+              <DialogTitle>{editingPaymentType?.id ? 'Edit Payment Type' : 'Add Payment Type'}</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 grid gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input id="name" name="name" defaultValue={editingPaymentType?.name} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="type">Type</Label>
+                <Select name="type" required defaultValue={editingPaymentType?.type}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Cash">Cash</SelectItem>
+                    <SelectItem value="Card">Card</SelectItem>
+                    <SelectItem value="Credit">Credit</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter><Button type="submit">Save</Button></DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
