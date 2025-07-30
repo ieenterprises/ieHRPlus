@@ -20,7 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Customer } from "@/lib/types";
-import { MoreHorizontal, PlusCircle, Trash2, Edit, Download } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Download, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,9 +53,20 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Partial<Customer> | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
   const canManageCustomers = useMemo(() => loggedInUser?.permissions.includes('MANAGE_CUSTOMERS') ?? false, [loggedInUser]);
+
+  const filteredCustomers = useMemo(() => {
+    if (!searchTerm) return customers;
+    const lowercasedTerm = searchTerm.toLowerCase();
+    return customers.filter(customer =>
+      customer.name.toLowerCase().includes(lowercasedTerm) ||
+      customer.email.toLowerCase().includes(lowercasedTerm) ||
+      customer.phone?.toLowerCase().includes(lowercasedTerm)
+    );
+  }, [customers, searchTerm]);
 
   useEffect(() => {
     setLoading(false);
@@ -117,7 +128,7 @@ export default function CustomersPage() {
   }
 
   const handleExport = () => {
-    const dataToExport = customers.map(c => ({
+    const dataToExport = filteredCustomers.map(c => ({
       "Name": c.name,
       "Email": c.email,
       "Phone": c.phone,
@@ -164,6 +175,17 @@ export default function CustomersPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4">
+             <div className="relative w-full max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Search customers..."
+                    className="pl-9"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -184,8 +206,8 @@ export default function CustomersPage() {
                     Loading...
                   </TableCell>
                 </TableRow>
-              ) : customers.length > 0 ? (
-                customers.map((customer) => (
+              ) : filteredCustomers.length > 0 ? (
+                filteredCustomers.map((customer) => (
                   <TableRow key={customer.id}>
                     <TableCell className="font-medium">{customer.name}</TableCell>
                     <TableCell className="hidden md:table-cell">{customer.email}</TableCell>

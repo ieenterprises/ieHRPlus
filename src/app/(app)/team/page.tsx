@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +22,7 @@ import {
 import { type User, type UserRole, type Role } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Store, Download, Eye, EyeOff } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Store, Download, Eye, EyeOff, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,10 +90,27 @@ export default function TeamPage() {
   const [editingRole, setEditingRole] = useState<Partial<Role> | null>(null);
   const [selectedRolePermissions, setSelectedRolePermissions] = useState<AnyPermission[]>([]);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [roleSearchTerm, setRoleSearchTerm] = useState("");
 
   const { toast } = useToast();
   
   const ownerUser = users.find(u => u.role === "Owner");
+
+  const filteredUsers = useMemo(() => {
+    if (!userSearchTerm) return users;
+    const lowercasedTerm = userSearchTerm.toLowerCase();
+    return users.filter(user => 
+      user.name.toLowerCase().includes(lowercasedTerm) ||
+      user.email.toLowerCase().includes(lowercasedTerm)
+    );
+  }, [users, userSearchTerm]);
+
+  const filteredRoles = useMemo(() => {
+    if (!roleSearchTerm) return roles;
+    return roles.filter(role => role.name.toLowerCase().includes(roleSearchTerm.toLowerCase()));
+  }, [roles, roleSearchTerm]);
 
   useEffect(() => {
     setLoading(false);
@@ -280,7 +297,7 @@ export default function TeamPage() {
   const isRoleNameLocked = systemRoles.includes(editingRole?.name || "");
 
   const handleExport = () => {
-    const dataToExport = users.map(u => ({
+    const dataToExport = filteredUsers.map(u => ({
       "Name": u.name,
       "Email": u.email,
       "Role": u.role,
@@ -353,13 +370,24 @@ export default function TeamPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
+                <div className="mb-4">
+                    <div className="relative w-full max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Search users by name or email..."
+                            className="pl-9"
+                            value={userSearchTerm}
+                            onChange={(e) => setUserSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
                 <Table>
                     <TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead className="hidden md:table-cell">Email</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
                     <TableBody>
                     {loading ? (
                         <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading...</TableCell></TableRow>
-                    ) : users.length > 0 ? (
-                        users.map((user) => (
+                    ) : filteredUsers.length > 0 ? (
+                        filteredUsers.map((user) => (
                             <TableRow key={user.id}>
                             <TableCell>
                                 <div className="flex items-center gap-3">
@@ -399,11 +427,22 @@ export default function TeamPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
+                    <div className="mb-4">
+                        <div className="relative w-full max-w-sm">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                placeholder="Search roles..."
+                                className="pl-9"
+                                value={roleSearchTerm}
+                                onChange={(e) => setRoleSearchTerm(e.target.value)}
+                            />
+                        </div>
+                    </div>
                     <Table>
                         <TableHeader><TableRow><TableHead>Role Name</TableHead><TableHead>Permissions</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                         <TableBody>
-                         {roles.length > 0 ? (
-                            roles.map((role) => (
+                         {filteredRoles.length > 0 ? (
+                            filteredRoles.map((role) => (
                                 <TableRow key={role.id}>
                                     <TableCell><Badge variant={getRoleBadgeVariant(role.name as UserRole)}>{role.name}</Badge></TableCell>
                                     <TableCell>{role.permissions.length} permissions</TableCell>

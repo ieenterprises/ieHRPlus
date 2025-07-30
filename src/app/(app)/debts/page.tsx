@@ -23,10 +23,16 @@ import {
 import { type Debt, type Sale } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { CheckCircle2, Download, Coins } from "lucide-react";
+import { CheckCircle2, Download, Coins, Search, Calendar as CalendarIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
 import Papa from "papaparse";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { type DateRange } from "react-day-picker";
+import { cn } from "@/lib/utils";
 
 export default function DebtsPage() {
   const { debts, setDebts, sales, users, customers, currency, setDebtToSettle } = useSettings();
@@ -34,11 +40,19 @@ export default function DebtsPage() {
   const { toast } = useToast();
   const router = useRouter();
 
+  const [filters, setFilters] = useState({
+    searchTerm: "",
+    status: "all",
+    employee: "all",
+    customer: "all",
+  });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
   const enrichedDebts = useMemo(() => {
     return debts
       .map(debt => {
         const sale = sales.find(s => s.id === debt.sale_id);
-        if (!sale) return null; // Filter out debts with no matching sale
+        if (!sale) return null;
         return {
           ...debt,
           sales: sale ? { ...sale, order_number: sale.order_number } : null,
@@ -49,12 +63,33 @@ export default function DebtsPage() {
       .filter((debt): debt is NonNullable<typeof debt> => debt !== null);
   }, [debts, sales, customers, users]);
 
+  const filteredDebts = useMemo(() => {
+    return enrichedDebts.filter(debt => {
+      const searchTermLower = filters.searchTerm.toLowerCase();
+      const searchMatch =
+        filters.searchTerm === "" ||
+        debt.sales?.order_number?.toString().includes(searchTermLower) ||
+        debt.customers?.name?.toLowerCase().includes(searchTermLower);
+      
+      const statusMatch = filters.status === 'all' || debt.status.toLowerCase() === filters.status;
+      const employeeMatch = filters.employee === 'all' || debt.users?.id === filters.employee;
+      const customerMatch = filters.customer === 'all' || debt.customers?.id === filters.customer;
+      
+      const dateMatch =
+        !dateRange?.from ||
+        (new Date(debt.created_at!) >= dateRange.from &&
+          (!dateRange.to || new Date(debt.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
+      
+      return searchMatch && statusMatch && employeeMatch && customerMatch && dateMatch;
+    });
+  }, [enrichedDebts, filters, dateRange]);
+
 
   useEffect(() => {
     setLoading(false);
   }, []);
 
-  const handleSettleDebt = (debt: (typeof enrichedDebts)[0]) => {
+  const handleSettleDebt = (debt: (typeof filteredDebts)[0]) => {
     if (!debt.sales) {
       toast({
         title: "Sale Not Found",
@@ -68,7 +103,7 @@ export default function DebtsPage() {
   };
 
   const handleExport = () => {
-    const dataToExport = enrichedDebts.map(d => ({
+    const dataToExport = filteredDebts.map(d => ({
         "Order #": d.sales?.order_number,
         "Customer": d.customers?.name,
         "Employee": d.users?.name || "N/A",
@@ -110,6 +145,45 @@ export default function DebtsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+              <Input
+                placeholder="Search by Order # or Customer..."
+                value={filters.searchTerm}
+                onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value}))}
+                className="max-w-xs"
+              />
+               <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({...prev, status: value}))}>
+                  <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="unpaid">Unpaid</SelectItem>
+                      <SelectItem value="paid">Paid</SelectItem>
+                  </SelectContent>
+              </Select>
+               <Select value={filters.customer} onValueChange={(value) => setFilters(prev => ({...prev, customer: value}))}>
+                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by customer" /></SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="all">All Customers</SelectItem>
+                      {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+              </Select>
+              <Select value={filters.employee} onValueChange={(value) => setFilters(prev => ({...prev, employee: value}))}>
+                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by employee" /></SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="all">All Employees</SelectItem>
+                      {users.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                  </SelectContent>
+              </Select>
+              <Popover>
+                  <PopoverTrigger asChild>
+                      <Button id="date" variant={"outline"} className={cn("w-[260px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (dateRange.to ? (<>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>) : (format(dateRange.from, "LLL dd, y"))) : (<span>Pick a date range</span>)}
+                      </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start"><Calendar initialFocus mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2}/></PopoverContent>
+              </Popover>
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -129,8 +203,8 @@ export default function DebtsPage() {
                     Loading...
                   </TableCell>
                 </TableRow>
-              ) : enrichedDebts.length > 0 ? (
-                enrichedDebts.map((debt) => (
+              ) : filteredDebts.length > 0 ? (
+                filteredDebts.map((debt) => (
                   <TableRow key={debt.id}>
                     <TableCell className="font-medium">{debt.sales?.order_number}</TableCell>
                     <TableCell>{debt.customers?.name}</TableCell>
@@ -155,7 +229,7 @@ export default function DebtsPage() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
-                    No debts found.
+                    No debts found for the current filters.
                   </TableCell>
                 </TableRow>
               )}

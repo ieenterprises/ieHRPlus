@@ -149,12 +149,25 @@ export default function VoidedPage() {
   }, [enrichedLogs, filters, dateRange, products, categories]);
 
   const filteredVoidedTickets = useMemo(() => {
-    return enrichedLogs.filter((log): log is VoidedLog & { type: 'ticket', data: any } => log.type === 'ticket');
-  }, [enrichedLogs]);
+    return enrichedLogs
+      .filter((log): log is VoidedLog & { type: 'ticket', data: any } => log.type === 'ticket')
+      .filter((log) => {
+        const employeeMatch = filters.employee === "all" || log.users?.id === filters.employee;
+        const dateMatch =
+          !dateRange?.from ||
+          (new Date(log.created_at!) >= dateRange.from &&
+            (!dateRange.to || new Date(log.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
+        return employeeMatch && dateMatch;
+      });
+  }, [enrichedLogs, filters, dateRange]);
+
 
   useEffect(() => {
     setLoading(false);
-  }, []);
+    // Reset filters when tab changes
+    setFilters({ searchTerm: "", employee: "all", category: "all" });
+    setDateRange(undefined);
+  }, [activeTab]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -177,7 +190,6 @@ export default function VoidedPage() {
         const saleToRestore = logToRestore.data as Sale;
         setSales(prev => [...prev, saleToRestore]);
         
-        // If it was a reservation, restore it
         if (saleToRestore.items.some(item => {
             const product = products.find(p => p.id === item.id);
             const category = categories.find(c => c.id === product?.category_id);
@@ -188,7 +200,7 @@ export default function VoidedPage() {
                 guest_name: saleToRestore.customers?.name || 'Unknown Guest',
                 product_id: saleToRestore.items[0].id,
                 check_in: saleToRestore.created_at!,
-                check_out: new Date().toISOString(), // This is an approximation
+                check_out: new Date().toISOString(),
                 status: 'Checked-in' as const,
                 sale_id: saleToRestore.id,
                 created_at: saleToRestore.created_at!,
@@ -196,11 +208,9 @@ export default function VoidedPage() {
             };
             setReservations(prev => [...prev, reservationToRestore]);
             
-            // Set room status to occupied
             setProducts(prevProds => prevProds.map(p => p.id === reservationToRestore.product_id ? {...p, status: 'Occupied'} : p));
         }
 
-        // If it was a credit sale, restore the debt
         if (saleToRestore.payment_methods.includes('Credit')) {
             const debtToRestore = {
                 id: `debt_${new Date().getTime()}`,
@@ -322,6 +332,24 @@ export default function VoidedPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                        <Select value={filters.employee} onValueChange={(value) => handleFilterChange('employee', value)}>
+                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by voiding employee" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Employees</SelectItem>
+                                {users.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button id="date-tickets" variant={"outline"} className={cn("w-[260px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {dateRange?.from ? (dateRange.to ? (<>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>) : (format(dateRange.from, "LLL dd, y"))) : (<span>Pick a void date range</span>)}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start"><Calendar initialFocus mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2}/></PopoverContent>
+                        </Popover>
+                    </div>
                     <Table>
                         <TableHeader>
                             <TableRow>
