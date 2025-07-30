@@ -172,34 +172,43 @@ export default function VoidedPage() {
 
   const handleRestoreLog = (logToRestore: VoidedLog) => {
     if (!logToRestore || logToRestore.type !== 'receipt') return;
-
+  
     const saleToRestore = logToRestore.data as Sale;
+    
+    const roomCategory = categories.find(c => c.name.toLowerCase() === 'room');
+    const isRoomBooking = saleToRestore.items.some(item => {
+        const product = products.find(p => p.id === item.id);
+        return product?.category_id === roomCategory?.id;
+    });
+  
     setSales(prev => [...prev, saleToRestore]);
     
-    if (saleToRestore.items.some(item => {
-        const product = products.find(p => p.id === item.id);
-        const category = categories.find(c => c.id === product?.category_id);
-        return category?.name === 'Room';
-    })) {
-        const reservationToRestore = {
-            id: `res_${new Date().getTime()}`,
-            guest_name: saleToRestore.customers?.name || 'Unknown Guest',
-            product_id: saleToRestore.items[0].id,
-            check_in: saleToRestore.created_at!,
-            check_out: new Date().toISOString(),
-            status: 'Checked-in' as const,
-            sale_id: saleToRestore.id,
-            created_at: saleToRestore.created_at!,
-            products: { name: saleToRestore.items[0].name, price: saleToRestore.items[0].price }
-        };
-        setReservations(prev => [...prev, reservationToRestore]);
-        
-        setProducts(prevProds => prevProds.map(p => p.id === reservationToRestore.product_id ? {...p, status: 'Occupied'} : p));
+    if (isRoomBooking) {
+        const roomItem = saleToRestore.items.find(item => {
+            const product = products.find(p => p.id === item.id);
+            return product?.category_id === roomCategory?.id;
+        });
+  
+        if (roomItem) {
+            const reservationToRestore: Omit<Reservation, 'id'> = {
+                guest_name: saleToRestore.customers?.name || 'Unknown Guest',
+                product_id: roomItem.id,
+                check_in: saleToRestore.created_at!,
+                // Note: check_out date is an approximation here, might need manual adjustment.
+                check_out: new Date(new Date(saleToRestore.created_at!).getTime() + 24 * 60 * 60 * 1000).toISOString(),
+                status: 'Checked-in' as const,
+                sale_id: saleToRestore.id,
+                created_at: saleToRestore.created_at!,
+                products: products.find(p => p.id === roomItem.id) || null
+            };
+            setReservations(prev => [...prev, {id: `res_${new Date().getTime()}`, ...reservationToRestore}]);
+            
+            setProducts(prevProds => prevProds.map(p => p.id === roomItem.id ? {...p, status: 'Occupied'} : p));
+        }
     }
-
+  
     if (saleToRestore.payment_methods.includes('Credit')) {
-        const debtToRestore = {
-            id: `debt_${new Date().getTime()}`,
+        const debtToRestore: Omit<Debt, 'id'> = {
             sale_id: saleToRestore.id,
             customer_id: saleToRestore.customer_id,
             amount: saleToRestore.total,
@@ -208,11 +217,11 @@ export default function VoidedPage() {
             sales: { order_number: saleToRestore.order_number },
             customers: saleToRestore.customers ? { name: saleToRestore.customers.name } : null,
         };
-        setDebts(prev => [...prev, debtToRestore as Debt]);
+        setDebts(prev => [...prev, {id: `debt_${new Date().getTime()}`, ...debtToRestore} as Debt]);
     }
     
     toast({ title: "Receipt Restored", description: `Receipt #${saleToRestore.order_number} has been restored.` });
-
+  
     setVoidedLogs(prev => prev.filter(log => log.id !== logToRestore.id));
   };
 

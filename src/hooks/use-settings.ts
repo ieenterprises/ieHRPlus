@@ -96,7 +96,7 @@ type SettingsContextType = {
 
     // Voiding and ticket logic
     voidSale: (saleId: string, voidedByEmployeeId: string) => Promise<void>;
-    saveTicket: (ticket: any) => Promise<void>;
+    saveTicket: (ticket: any) => Promise<string | null>;
     deleteTicket: (ticketId: string) => Promise<void>;
 };
 
@@ -509,6 +509,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const saleToVoid = sales.find(s => s.id === saleId);
         if (!saleToVoid) return;
 
+        const reservationToVoid = reservations.find(r => r.sale_id === saleId);
+
         const batch = writeBatch(db);
 
         // 1. Add to voided logs
@@ -530,29 +532,28 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         debtSnapshot.forEach(doc => batch.delete(doc.ref));
 
         // 4. Delete associated reservation and update room status
-        const resQuery = query(collection(db, 'reservations'), where('sale_id', '==', saleId));
-        const resSnapshot = await getDocs(resQuery);
-        resSnapshot.forEach(doc => {
-            const reservation = doc.data() as Reservation;
-            if (reservation.product_id) {
-                const productRef = doc(db, 'products', reservation.product_id);
+        if (reservationToVoid) {
+            if (reservationToVoid.product_id) {
+                const productRef = doc(db, 'products', reservationToVoid.product_id);
                 batch.update(productRef, { status: 'Available' });
             }
-            batch.delete(doc.ref);
-        });
+            batch.delete(doc(db, 'reservations', reservationToVoid.id));
+        }
 
         await batch.commit();
     };
 
-    const saveTicket = async (ticketData: any) => {
+    const saveTicket = async (ticketData: any): Promise<string | null> => {
         if (ticketData.id) {
             const ticketRef = doc(db, 'open_tickets', ticketData.id);
             await updateDoc(ticketRef, ticketData);
+            return ticketData.id;
         } else {
-            await addDoc(collection(db, 'open_tickets'), {
+            const newDocRef = await addDoc(collection(db, 'open_tickets'), {
                 ...ticketData,
                 created_at: new Date().toISOString(),
             });
+            return newDocRef.id;
         }
     };
     
