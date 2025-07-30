@@ -54,11 +54,11 @@ type SettingsContextType = {
     openTickets: OpenTicket[];
     
     // Data setters (now write to DB)
-    setFeatureSettings: React.Dispatch<React.SetStateAction<FeatureSettings>>;
+    setFeatureSettings: (value: React.SetStateAction<FeatureSettings>) => void;
     setStores: React.Dispatch<React.SetStateAction<StoreType[]>>; // Keep simple setters for complex page logic
     setPosDevices: React.Dispatch<React.SetStateAction<PosDeviceType[]>>;
     setPrinters: React.Dispatch<React.SetStateAction<PrinterType[]>>;
-    setReceiptSettings: React.Dispatch<React.SetStateAction<Record<string, ReceiptSettings>>>;
+    setReceiptSettings: (value: React.SetStateAction<Record<string, ReceiptSettings>>) => void;
     setPaymentTypes: React.Dispatch<React.SetStateAction<PaymentType[]>>;
     setTaxes: React.Dispatch<React.SetStateAction<Tax[]>>;
     setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
@@ -80,7 +80,7 @@ type SettingsContextType = {
     selectedDevice: PosDeviceType | null;
     setSelectedDevice: React.Dispatch<React.SetStateAction<PosDeviceType | null>>;
     currency: string;
-    setCurrency: React.Dispatch<React.SetStateAction<string>>;
+    setCurrency: (value: React.SetStateAction<string>) => void;
     getPermissionsForRole: (role: UserRole) => AnyPermission[];
 
     // Cross-page state
@@ -331,6 +331,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
 
     const voidTicket = async (ticketId: string, voidedByEmployeeId: string) => {
+        if (!ticketId) {
+            console.error("voidTicket called with invalid ticketId");
+            return;
+        }
         const ticketToVoid = openTickets.find(t => t.id === ticketId);
         if (!ticketToVoid) return;
 
