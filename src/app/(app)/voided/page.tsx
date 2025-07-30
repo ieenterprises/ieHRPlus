@@ -148,19 +148,6 @@ export default function VoidedPage() {
     });
   }, [enrichedLogs, filters, dateRange, products, categories]);
 
-  const filteredVoidedTickets = useMemo(() => {
-    return enrichedLogs
-      .filter((log): log is VoidedLog & { type: 'ticket', data: any } => log.type === 'ticket')
-      .filter((log) => {
-        const employeeMatch = filters.employee === "all" || log.users?.id === filters.employee;
-        const dateMatch =
-          !dateRange?.from ||
-          (new Date(log.created_at!) >= dateRange.from &&
-            (!dateRange.to || new Date(log.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
-        return employeeMatch && dateMatch;
-      });
-  }, [enrichedLogs, filters, dateRange]);
-
 
   useEffect(() => {
     setLoading(false);
@@ -184,54 +171,47 @@ export default function VoidedPage() {
   };
 
   const handleRestoreLog = (logToRestore: VoidedLog) => {
-    if (!logToRestore) return;
+    if (!logToRestore || logToRestore.type !== 'receipt') return;
 
-    if (logToRestore.type === 'receipt') {
-        const saleToRestore = logToRestore.data as Sale;
-        setSales(prev => [...prev, saleToRestore]);
+    const saleToRestore = logToRestore.data as Sale;
+    setSales(prev => [...prev, saleToRestore]);
+    
+    if (saleToRestore.items.some(item => {
+        const product = products.find(p => p.id === item.id);
+        const category = categories.find(c => c.id === product?.category_id);
+        return category?.name === 'Room';
+    })) {
+        const reservationToRestore = {
+            id: `res_${new Date().getTime()}`,
+            guest_name: saleToRestore.customers?.name || 'Unknown Guest',
+            product_id: saleToRestore.items[0].id,
+            check_in: saleToRestore.created_at!,
+            check_out: new Date().toISOString(),
+            status: 'Checked-in' as const,
+            sale_id: saleToRestore.id,
+            created_at: saleToRestore.created_at!,
+            products: { name: saleToRestore.items[0].name, price: saleToRestore.items[0].price }
+        };
+        setReservations(prev => [...prev, reservationToRestore]);
         
-        if (saleToRestore.items.some(item => {
-            const product = products.find(p => p.id === item.id);
-            const category = categories.find(c => c.id === product?.category_id);
-            return category?.name === 'Room';
-        })) {
-            const reservationToRestore = {
-                id: `res_${new Date().getTime()}`,
-                guest_name: saleToRestore.customers?.name || 'Unknown Guest',
-                product_id: saleToRestore.items[0].id,
-                check_in: saleToRestore.created_at!,
-                check_out: new Date().toISOString(),
-                status: 'Checked-in' as const,
-                sale_id: saleToRestore.id,
-                created_at: saleToRestore.created_at!,
-                products: { name: saleToRestore.items[0].name, price: saleToRestore.items[0].price }
-            };
-            setReservations(prev => [...prev, reservationToRestore]);
-            
-            setProducts(prevProds => prevProds.map(p => p.id === reservationToRestore.product_id ? {...p, status: 'Occupied'} : p));
-        }
-
-        if (saleToRestore.payment_methods.includes('Credit')) {
-            const debtToRestore = {
-                id: `debt_${new Date().getTime()}`,
-                sale_id: saleToRestore.id,
-                customer_id: saleToRestore.customer_id,
-                amount: saleToRestore.total,
-                status: 'Unpaid' as const,
-                created_at: saleToRestore.created_at!,
-                sales: { order_number: saleToRestore.order_number },
-                customers: saleToRestore.customers ? { name: saleToRestore.customers.name } : null,
-            };
-            setDebts(prev => [...prev, debtToRestore as Debt]);
-        }
-        
-        toast({ title: "Receipt Restored", description: `Receipt #${saleToRestore.order_number} has been restored.` });
-
-    } else if (logToRestore.type === 'ticket') {
-        const ticketToRestore = logToRestore.data as OpenTicket;
-        setOpenTickets(prev => [...prev, ticketToRestore]);
-        toast({ title: "Ticket Restored", description: `Ticket "${ticketToRestore.ticket_name}" has been restored.` });
+        setProducts(prevProds => prevProds.map(p => p.id === reservationToRestore.product_id ? {...p, status: 'Occupied'} : p));
     }
+
+    if (saleToRestore.payment_methods.includes('Credit')) {
+        const debtToRestore = {
+            id: `debt_${new Date().getTime()}`,
+            sale_id: saleToRestore.id,
+            customer_id: saleToRestore.customer_id,
+            amount: saleToRestore.total,
+            status: 'Unpaid' as const,
+            created_at: saleToRestore.created_at!,
+            sales: { order_number: saleToRestore.order_number },
+            customers: saleToRestore.customers ? { name: saleToRestore.customers.name } : null,
+        };
+        setDebts(prev => [...prev, debtToRestore as Debt]);
+    }
+    
+    toast({ title: "Receipt Restored", description: `Receipt #${saleToRestore.order_number} has been restored.` });
 
     setVoidedLogs(prev => prev.filter(log => log.id !== logToRestore.id));
   };
@@ -239,34 +219,19 @@ export default function VoidedPage() {
 
   const handleExport = () => {
     let dataToExport: any[] = [];
-    let reportName = "";
-
-    if (activeTab === 'receipts') {
-      reportName = "voided_receipts";
-      dataToExport = filteredVoidedReceipts.map(log => ({
-        "Order #": log.data.order_number,
-        "Original Date": format(new Date(log.data.created_at!), "yyyy-MM-dd HH:mm"),
-        "Voided Date": format(new Date(log.created_at), "yyyy-MM-dd HH:mm"),
-        "Customer": log.data.customers?.name ?? 'Walk-in',
-        "Original Employee": log.data.users?.name || "N/A",
-        "Voided By": log.users?.name || "N/A",
-        "Total": log.data.total.toFixed(2),
-        "Payment Methods": log.data.payment_methods.join(", "),
-        "Items": log.data.items.map((item: SaleItem) => `${item.name} (x${item.quantity})`).join("; "),
-      }));
-    } else { // tickets
-      reportName = "voided_tickets";
-      dataToExport = filteredVoidedTickets.map(log => ({
-        "Ticket Name": log.data.ticket_name,
-        "Original Date": format(new Date(log.data.created_at!), "yyyy-MM-dd HH:mm"),
-        "Voided Date": format(new Date(log.created_at), "yyyy-MM-dd HH:mm"),
-        "Customer": log.data.customers?.name || "N/A",
-        "Original Employee": log.data.users?.name || "N/A",
-        "Voided By": log.users?.name || "N/A",
-        "Total": log.data.total.toFixed(2),
-        "Items": (log.data.items as SaleItem[]).map(item => `${item.name} (x${item.quantity})`).join("; "),
-      }));
-    }
+    let reportName = "voided_receipts";
+    
+    dataToExport = filteredVoidedReceipts.map(log => ({
+      "Order #": log.data.order_number,
+      "Original Date": format(new Date(log.data.created_at!), "yyyy-MM-dd HH:mm"),
+      "Voided Date": format(new Date(log.created_at), "yyyy-MM-dd HH:mm"),
+      "Customer": log.data.customers?.name ?? 'Walk-in',
+      "Original Employee": log.data.users?.name || "N/A",
+      "Voided By": log.users?.name || "N/A",
+      "Total": log.data.total.toFixed(2),
+      "Payment Methods": log.data.payment_methods.join(", "),
+      "Items": log.data.items.map((item: SaleItem) => `${item.name} (x${item.quantity})`).join("; "),
+    }));
 
     if (dataToExport.length === 0) {
       toast({
@@ -310,7 +275,7 @@ export default function VoidedPage() {
       <div className="flex items-center justify-between">
         <PageHeader
           title="Voided Logs"
-          description="Review all voided tickets and completed receipts."
+          description="Review all voided completed receipts."
         />
         <Button onClick={handleExport} variant="outline">
           <Download className="mr-2 h-4 w-4" />
@@ -318,229 +283,147 @@ export default function VoidedPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="receipts" onValueChange={setActiveTab}>
-        <TabsList>
-            <TabsTrigger value="tickets">Voided Tickets</TabsTrigger>
-            <TabsTrigger value="receipts">Voided Receipts</TabsTrigger>
-        </TabsList>
-        <TabsContent value="tickets" className="pt-4">
-             <Card>
-                <CardHeader>
-                    <CardTitle>Voided Tickets</CardTitle>
-                    <CardDescription>
-                        A list of all deleted open tickets.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex flex-wrap items-center gap-2 mb-4">
-                        <Select value={filters.employee} onValueChange={(value) => handleFilterChange('employee', value)}>
-                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by voiding employee" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Employees</SelectItem>
-                                {users.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button id="date-tickets" variant={"outline"} className={cn("w-[260px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {dateRange?.from ? (dateRange.to ? (<>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>) : (format(dateRange.from, "LLL dd, y"))) : (<span>Pick a void date range</span>)}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start"><Calendar initialFocus mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2}/></PopoverContent>
-                        </Popover>
-                    </div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Ticket Name</TableHead>
-                                <TableHead>Employee</TableHead>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Items</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                           {loading ? (
-                                <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
-                            ) : filteredVoidedTickets.length > 0 ? (
-                                filteredVoidedTickets.map(log => (
-                                    <TableRow key={log.id}>
-                                        <TableCell className="font-medium">{log.data.ticket_name}</TableCell>
-                                        <TableCell>{log.data.users?.name ?? 'N/A'}</TableCell>
-                                        <TableCell>{format(new Date(log.data.created_at!), 'LLL dd, y HH:mm')}</TableCell>
-                                        <TableCell>{(log.data.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
-                                        <TableCell className="text-right">{currency}{log.data.total.toFixed(2)}</TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <span className="text-muted-foreground text-xs">Voided by: {log.users?.name || 'N/A'}</span>
-                                                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleRestoreLog(log)} disabled={!hasRestorePermission}>
-                                                    <RotateCcw className="h-4 w-4" />
-                                                </Button>
-                                                <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)} disabled={!hasDeletePermission}>
-                                                  <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                                        No voided tickets found.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-        </TabsContent>
-        <TabsContent value="receipts" className="pt-4">
-             <Card>
-                <CardHeader>
-                <CardTitle>Voided Receipts</CardTitle>
-                <CardDescription>
-                    Review all voided sales transactions.
-                </CardDescription>
-                </CardHeader>
-                <CardContent>
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                    <Input
-                    placeholder="Search by order, customer, item..."
-                    value={filters.searchTerm}
-                    onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
-                    className="max-w-xs"
-                    />
-                     <Select value={filters.category} onValueChange={(value) => handleFilterChange('category', value)}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Filter by category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Categories</SelectItem>
-                            {categories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filters.employee} onValueChange={(value) => handleFilterChange('employee', value)}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Filter by employee" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Employees</SelectItem>
-                            {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button
-                            id="date"
-                            variant={"outline"}
-                            className={cn(
-                                "w-[260px] justify-start text-left font-normal",
-                                !dateRange && "text-muted-foreground"
-                            )}
-                            >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {dateRange?.from ? (
-                                dateRange.to ? (
-                                <>
-                                    {format(dateRange.from, "LLL dd, y")} -{" "}
-                                    {format(dateRange.to, "LLL dd, y")}
-                                </>
-                                ) : (
-                                format(dateRange.from, "LLL dd, y")
-                                )
-                            ) : (
-                                <span>Pick a void date range</span>
-                            )}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                            initialFocus
-                            mode="range"
-                            selected={dateRange}
-                            onSelect={setDateRange}
-                            numberOfMonths={2}
-                            />
-                        </PopoverContent>
-                    </Popover>
-                </div>
-                <Table>
-                    <TableHeader>
-                      <TableRow>
-                          <TableHead>Order #</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Customer</TableHead>
-                          <TableHead>Employee</TableHead>
-                          <TableHead>Items</TableHead>
-                          <TableHead>Category</TableHead>
-                          <TableHead className="text-right">Total</TableHead>
-                          <TableHead className="text-center">Payment</TableHead>
-                          <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {loading ? (
-                        <TableRow><TableCell colSpan={9} className="h-24 text-center">Loading...</TableCell></TableRow>
-                    ) : filteredVoidedReceipts.length > 0 ? (
-                        filteredVoidedReceipts.map((log) => {
-                          const saleData = log.data;
-                          const categoriesForDisplay = getSaleCategoryNames(saleData.items as SaleItem[]);
-                          return (
-                            <TableRow key={log.id}>
-                                <TableCell className="font-medium">#{saleData.order_number}</TableCell>
-                                <TableCell>{format(new Date(saleData.created_at!), "LLL dd, y HH:mm")}</TableCell>
-                                <TableCell>{saleData.customers?.name ?? 'Walk-in'}</TableCell>
-                                <TableCell>{saleData.users?.name}</TableCell>
-                                <TableCell>
-                                    {(saleData.items as SaleItem[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex flex-wrap gap-1">
-                                      {categoriesForDisplay.map(category => (
-                                          <Badge key={category} variant="outline" className="whitespace-nowrap">{category}</Badge>
-                                      ))}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-right">{currency}{saleData.total?.toFixed(2)}</TableCell>
-                                <TableCell className="text-center">
-                                  <div className="flex items-center justify-center gap-1">
-                                      {(saleData.payment_methods as string[]).map((method: string) => (
-                                          <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">
-                                              {method}
-                                          </Badge>
-                                      ))}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-muted-foreground text-xs whitespace-nowrap">Voided by: {log.users?.name || 'N/A'}</span>
-                                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleRestoreLog(log)} disabled={!hasRestorePermission}>
-                                            <RotateCcw className="h-4 w-4" />
-                                        </Button>
-                                        <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)} disabled={!hasDeletePermission}>
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                          );
-                        })
-                    ) : (
-                        <TableRow>
-                            <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
-                                No voided receipts found for the selected filters.
-                            </TableCell>
-                        </TableRow>
+      <Card>
+        <CardHeader>
+        <CardTitle>Voided Receipts</CardTitle>
+        <CardDescription>
+            Review all voided sales transactions.
+        </CardDescription>
+        </CardHeader>
+        <CardContent>
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+            <Input
+            placeholder="Search by order, customer, item..."
+            value={filters.searchTerm}
+            onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
+            className="max-w-xs"
+            />
+              <Select value={filters.category} onValueChange={(value) => handleFilterChange('category', value)}>
+                <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by category" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
+            <Select value={filters.employee} onValueChange={(value) => handleFilterChange('employee', value)}>
+                <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by employee" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Employees</SelectItem>
+                    {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button
+                    id="date"
+                    variant={"outline"}
+                    className={cn(
+                        "w-[260px] justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
                     )}
-                    </TableBody>
-                </Table>
-                </CardContent>
-            </Card>
-        </TabsContent>
-      </Tabs>
+                    >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                        dateRange.to ? (
+                        <>
+                            {format(dateRange.from, "LLL dd, y")} -{" "}
+                            {format(dateRange.to, "LLL dd, y")}
+                        </>
+                        ) : (
+                        format(dateRange.from, "LLL dd, y")
+                        )
+                    ) : (
+                        <span>Pick a void date range</span>
+                    )}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                    initialFocus
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                    />
+                </PopoverContent>
+            </Popover>
+        </div>
+        <Table>
+            <TableHeader>
+              <TableRow>
+                  <TableHead>Order #</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-center">Payment</TableHead>
+                  <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+            {loading ? (
+                <TableRow><TableCell colSpan={9} className="h-24 text-center">Loading...</TableCell></TableRow>
+            ) : filteredVoidedReceipts.length > 0 ? (
+                filteredVoidedReceipts.map((log) => {
+                  const saleData = log.data;
+                  const categoriesForDisplay = getSaleCategoryNames(saleData.items as SaleItem[]);
+                  return (
+                    <TableRow key={log.id}>
+                        <TableCell className="font-medium">#{saleData.order_number}</TableCell>
+                        <TableCell>{format(new Date(saleData.created_at!), "LLL dd, y HH:mm")}</TableCell>
+                        <TableCell>{saleData.customers?.name ?? 'Walk-in'}</TableCell>
+                        <TableCell>{saleData.users?.name}</TableCell>
+                        <TableCell>
+                            {(saleData.items as SaleItem[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                              {categoriesForDisplay.map(category => (
+                                  <Badge key={category} variant="outline" className="whitespace-nowrap">{category}</Badge>
+                              ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">{currency}{saleData.total?.toFixed(2)}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                              {(saleData.payment_methods as string[]).map((method: string) => (
+                                  <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">
+                                      {method}
+                                  </Badge>
+                              ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                            <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground text-xs whitespace-nowrap">Voided by: {log.users?.name || 'N/A'}</span>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleRestoreLog(log)} disabled={!hasRestorePermission}>
+                                    <RotateCcw className="h-4 w-4" />
+                                </Button>
+                                <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setLogToDelete(log.id)} disabled={!hasDeletePermission}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </TableCell>
+                    </TableRow>
+                  );
+                })
+            ) : (
+                <TableRow>
+                    <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
+                        No voided receipts found for the selected filters.
+                    </TableCell>
+                </TableRow>
+            )}
+            </TableBody>
+        </Table>
+        </CardContent>
+    </Card>
     </div>
   );
 }

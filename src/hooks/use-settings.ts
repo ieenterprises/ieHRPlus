@@ -96,7 +96,6 @@ type SettingsContextType = {
 
     // Voiding and ticket logic
     voidSale: (saleId: string, voidedByEmployeeId: string) => Promise<void>;
-    voidTicket: (ticketId: string, voidedByEmployeeId: string) => Promise<void>;
     saveTicket: (ticket: any) => Promise<void>;
     deleteTicket: (ticketId: string) => Promise<void>;
 };
@@ -545,29 +544,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         await batch.commit();
     };
 
-    const voidTicket = async (ticketId: string, voidedByEmployeeId: string) => {
-        if (!ticketId) {
-            console.error("voidTicket called with invalid ticketId");
-            return;
-        }
-        const ticketToVoid = openTickets.find(t => t.id === ticketId);
-        if (!ticketToVoid) return;
-
-        const batch = writeBatch(db);
-        // 1. Add to voided logs
-        const voidedLogRef = doc(collection(db, 'voided_logs'));
-        const { users, customers, ...ticketData } = ticketToVoid;
-        batch.set(voidedLogRef, {
-            type: 'ticket',
-            voided_by_employee_id: voidedByEmployeeId,
-            created_at: new Date().toISOString(),
-            data: ticketData,
-        });
-        // 2. Delete original ticket
-        batch.delete(doc(db, 'open_tickets', ticketId));
-        await batch.commit();
-    };
-
     const saveTicket = async (ticketData: any) => {
         if (ticketData.id) {
             const ticketRef = doc(db, 'open_tickets', ticketData.id);
@@ -614,7 +590,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         debtToSettle, setDebtToSettle,
         printableData, setPrintableData,
         voidSale,
-        voidTicket,
         saveTicket,
         deleteTicket,
     };

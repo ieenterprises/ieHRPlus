@@ -129,7 +129,6 @@ export default function SalesPage() {
     setReservations,
     debtToSettle,
     setDebtToSettle,
-    voidTicket,
   } = useSettings();
   const { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode } = usePos();
 
@@ -594,11 +593,6 @@ export default function SalesPage() {
     setIsTicketsDialogOpen(false);
   };
   
-  const handleMoveTicketToVoid = (ticketId: string) => {
-    voidTicket(ticketId, loggedInUser?.id || 'unknown');
-    toast({ title: "Ticket Moved", description: `Ticket has been moved to the voided logs.` });
-  }
-
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
   
   const currentPaymentType = configuredPaymentTypes.find(p => p.name === splitPaymentMethod);
@@ -974,11 +968,6 @@ export default function SalesPage() {
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as any)}>Load</Button>
-                                                    {hasPermission('VOID_SAVED_ITEMS') && (
-                                                        <Button variant="destructive" size="sm" onClick={() => handleMoveTicketToVoid(ticket.id)}>
-                                                            <Trash2 className="mr-2 h-4 w-4" /> Move to Void
-                                                        </Button>
-                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>

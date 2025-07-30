@@ -60,7 +60,7 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function KitchenPage() {
-  const { sales, products, categories, users, loggedInUser, voidSale, voidTicket, setPrintableData } = useSettings();
+  const { sales, products, categories, users, loggedInUser, voidSale, setPrintableData } = useSettings();
   const { openTickets } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -220,10 +220,6 @@ export default function KitchenPage() {
     toast({ title: "Receipt Moved", description: `The receipt has been moved to the voided logs.` });
   };
   
-  const handleMoveTicketToVoid = (ticketId: string) => {
-    voidTicket(ticketId, loggedInUser?.id || 'unknown');
-    toast({ title: "Ticket Moved", description: `The ticket has been moved to the voided logs.` });
-  }
 
   return (
     <div className="space-y-8">
@@ -305,11 +301,6 @@ export default function KitchenPage() {
                                             <Button variant="outline" size="sm" onClick={() => onPrint(ticket, 'ticket')}>
                                               <Printer className="mr-2 h-4 w-4" /> Print
                                             </Button>
-                                             {hasPermission('VOID_SAVED_ITEMS') && (
-                                                <Button variant="destructive" size="sm" onClick={() => handleMoveTicketToVoid(ticket.id!)}>
-                                                    <Trash2 className="mr-2 h-4 w-4" /> Move to Void
-                                                </Button>
-                                            )}
                                           </div>
                                         </TableCell>
                                     </TableRow>
