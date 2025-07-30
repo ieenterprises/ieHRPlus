@@ -22,7 +22,6 @@ import { doc, writeBatch, collection, getDocs, query, where, setDoc } from "fire
 import { posPermissions, backOfficePermissions, AnyPermission } from "@/lib/permissions";
 import { MOCK_INITIAL_ROLES } from "@/hooks/use-settings";
 import { seedDatabaseWithMockData } from "@/lib/mock-data";
-import { ArrowLeft } from "lucide-react";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -78,11 +77,14 @@ export default function SignUpPage() {
         };
 
         // 5. Add user profile to 'users' collection, using the auth UID as the document ID
-        // Note: We use setDoc directly on the batch, not inside seedDatabase to ensure it's part of the same transaction
         const userDocRef = doc(db, "users", user.uid);
         batch.set(userDocRef, newUserProfile);
+
+        // 6. Set a ready flag to signal profile completion
+        const readyFlagRef = doc(db, "_user_ready_flags", user.uid);
+        batch.set(readyFlagRef, { ready: true, createdAt: new Date() });
         
-        // 6. Commit all database writes at once
+        // 7. Commit all database writes at once
         await batch.commit();
         
         toast({
@@ -102,50 +104,42 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="relative">
-      <Button variant="outline" size="sm" className="absolute -top-16 left-0" asChild>
-        <Link href="/">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Home
-        </Link>
-      </Button>
-      <Card className="w-full max-w-sm">
-        <form onSubmit={handleSubmit}>
-          <CardHeader>
-            <CardTitle className="text-2xl">Register Your Business</CardTitle>
-            <CardDescription>
-              Create your owner account to get started with the POS system.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="business-name">Business Name</Label>
-              <Input id="business-name" name="business_name" placeholder="Acme Inc." required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="owner-name">Owner's Name</Label>
-              <Input id="owner-name" name="owner_name" placeholder="John Doe" required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" placeholder="m@example.com" required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" required />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button className="w-full" type="submit">Sign Up</Button>
-            <div className="text-center text-sm">
-                Already have an account?{" "}
-                <Link href="/sign-in" className="underline">
-                    Sign in
-                </Link>
-            </div>
-          </CardFooter>
-        </form>
-      </Card>
-    </div>
+    <Card className="w-full max-w-sm">
+      <form onSubmit={handleSubmit}>
+        <CardHeader>
+          <CardTitle className="text-2xl">Register Your Business</CardTitle>
+          <CardDescription>
+            Create your owner account to get started with the POS system.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="business-name">Business Name</Label>
+            <Input id="business-name" name="business_name" placeholder="Acme Inc." required />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="owner-name">Owner's Name</Label>
+            <Input id="owner-name" name="owner_name" placeholder="John Doe" required />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" name="email" type="email" placeholder="m@example.com" required />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="password">Password</Label>
+            <Input id="password" name="password" type="password" required />
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col gap-4">
+          <Button className="w-full" type="submit">Sign Up</Button>
+          <div className="text-center text-sm">
+              Already have an account?{" "}
+              <Link href="/sign-in" className="underline">
+                  Sign in
+              </Link>
+          </div>
+        </CardFooter>
+      </form>
+    </Card>
   );
 }

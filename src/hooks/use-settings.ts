@@ -158,32 +158,48 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     const fetchAndSetUser = useCallback(async (uid: string) => {
         setLoadingUser(true);
-        let userProfile: User | null = null;
-        let attempts = 0;
-        while (userProfile === null && attempts < 5) {
-            try {
-                const userDocRef = doc(db, "users", uid);
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    userProfile = { id: userDoc.id, ...userDoc.data() } as User;
+        try {
+            // Wait for the ready flag to ensure the user document is created.
+            let ready = false;
+            let attempts = 0;
+            while (!ready && attempts < 10) { // 5 seconds timeout
+                const readyFlagDoc = await getDoc(doc(db, "_user_ready_flags", uid));
+                if (readyFlagDoc.exists()) {
+                    ready = true;
                 } else {
                     attempts++;
-                    await new Promise(res => setTimeout(res, 500)); // Wait before retrying
+                    await new Promise(res => setTimeout(res, 500));
                 }
-            } catch (error) {
-                console.error("Error fetching user profile:", error);
-                break; // Exit loop on error
             }
-        }
 
-        if (userProfile) {
-            setLoggedInUser(userProfile);
-        } else {
-            console.error("User profile not found in database for UID:", uid);
+            if (!ready) {
+                console.error("User profile ready flag not found after timeout for UID:", uid);
+                setLoadingUser(false);
+                logout(); // Log out user if profile cannot be found
+                return null;
+            }
+            
+            // Once ready, fetch the actual user profile
+            const userDocRef = doc(db, "users", uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (userDoc.exists()) {
+                const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
+                setLoggedInUser(userProfile);
+                setLoadingUser(false);
+                return userProfile;
+            } else {
+                 console.error("User profile not found in database for UID:", uid);
+                 setLoadingUser(false);
+                 logout(); // Log out user if profile cannot be found
+                 return null;
+            }
+        } catch (error) {
+            console.error("Error fetching user profile:", error);
+            setLoadingUser(false);
+            logout();
             return null;
         }
-        setLoadingUser(false);
-        return userProfile;
     }, []);
 
     useEffect(() => {
