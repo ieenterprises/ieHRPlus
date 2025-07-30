@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -19,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2 } from "lucide-react";
+import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -150,6 +151,7 @@ export default function SalesPage() {
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState(configuredPaymentTypes[0]?.name || "Cash");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [productSearchTerm, setProductSearchTerm] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
   const [isCheckingIn, setIsCheckingIn] = useState(false);
@@ -508,6 +510,8 @@ export default function SalesPage() {
             );
         }
         
+        if (activeTicket?.id) await deleteTicket(activeTicket.id);
+
         if (!isCheckingIn) {
             let toastDescription = debtToSettle 
               ? `Debt settled. Total: ${currency}${total.toFixed(2)}.`
@@ -538,9 +542,16 @@ export default function SalesPage() {
   const filteredProducts = useMemo(() => {
     let prods = isReservationsEnabled ? products : products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
     
-    if (categoryFilter === 'all') return prods;
-    return prods.filter(p => p.category_id === categoryFilter);
-  }, [products, categoryFilter, isReservationsEnabled, getCategoryName]);
+    if (categoryFilter !== 'all') {
+      prods = prods.filter(p => p.category_id === categoryFilter);
+    }
+
+    if (productSearchTerm) {
+      prods = prods.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()));
+    }
+
+    return prods;
+  }, [products, categoryFilter, productSearchTerm, isReservationsEnabled, getCategoryName]);
 
   const handleClearOrder = () => {
     setOrderItems([]);
@@ -563,17 +574,22 @@ export default function SalesPage() {
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
     try {
-        const ticketPayload = {
+        const ticketPayload: Partial<OpenTicket> = {
             items: saleItems,
             total: total,
             employee_id: loggedInUser?.id ?? null,
             customer_id: selectedCustomerId,
-            order_number: activeTicket?.order_number || Math.floor(Math.random() * 100000),
+            order_number: Math.floor(Math.random() * 100000),
         };
         
-        await saveTicket(ticketPayload);
+        // If it's an update to a loaded ticket, create a new one instead of updating
+        if (activeTicket) {
+             toast({ title: "Order Saved", description: "The updated order has been saved as a new open ticket." });
+        } else {
+             toast({ title: "Order Saved", description: "The order has been saved as an open ticket." });
+        }
         
-        toast({ title: "Order Saved", description: "The order has been saved as a new open ticket." });
+        await saveTicket(ticketPayload);
         handleClearOrder();
     } catch (error: any) {
         toast({ title: "Error Saving Order", description: error.message, variant: "destructive" });
@@ -610,16 +626,27 @@ export default function SalesPage() {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             <div className="lg:col-span-2 space-y-4">
-                <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
-                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
-                    <TabsTrigger value="all">All</TabsTrigger>
-                    {visibleCategories.map((category) => (
-                    <TabsTrigger key={category.id} value={category.id}>
-                        {category.name}
-                    </TabsTrigger>
-                    ))}
-                </TabsList>
-                </Tabs>
+                <div className="flex flex-col sm:flex-row gap-4">
+                    <Tabs value={categoryFilter} onValueChange={setCategoryFilter} className="w-full">
+                        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
+                            <TabsTrigger value="all">All</TabsTrigger>
+                            {visibleCategories.map((category) => (
+                            <TabsTrigger key={category.id} value={category.id}>
+                                {category.name}
+                            </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </Tabs>
+                    <div className="relative w-full sm:max-w-xs">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Search products..."
+                            className="pl-9"
+                            value={productSearchTerm}
+                            onChange={(e) => setProductSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {filteredProducts.map((product) => (
                     <ProductCard
@@ -634,7 +661,7 @@ export default function SalesPage() {
                     <Card className="col-span-full flex items-center justify-center h-64">
                         <CardContent className="text-center text-muted-foreground p-6">
                             <p className="text-lg font-medium">No products found</p>
-                            <p>There are no products in the selected category.</p>
+                            <p>There are no products for the current filter and search term.</p>
                         </CardContent>
                     </Card>
                 )}

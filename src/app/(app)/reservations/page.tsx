@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { format, differenceInDays, isWithinInterval } from "date-fns";
-import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff, Trash2, Search } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
 
@@ -133,11 +133,32 @@ export default function ReservationsPage() {
   const { toast } = useToast();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  const [roomSearchTerm, setRoomSearchTerm] = useState("");
+  const [roomStatusFilter, setRoomStatusFilter] = useState("all");
+  const [bookingSearchTerm, setBookingSearchTerm] = useState("");
   
   const rooms = products.filter(p => {
     const category = categories.find(c => c.id === p.category_id);
     return category?.name === 'Room';
   });
+
+  const filteredRooms = useMemo(() => {
+    return rooms.filter(room => {
+      const searchMatch = room.name.toLowerCase().includes(roomSearchTerm.toLowerCase());
+      const statusMatch = roomStatusFilter === 'all' || room.status === roomStatusFilter;
+      return searchMatch && statusMatch;
+    });
+  }, [rooms, roomSearchTerm, roomStatusFilter]);
+  
+  const filteredBookings = useMemo(() => {
+    if (!bookingSearchTerm) return reservations;
+    const lowercasedTerm = bookingSearchTerm.toLowerCase();
+    return reservations.filter(booking => 
+      booking.guest_name.toLowerCase().includes(lowercasedTerm) ||
+      booking.products?.name?.toLowerCase().includes(lowercasedTerm)
+    );
+  }, [reservations, bookingSearchTerm]);
 
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
 
@@ -241,7 +262,7 @@ export default function ReservationsPage() {
   };
 
   const handleExportBookings = () => {
-    const dataToExport = reservations.map(r => {
+    const dataToExport = filteredBookings.map(r => {
       const sale = sales.find(s => s.id === r.sale_id);
       return {
         "Order #": sale?.order_number || 'N/A',
@@ -268,7 +289,7 @@ export default function ReservationsPage() {
   };
   
   const handleExportRoomStatus = () => {
-    const dataToExport = rooms.map(room => ({
+    const dataToExport = filteredRooms.map(room => ({
         "Room Name": room.name,
         "Category": getCategoryName(room.category_id),
         "Price": room.price.toFixed(2),
@@ -325,12 +346,36 @@ export default function ReservationsPage() {
       </div>
       
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Room Status</h2>
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h2 className="text-xl font-semibold">Room Status</h2>
+             <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-auto">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Search rooms..."
+                        className="pl-9"
+                        value={roomSearchTerm}
+                        onChange={(e) => setRoomSearchTerm(e.target.value)}
+                    />
+                </div>
+                <Select value={roomStatusFilter} onValueChange={setRoomStatusFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="Available">Available</SelectItem>
+                    <SelectItem value="Occupied">Occupied</SelectItem>
+                    <SelectItem value="Maintenance">Maintenance</SelectItem>
+                  </SelectContent>
+                </Select>
+            </div>
+        </div>
         {loading ? (
              <p>Loading room statuses...</p>
-        ): rooms.length > 0 ? (
+        ): filteredRooms.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                {rooms.map(room => (
+                {filteredRooms.map(room => (
                     <RoomStatusCard 
                         key={room.id} 
                         room={room} 
@@ -341,7 +386,7 @@ export default function ReservationsPage() {
             </div>
         ) : (
              <Card className="flex items-center justify-center h-32">
-                <p className="text-muted-foreground">No rooms found. Please add products to the 'Room' category.</p>
+                <p className="text-muted-foreground">No rooms found for the current filters.</p>
              </Card>
         )}
       </div>
@@ -354,6 +399,17 @@ export default function ReservationsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+           <div className="mb-4">
+             <div className="relative w-full max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Search by guest or room name..."
+                    className="pl-9"
+                    value={bookingSearchTerm}
+                    onChange={(e) => setBookingSearchTerm(e.target.value)}
+                />
+            </div>
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -374,8 +430,8 @@ export default function ReservationsPage() {
                     Loading...
                   </TableCell>
                 </TableRow>
-              ) : reservations.length > 0 ? (
-                reservations.map((reservation) => {
+              ) : filteredBookings.length > 0 ? (
+                filteredBookings.map((reservation) => {
                   const sale = sales.find(s => s.id === reservation.sale_id);
                   return (
                     <TableRow key={reservation.id}>
