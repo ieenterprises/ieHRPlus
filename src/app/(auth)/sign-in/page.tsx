@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { auth } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { ArrowLeft } from "lucide-react";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -65,34 +66,42 @@ export default function SignInPage() {
 
 
   return (
-    <Card className="w-full max-w-sm">
-      <form onSubmit={handlePasswordSignIn}>
-        <CardHeader>
-          <CardTitle className="text-2xl">Sign In</CardTitle>
-          <CardDescription>
-            Sign in to your business account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" placeholder="owner@example.com" required defaultValue="owner@example.com" />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" name="password" type="password" required defaultValue="password" />
-          </div>
-        </CardContent>
-        <CardFooter className="flex-col gap-4">
-          <Button className="w-full" type="submit">Sign In</Button>
-          <div className="text-center text-sm">
-              Don&apos;t have an account?{" "}
-              <Link href="/sign-up" className="underline">
-                  Sign up
-              </Link>
-          </div>
-        </CardFooter>
-      </form>
-    </Card>
+    <div className="relative">
+      <Button variant="outline" size="sm" className="absolute -top-16 left-0" asChild>
+        <Link href="/">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Home
+        </Link>
+      </Button>
+      <Card className="w-full max-w-sm">
+        <form onSubmit={handlePasswordSignIn}>
+          <CardHeader>
+            <CardTitle className="text-2xl">Sign In</CardTitle>
+            <CardDescription>
+              Sign in to your business account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" name="email" type="email" placeholder="owner@example.com" required defaultValue="owner@example.com" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" name="password" type="password" required defaultValue="password" />
+            </div>
+          </CardContent>
+          <CardFooter className="flex-col gap-4">
+            <Button className="w-full" type="submit">Sign In</Button>
+            <div className="text-center text-sm">
+                Don&apos;t have an account?{" "}
+                <Link href="/sign-up" className="underline">
+                    Sign up
+                </Link>
+            </div>
+          </CardFooter>
+        </form>
+      </Card>
+    </div>
   );
 }
