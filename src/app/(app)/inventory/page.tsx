@@ -130,7 +130,7 @@ export default function InventoryPage() {
     setEditingValue(product[field] as string | number);
   };
   
-  const handleInlineEditSave = () => {
+  const handleInlineEditSave = async () => {
     if (!editingCell || !canManageInventory) return;
   
     const { productId, field } = editingCell;
@@ -142,9 +142,9 @@ export default function InventoryPage() {
       : editingValue;
   
     if (originalProduct[field] !== updatedValue) {
-      setProducts(prevProducts =>
+      await setProducts(prevProducts =>
         prevProducts.map(p =>
-          p.id === productId ? { ...p, [field]: updatedValue } : p
+          p.id === productId ? { ...p, [field]: updatedValue } as Product : p
         )
       );
       toast({ title: `Product updated`, description: `Set ${field} to ${editingValue}.` });
@@ -176,7 +176,7 @@ export default function InventoryPage() {
   
   const handleDeleteProduct = async (productId: string) => {
     try {
-      setProducts(products.filter(p => p.id !== productId));
+      await setProducts(products.filter(p => p.id !== productId));
       toast({ title: "Product Deleted", description: "The product has been removed from inventory." });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -217,11 +217,11 @@ export default function InventoryPage() {
     
     try {
       if ('id' in editingProduct && editingProduct.id) {
-        setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...productData } as Product : p));
+        await setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...productData } as Product : p));
         toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
       } else {
         const newProduct = { ...productData, id: `prod_${new Date().getTime()}`, created_at: new Date().toISOString() };
-        setProducts([newProduct, ...products]);
+        await setProducts([newProduct as Product, ...products]);
         toast({ title: "Product Added", description: `${productData.name} has been added to inventory.` });
       }
       handleProductDialogClose(false);
@@ -251,7 +251,7 @@ export default function InventoryPage() {
       return;
     }
     try {
-      setCategories(categories.filter((c) => c.id !== categoryId));
+      await setCategories(categories.filter((c) => c.id !== categoryId));
       toast({ title: "Category Deleted" });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -289,11 +289,11 @@ export default function InventoryPage() {
 
     try {
       if ('id' in editingCategory && editingCategory.id) {
-        setCategories(categories.map((c) => c.id === editingCategory.id ? ({ ...c, ...categoryData } as Category) : c));
+        await setCategories(categories.map((c) => c.id === editingCategory.id ? ({ ...c, ...categoryData } as Category) : c));
         toast({ title: "Category Updated" });
       } else {
         const newCategory = { ...categoryData, id: `cat_${new Date().getTime()}`, created_at: new Date().toISOString() };
-        setCategories([...categories, newCategory]);
+        await setCategories([...categories, newCategory as Category]);
         toast({ title: "Category Added" });
       }
       handleCategoryDialogClose(false);
@@ -346,7 +346,7 @@ export default function InventoryPage() {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
+      complete: async (results) => {
         const importedData = results.data as any[];
         let newProducts: Product[] = [];
         let errors = 0;
@@ -372,8 +372,9 @@ export default function InventoryPage() {
             status: 'Available',
           });
         });
+        
+        await setProducts(prev => [...prev, ...newProducts]);
 
-        setProducts(prev => [...prev, ...newProducts]);
         toast({
           title: "Import Complete",
           description: `${newProducts.length} products imported successfully. ${errors > 0 ? `${errors} rows failed.` : ''}`,

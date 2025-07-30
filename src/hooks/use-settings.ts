@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
@@ -48,20 +47,22 @@ type SettingsContextType = {
     
     // Data setters (now write to DB)
     setFeatureSettings: (value: React.SetStateAction<FeatureSettings>) => void;
-    setStores: React.Dispatch<React.SetStateAction<StoreType[]>>; // Keep simple setters for complex page logic
-    setPosDevices: React.Dispatch<React.SetStateAction<PosDeviceType[]>>;
-    setPrinters: React.Dispatch<React.SetStateAction<PrinterType[]>>;
+    addStore: (store: Omit<StoreType, 'id'>) => Promise<void>;
+    updateStore: (id: string, store: Partial<StoreType>) => Promise<void>;
+    deleteStore: (id: string) => Promise<void>;
+    addPosDevice: (device: Omit<PosDeviceType, 'id'>) => Promise<void>;
+    updatePosDevice: (id: string, device: Partial<PosDeviceType>) => Promise<void>;
+    deletePosDevice: (id: string) => Promise<void>;
+    addPrinter: (printer: Omit<PrinterType, 'id'>) => Promise<void>;
+    updatePrinter: (id: string, printer: Partial<PrinterType>) => Promise<void>;
+    deletePrinter: (id: string) => Promise<void>;
     setReceiptSettings: (value: React.SetStateAction<Record<string, ReceiptSettings>>) => void;
-    setPaymentTypes: React.Dispatch<React.SetStateAction<PaymentType[]>>;
-    setTaxes: React.Dispatch<React.SetStateAction<Tax[]>>;
-    setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
-    setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
-    setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
-    setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
-    setDebts: React.Dispatch<React.SetStateAction<Debt[]>>;
-    setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
-    setVoidedLogs: React.Dispatch<React.SetStateAction<VoidedLog[]>>;
-    setOpenTickets: React.Dispatch<React.SetStateAction<OpenTicket[]>>;
+    addPaymentType: (pt: Omit<PaymentType, 'id'>) => Promise<void>;
+    updatePaymentType: (id: string, pt: Partial<PaymentType>) => Promise<void>;
+    deletePaymentType: (id: string) => Promise<void>;
+    addTax: (tax: Omit<Tax, 'id'>) => Promise<void>;
+    updateTax: (id: string, tax: Partial<Tax>) => Promise<void>;
+    deleteTax: (id: string) => Promise<void>;
     
     // Auth and session state
     loggedInUser: User | null;
@@ -81,6 +82,16 @@ type SettingsContextType = {
     setDebtToSettle: React.Dispatch<React.SetStateAction<Sale | null>>;
     printableData: any | null;
     setPrintableData: React.Dispatch<React.SetStateAction<any | null>>;
+
+    // Direct state setters for complex pages
+    setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
+    setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
+    setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
+    setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
+    setDebts: React.Dispatch<React.SetStateAction<Debt[]>>;
+    setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
+    setOpenTickets: React.Dispatch<React.SetStateAction<OpenTicket[]>>;
+    setVoidedLogs: React.Dispatch<React.SetStateAction<VoidedLog[]>>;
 
 
     // Voiding and ticket logic
@@ -124,14 +135,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [taxes, setTaxes] = useState<Tax[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [roles, setRoles] = useState<Role[]>([]);
-    const [products, setProducts] = useState<Product[]>([]);
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [customers, setCustomers] = useState<Customer[]>([]);
-    const [sales, setSales] = useState<Sale[]>([]);
-    const [debts, setDebts] = useState<Debt[]>([]);
-    const [reservations, setReservations] = useState<Reservation[]>([]);
-    const [voidedLogs, setVoidedLogs] = useState<VoidedLog[]>([]);
-    const [openTickets, setOpenTickets] = useState<OpenTicket[]>([]);
+    const [products, setProductsState] = useState<Product[]>([]);
+    const [categories, setCategoriesState] = useState<Category[]>([]);
+    const [customers, setCustomersState] = useState<Customer[]>([]);
+    const [sales, setSalesState] = useState<Sale[]>([]);
+    const [debts, setDebtsState] = useState<Debt[]>([]);
+    const [reservations, setReservationsState] = useState<Reservation[]>([]);
+    const [voidedLogs, setVoidedLogsState] = useState<VoidedLog[]>([]);
+    const [openTickets, setOpenTicketsState] = useState<OpenTicket[]>([]);
     const [currency, setCurrencyState] = useState<string>('$');
     
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
@@ -189,14 +200,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                     const collections = {
                         users: setUsers,
                         roles: setRoles,
-                        categories: setCategories,
-                        products: setProducts,
-                        customers: setCustomers,
-                        sales: setSales,
-                        debts: setDebts,
-                        reservations: setReservations,
-                        open_tickets: setOpenTickets,
-                        voided_logs: setVoidedLogs,
+                        categories: setCategoriesState,
+                        products: setProductsState,
+                        customers: setCustomersState,
+                        sales: setSalesState,
+                        debts: setDebtsState,
+                        reservations: setReservationsState,
+                        open_tickets: setOpenTicketsState,
+                        voided_logs: setVoidedLogsState,
                         stores: setStores,
                         pos_devices: setPosDevices,
                         printers: setPrinters,
@@ -232,9 +243,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all local data on logout
-                setUsers([]); setRoles([]); setCategories([]); setProducts([]);
-                setCustomers([]); setSales([]); setDebts([]); setReservations([]);
-                setOpenTickets([]); setVoidedLogs([]); setStores([]); setPosDevices([]);
+                setUsers([]); setRoles([]); setCategoriesState([]); setProductsState([]);
+                setCustomersState([]); setSalesState([]); setDebtsState([]); setReservationsState([]);
+                setOpenTicketsState([]); setVoidedLogsState([]); setStores([]); setPosDevices([]);
                 setPrinters([]); setTaxes([]);
             }
         });
@@ -286,6 +297,199 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const setReceiptSettings = createSetterWithDbSync(receiptSettings, setReceiptSettingsState, 'receiptSettings');
     const setCurrency = createSetterWithDbSync(currency, setCurrencyState, 'currency');
     
+    // Generic CRUD Functions
+    const addDocFactory = (collectionName: string) => async (data: any) => { await addDoc(collection(db, collectionName), data); };
+    const updateDocFactory = (collectionName: string) => async (id: string, data: any) => { await updateDoc(doc(db, collectionName, id), data); };
+    const deleteDocFactory = (collectionName: string) => async (id: string) => { await deleteDoc(doc(db, collectionName, id)); };
+
+    const addStore = addDocFactory('stores');
+    const updateStore = updateDocFactory('stores');
+    const deleteStore = deleteDocFactory('stores');
+
+    const addPosDevice = addDocFactory('pos_devices');
+    const updatePosDevice = updateDocFactory('pos_devices');
+    const deletePosDevice = deleteDocFactory('pos_devices');
+
+    const addPrinter = addDocFactory('printers');
+    const updatePrinter = updateDocFactory('printers');
+    const deletePrinter = deleteDocFactory('printers');
+    
+    const addPaymentType = addDocFactory('payment_types');
+    const updatePaymentType = updateDocFactory('payment_types');
+    const deletePaymentType = deleteDocFactory('payment_types');
+
+    const addTax = addDocFactory('taxes');
+    const updateTax = updateDocFactory('taxes');
+    const deleteTax = deleteDocFactory('taxes');
+
+    const setProducts = async (value: React.SetStateAction<Product[]>) => {
+        const newProducts = typeof value === 'function' ? value(products) : value;
+        const oldProductIds = new Set(products.map(p => p.id));
+        const newProductIds = new Set(newProducts.map(p => p.id));
+        
+        const batch = writeBatch(db);
+
+        for (const product of newProducts) {
+            const productRef = doc(db, 'products', product.id);
+            if (!oldProductIds.has(product.id) || JSON.stringify(products.find(p=>p.id === product.id)) !== JSON.stringify(product)) {
+                 batch.set(productRef, product);
+            }
+        }
+
+        for (const oldProduct of products) {
+            if (!newProductIds.has(oldProduct.id)) {
+                batch.delete(doc(db, 'products', oldProduct.id));
+            }
+        }
+        await batch.commit();
+        setProductsState(newProducts);
+    };
+
+    const setCategories = async (value: React.SetStateAction<Category[]>) => {
+        const newItems = typeof value === 'function' ? value(categories) : value;
+        const oldIds = new Set(categories.map(c => c.id));
+        const newIds = new Set(newItems.map(c => c.id));
+        const batch = writeBatch(db);
+        newItems.forEach(item => {
+            const ref = doc(db, 'categories', item.id);
+            if (!oldIds.has(item.id) || JSON.stringify(categories.find(c=>c.id === item.id)) !== JSON.stringify(item)) {
+                batch.set(ref, item);
+            }
+        });
+        categories.forEach(item => {
+            if (!newIds.has(item.id)) {
+                batch.delete(doc(db, 'categories', item.id));
+            }
+        });
+        await batch.commit();
+        setCategoriesState(newItems);
+    };
+
+    const setCustomers = async (value: React.SetStateAction<Customer[]>) => {
+        const newItems = typeof value === 'function' ? value(customers) : value;
+        const oldIds = new Set(customers.map(c => c.id));
+        const newIds = new Set(newItems.map(c => c.id));
+        const batch = writeBatch(db);
+        newItems.forEach(item => {
+            const ref = doc(db, 'customers', item.id);
+             if (!oldIds.has(item.id) || JSON.stringify(customers.find(c=>c.id === item.id)) !== JSON.stringify(item)) {
+                batch.set(ref, item);
+            }
+        });
+        customers.forEach(item => {
+            if (!newIds.has(item.id)) {
+                batch.delete(doc(db, 'customers', item.id));
+            }
+        });
+        await batch.commit();
+        setCustomersState(newItems);
+    };
+
+    const setSales = async (value: React.SetStateAction<Sale[]>) => {
+        const newItems = typeof value === 'function' ? value(sales) : value;
+        const oldIds = new Set(sales.map(s => s.id));
+        const newIds = new Set(newItems.map(s => s.id));
+        const batch = writeBatch(db);
+        newItems.forEach(item => {
+             const { customers, users, pos_devices, ...saleData } = item;
+            const ref = doc(db, 'sales', item.id);
+             if (!oldIds.has(item.id) || JSON.stringify(sales.find(c=>c.id === item.id)) !== JSON.stringify(item)) {
+                batch.set(ref, saleData);
+            }
+        });
+        sales.forEach(item => {
+            if (!newIds.has(item.id)) {
+                batch.delete(doc(db, 'sales', item.id));
+            }
+        });
+        await batch.commit();
+        setSalesState(newItems);
+    };
+
+    const setDebts = async (value: React.SetStateAction<Debt[]>) => {
+        const newItems = typeof value === 'function' ? value(debts) : value;
+        const oldIds = new Set(debts.map(d => d.id));
+        const newIds = new Set(newItems.map(d => d.id));
+        const batch = writeBatch(db);
+        newItems.forEach(item => {
+            const { sales, customers, ...debtData } = item;
+            const ref = doc(db, 'debts', item.id);
+            if (!oldIds.has(item.id) || JSON.stringify(debts.find(c=>c.id === item.id)) !== JSON.stringify(item)) {
+                batch.set(ref, debtData);
+            }
+        });
+        debts.forEach(item => {
+            if (!newIds.has(item.id)) {
+                batch.delete(doc(db, 'debts', item.id));
+            }
+        });
+        await batch.commit();
+        setDebtsState(newItems);
+    };
+
+    const setReservations = async (value: React.SetStateAction<Reservation[]>) => {
+        const newItems = typeof value === 'function' ? value(reservations) : value;
+        const oldIds = new Set(reservations.map(r => r.id));
+        const newIds = new Set(newItems.map(r => r.id));
+        const batch = writeBatch(db);
+        newItems.forEach(item => {
+            const { products, ...resData } = item;
+            const ref = doc(db, 'reservations', item.id);
+            if (!oldIds.has(item.id) || JSON.stringify(reservations.find(c=>c.id === item.id)) !== JSON.stringify(item)) {
+                batch.set(ref, resData);
+            }
+        });
+        reservations.forEach(item => {
+            if (!newIds.has(item.id)) {
+                batch.delete(doc(db, 'reservations', item.id));
+            }
+        });
+        await batch.commit();
+        setReservationsState(newItems);
+    };
+
+    const setOpenTickets = async (value: React.SetStateAction<OpenTicket[]>) => {
+        const newItems = typeof value === 'function' ? value(openTickets) : value;
+        const oldIds = new Set(openTickets.map(t => t.id));
+        const newIds = new Set(newItems.map(t => t.id));
+        const batch = writeBatch(db);
+        newItems.forEach(item => {
+            const { users, customers, ...ticketData } = item;
+            const ref = doc(db, 'open_tickets', item.id);
+            if (!oldIds.has(item.id) || JSON.stringify(openTickets.find(c=>c.id === item.id)) !== JSON.stringify(item)) {
+                batch.set(ref, ticketData);
+            }
+        });
+        openTickets.forEach(item => {
+            if (!newIds.has(item.id)) {
+                batch.delete(doc(db, 'open_tickets', item.id));
+            }
+        });
+        await batch.commit();
+        setOpenTicketsState(newItems);
+    };
+
+    const setVoidedLogs = async (value: React.SetStateAction<VoidedLog[]>) => {
+        const newItems = typeof value === 'function' ? value(voidedLogs) : value;
+        const oldIds = new Set(voidedLogs.map(v => v.id));
+        const newIds = new Set(newItems.map(v => v.id));
+        const batch = writeBatch(db);
+        newItems.forEach(item => {
+            const { users, ...logData } = item;
+            const ref = doc(db, 'voided_logs', item.id);
+             if (!oldIds.has(item.id) || JSON.stringify(voidedLogs.find(c=>c.id === item.id)) !== JSON.stringify(item)) {
+                batch.set(ref, logData);
+            }
+        });
+        voidedLogs.forEach(item => {
+            if (!newIds.has(item.id)) {
+                batch.delete(doc(db, 'voided_logs', item.id));
+            }
+        });
+        await batch.commit();
+        setVoidedLogsState(newItems);
+    };
+
     const voidSale = async (saleId: string, voidedByEmployeeId: string) => {
         const saleToVoid = sales.find(s => s.id === saleId);
         if (!saleToVoid) return;
@@ -294,11 +498,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         // 1. Add to voided logs
         const voidedLogRef = doc(collection(db, 'voided_logs'));
+        const { customers, users, pos_devices, ...saleData } = saleToVoid;
         batch.set(voidedLogRef, {
             type: 'receipt',
             voided_by_employee_id: voidedByEmployeeId,
             created_at: new Date().toISOString(),
-            data: saleToVoid,
+            data: saleData,
         });
 
         // 2. Delete original sale
@@ -335,16 +540,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const batch = writeBatch(db);
         // 1. Add to voided logs
         const voidedLogRef = doc(collection(db, 'voided_logs'));
+        const { users, customers, ...ticketData } = ticketToVoid;
         batch.set(voidedLogRef, {
             type: 'ticket',
             voided_by_employee_id: voidedByEmployeeId,
             created_at: new Date().toISOString(),
-            data: ticketToVoid,
+            data: ticketData,
         });
         // 2. Delete original ticket
         batch.delete(doc(db, 'open_tickets', ticketId));
         await batch.commit();
-        setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
     };
 
     const saveTicket = async (ticketData: any) => {
@@ -360,17 +565,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
     
     const deleteTicket = async (ticketId: string) => {
-        await deleteDoc(doc(db, 'open_tickets', ticketId));
+        if (ticketId) {
+            await deleteDoc(doc(db, 'open_tickets', ticketId));
+        }
     };
 
     const value: SettingsContextType = {
         featureSettings, setFeatureSettings,
-        stores, setStores,
-        posDevices, setPosDevices,
-        printers, setPrinters,
+        stores, addStore, updateStore, deleteStore,
+        posDevices, addPosDevice, updatePosDevice, deletePosDevice,
+        printers, addPrinter, updatePrinter, deletePrinter,
         receiptSettings, setReceiptSettings,
-        paymentTypes, setPaymentTypes,
-        taxes, setTaxes,
+        paymentTypes, addPaymentType, updatePaymentType, deletePaymentType,
+        taxes, addTax, updateTax, deleteTax,
         roles,
         users,
         products, setProducts,

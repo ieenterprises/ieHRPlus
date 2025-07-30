@@ -73,43 +73,28 @@ export default function SettingsPage() {
     currency,
     paymentTypes,
     setFeatureSettings,
-    setStores,
-    setPosDevices,
-    setPrinters,
+    addStore,
+    updateStore,
+    deleteStore,
+    addPosDevice,
+    updatePosDevice,
+    deletePosDevice,
+    addPrinter,
+    updatePrinter,
+    deletePrinter,
     setReceiptSettings,
-    setTaxes,
+    addTax,
+    updateTax,
+    deleteTax,
     setCurrency,
-    setPaymentTypes,
+    addPaymentType,
+    updatePaymentType,
+    deletePaymentType,
   } = useSettings();
   
   const [activeSection, setActiveSection] = useState("features");
-  const [initialSettings, setInitialSettings] = useState({});
-
+  
   const { toast } = useToast();
-
-  useEffect(() => {
-    setInitialSettings({
-        featureSettings,
-        stores,
-        posDevices,
-        printers,
-        receiptSettings,
-        taxes,
-        currency,
-        paymentTypes,
-    });
-  }, []); // Capture initial state on mount
-
-  const hasChanges = JSON.stringify({
-    featureSettings,
-    stores,
-    posDevices,
-    printers,
-    receiptSettings,
-    taxes,
-    currency,
-    paymentTypes,
-  }) !== JSON.stringify(initialSettings);
 
   const [isStoreDialogOpen, setIsStoreDialogOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Partial<StoreType> | null>(null);
@@ -140,24 +125,6 @@ export default function SettingsPage() {
   const handleToggle = (id: string, checked: boolean) => {
     setFeatureSettings(prev => ({ ...prev, [id]: checked }));
   };
-
-  const handleSaveChanges = () => {
-    setInitialSettings({ featureSettings, stores, posDevices, printers, receiptSettings, taxes, currency, paymentTypes }); // Update baseline
-    toast({ title: "Settings Saved", description: "Your changes have been successfully saved." });
-  };
-
-  const handleCancelChanges = () => {
-    const s = initialSettings as any;
-    setFeatureSettings(s.featureSettings);
-    setStores(s.stores);
-    setPosDevices(s.posDevices);
-    setPrinters(s.printers);
-    setReceiptSettings(s.receiptSettings);
-    setTaxes(s.taxes);
-    setCurrency(s.currency);
-    setPaymentTypes(s.paymentTypes);
-    toast({ title: "Changes Discarded", description: "Your changes have been discarded." });
-  };
   
   // Store Handlers
   const handleOpenStoreDialog = (store: Partial<StoreType> | null) => {
@@ -170,7 +137,7 @@ export default function SettingsPage() {
           toast({ title: "Cannot Delete Store", description: "This store has POS devices assigned to it.", variant: "destructive" });
           return;
       }
-      setStores(stores.filter(s => s.id !== storeId));
+      deleteStore(storeId);
       toast({ title: "Store Deleted" });
   }
 
@@ -183,11 +150,10 @@ export default function SettingsPage() {
       };
 
       if (editingStore?.id) {
-          setStores(stores.map(s => s.id === editingStore.id ? { ...s, ...storeData } : s));
+          updateStore(editingStore.id, storeData);
           toast({ title: "Store Updated" });
       } else {
-          const newId = `store_${new Date().getTime()}`;
-          setStores([...stores, { id: newId, ...storeData }]);
+          addStore(storeData);
           toast({ title: "Store Added" });
       }
       setIsStoreDialogOpen(false);
@@ -204,7 +170,7 @@ export default function SettingsPage() {
           toast({ title: "Cannot Delete Device", description: "This POS device has printers assigned to it.", variant: "destructive" });
           return;
       }
-      setPosDevices(posDevices.filter(d => d.id !== deviceId));
+      deletePosDevice(deviceId);
       toast({ title: "POS Device Deleted" });
   }
 
@@ -217,10 +183,10 @@ export default function SettingsPage() {
       };
 
       if (editingDevice?.id) {
-          setPosDevices(posDevices.map(d => d.id === editingDevice.id ? { ...d, ...deviceData } : d));
+          updatePosDevice(editingDevice.id, deviceData);
           toast({ title: "POS Device Updated" });
       } else {
-          setPosDevices([...posDevices, { id: `pos_${new Date().getTime()}`, ...deviceData }]);
+          addPosDevice(deviceData);
           toast({ title: "POS Device Added" });
       }
       setIsDeviceDialogOpen(false);
@@ -233,7 +199,7 @@ export default function SettingsPage() {
   }
 
   const handleDeletePrinter = (printerId: string) => {
-      setPrinters(printers.filter(p => p.id !== printerId));
+      deletePrinter(printerId);
       toast({ title: "Printer Deleted" });
   }
 
@@ -248,10 +214,10 @@ export default function SettingsPage() {
       };
 
       if (editingPrinter?.id) {
-          setPrinters(printers.map(p => p.id === editingPrinter.id ? { ...p, ...printerData } : p));
+          updatePrinter(editingPrinter.id, printerData);
           toast({ title: "Printer Updated" });
       } else {
-          setPrinters([...printers, { id: `printer_${new Date().getTime()}`, ...printerData }]);
+          addPrinter(printerData);
           toast({ title: "Printer Added" });
       }
       setIsPrinterDialogOpen(false);
@@ -266,6 +232,7 @@ export default function SettingsPage() {
               [field]: value
           }
       }));
+      toast({title: "Settings Saved", description: "Receipt settings have been updated."});
   }
   
   const handleLogoChange = (storeId: string, field: 'emailedLogo' | 'printedLogo', event: React.ChangeEvent<HTMLInputElement>) => {
@@ -286,7 +253,7 @@ export default function SettingsPage() {
   }
 
   const handleDeleteTax = (taxId: string) => {
-      setTaxes(taxes.filter(t => t.id !== taxId));
+      deleteTax(taxId);
       toast({ title: "Tax Deleted" });
   }
   
@@ -301,10 +268,10 @@ export default function SettingsPage() {
     };
 
     if (editingTax?.id) {
-        setTaxes(taxes.map(t => t.id === editingTax.id ? { ...t, ...taxData } : t));
+        updateTax(editingTax.id, taxData);
         toast({ title: "Tax Updated" });
     } else {
-        setTaxes([...taxes, { id: `tax_${new Date().getTime()}`, ...taxData }]);
+        addTax(taxData);
         toast({ title: "Tax Added" });
     }
     setIsTaxDialogOpen(false);
@@ -317,7 +284,7 @@ export default function SettingsPage() {
   };
 
   const handleDeletePaymentType = (id: string) => {
-    setPaymentTypes(paymentTypes.filter(pt => pt.id !== id));
+    deletePaymentType(id);
     toast({ title: "Payment Type Deleted" });
   };
 
@@ -330,10 +297,10 @@ export default function SettingsPage() {
     };
 
     if (editingPaymentType?.id) {
-      setPaymentTypes(paymentTypes.map(pt => (pt.id === editingPaymentType.id ? { ...pt, ...ptData } : pt)));
+      updatePaymentType(editingPaymentType.id, ptData);
       toast({ title: "Payment Type Updated" });
     } else {
-      setPaymentTypes([...paymentTypes, { id: `pay_${new Date().getTime()}`, ...ptData }]);
+      addPaymentType(ptData);
       toast({ title: "Payment Type Added" });
     }
     setIsPaymentTypeDialogOpen(false);
@@ -351,12 +318,6 @@ export default function SettingsPage() {
           title="Settings"
           description="Configure the features and behavior of your POS system."
         />
-        {hasChanges && (
-            <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={handleCancelChanges}>Cancel</Button>
-                <Button onClick={handleSaveChanges}>Save Changes</Button>
-            </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -775,7 +736,7 @@ export default function SettingsPage() {
                         <CardContent>
                             <div className="max-w-xs space-y-2">
                                 <Label htmlFor="currency">Currency</Label>
-                                <Select value={currency} onValueChange={setCurrency}>
+                                <Select value={currency} onValueChange={(value) => { setCurrency(value); toast({title: "Settings Saved"}); }}>
                                     <SelectTrigger id="currency">
                                         <SelectValue placeholder="Select a currency" />
                                     </SelectTrigger>

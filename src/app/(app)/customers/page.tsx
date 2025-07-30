@@ -86,11 +86,11 @@ export default function CustomersPage() {
 
     try {
       if ('id' in editingCustomer && editingCustomer.id) {
-        setCustomers(customers.map(c => c.id === editingCustomer.id ? { ...c, ...customerData } as Customer : c));
+        await setCustomers(customers.map(c => c.id === editingCustomer.id ? { ...c, ...customerData } as Customer : c));
         toast({ title: "Customer Updated", description: `${customerData.name}'s details have been updated.` });
       } else {
         const newCustomer = { ...customerData, id: `cust_${new Date().getTime()}`, created_at: new Date().toISOString() };
-        setCustomers([newCustomer, ...customers]);
+        await setCustomers([newCustomer as Customer, ...customers]);
         toast({ title: "Customer Added", description: `${customerData.name} has been added.` });
       }
       handleDialogClose(false);
@@ -105,7 +105,7 @@ export default function CustomersPage() {
         return;
       }
     try {
-      setCustomers(customers.filter(c => c.id !== customerId));
+      await setCustomers(customers.filter(c => c.id !== customerId));
       toast({
         title: "Customer Deleted",
         description: "The customer has been removed.",
