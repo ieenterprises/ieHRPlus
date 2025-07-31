@@ -613,7 +613,18 @@ export default function SalesPage() {
     <TooltipProvider>
         <div className="space-y-8">
             <div className="flex items-center justify-between">
-                <PageHeader title="Sales" description="Create a new order for products or room bookings." />
+                <div className="flex items-center gap-4">
+                  <PageHeader title="Sales" description="Create a new order for products or room bookings." />
+                   <div className="relative w-full sm:max-w-xs">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Search products..."
+                            className="pl-9"
+                            value={productSearchTerm}
+                            onChange={(e) => setProductSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
                 <div className="flex items-center gap-2">
                     <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId} disabled={!!debtToSettle}>
                         <SelectTrigger className="w-[200px]">
@@ -644,15 +655,7 @@ export default function SalesPage() {
                             ))}
                         </TabsList>
                     </Tabs>
-                    <div className="relative w-full sm:max-w-xs">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search products..."
-                            className="pl-9"
-                            value={productSearchTerm}
-                            onChange={(e) => setProductSearchTerm(e.target.value)}
-                        />
-                    </div>
+                   
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {filteredProducts.map((product) => (
@@ -754,15 +757,12 @@ export default function SalesPage() {
                         <span>{currency}{total.toFixed(2)}</span>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2">
                          {featureSettings.open_tickets && !debtToSettle && (
-                            <Button variant="secondary" onClick={handleSaveOrder}>
+                            <Button variant="secondary" onClick={handleSaveOrder} className="w-full">
                                 <Save className="mr-2 h-4 w-4" /> Save Order
                             </Button>
                          )}
-                         <Button variant="outline" onClick={handleClearOrder} className={cn(!featureSettings.open_tickets || !!debtToSettle ? "col-span-2" : "")}>
-                            <X className="mr-2 h-4 w-4" /> {debtToSettle ? "Cancel" : "Clear"}
-                        </Button>
                     </div>
                     <div className="flex flex-col gap-2">
                          <Tooltip>
@@ -1011,4 +1011,5 @@ export default function SalesPage() {
 
 
     
+
 
