@@ -5,7 +5,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, createElemen
 import type { OpenTicket, User, Customer, SaleItem } from '@/lib/types';
 import { useToast } from './use-toast';
 import { useSettings } from './use-settings';
-import { collection, doc, addDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, doc, addDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 
 type OpenTicketWithRelations = OpenTicket & { 
@@ -26,7 +26,7 @@ type PosContextType = {
 const PosContext = createContext<PosContextType | undefined>(undefined);
 
 export function PosProvider({ children }: { children: ReactNode }) {
-  const { openTickets: openTicketsData, setOpenTickets: setOpenTicketsData, users, customers } = useSettings();
+  const { openTickets: openTicketsData, setOpenTickets: setOpenTicketsData, users, customers, loggedInUser } = useSettings();
   const [openTickets, setOpenTickets] = useState<OpenTicketWithRelations[]>([]);
   const [reservationMode, setReservationMode] = useState(false);
   const [ticketToLoad, setTicketToLoad] = useState<OpenTicket | null>(null);
@@ -43,13 +43,20 @@ export function PosProvider({ children }: { children: ReactNode }) {
 
   const saveTicket = async (ticketData: Partial<OpenTicket>): Promise<OpenTicket | null> => {
       try {
+          if (!loggedInUser?.businessId) {
+              throw new Error("Business ID is missing.");
+          }
+          const dataToSave = {
+              ...ticketData,
+              businessId: loggedInUser.businessId,
+          };
           if (ticketData.id) {
               const ticketRef = doc(db, 'open_tickets', ticketData.id);
-              await updateDoc(ticketRef, ticketData);
+              await updateDoc(ticketRef, dataToSave);
               return { ...ticketData, id: ticketData.id } as OpenTicket;
           } else {
               const newDocRef = await addDoc(collection(db, 'open_tickets'), {
-                  ...ticketData,
+                  ...dataToSave,
                   created_at: new Date().toISOString(),
               });
               return { ...ticketData, id: newDocRef.id, created_at: new Date().toISOString() } as OpenTicket;

@@ -453,6 +453,7 @@ export default function SalesPage() {
               customers: customers.find(c => c.id === (creditInfo ? creditInfo.customerId : selectedCustomerId)) || null,
               users: { name: loggedInUser?.name || null },
               pos_devices: selectedDevice ? { store_id: selectedDevice.store_id } : null,
+              businessId: loggedInUser?.businessId || '',
           };
           setSales(prev => [...prev, newSale]);
         }
@@ -467,6 +468,7 @@ export default function SalesPage() {
               created_at: new Date().toISOString(),
               sales: { order_number: newSale.order_number },
               customers: { name: customers.find(c => c.id === creditInfo.customerId)?.name || null },
+              businessId: loggedInUser?.businessId || '',
             };
             setDebts(prev => [...prev, newDebt]);
         }
@@ -570,6 +572,10 @@ export default function SalesPage() {
       toast({ title: "Empty Order", description: "Cannot save an empty order.", variant: "destructive" });
       return;
     }
+    if (!loggedInUser?.businessId) {
+      toast({ title: "Error", description: "Cannot determine business for this ticket.", variant: "destructive" });
+      return;
+    }
   
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
@@ -580,6 +586,7 @@ export default function SalesPage() {
             employee_id: loggedInUser?.id ?? null,
             customer_id: selectedCustomerId,
             order_number: Math.floor(Math.random() * 100000),
+            businessId: loggedInUser.businessId,
         };
         
         // If it's an update to a loaded ticket, create a new one instead of updating
@@ -1004,3 +1011,4 @@ export default function SalesPage() {
 
 
     
+
