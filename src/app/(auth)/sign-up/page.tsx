@@ -18,7 +18,7 @@ import Link from "next/link";
 import { useSettings } from "@/hooks/use-settings";
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, writeBatch, collection, getDocs, query, where, setDoc } from "firebase/firestore";
+import { doc, writeBatch, collection, getDocs, query, where, setDoc, addDoc } from "firebase/firestore";
 import { posPermissions, backOfficePermissions, AnyPermission } from "@/lib/permissions";
 import { MOCK_INITIAL_ROLES } from "@/hooks/use-settings";
 import { seedDatabaseWithMockData } from "@/lib/mock-data";
@@ -44,30 +44,21 @@ export default function SignUpPage() {
 
         const batch = writeBatch(db);
 
-        // 2. Check if roles exist. If not, this is a fresh setup.
-        const rolesCollectionRef = collection(db, "roles");
-        const rolesSnapshot = await getDocs(rolesCollectionRef);
-        
-        let isFirstUser = rolesSnapshot.empty;
+        // 2. Create a new business document
+        const businessDocRef = doc(collection(db, "businesses"));
+        batch.set(businessDocRef, { name: businessName, owner_id: user.uid, created_at: new Date().toISOString() });
+        const businessId = businessDocRef.id;
 
-        if (isFirstUser) {
-            // A. Seed roles
-            MOCK_INITIAL_ROLES.forEach(role => {
-                const roleDocRef = doc(rolesCollectionRef, role.id);
-                batch.set(roleDocRef, role);
-            });
-            
-            // B. Seed the rest of the database with mock data
-            seedDatabaseWithMockData(batch, user.uid, businessName);
-        }
+        // 3. Seed initial data for this new business
+        seedDatabaseWithMockData(batch, businessId, user.uid);
         
-        // 3. Define all permissions for the Owner
+        // 4. Define all permissions for the Owner
         const ownerRolePermissions: AnyPermission[] = [
           ...Object.keys(posPermissions) as (keyof typeof posPermissions)[],
           ...Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[]
         ];
 
-        // 4. Prepare user profile for Firestore
+        // 5. Prepare user profile for Firestore
         const newUserProfile = {
           name: ownerName,
           email: email,
@@ -75,13 +66,14 @@ export default function SignUpPage() {
           avatar_url: `https://placehold.co/100x100.png?text=${ownerName.charAt(0)}`,
           permissions: ownerRolePermissions,
           created_at: new Date().toISOString(),
+          businessId: businessId, // Link user to the business
         };
 
-        // 5. Add user profile to 'users' collection, using the auth UID as the document ID
+        // 6. Add user profile to 'users' collection, using the auth UID as the document ID
         const userDocRef = doc(db, "users", user.uid);
         batch.set(userDocRef, newUserProfile);
         
-        // 6. Commit all database writes at once
+        // 7. Commit all database writes at once
         await batch.commit();
         
         toast({

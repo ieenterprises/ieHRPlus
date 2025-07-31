@@ -3,6 +3,7 @@ import { WriteBatch, doc, collection } from "firebase/firestore";
 import { db } from "./firebase";
 import { addDays, subDays } from "date-fns";
 import { SaleItem } from "./types";
+import { MOCK_INITIAL_ROLES } from "@/hooks/use-settings";
 
 // --- MOCK DATA GENERATION ---
 
@@ -189,30 +190,32 @@ const generateDynamicMockData = (ownerId: string, businessName: string) => {
 };
 
 // 3. The main seeding function
-export const seedDatabaseWithMockData = (batch: WriteBatch, ownerId: string, businessName: string) => {
+export const seedDatabaseWithMockData = (batch: WriteBatch, businessId: string, ownerId: string) => {
+  const addWithBusinessId = (collectionName: string, data: any) => {
+    const item = { ...data, businessId };
+    batch.set(doc(db, collectionName, item.id), item);
+  };
     
   // --- Add static data to batch ---
-  MOCK_CATEGORIES.forEach(item => batch.set(doc(db, "categories", item.id), item));
-  MOCK_PRODUCTS.forEach(item => batch.set(doc(db, "products", item.id), item));
-  MOCK_CUSTOMERS.forEach(item => batch.set(doc(db, "customers", item.id), item));
-  MOCK_STORES.forEach(item => batch.set(doc(db, "stores", item.id), item));
-  MOCK_POS_DEVICES.forEach(item => batch.set(doc(db, "pos_devices", item.id), item));
-  MOCK_PRINTERS.forEach(item => batch.set(doc(db, "printers", item.id), item));
-  MOCK_TAXES.forEach(item => batch.set(doc(db, "taxes", item.id), item));
-  MOCK_PAYMENT_TYPES.forEach(item => batch.set(doc(db, "payment_types", item.id), item));
-
+  MOCK_INITIAL_ROLES.forEach(item => addWithBusinessId("roles", item));
+  MOCK_CATEGORIES.forEach(item => addWithBusinessId("categories", item));
+  MOCK_PRODUCTS.forEach(item => addWithBusinessId("products", item));
+  MOCK_CUSTOMERS.forEach(item => addWithBusinessId("customers", item));
+  MOCK_STORES.forEach(item => addWithBusinessId("stores", item));
+  MOCK_POS_DEVICES.forEach(item => addWithBusinessId("pos_devices", item));
+  MOCK_PRINTERS.forEach(item => addWithBusinessId("printers", item));
+  MOCK_TAXES.forEach(item => addWithBusinessId("taxes", item));
+  MOCK_PAYMENT_TYPES.forEach(item => addWithBusinessId("payment_types", item));
 
   // --- Generate and add dynamic data to batch ---
-  const { sales, debts, reservations, settings, openTickets, voidedLogs } = generateDynamicMockData(ownerId, businessName);
+  const { sales, debts, reservations, settings, openTickets, voidedLogs } = generateDynamicMockData(ownerId, "Your Business");
 
-  sales.forEach(item => batch.set(doc(db, "sales", item.id), item));
-  debts.forEach(item => batch.set(doc(db, "debts", item.id), item));
-  reservations.forEach(item => batch.set(doc(db, "reservations", item.id), item));
-  openTickets.forEach(item => batch.set(doc(db, "open_tickets", item.id), item));
-  voidedLogs.forEach(item => batch.set(doc(db, "voided_logs", item.id), item));
+  sales.forEach(item => addWithBusinessId("sales", item));
+  debts.forEach(item => addWithBusinessId("debts", item));
+  reservations.forEach(item => addWithBusinessId("reservations", item));
+  openTickets.forEach(item => addWithBusinessId("open_tickets", item));
+  voidedLogs.forEach(item => addWithBusinessId("voided_logs", item));
 
   // --- Add settings document ---
-  batch.set(doc(db, "settings", "global"), settings);
-
-  // Note: The Owner user is added separately in the sign-up flow to ensure it's part of the same transaction
+  batch.set(doc(db, "settings", businessId), settings);
 };

@@ -80,7 +80,7 @@ const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof ty
 const systemRoles = ["Owner"];
 
 export default function TeamPage() {
-  const { users, setUsers, roles, setRoles, getPermissionsForRole } = useSettings();
+  const { users, roles, getPermissionsForRole, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
   
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -95,8 +95,6 @@ export default function TeamPage() {
   const [roleSearchTerm, setRoleSearchTerm] = useState("");
 
   const { toast } = useToast();
-  
-  const ownerUser = users.find(u => u.role === "Owner");
 
   const filteredUsers = useMemo(() => {
     if (!userSearchTerm) return users;
@@ -143,7 +141,7 @@ export default function TeamPage() {
 
   const handleSaveUser = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!editingUser) return;
+    if (!editingUser || !loggedInUser?.businessId) return;
   
     const formData = new FormData(event.currentTarget);
     const newPassword = formData.get("password") as string;
@@ -155,6 +153,7 @@ export default function TeamPage() {
       role: roleName,
       permissions: getPermissionsForRole(roleName),
       avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
+      businessId: loggedInUser.businessId, // Assign to the owner's business
     };
   
     try {
@@ -177,28 +176,22 @@ export default function TeamPage() {
                 created_at: new Date().toISOString(),
             });
 
-            if (ownerUser && ownerUser.email) {
-                const ownerPassword = prompt(`To finalize user creation, please re-enter your password for ${ownerUser.email}:`);
+            // Re-sign in the owner to refresh their token and avoid session interruption
+            if (loggedInUser && loggedInUser.email) {
+                const ownerPassword = prompt(`To finalize, please re-enter your password:`);
                 if (ownerPassword) {
                     try {
-                        await signInWithEmailAndPassword(auth, ownerUser.email, ownerPassword);
+                        await signInWithEmailAndPassword(auth, loggedInUser.email, ownerPassword);
                     } catch (reauthError) {
-                        toast({
+                         toast({
                             title: "Session Warning",
-                            description: "Could not re-authenticate as owner after creating user. You may need to sign in again.",
+                            description: "Could not re-authenticate. You may need to sign in again.",
                             variant: "destructive",
                         });
                     }
-                } else {
-                    toast({
-                        title: "Re-authentication Cancelled",
-                        description: "New user was created, but your session might be interrupted. Please sign in again if you experience issues.",
-                        variant: "destructive",
-                    });
                 }
             }
-  
-            toast({ title: "User Created", description: `User ${userData.name} has been created and can now sign in.` });
+            toast({ title: "User Created", description: `User ${userData.name} has been created.` });
         }
         handleUserDialogClose(false);
     } catch(error: any) {
@@ -238,12 +231,13 @@ export default function TeamPage() {
   
   const handleSaveRole = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!editingRole) return;
+    if (!editingRole || !loggedInUser?.businessId) return;
     const formData = new FormData(event.currentTarget);
     const roleName = formData.get("name") as string;
     const roleData = {
       name: roleName,
       permissions: selectedRolePermissions,
+      businessId: loggedInUser.businessId,
     };
     
     try {
@@ -252,7 +246,7 @@ export default function TeamPage() {
           const roleDocRef = doc(db, 'roles', editingRole.id);
           batch.update(roleDocRef, roleData);
           
-          const usersQuery = query(collection(db, 'users'), where('role', '==', editingRole.name));
+          const usersQuery = query(collection(db, 'users'), where('role', '==', editingRole.name), where('businessId', '==', loggedInUser.businessId));
           const usersSnapshot = await getDocs(usersQuery);
           usersSnapshot.forEach(userDoc => {
               batch.update(doc(db, 'users', userDoc.id), { permissions: selectedRolePermissions });
@@ -526,5 +520,3 @@ export default function TeamPage() {
     </div>
   );
 }
-
-    

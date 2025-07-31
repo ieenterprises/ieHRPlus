@@ -2,36 +2,48 @@
 
 import type { AnyPermission } from "./permissions";
 
-export type Category = Database['public']['Tables']['categories']['Row']
-export type Product = Database['public']['Tables']['products']['Row']
+export type Business = {
+    id: string;
+    name: string;
+    owner_id: string;
+    created_at: string;
+}
+
+export type Category = Database['public']['Tables']['categories']['Row'] & { businessId: string };
+export type Product = Database['public']['Tables']['products']['Row'] & { businessId: string };
 export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions'> & {
     permissions: AnyPermission[];
     password?: string;
+    businessId: string;
 }
-export type Customer = Database['public']['Tables']['customers']['Row']
+export type Customer = Database['public']['Tables']['customers']['Row'] & { businessId: string };
 export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 'payment_methods'> & {
   items: SaleItem[];
   payment_methods: string[];
   customers: Customer | null;
   users: Pick<User, 'name'> | null;
   pos_devices: { store_id: string } | null;
+  businessId: string;
 };
 export type Debt = Database['public']['Tables']['debts']['Row'] & {
   sales: { order_number: number | null } | null;
   customers: { name: string | null } | null;
+  businessId: string;
 };
 export type Reservation = Database['public']['Tables']['reservations']['Row'] & {
   products: { name: string | null; price: number | null; } | null;
   sale_id: string | null;
+  businessId: string;
 };
 export type OpenTicket = Database['public']['Tables']['open_tickets']['Row'] & {
   id: string; // Ensure id is always present
   users: { name: string | null } | null;
   customers: { name: string | null } | null;
+  businessId: string;
 };
-export type StoreType = Database['public']['Tables']['stores']['Row'];
-export type PosDeviceType = Database['public']['Tables']['pos_devices']['Row'];
-export type PaymentType = Database['public']['Tables']['payment_types']['Row'];
+export type StoreType = Database['public']['Tables']['stores']['Row'] & { businessId: string };
+export type PosDeviceType = Database['public']['Tables']['pos_devices']['Row'] & { businessId: string };
+export type PaymentType = Database['public']['Tables']['payment_types']['Row'] & { businessId: string };
 
 export type PrinterType = {
     id: string;
@@ -39,6 +51,7 @@ export type PrinterType = {
     connection_type: 'Network' | 'Bluetooth' | 'Cable';
     ip_address?: string | null;
     pos_device_id: string;
+    businessId: string;
 };
 
 export type ReceiptSettings = {
@@ -57,6 +70,7 @@ export type Tax = {
     rate: number;
     is_default: boolean;
     type: 'Included' | 'Added';
+    businessId: string;
 };
 
 export type SaleItem = {
@@ -70,6 +84,7 @@ export type Role = {
   id: string;
   name: string;
   permissions: AnyPermission[];
+  businessId: string;
 };
 
 export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier" | "Waitress" | "Bar Man";
@@ -92,6 +107,7 @@ export type VoidedLog = {
     reservation_check_out?: string;
   }>;
   users: { name: string | null } | null;
+  businessId: string;
 };
 
 

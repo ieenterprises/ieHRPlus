@@ -188,7 +188,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
             if (user) {
                 const userProfile = await fetchAndSetUser(user.uid);
-                if (userProfile) {
+                if (userProfile && userProfile.businessId) {
+                    const { businessId } = userProfile;
+
                     const collections = {
                         users: setUsersState,
                         roles: setRolesState,
@@ -208,7 +210,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                     };
 
                     Object.entries(collections).forEach(([name, setter]) => {
-                        const q = collection(db, name);
+                        const q = query(collection(db, name), where("businessId", "==", businessId));
                         const unsubscribe = onSnapshot(q, (snapshot) => {
                             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                             setter(data as any);
@@ -218,7 +220,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         subscriptions.push(unsubscribe);
                     });
 
-                    const settingsDocRef = doc(db, 'settings', 'global');
+                    const settingsDocRef = doc(db, 'settings', businessId);
                     const settingsUnsub = onSnapshot(settingsDocRef, (doc) => {
                         if (doc.exists()) {
                             const settingsData = doc.data();
@@ -232,10 +234,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             } else {
                 setLoggedInUser(null);
                 setLoadingUser(false);
-                setUsersState([]); setRolesState([]); setCategoriesState([]); setProductsState([]);
-                setCustomersState([]); setSalesState([]); setDebtsState([]); setReservationsState([]);
-                setOpenTicketsState([]); setVoidedLogsState([]); setStores([]); setPosDevices([]);
-                setPrinters([]); setTaxes([]);
+                // Clear all data on logout
+                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setDebtsState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setStores, setPosDevices, setPrinters, setTaxes, setPaymentTypes];
+                collections.forEach(setter => setter([]));
             }
         });
     
@@ -262,7 +263,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }, [roles]);
 
     const setSettingsDoc = async (data: any) => {
-        const settingsDocRef = doc(db, 'settings', 'global');
+        if (!loggedInUser?.businessId) return;
+        const settingsDocRef = doc(db, 'settings', loggedInUser.businessId);
         await setDoc(settingsDocRef, data, { merge: true });
     };
     
@@ -284,7 +286,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const setReceiptSettings = createSetterWithDbSync(receiptSettings, setReceiptSettingsState, 'receiptSettings');
     const setCurrency = createSetterWithDbSync(currency, setCurrencyState, 'currency');
     
-    const addDocFactory = (collectionName: string) => async (data: any) => { await addDoc(collection(db, collectionName), data); };
+    const addDocFactory = (collectionName: string) => async (data: any) => { 
+        if (!loggedInUser?.businessId) return;
+        await addDoc(collection(db, collectionName), { ...data, businessId: loggedInUser.businessId }); 
+    };
     const updateDocFactory = (collectionName: string) => async (id: string, data: any) => { await updateDoc(doc(db, collectionName, id), data); };
     const deleteDocFactory = (collectionName: string) => async (id: string) => { await deleteDoc(doc(db, collectionName, id)); };
 
@@ -306,6 +311,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     const createBatchSetter = <T extends {id: string}>(collectionName: string, localState: T[], localSetter: React.Dispatch<React.SetStateAction<T[]>>) => 
         async (value: React.SetStateAction<T[]>) => {
+        if (!loggedInUser?.businessId) return;
         const newItems = typeof value === 'function' ? value(localState) : value;
         const oldIds = new Set(localState.map(item => item.id));
         const newIds = new Set(newItems.map(item => item.id));
@@ -315,7 +321,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             const ref = doc(db, collectionName, item.id);
             const oldItem = localState.find(i => i.id === item.id);
             if (!oldIds.has(item.id) || JSON.stringify(oldItem) !== JSON.stringify(item)) {
-                batch.set(ref, item);
+                const itemWithBusinessId = { ...item, businessId: loggedInUser.businessId };
+                batch.set(ref, itemWithBusinessId);
             }
         });
 
@@ -337,6 +344,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const setVoidedLogs = createBatchSetter('voided_logs', voidedLogs, setVoidedLogsState);
 
     const voidSale = async (saleId: string, voidedByEmployeeId: string) => {
+        if (!loggedInUser?.businessId) return;
         const saleToVoid = sales.find(s => s.id === saleId);
         if (!saleToVoid) return;
         const batch = writeBatch(db);
@@ -347,6 +355,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             voided_by_employee_id: voidedByEmployeeId,
             created_at: new Date().toISOString(),
             data: saleData,
+            businessId: loggedInUser.businessId,
         });
         batch.delete(doc(db, 'sales', saleId));
         await batch.commit();
@@ -392,5 +401,3 @@ export function useSettings() {
     }
     return context;
 }
-
-    
