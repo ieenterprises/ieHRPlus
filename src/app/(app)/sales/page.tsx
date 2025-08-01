@@ -131,6 +131,7 @@ export default function SalesPage() {
     setReservations,
     debtToSettle,
     setDebtToSettle,
+    taxes,
   } = useSettings();
   const { openTickets, saveTicket, deleteTicket, ticketToLoad, setTicketToLoad } = usePos();
 
@@ -342,11 +343,18 @@ export default function SalesPage() {
     );
   };
 
-  const subtotal = orderItems.reduce(
-    (acc, item) => acc + item.product.price * item.quantity,
-    0
+  const subtotal = useMemo(() =>
+    orderItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0),
+    [orderItems]
   );
-  const tax = subtotal * 0.08;
+  
+  const defaultTax = useMemo(() => taxes.find(t => t.is_default), [taxes]);
+  
+  const tax = useMemo(() => {
+    if (!defaultTax) return 0;
+    return subtotal * (defaultTax.rate / 100);
+  }, [subtotal, defaultTax]);
+
   const total = subtotal + tax;
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
   const remainingBalance = total - totalPaid;
@@ -426,6 +434,7 @@ export default function SalesPage() {
           const originalSale = sales.find(s => s.id === debtToSettle.id);
           if (!originalSale) {
             toast({ title: "Error", description: "Original sale not found for this debt.", variant: "destructive" });
+            setIsProcessing(false);
             return;
           }
           const settlementPayments = payments.map(p => p.method);
@@ -806,10 +815,12 @@ export default function SalesPage() {
                         <span>Subtotal</span>
                         <span>{currency}{subtotal.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between text-muted-foreground">
-                        <span>Tax (8%)</span>
-                        <span>{currency}{tax.toFixed(2)}</span>
-                        </div>
+                        {tax > 0 && (
+                            <div className="flex justify-between text-muted-foreground">
+                                <span>Tax ({defaultTax?.name} @ {defaultTax?.rate}%)</span>
+                                <span>{currency}{tax.toFixed(2)}</span>
+                            </div>
+                        )}
                         <Separator />
                         <div className="flex justify-between font-bold text-lg">
                         <span>Total</span>
@@ -1112,6 +1123,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 
