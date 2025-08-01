@@ -70,3 +70,12 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .bg-sidebar {
+    @apply bg-background;
+  }
+  .dark .bg-sidebar {
+    @apply bg-card;
+  }
+}
