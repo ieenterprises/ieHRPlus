@@ -840,9 +840,8 @@ export default function SalesPage() {
                         </div>
                 </div>
             </div>
-            <DialogFooter className="grid grid-cols-2 gap-2">
-                <Button variant="secondary" onClick={() => handleConfirmBooking('Confirmed')}>Reserve for Later</Button>
-                <Button onClick={() => handleConfirmBooking('Checked-in')}>Pay & Check-in Now</Button>
+            <DialogFooter>
+                <Button onClick={() => handleConfirmBooking('Checked-in')} className="w-full">Pay & Check-in Now</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
