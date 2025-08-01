@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2, Search } from "lucide-react";
+import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2, Search, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -122,6 +122,7 @@ export default function SalesPage() {
     setProducts,
     categories,
     customers,
+    setCustomers,
     sales,
     setSales,
     debts,
@@ -156,6 +157,8 @@ export default function SalesPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
   const [isCheckingIn, setIsCheckingIn] = useState(false);
+
+  const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false);
 
   const isReservationsEnabled = featureSettings.reservations;
 
@@ -611,6 +614,33 @@ export default function SalesPage() {
   
   const cardTitle = debtToSettle ? "Settle Debt" : activeTicket ? `Editing Order #${activeTicket.order_number}` : "Current Order";
 
+  const handleAddCustomer = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const name = formData.get("name") as string;
+    const email = formData.get("email") as string;
+
+    if (!name || !email) {
+      toast({ title: "Missing fields", description: "Please provide both name and email.", variant: "destructive" });
+      return;
+    }
+    try {
+      const newCustomer = {
+        name,
+        email,
+        phone: null,
+        id: `cust_${new Date().getTime()}`,
+        created_at: new Date().toISOString(),
+      };
+      await setCustomers([newCustomer as Customer, ...customers]);
+      setSelectedCustomerId(newCustomer.id);
+      setIsAddCustomerDialogOpen(false);
+      toast({ title: "Customer Added", description: `${name} has been added and selected.` });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
   return (
     <TooltipProvider>
         <div className="space-y-8">
@@ -628,14 +658,19 @@ export default function SalesPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId} disabled={!!debtToSettle}>
-                        <SelectTrigger className="w-[200px]">
-                            <SelectValue placeholder="Select Customer" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-1">
+                        <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId} disabled={!!debtToSettle}>
+                            <SelectTrigger className="w-[200px]">
+                                <SelectValue placeholder="Select Customer" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <Button variant="outline" size="icon" onClick={() => setIsAddCustomerDialogOpen(true)} className="h-10 w-10 shrink-0">
+                            <PlusCircle className="h-4 w-4" />
+                        </Button>
+                    </div>
                     {featureSettings.open_tickets && !debtToSettle && (
                         <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
                             <Ticket className="mr-2 h-4 w-4" />
@@ -1008,6 +1043,32 @@ export default function SalesPage() {
                 </div>
             </DialogContent>
         </Dialog>
+        <Dialog open={isAddCustomerDialogOpen} onOpenChange={setIsAddCustomerDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+                <form onSubmit={handleAddCustomer}>
+                    <DialogHeader>
+                        <DialogTitle>Add New Customer</DialogTitle>
+                        <DialogDescription>
+                            Quickly add a new customer to the system.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="name">Customer Name</Label>
+                            <Input id="name" name="name" placeholder="John Doe or Table 5" required />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="email">Email</Label>
+                            <Input id="email" name="email" type="email" placeholder="customer@example.com" required />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsAddCustomerDialogOpen(false)}>Cancel</Button>
+                        <Button type="submit">Save Customer</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }
@@ -1020,4 +1081,5 @@ export default function SalesPage() {
 
 
     
+
 
