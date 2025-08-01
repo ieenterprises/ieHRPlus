@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay } from "date-fns";
+import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay, isPast, isEqual } from "date-fns";
 import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff, Trash2, Search, Loader2 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
@@ -132,6 +132,7 @@ export default function ReservationsPage() {
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
+  const [hasExported, setHasExported] = useState(false);
 
   const { toast } = useToast();
 
@@ -297,7 +298,8 @@ export default function ReservationsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast({ title: "Export Complete", description: "Bookings report has been downloaded." });
+    setHasExported(true);
+    toast({ title: "Export Complete", description: "Bookings report has been downloaded. Clear booking is now enabled." });
   };
   
   const handleExportRoomStatus = () => {
@@ -319,6 +321,24 @@ export default function ReservationsPage() {
     document.body.removeChild(link);
     toast({ title: "Export Complete", description: "Room status report has been downloaded." });
   };
+  
+  const handleClearBooking = async (reservation: Reservation) => {
+    if (!reservation.id) return;
+    setIsProcessing(true);
+    try {
+      if (reservation.sale_id) {
+        await voidSale(reservation.sale_id, loggedInUser?.id || 'unknown');
+      } else {
+        await setReservations(prev => prev.filter(r => r.id !== reservation.id));
+      }
+      toast({ title: "Booking Cleared", description: `The booking for ${reservation.guest_name} has been cleared.`});
+    } catch (error: any) {
+      toast({ title: "Error Clearing Booking", description: error.message, variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
 
   if (!featureSettings.reservations) {
     return (
@@ -466,6 +486,12 @@ export default function ReservationsPage() {
                 ) : filteredBookings.length > 0 ? (
                   filteredBookings.map((reservation) => {
                     const sale = sales.find(s => s.id === reservation.sale_id);
+                    const today = startOfDay(new Date());
+                    const checkOutDate = startOfDay(new Date(reservation.check_out));
+                    const isCheckOutDateReached = isEqual(today, checkOutDate) || isPast(checkOutDate);
+                    const isSaleVoided = reservation.sale_id ? !sales.some(s => s.id === reservation.sale_id) : false;
+                    const canClearBooking = hasExported || isCheckOutDateReached || isSaleVoided;
+
                     return (
                       <TableRow key={reservation.id}>
                         <TableCell className="font-medium hidden sm:table-cell">#{sale?.order_number || 'N/A'}</TableCell>
@@ -507,7 +533,11 @@ export default function ReservationsPage() {
                               {hasPermission('CANCEL_RECEIPTS') && (
                                 <>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem disabled>
+                                  <DropdownMenuItem 
+                                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                    onClick={() => handleClearBooking(reservation)}
+                                    disabled={!canClearBooking || isProcessing}
+                                  >
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Clear Booking
                                   </DropdownMenuItem>
@@ -569,3 +599,4 @@ export default function ReservationsPage() {
     </div>
   );
 }
+
