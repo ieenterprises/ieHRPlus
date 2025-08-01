@@ -110,6 +110,12 @@ function ProductCard({
   );
 }
 
+const generateUniqueOrderNumber = () => {
+  const timestamp = new Date().getTime();
+  const randomSuffix = Math.floor(Math.random() * 1000);
+  return parseInt(`${timestamp % 1000000}${randomSuffix}`);
+};
+
 export default function SalesPage() {
   const { 
     featureSettings, 
@@ -455,7 +461,7 @@ export default function SalesPage() {
           // This is a new sale
           newSale = {
               id: newSaleId,
-              order_number: Math.floor(Math.random() * 100000),
+              order_number: generateUniqueOrderNumber(),
               created_at: new Date().toISOString(),
               items: saleItems,
               total: total,
@@ -602,7 +608,7 @@ export default function SalesPage() {
             total: total,
             employee_id: loggedInUser?.id ?? null,
             customer_id: selectedCustomerId,
-            order_number: Math.floor(Math.random() * 100000),
+            order_number: generateUniqueOrderNumber(),
             businessId: loggedInUser.businessId,
         };
         
@@ -1120,6 +1126,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 
