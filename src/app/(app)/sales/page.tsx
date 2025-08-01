@@ -979,19 +979,22 @@ export default function SalesPage() {
                             </TableHeader>
                             <TableBody>
                                 {openTickets.length > 0 ? (
-                                    openTickets.map(ticket => (
-                                        <TableRow key={ticket.id || ticket.order_number}>
-                                            <TableCell className="font-medium">#{ticket.order_number}</TableCell>
-                                            <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
-                                            <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
-                                            <TableCell className="text-right">{currency}{ticket.total.toFixed(2)}</TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket)}>Load</Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
+                                    openTickets.map(ticket => {
+                                        const canLoadTicket = loggedInUser?.id === ticket.employee_id || hasPermission('MANAGE_OPEN_TICKETS');
+                                        return (
+                                            <TableRow key={ticket.id || ticket.order_number}>
+                                                <TableCell className="font-medium">#{ticket.order_number}</TableCell>
+                                                <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
+                                                <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
+                                                <TableCell className="text-right">{currency}{ticket.total.toFixed(2)}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket)} disabled={!canLoadTicket}>Load</Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        )
+                                    })
                                 ) : (
                                     <TableRow>
                                         <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
@@ -1017,3 +1020,4 @@ export default function SalesPage() {
 
 
     
+
