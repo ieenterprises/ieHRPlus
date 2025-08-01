@@ -470,12 +470,6 @@ export default function ReservationsPage() {
                               <Edit className="mr-2 h-4 w-4" />
                               Update Status
                             </DropdownMenuItem>
-                            {hasPermission('CANCEL_RECEIPTS') && reservation.sale_id && (
-                               <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleVoidReservation(reservation)}>
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Move to Void
-                              </DropdownMenuItem>
-                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
