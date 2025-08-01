@@ -675,23 +675,12 @@ export default function SalesPage() {
   return (
     <TooltipProvider>
         <div className="space-y-8">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <PageHeader title="Sales" description="Create a new order for products or room bookings." />
-                   <div className="relative w-full sm:max-w-xs">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search products..."
-                            className="pl-9"
-                            value={productSearchTerm}
-                            onChange={(e) => setProductSearchTerm(e.target.value)}
-                        />
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <PageHeader title="Sales" description="Create a new order." />
+                <div className="w-full sm:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-2 self-start sm:self-center">
+                    <div className="w-full sm:w-auto flex items-center gap-1">
                         <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId} disabled={!!debtToSettle}>
-                            <SelectTrigger className="w-[200px]">
+                            <SelectTrigger className="w-full sm:w-[200px]">
                                 <SelectValue placeholder="Select Customer" />
                             </SelectTrigger>
                             <SelectContent>
@@ -703,7 +692,7 @@ export default function SalesPage() {
                         </Button>
                     </div>
                     {featureSettings.open_tickets && !debtToSettle && (
-                        <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)}>
+                        <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)} className="w-full sm:w-auto">
                             <Ticket className="mr-2 h-4 w-4" />
                             Open Tickets ({openTickets.length})
                         </Button>
@@ -723,7 +712,15 @@ export default function SalesPage() {
                             ))}
                         </TabsList>
                     </Tabs>
-                   
+                    <div className="relative w-full sm:max-w-xs">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Search products..."
+                            className="pl-9"
+                            value={productSearchTerm}
+                            onChange={(e) => setProductSearchTerm(e.target.value)}
+                        />
+                    </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {filteredProducts.map((product) => (
@@ -1123,6 +1120,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 

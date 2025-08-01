@@ -344,22 +344,26 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Team Management" description="Manage your team members and their roles and permissions." />
+      <PageHeader title="Team Management" description="Manage your team members and their roles." />
       <Tabs defaultValue="users">
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 grid w-full grid-cols-2">
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="roles">Roles</TabsTrigger>
         </TabsList>
         <TabsContent value="users">
             <Card>
-                <CardHeader className="relative">
-                    <CardTitle>Users</CardTitle>
-                    <CardDescription>A list of all users in your system.</CardDescription>
-                    <div className="absolute top-6 right-6 flex items-center gap-2">
-                        <Button onClick={handleExport} variant="outline">
-                            <Download className="mr-2 h-4 w-4" /> Export
-                        </Button>
-                        <Button onClick={() => handleOpenUserDialog(null)}><PlusCircle className="mr-2 h-4 w-4" />Add User</Button>
+                <CardHeader>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle>Users</CardTitle>
+                            <CardDescription>A list of all users in your system.</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2 self-end">
+                            <Button onClick={handleExport} variant="outline" size="sm">
+                                <Download className="mr-2 h-4 w-4" /> Export
+                            </Button>
+                            <Button onClick={() => handleOpenUserDialog(null)} size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add User</Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -367,56 +371,60 @@ export default function TeamPage() {
                     <div className="relative w-full max-w-sm">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input 
-                            placeholder="Search users by name or email..."
+                            placeholder="Search users..."
                             className="pl-9"
                             value={userSearchTerm}
                             onChange={(e) => setUserSearchTerm(e.target.value)}
                         />
                     </div>
                 </div>
-                <Table>
-                    <TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead className="hidden md:table-cell">Email</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
-                    <TableBody>
-                    {loading ? (
-                        <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading...</TableCell></TableRow>
-                    ) : filteredUsers.length > 0 ? (
-                        filteredUsers.map((user) => (
-                            <TableRow key={user.id}>
-                            <TableCell>
-                                <div className="flex items-center gap-3">
-                                <Avatar><AvatarImage src={user.avatar_url || ''} alt={user.name} data-ai-hint="person portrait" /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                <span className="font-medium">{user.name}</span>
-                                </div>
-                            </TableCell>
-                            <TableCell><Badge variant={getRoleBadgeVariant(user.role as UserRole)}>{user.role}</Badge></TableCell>
-                            <TableCell className="hidden md:table-cell">{user.email}</TableCell>
-                            <TableCell>
-                                <DropdownMenu>
-                                <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Toggle menu</span></Button></DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                    <DropdownMenuItem onClick={() => handleOpenUserDialog(user)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteUser(user.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
-                                </DropdownMenuContent>
-                                </DropdownMenu>
-                            </TableCell>
-                            </TableRow>
-                        ))
-                    ) : (
-                        <TableRow><TableCell colSpan={4} className="h-24 text-center">No users found.</TableCell></TableRow>
-                    )}
-                    </TableBody>
-                </Table>
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead className="hidden md:table-cell">Email</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
+                        <TableBody>
+                        {loading ? (
+                            <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading...</TableCell></TableRow>
+                        ) : filteredUsers.length > 0 ? (
+                            filteredUsers.map((user) => (
+                                <TableRow key={user.id}>
+                                <TableCell>
+                                    <div className="flex items-center gap-3">
+                                    <Avatar><AvatarImage src={user.avatar_url || ''} alt={user.name} data-ai-hint="person portrait" /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                    <span className="font-medium">{user.name}</span>
+                                    </div>
+                                </TableCell>
+                                <TableCell><Badge variant={getRoleBadgeVariant(user.role as UserRole)}>{user.role}</Badge></TableCell>
+                                <TableCell className="hidden md:table-cell">{user.email}</TableCell>
+                                <TableCell>
+                                    <DropdownMenu>
+                                    <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Toggle menu</span></Button></DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                        <DropdownMenuItem onClick={() => handleOpenUserDialog(user)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+                                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteUser(user.id)}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow><TableCell colSpan={4} className="h-24 text-center">No users found.</TableCell></TableRow>
+                        )}
+                        </TableBody>
+                    </Table>
+                </div>
                 </CardContent>
             </Card>
         </TabsContent>
         <TabsContent value="roles">
             <Card>
-                <CardHeader className="relative">
-                    <CardTitle>Roles</CardTitle>
-                    <CardDescription>Define roles and their permissions for your team.</CardDescription>
-                    <div className="absolute top-6 right-6">
-                        <Button onClick={() => handleOpenRoleDialog(null)}><PlusCircle className="mr-2 h-4 w-4" />Add Role</Button>
+                <CardHeader>
+                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle>Roles</CardTitle>
+                            <CardDescription>Define roles and their permissions for your team.</CardDescription>
+                        </div>
+                        <Button onClick={() => handleOpenRoleDialog(null)} size="sm" className="self-end"><PlusCircle className="mr-2 h-4 w-4" />Add Role</Button>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -431,27 +439,29 @@ export default function TeamPage() {
                             />
                         </div>
                     </div>
-                    <Table>
-                        <TableHeader><TableRow><TableHead>Role Name</TableHead><TableHead>Permissions</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                         {filteredRoles.length > 0 ? (
-                            filteredRoles.map((role) => (
-                                <TableRow key={role.id}>
-                                    <TableCell><Badge variant={getRoleBadgeVariant(role.name as UserRole)}>{role.name}</Badge></TableCell>
-                                    <TableCell>{role.permissions.length} permissions</TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" onClick={() => handleOpenRoleDialog(role)}><Edit className="h-4 w-4" /></Button>
-                                        {!systemRoles.includes(role.name) && (
-                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteRole(role.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                         ) : (
-                            <TableRow><TableCell colSpan={3} className="h-24 text-center">No roles found.</TableCell></TableRow>
-                         )}
-                        </TableBody>
-                    </Table>
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader><TableRow><TableHead>Role Name</TableHead><TableHead>Permissions</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                            {filteredRoles.length > 0 ? (
+                                filteredRoles.map((role) => (
+                                    <TableRow key={role.id}>
+                                        <TableCell><Badge variant={getRoleBadgeVariant(role.name as UserRole)}>{role.name}</Badge></TableCell>
+                                        <TableCell>{role.permissions.length} permissions</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenRoleDialog(role)}><Edit className="h-4 w-4" /></Button>
+                                            {!systemRoles.includes(role.name) && (
+                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteRole(role.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow><TableCell colSpan={3} className="h-24 text-center">No roles found.</TableCell></TableRow>
+                            )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
         </TabsContent>

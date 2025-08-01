@@ -95,34 +95,36 @@ function ReportTable({ data, dataKeyLabel, currency }: { data: ReportDataPoint[]
                 <CardTitle>Detailed Report</CardTitle>
             </CardHeader>
             <CardContent>
-                 <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>{dataKeyLabel}</TableHead>
-                            <TableHead className="text-right">Net Sales</TableHead>
-                            <TableHead className="text-right">Items Sold</TableHead>
-                            <TableHead className="text-right">Transactions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {data.map(item => (
-                            <TableRow key={item.name}>
-                                <TableCell className="font-medium">{item.name}</TableCell>
-                                <TableCell className="text-right">{currency}{item.sales.toFixed(2)}</TableCell>
-                                <TableCell className="text-right">{item.quantity}</TableCell>
-                                <TableCell className="text-right">{item.transactions}</TableCell>
+                 <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>{dataKeyLabel}</TableHead>
+                                <TableHead className="text-right">Net Sales</TableHead>
+                                <TableHead className="text-right">Items Sold</TableHead>
+                                <TableHead className="text-right">Transactions</TableHead>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                    <TableFooter>
-                        <TableRow className="font-bold">
-                            <TableCell>Total</TableCell>
-                            <TableCell className="text-right">{currency}{totalSales.toFixed(2)}</TableCell>
-                            <TableCell className="text-right">{totalQuantity}</TableCell>
-                            <TableCell className="text-right">{totalTransactions}</TableCell>
-                        </TableRow>
-                    </TableFooter>
-                </Table>
+                        </TableHeader>
+                        <TableBody>
+                            {data.map(item => (
+                                <TableRow key={item.name}>
+                                    <TableCell className="font-medium">{item.name}</TableCell>
+                                    <TableCell className="text-right">{currency}{item.sales.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right">{item.quantity}</TableCell>
+                                    <TableCell className="text-right">{item.transactions}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                        <TableFooter>
+                            <TableRow className="font-bold">
+                                <TableCell>Total</TableCell>
+                                <TableCell className="text-right">{currency}{totalSales.toFixed(2)}</TableCell>
+                                <TableCell className="text-right">{totalQuantity}</TableCell>
+                                <TableCell className="text-right">{totalTransactions}</TableCell>
+                            </TableRow>
+                        </TableFooter>
+                    </Table>
+                 </div>
             </CardContent>
         </Card>
     )
@@ -269,16 +271,16 @@ export default function ReportsPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <PageHeader
           title="Sales Reports"
-          description="Analyze your sales performance with detailed filters."
+          description="Analyze your sales performance."
         />
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Popover>
             <PopoverTrigger asChild>
                 <Button
                 id="date"
                 variant={"outline"}
                 className={cn(
-                    "w-full sm:w-[300px] justify-start text-left font-normal",
+                    "w-full sm:w-[260px] justify-start text-left font-normal",
                     !date && "text-muted-foreground"
                 )}
                 >
@@ -308,7 +310,7 @@ export default function ReportsPage() {
                 />
             </PopoverContent>
             </Popover>
-            <Button onClick={handleExport} variant="outline"><Download className="h-4 w-4"/></Button>
+            <Button onClick={handleExport} variant="outline"><Download className="h-4 w-4 mr-2 sm:mr-0"/> <span className="sm:hidden">Export</span></Button>
         </div>
       </div>
 
@@ -316,7 +318,7 @@ export default function ReportsPage() {
         <CardHeader>
             <CardTitle>Filters</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
                 <SelectTrigger><SelectValue placeholder="Filter by Store"/></SelectTrigger>
                 <SelectContent>
@@ -349,7 +351,7 @@ export default function ReportsPage() {
     </Card>
 
       <Tabs defaultValue="item" onValueChange={setActiveTab}>
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
           <TabsTrigger value="item">By Item</TabsTrigger>
           <TabsTrigger value="category">By Category</TabsTrigger>
           <TabsTrigger value="employee">By Employee</TabsTrigger>

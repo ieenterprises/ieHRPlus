@@ -129,14 +129,14 @@ export default function DebtsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <PageHeader
           title="Debt Management"
           description="Track and recover outstanding credit sales."
         />
-        <Button onClick={handleExport} variant="outline">
+        <Button onClick={handleExport} variant="outline" size="sm" className="self-end">
           <Download className="mr-2 h-4 w-4" />
-          Export to CSV
+          Export
         </Button>
       </div>
       <Card>
@@ -147,15 +147,15 @@ export default function DebtsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 mb-4">
               <Input
-                placeholder="Search by Order # or Customer..."
+                placeholder="Search..."
                 value={filters.searchTerm}
                 onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value}))}
-                className="max-w-xs"
+                className="w-full sm:w-auto sm:max-w-xs"
               />
                <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({...prev, status: value}))}>
-                  <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-[180px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
                       <SelectItem value="unpaid">Unpaid</SelectItem>
@@ -163,14 +163,14 @@ export default function DebtsPage() {
                   </SelectContent>
               </Select>
                <Select value={filters.customer} onValueChange={(value) => setFilters(prev => ({...prev, customer: value}))}>
-                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by customer" /></SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by customer" /></SelectTrigger>
                   <SelectContent>
                       <SelectItem value="all">All Customers</SelectItem>
                       {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
               </Select>
               <Select value={filters.employee} onValueChange={(value) => setFilters(prev => ({...prev, employee: value}))}>
-                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by employee" /></SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by employee" /></SelectTrigger>
                   <SelectContent>
                       <SelectItem value="all">All Employees</SelectItem>
                       {users.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
@@ -178,7 +178,7 @@ export default function DebtsPage() {
               </Select>
               <Popover>
                   <PopoverTrigger asChild>
-                      <Button id="date" variant={"outline"} className={cn("w-[260px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+                      <Button id="date" variant={"outline"} className={cn("w-full sm:w-[260px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {dateRange?.from ? (dateRange.to ? (<>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>) : (format(dateRange.from, "LLL dd, y"))) : (<span>Pick a date range</span>)}
                       </Button>
@@ -186,60 +186,62 @@ export default function DebtsPage() {
                   <PopoverContent className="w-auto p-0" align="start"><Calendar initialFocus mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2}/></PopoverContent>
               </Popover>
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Order #</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead className="hidden sm:table-cell">Employee</TableHead>
-                <TableHead className="hidden md:table-cell">Date</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
-                    Loading...
-                  </TableCell>
+                  <TableHead>Order #</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead className="hidden sm:table-cell">Employee</TableHead>
+                  <TableHead className="hidden md:table-cell">Date</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Action</TableHead>
                 </TableRow>
-              ) : filteredDebts.length > 0 ? (
-                filteredDebts.map((debt) => {
-                  const canSettleDebt = hasPermission('MANAGE_CUSTOMERS') || loggedInUser?.id === debt.sales?.employee_id;
-                  return (
-                    <TableRow key={debt.id}>
-                      <TableCell className="font-medium">{debt.sales?.order_number}</TableCell>
-                      <TableCell>{debt.customers?.name}</TableCell>
-                      <TableCell className="hidden sm:table-cell">{debt.users?.name || 'N/A'}</TableCell>
-                      <TableCell className="hidden md:table-cell">{format(new Date(debt.created_at!), "LLL dd, y")}</TableCell>
-                      <TableCell className="text-right">{currency}{debt.amount.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Badge variant={debt.status === "Paid" ? "secondary" : "destructive"}>
-                          {debt.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {debt.status === "Unpaid" && canSettleDebt && (
-                          <Button variant="outline" size="sm" onClick={() => handleSettleDebt(debt)}>
-                            <Coins className="mr-2 h-4 w-4" />
-                            Settle Debt
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
-                    No debts found for the current filters.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
+                      Loading...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredDebts.length > 0 ? (
+                  filteredDebts.map((debt) => {
+                    const canSettleDebt = hasPermission('MANAGE_CUSTOMERS') || loggedInUser?.id === debt.sales?.employee_id;
+                    return (
+                      <TableRow key={debt.id}>
+                        <TableCell className="font-medium">{debt.sales?.order_number}</TableCell>
+                        <TableCell>{debt.customers?.name}</TableCell>
+                        <TableCell className="hidden sm:table-cell">{debt.users?.name || 'N/A'}</TableCell>
+                        <TableCell className="hidden md:table-cell">{format(new Date(debt.created_at!), "LLL dd, y")}</TableCell>
+                        <TableCell className="text-right">{currency}{debt.amount.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Badge variant={debt.status === "Paid" ? "secondary" : "destructive"}>
+                            {debt.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {debt.status === "Unpaid" && canSettleDebt && (
+                            <Button variant="outline" size="sm" onClick={() => handleSettleDebt(debt)}>
+                              <Coins className="mr-2 h-4 w-4" />
+                              Settle Debt
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
+                      No debts found for the current filters.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
