@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { format, differenceInDays, isWithinInterval } from "date-fns";
-import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff, Trash2, Search } from "lucide-react";
+import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff, Trash2, Search, Loader2 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
 
@@ -126,6 +126,7 @@ export default function ReservationsPage() {
     voidSale,
   } = useSettings();
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
@@ -186,7 +187,8 @@ export default function ReservationsPage() {
   const handleUpdateReservation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editingReservation || !editingReservation.product_id) return;
-
+    
+    setIsProcessing(true);
     const formData = new FormData(event.currentTarget);
     const newStatus = formData.get("status") as Reservation['status'];
 
@@ -209,6 +211,8 @@ export default function ReservationsPage() {
         toast({ title: "Reservation Updated", description: `Booking for ${editingReservation.guest_name} is now ${newStatus}.`});
     } catch (error: any) {
         toast({ title: "Error updating reservation", description: error.message, variant: "destructive" });
+    } finally {
+        setIsProcessing(false);
     }
   }
 
@@ -514,7 +518,10 @@ export default function ReservationsPage() {
                 </div>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
-                    <Button type="submit">Save Changes</Button>
+                    <Button type="submit" disabled={isProcessing}>
+                        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Save Changes
+                    </Button>
                 </DialogFooter>
             </form>
           </DialogContent>

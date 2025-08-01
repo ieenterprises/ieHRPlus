@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2, Search, PlusCircle } from "lucide-react";
+import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2, Search, PlusCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -137,6 +137,7 @@ export default function SalesPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState<OpenTicket | null>(null);
@@ -237,6 +238,7 @@ export default function SalesPage() {
       return;
     }
     
+    setIsProcessing(true);
     try {
         const reservationData = {
             guest_name: guestName,
@@ -263,6 +265,8 @@ export default function SalesPage() {
 
     } catch(error: any) {
          toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+        setIsProcessing(false);
     }
   };
 
@@ -406,6 +410,7 @@ export default function SalesPage() {
         return;
     }
     
+    setIsProcessing(true);
     try {
         const saleItems: SaleItem[] = orderItems.map(item => ({
             id: item.product.id,
@@ -426,7 +431,7 @@ export default function SalesPage() {
           const settlementPayments = payments.map(p => p.method);
           newSale = {
             ...originalSale,
-            payment_methods: settlementPayments,
+            payment_methods: [...originalSale.payment_methods.filter(pm => pm !== 'Credit'), ...settlementPayments],
           };
 
           await setSales(prevSales => prevSales.map(s => s.id === newSale.id ? newSale : s));
@@ -531,6 +536,8 @@ export default function SalesPage() {
 
     } catch (error: any) {
         toast({ title: "Error completing sale", description: error.message, variant: "destructive" });
+    } finally {
+        setIsProcessing(false);
     }
   };
   
@@ -579,6 +586,7 @@ export default function SalesPage() {
   
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
+    setIsProcessing(true);
     try {
         const ticketPayload: Partial<OpenTicket> = {
             items: saleItems,
@@ -600,6 +608,8 @@ export default function SalesPage() {
         handleClearOrder();
     } catch (error: any) {
         toast({ title: "Error Saving Order", description: error.message, variant: "destructive" });
+    } finally {
+        setIsProcessing(false);
     }
   };
   
@@ -619,6 +629,8 @@ export default function SalesPage() {
       toast({ title: "Missing fields", description: "Please provide both name and email.", variant: "destructive" });
       return;
     }
+    
+    setIsProcessing(true);
     try {
       const newCustomer = {
         name,
@@ -633,6 +645,8 @@ export default function SalesPage() {
       toast({ title: "Customer Added", description: `${name} has been added and selected.` });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+        setIsProcessing(false);
     }
   };
 
@@ -804,8 +818,9 @@ export default function SalesPage() {
                     </div>
                     <div className="grid grid-cols-1 gap-2">
                          {featureSettings.open_tickets && !debtToSettle && (
-                            <Button variant="secondary" onClick={handleSaveOrder} className="w-full">
-                                <Save className="mr-2 h-4 w-4" /> Save Order
+                            <Button variant="secondary" onClick={handleSaveOrder} className="w-full" disabled={isProcessing}>
+                                {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                {isProcessing ? 'Saving...' : 'Save Order'}
                             </Button>
                          )}
                     </div>
@@ -813,8 +828,9 @@ export default function SalesPage() {
                          <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className="w-full">
-                                    <Button size="lg" className="w-full" onClick={() => handlePayment(false)} disabled={!loggedInUser}>
-                                        <CreditCard className="mr-2 h-5 w-5" /> Proceed to Payment
+                                    <Button size="lg" className="w-full" onClick={() => handlePayment(false)} disabled={!loggedInUser || isProcessing}>
+                                        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
+                                        {isProcessing ? 'Processing...' : 'Proceed to Payment'}
                                     </Button>
                                 </div>
                             </TooltipTrigger>
@@ -884,7 +900,10 @@ export default function SalesPage() {
                 </div>
             </div>
             <DialogFooter>
-                <Button onClick={() => handleConfirmBooking('Checked-in')} className="w-full">Pay & Check-in Now</Button>
+                <Button onClick={() => handleConfirmBooking('Checked-in')} className="w-full" disabled={isProcessing}>
+                    {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Pay & Check-in Now
+                </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -994,7 +1013,8 @@ export default function SalesPage() {
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setIsSplitPaymentDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={() => handleCompleteSale()} disabled={Math.abs(remainingBalance) > 0.001}>
+                    <Button onClick={() => handleCompleteSale()} disabled={Math.abs(remainingBalance) > 0.001 || isProcessing}>
+                        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Complete Sale
                     </Button>
                 </DialogFooter>
@@ -1072,7 +1092,10 @@ export default function SalesPage() {
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => setIsAddCustomerDialogOpen(false)}>Cancel</Button>
-                        <Button type="submit">Save Customer</Button>
+                        <Button type="submit" disabled={isProcessing}>
+                            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Save Customer
+                        </Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
@@ -1089,6 +1112,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 

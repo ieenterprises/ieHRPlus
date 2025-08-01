@@ -20,7 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Customer } from "@/lib/types";
-import { MoreHorizontal, PlusCircle, Trash2, Edit, Download, Search } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Download, Search, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +51,7 @@ const EMPTY_CUSTOMER: Partial<Customer> = {
 export default function CustomersPage() {
   const { customers, setCustomers, debts, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Partial<Customer> | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -88,6 +89,7 @@ export default function CustomersPage() {
     event.preventDefault();
     if (!editingCustomer) return;
 
+    setIsProcessing(true);
     const formData = new FormData(event.currentTarget);
     const customerData = {
       name: formData.get("name") as string,
@@ -107,6 +109,8 @@ export default function CustomersPage() {
       handleDialogClose(false);
     } catch (error: any) {
       toast({ title: "Error saving customer", description: error.message, variant: "destructive" });
+    } finally {
+        setIsProcessing(false);
     }
   };
 
@@ -115,6 +119,7 @@ export default function CustomersPage() {
         toast({ title: "Cannot Delete Customer", description: "This customer has outstanding debts.", variant: "destructive" });
         return;
       }
+    setIsProcessing(true);
     try {
       await setCustomers(customers.filter(c => c.id !== customerId));
       toast({
@@ -124,6 +129,8 @@ export default function CustomersPage() {
       });
     } catch (error: any) {
       toast({ title: "Error deleting customer", description: error.message, variant: "destructive" });
+    } finally {
+        setIsProcessing(false);
     }
   }
 
@@ -273,7 +280,10 @@ export default function CustomersPage() {
             </div>
 
             <DialogFooter>
-              <Button type="submit">Save Changes</Button>
+              <Button type="submit" disabled={isProcessing}>
+                {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save Changes
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

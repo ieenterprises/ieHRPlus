@@ -44,7 +44,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Trash2, Edit, Upload, Download, Search } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Upload, Download, Search, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Product, type Category } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -73,6 +73,7 @@ export default function InventoryPage() {
     loggedInUser,
   } = useSettings();
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
@@ -175,11 +176,14 @@ export default function InventoryPage() {
   }
   
   const handleDeleteProduct = async (productId: string) => {
+    setIsProcessing(true);
     try {
       await setProducts(products.filter(p => p.id !== productId));
       toast({ title: "Product Deleted", description: "The product has been removed from inventory." });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
     }
   };
   
@@ -205,6 +209,7 @@ export default function InventoryPage() {
   const handleProductFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editingProduct) return;
+    setIsProcessing(true);
     const formData = new FormData(event.currentTarget);
     const productData = {
       name: formData.get("name") as string,
@@ -227,6 +232,8 @@ export default function InventoryPage() {
       handleProductDialogClose(false);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+        setIsProcessing(false);
     }
   };
 
@@ -250,11 +257,14 @@ export default function InventoryPage() {
       });
       return;
     }
+    setIsProcessing(true);
     try {
       await setCategories(categories.filter((c) => c.id !== categoryId));
       toast({ title: "Category Deleted" });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -268,6 +278,8 @@ export default function InventoryPage() {
   const handleCategoryFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editingCategory) return;
+    
+    setIsProcessing(true);
     const formData = new FormData(event.currentTarget);
     const categoryName = formData.get("name") as string;
 
@@ -280,6 +292,7 @@ export default function InventoryPage() {
         description: "Cannot create 'Room' category while Reservations feature is disabled.",
         variant: "destructive",
       });
+      setIsProcessing(false);
       return;
     }
 
@@ -299,6 +312,8 @@ export default function InventoryPage() {
       handleCategoryDialogClose(false);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+        setIsProcessing(false);
     }
   };
 
@@ -342,7 +357,8 @@ export default function InventoryPage() {
       toast({ title: "No file selected", variant: "destructive" });
       return;
     }
-
+    
+    setIsProcessing(true);
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -380,9 +396,11 @@ export default function InventoryPage() {
           description: `${newProducts.length} products imported successfully. ${errors > 0 ? `${errors} rows failed.` : ''}`,
         });
         setIsImportDialogOpen(false);
+        setIsProcessing(false);
       },
       error: (error) => {
         toast({ title: "Import Failed", description: error.message, variant: "destructive" });
+        setIsProcessing(false);
       }
     });
   };
@@ -683,7 +701,10 @@ export default function InventoryPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit">Save Changes</Button>
+                <Button type="submit" disabled={isProcessing}>
+                    {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Save Changes
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -705,7 +726,10 @@ export default function InventoryPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit">Save Changes</Button>
+                <Button type="submit" disabled={isProcessing}>
+                    {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Save Changes
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -732,6 +756,7 @@ export default function InventoryPage() {
               accept=".csv"
               ref={fileInputRef}
               onChange={handleImportProducts}
+              disabled={isProcessing}
             />
           </div>
           <DialogFooter>
