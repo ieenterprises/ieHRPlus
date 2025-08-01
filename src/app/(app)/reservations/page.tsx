@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { format, differenceInDays, isWithinInterval } from "date-fns";
+import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff, Trash2, Search, Loader2 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
@@ -40,6 +40,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -119,6 +120,7 @@ export default function ReservationsPage() {
     reservations, setReservations, 
     products, setProducts,
     categories,
+    customers,
     sales,
     currency,
     featureSettings,
@@ -137,7 +139,13 @@ export default function ReservationsPage() {
 
   const [roomSearchTerm, setRoomSearchTerm] = useState("");
   const [roomStatusFilter, setRoomStatusFilter] = useState("all");
-  const [bookingSearchTerm, setBookingSearchTerm] = useState("");
+  
+  const [bookingFilters, setBookingFilters] = useState({
+    searchTerm: "",
+    customerId: "all",
+    roomId: "all",
+  });
+  const [bookingDateRange, setBookingDateRange] = useState<DateRange | undefined>();
   
   const rooms = products.filter(p => {
     const category = categories.find(c => c.id === p.category_id);
@@ -153,13 +161,23 @@ export default function ReservationsPage() {
   }, [rooms, roomSearchTerm, roomStatusFilter]);
   
   const filteredBookings = useMemo(() => {
-    if (!bookingSearchTerm) return reservations;
-    const lowercasedTerm = bookingSearchTerm.toLowerCase();
-    return reservations.filter(booking => 
-      booking.guest_name.toLowerCase().includes(lowercasedTerm) ||
-      booking.products?.name?.toLowerCase().includes(lowercasedTerm)
-    );
-  }, [reservations, bookingSearchTerm]);
+    return reservations.filter(booking => {
+        const lowercasedTerm = bookingFilters.searchTerm.toLowerCase();
+        const searchMatch = 
+          booking.guest_name.toLowerCase().includes(lowercasedTerm) ||
+          booking.products?.name?.toLowerCase().includes(lowercasedTerm);
+
+        const customerMatch = bookingFilters.customerId === 'all' || (booking.customers?.id === bookingFilters.customerId);
+        const roomMatch = bookingFilters.roomId === 'all' || booking.product_id === bookingFilters.roomId;
+
+        const dateMatch = !bookingDateRange?.from || isWithinInterval(new Date(booking.check_in), {
+            start: startOfDay(bookingDateRange.from),
+            end: bookingDateRange.to ? endOfDay(bookingDateRange.to) : endOfDay(new Date(8640000000000000)) // Far future date if no end date
+        });
+
+        return searchMatch && customerMatch && roomMatch && dateMatch;
+    });
+  }, [reservations, bookingFilters, bookingDateRange]);
 
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
 
@@ -215,16 +233,6 @@ export default function ReservationsPage() {
         setIsProcessing(false);
     }
   }
-
-  const handleVoidReservation = (reservation: Reservation) => {
-    if (!reservation.sale_id) {
-      toast({ title: "Error", description: "Cannot void a reservation without an associated sale.", variant: "destructive" });
-      return;
-    }
-    voidSale(reservation.sale_id, loggedInUser?.id || 'unknown');
-    toast({ title: "Booking Voided", description: `Booking for ${reservation.guest_name} has been voided.` });
-  };
-
 
   const getStatusVariant = (status: Reservation['status']) => {
     switch (status) {
@@ -326,21 +334,21 @@ export default function ReservationsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <PageHeader
           title="Reservations"
           description="Manage room bookings and availability."
         />
-        <div className="flex items-center gap-2">
-           <Button onClick={handleExportRoomStatus} variant="outline">
+        <div className="flex items-center gap-2 self-end sm:self-center">
+           <Button onClick={handleExportRoomStatus} variant="outline" size="sm">
               <Download className="mr-2 h-4 w-4" />
               Export Status
            </Button>
-           <Button onClick={handleExportBookings} variant="outline">
+           <Button onClick={handleExportBookings} variant="outline" size="sm">
               <Download className="mr-2 h-4 w-4" />
               Export Bookings
            </Button>
-            <Button asChild>
+            <Button asChild size="sm">
               <Link href="/sales">
                 <PlusCircle className="mr-2 h-4 w-4" />
                 New Reservation
@@ -350,9 +358,9 @@ export default function ReservationsPage() {
       </div>
       
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h2 className="text-xl font-semibold">Room Status</h2>
-             <div className="flex items-center gap-2 w-full sm:w-auto">
+             <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto self-end sm:self-center">
                 <div className="relative w-full sm:w-auto">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
@@ -363,7 +371,7 @@ export default function ReservationsPage() {
                     />
                 </div>
                 <Select value={roomStatusFilter} onValueChange={setRoomStatusFilter}>
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -403,92 +411,124 @@ export default function ReservationsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-           <div className="mb-4">
-             <div className="relative w-full max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                    placeholder="Search by guest or room name..."
-                    className="pl-9"
-                    value={bookingSearchTerm}
-                    onChange={(e) => setBookingSearchTerm(e.target.value)}
-                />
-            </div>
+           <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 mb-4">
+              <Input
+                placeholder="Search by guest or room..."
+                value={bookingFilters.searchTerm}
+                onChange={(e) => setBookingFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
+                className="w-full sm:w-auto sm:max-w-xs"
+              />
+               <Select value={bookingFilters.customerId} onValueChange={(value) => setBookingFilters(prev => ({...prev, customerId: value}))}>
+                  <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by customer" /></SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="all">All Customers</SelectItem>
+                      {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+              </Select>
+               <Select value={bookingFilters.roomId} onValueChange={(value) => setBookingFilters(prev => ({...prev, roomId: value}))}>
+                  <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by room" /></SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="all">All Rooms</SelectItem>
+                      {rooms.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                  </SelectContent>
+              </Select>
+              <Popover>
+                  <PopoverTrigger asChild>
+                      <Button id="date" variant={"outline"} className={cn("w-full sm:w-[260px] justify-start text-left font-normal", !bookingDateRange && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {bookingDateRange?.from ? (bookingDateRange.to ? (<>{format(bookingDateRange.from, "LLL dd, y")} - {format(bookingDateRange.to, "LLL dd, y")}</>) : (format(bookingDateRange.from, "LLL dd, y"))) : (<span>Filter by date</span>)}
+                      </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start"><Calendar initialFocus mode="range" selected={bookingDateRange} onSelect={setBookingDateRange} numberOfMonths={2}/></PopoverContent>
+              </Popover>
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Order #</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Room</TableHead>
-                <TableHead>Dates</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
-                    Loading...
-                  </TableCell>
+                  <TableHead className="hidden sm:table-cell">Order #</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Room</TableHead>
+                  <TableHead>Dates</TableHead>
+                  <TableHead className="text-right hidden md:table-cell">Total</TableHead>
+                  <TableHead className="hidden lg:table-cell">Payment</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ) : filteredBookings.length > 0 ? (
-                filteredBookings.map((reservation) => {
-                  const sale = sales.find(s => s.id === reservation.sale_id);
-                  return (
-                    <TableRow key={reservation.id}>
-                      <TableCell className="font-medium">#{sale?.order_number || 'N/A'}</TableCell>
-                      <TableCell className="font-medium">{reservation.guest_name}</TableCell>
-                      <TableCell>{reservation.products?.name}</TableCell>
-                      <TableCell>
-                          {format(new Date(reservation.check_in), "LLL dd, y")} - {format(new Date(reservation.check_out), "LLL dd, y")}
-                      </TableCell>
-                      <TableCell className="text-right">{currency}{calculateTotal(reservation).toFixed(2)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {sale ? (
-                              sale.payment_methods.map(method => (
-                                <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">{method}</Badge>
-                              ))
-                          ) : (
-                              <Badge variant="outline">Unpaid</Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusVariant(reservation.status as any)}>
-                          {reservation.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => handleEditReservation(reservation)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Update Status
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
-                    No reservations found.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
+                      Loading...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredBookings.length > 0 ? (
+                  filteredBookings.map((reservation) => {
+                    const sale = sales.find(s => s.id === reservation.sale_id);
+                    return (
+                      <TableRow key={reservation.id}>
+                        <TableCell className="font-medium hidden sm:table-cell">#{sale?.order_number || 'N/A'}</TableCell>
+                        <TableCell className="font-medium">{reservation.guest_name}</TableCell>
+                        <TableCell>{reservation.products?.name}</TableCell>
+                        <TableCell>
+                            {format(new Date(reservation.check_in), "LLL dd, y")} - {format(new Date(reservation.check_out), "LLL dd, y")}
+                        </TableCell>
+                        <TableCell className="text-right hidden md:table-cell">{currency}{calculateTotal(reservation).toFixed(2)}</TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <div className="flex items-center gap-1">
+                            {sale ? (
+                                sale.payment_methods.map(method => (
+                                  <Badge key={method} variant={getPaymentBadgeVariant(method)} className="capitalize">{method}</Badge>
+                                ))
+                            ) : (
+                                <Badge variant="outline">Unpaid</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusVariant(reservation.status as any)}>
+                            {reservation.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                           <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => handleEditReservation(reservation)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Update Status
+                              </DropdownMenuItem>
+                              {hasPermission('CANCEL_RECEIPTS') && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem disabled>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Clear Booking
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
+                      No reservations found for the current filters.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
