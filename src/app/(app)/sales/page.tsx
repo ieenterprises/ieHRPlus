@@ -418,24 +418,19 @@ export default function SalesPage() {
         const newSaleId = `sale_${new Date().getTime()}`;
 
         if (debtToSettle) {
-          // This is a debt settlement, find and update the original sale
           const originalSale = sales.find(s => s.id === debtToSettle.id);
-          
           if (!originalSale) {
             toast({ title: "Error", description: "Original sale not found for this debt.", variant: "destructive" });
             return;
           }
-          
-          const paymentMethods = creditInfo ? ['Credit'] : payments.map(p => p.method);
-          
+          const settlementPayments = payments.map(p => p.method);
           newSale = {
             ...originalSale,
-            payment_methods: [...originalSale.payment_methods.filter(pm => pm !== 'Credit'), ...paymentMethods],
+            payment_methods: settlementPayments,
           };
 
           await setSales(prevSales => prevSales.map(s => s.id === newSale.id ? newSale : s));
 
-          // Mark the debt as paid
           const originalDebt = debts.find(d => d.sale_id === debtToSettle.id);
           if (originalDebt) {
             await setDebts(prevDebts => prevDebts.map(d => 
@@ -640,6 +635,19 @@ export default function SalesPage() {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
+
+  const availablePaymentTypes = useMemo(() => {
+    if (debtToSettle) {
+      return configuredPaymentTypes.filter(pt => pt.type !== 'Credit');
+    }
+    return configuredPaymentTypes;
+  }, [debtToSettle, configuredPaymentTypes]);
+
+  useEffect(() => {
+    if (debtToSettle && splitPaymentMethod === 'Credit') {
+      setSplitPaymentMethod(availablePaymentTypes[0]?.name || 'Cash');
+    }
+  }, [debtToSettle, splitPaymentMethod, availablePaymentTypes]);
 
   return (
     <TooltipProvider>
@@ -956,7 +964,7 @@ export default function SalesPage() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {configuredPaymentTypes.map(pt => (
+                                            {availablePaymentTypes.map(pt => (
                                                 <SelectItem key={pt.id} value={pt.name}>{pt.name}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -1081,5 +1089,6 @@ export default function SalesPage() {
 
 
     
+
 
 
