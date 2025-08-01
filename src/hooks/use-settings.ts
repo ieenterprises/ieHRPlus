@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
@@ -309,29 +310,51 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const updateTax = updateDocFactory('taxes');
     const deleteTax = deleteDocFactory('taxes');
 
-    const createBatchSetter = <T extends {id: string}>(collectionName: string, localState: T[], localSetter: React.Dispatch<React.SetStateAction<T[]>>) => 
+    const createBatchSetter = <T extends {id?: string}>(collectionName: string, localState: T[], localSetter: React.Dispatch<React.SetStateAction<T[]>>) => 
         async (value: React.SetStateAction<T[]>) => {
         if (!loggedInUser?.businessId) return;
+        
         const newItems = typeof value === 'function' ? value(localState) : value;
-        const oldIds = new Set(localState.map(item => item.id));
-        const newIds = new Set(newItems.map(item => item.id));
+        localSetter(newItems); // Optimistic UI update
+
+        const oldIds = new Set(localState.map(item => item.id).filter(Boolean));
+        const newIds = new Set(newItems.map(item => item.id).filter(Boolean));
         const batch = writeBatch(db);
 
         newItems.forEach(item => {
-            const ref = doc(db, collectionName, item.id);
+            const docId = item.id || `temp_${Math.random().toString(36).substring(2, 9)}`;
+            const ref = doc(db, collectionName, docId);
             const oldItem = localState.find(i => i.id === item.id);
-            if (!oldIds.has(item.id) || JSON.stringify(oldItem) !== JSON.stringify(item)) {
+            
+            // Check if it's a new item or a changed item
+            if (!item.id || !oldIds.has(item.id) || JSON.stringify(oldItem) !== JSON.stringify(item)) {
                 const itemWithBusinessId = { ...item, businessId: loggedInUser.businessId };
-                batch.set(ref, itemWithBusinessId);
+                // If it's a new item without an ID, Firestore will generate one, but our local state won't match.
+                // This approach requires IDs to be generated client-side for consistency, or a more complex logic.
+                // For now, we assume client-generated IDs for new items.
+                if (!item.id) {
+                    const newRef = doc(collection(db, collectionName));
+                    item.id = newRef.id;
+                    batch.set(newRef, itemWithBusinessId);
+                } else {
+                    batch.set(ref, itemWithBusinessId, { merge: true });
+                }
             }
         });
 
         localState.forEach(item => {
-            if (!newIds.has(item.id)) {
+            if (item.id && !newIds.has(item.id)) {
                 batch.delete(doc(db, collectionName, item.id));
             }
         });
-        await batch.commit();
+        
+        try {
+            await batch.commit();
+        } catch (error) {
+            console.error(`Error during batch write to ${collectionName}:`, error);
+            // Optionally, revert the optimistic UI update
+            localSetter(localState);
+        }
     };
 
     const setProducts = createBatchSetter('products', products, setProductsState);
@@ -347,7 +370,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (!loggedInUser?.businessId) return;
         const saleToVoid = sales.find(s => s.id === saleId);
         if (!saleToVoid) return;
+
+        const reservationToVoid = reservations.find(r => r.sale_id === saleId);
+
         const batch = writeBatch(db);
+        
+        // 1. Create voided log
         const voidedLogRef = doc(collection(db, 'voided_logs'));
         const { customers, users, pos_devices, ...saleData } = saleToVoid;
         batch.set(voidedLogRef, {
@@ -357,7 +385,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             data: saleData,
             businessId: loggedInUser.businessId,
         });
+        
+        // 2. Delete the original sale
         batch.delete(doc(db, 'sales', saleId));
+
+        // 3. If there's a linked reservation, delete it
+        if (reservationToVoid && reservationToVoid.id) {
+            batch.delete(doc(db, 'reservations', reservationToVoid.id));
+        }
+
         await batch.commit();
     };
 
@@ -401,3 +437,5 @@ export function useSettings() {
     }
     return context;
 }
+
+    

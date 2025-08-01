@@ -8,7 +8,7 @@ import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
-import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole, Sale } from "@/lib/types";
+import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole, Sale, Reservation } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -126,6 +126,7 @@ export default function SalesPage() {
     setSales,
     debts,
     setDebts,
+    reservations,
     setReservations,
     debtToSettle,
     setDebtToSettle,
@@ -210,13 +211,13 @@ export default function SalesPage() {
     setLoading(false);
   }, [customers, debtToSettle, products, ticketToLoad]);
 
-  const addReservation = (reservationData: Omit<Omit<import("/Users/user/studio/src/lib/types.ts").Reservation, "id" | "created_at" | "products">, "guest_name" | "product_id" | "check_in" | "check_out" | "status" | "sale_id"> & { guest_name: any; product_id: any; check_in: any; check_out: any; status: any; sale_id: any; }) => {
-     setReservations(prev => [...prev, {
-        id: `res_${new Date().getTime()}`,
-        created_at: new Date().toISOString(),
-        products: products.find(p => p.id === reservationData.product_id) || null,
-        ...reservationData
-     }]);
+  const addReservation = async (reservationData: Omit<Reservation, 'id' | 'created_at' | 'products' | 'businessId'>) => {
+    const newReservation: Omit<Reservation, 'id' | 'businessId'> = {
+       created_at: new Date().toISOString(),
+       products: products.find(p => p.id === reservationData.product_id) || null,
+       ...reservationData
+    };
+    await setReservations(prev => [...prev, newReservation as Reservation]);
   };
 
   const handleConfirmBooking = async (status: 'Confirmed' | 'Checked-in') => {
@@ -243,7 +244,7 @@ export default function SalesPage() {
             sale_id: null,
         };
 
-        addReservation(reservationData);
+        await addReservation(reservationData);
         
         if (activeTicket?.id) await deleteTicket(activeTicket.id);
 
@@ -411,6 +412,7 @@ export default function SalesPage() {
         }));
 
         let newSale: Sale;
+        const newSaleId = `sale_${new Date().getTime()}`;
 
         if (debtToSettle) {
           // This is a debt settlement, find and update the original sale
@@ -428,19 +430,19 @@ export default function SalesPage() {
             payment_methods: [...originalSale.payment_methods.filter(pm => pm !== 'Credit'), ...paymentMethods],
           };
 
-          setSales(prevSales => prevSales.map(s => s.id === newSale.id ? newSale : s));
+          await setSales(prevSales => prevSales.map(s => s.id === newSale.id ? newSale : s));
 
           // Mark the debt as paid
           const originalDebt = debts.find(d => d.sale_id === debtToSettle.id);
           if (originalDebt) {
-            setDebts(prevDebts => prevDebts.map(d => 
+            await setDebts(prevDebts => prevDebts.map(d => 
               d.id === originalDebt.id ? { ...d, status: 'Paid' } : d
             ));
           }
         } else {
           // This is a new sale
           newSale = {
-              id: `sale_${new Date().getTime()}`,
+              id: newSaleId,
               order_number: Math.floor(Math.random() * 100000),
               created_at: new Date().toISOString(),
               items: saleItems,
@@ -455,7 +457,7 @@ export default function SalesPage() {
               pos_devices: selectedDevice ? { store_id: selectedDevice.store_id } : null,
               businessId: loggedInUser?.businessId || '',
           };
-          setSales(prev => [...prev, newSale]);
+          await setSales(prev => [...prev, newSale]);
         }
         
         if (creditInfo) {
@@ -470,13 +472,13 @@ export default function SalesPage() {
               customers: { name: customers.find(c => c.id === creditInfo.customerId)?.name || null },
               businessId: loggedInUser?.businessId || '',
             };
-            setDebts(prev => [...prev, newDebt]);
+            await setDebts(prev => [...prev, newDebt]);
         }
         
         if (isCheckingIn) {
             const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
             if (roomItem && guestName && dateRange?.from && dateRange.to) {
-                addReservation({
+                await addReservation({
                     guest_name: guestName,
                     product_id: roomItem.product.id,
                     check_in: dateRange.from.toISOString(),
@@ -485,7 +487,7 @@ export default function SalesPage() {
                     sale_id: newSale.id,
                 });
 
-                setProducts(prevProducts => 
+                await setProducts(prevProducts => 
                     prevProducts.map(room => room.id === roomItem.product.id ? { ...room, status: 'Occupied' } : room)
                 );
 
@@ -504,7 +506,7 @@ export default function SalesPage() {
             .map(item => ({ id: item.product.id, stock: item.product.stock - item.quantity }));
         
         if(stockUpdates.length > 0) {
-            setProducts(prevProducts =>
+            await setProducts(prevProducts =>
                 prevProducts.map(p => {
                     const update = stockUpdates.find(u => u.id === p.id);
                     return update ? { ...p, stock: update.stock } : p;
@@ -1013,3 +1015,6 @@ export default function SalesPage() {
     
 
 
+
+
+    

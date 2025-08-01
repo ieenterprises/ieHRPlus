@@ -30,7 +30,8 @@ export type Debt = Database['public']['Tables']['debts']['Row'] & {
   customers: { name: string | null } | null;
   businessId: string;
 };
-export type Reservation = Database['public']['Tables']['reservations']['Row'] & {
+export type Reservation = Omit<Database['public']['Tables']['reservations']['Row'], 'id'> & {
+  id?: string;
   products: { name: string | null; price: number | null; } | null;
   sale_id: string | null;
   businessId: string;
@@ -603,3 +604,5 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
+
+    
