@@ -35,7 +35,7 @@ import { type DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 
 export default function DebtsPage() {
-  const { debts, setDebts, sales, users, customers, currency, setDebtToSettle } = useSettings();
+  const { debts, setDebts, sales, users, customers, currency, setDebtToSettle, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
@@ -47,6 +47,8 @@ export default function DebtsPage() {
     customer: "all",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
 
   const enrichedDebts = useMemo(() => {
     return debts
@@ -204,28 +206,31 @@ export default function DebtsPage() {
                   </TableCell>
                 </TableRow>
               ) : filteredDebts.length > 0 ? (
-                filteredDebts.map((debt) => (
-                  <TableRow key={debt.id}>
-                    <TableCell className="font-medium">{debt.sales?.order_number}</TableCell>
-                    <TableCell>{debt.customers?.name}</TableCell>
-                    <TableCell className="hidden sm:table-cell">{debt.users?.name || 'N/A'}</TableCell>
-                    <TableCell className="hidden md:table-cell">{format(new Date(debt.created_at!), "LLL dd, y")}</TableCell>
-                    <TableCell className="text-right">{currency}{debt.amount.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Badge variant={debt.status === "Paid" ? "secondary" : "destructive"}>
-                        {debt.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {debt.status === "Unpaid" && (
-                        <Button variant="outline" size="sm" onClick={() => handleSettleDebt(debt)}>
-                          <Coins className="mr-2 h-4 w-4" />
-                          Settle Debt
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                filteredDebts.map((debt) => {
+                  const canSettleDebt = hasPermission('MANAGE_CUSTOMERS') || loggedInUser?.id === debt.sales?.employee_id;
+                  return (
+                    <TableRow key={debt.id}>
+                      <TableCell className="font-medium">{debt.sales?.order_number}</TableCell>
+                      <TableCell>{debt.customers?.name}</TableCell>
+                      <TableCell className="hidden sm:table-cell">{debt.users?.name || 'N/A'}</TableCell>
+                      <TableCell className="hidden md:table-cell">{format(new Date(debt.created_at!), "LLL dd, y")}</TableCell>
+                      <TableCell className="text-right">{currency}{debt.amount.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Badge variant={debt.status === "Paid" ? "secondary" : "destructive"}>
+                          {debt.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {debt.status === "Unpaid" && canSettleDebt && (
+                          <Button variant="outline" size="sm" onClick={() => handleSettleDebt(debt)}>
+                            <Coins className="mr-2 h-4 w-4" />
+                            Settle Debt
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
