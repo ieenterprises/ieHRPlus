@@ -2,8 +2,8 @@
 import { WriteBatch, doc, collection } from "firebase/firestore";
 import { db } from "./firebase";
 import { addDays, subDays } from "date-fns";
-import { SaleItem } from "./types";
-import { MOCK_INITIAL_ROLES } from "@/hooks/use-settings";
+import { SaleItem, Role } from "./types";
+import { MOCK_INITIAL_ROLES as initialMockRoles } from "@/hooks/use-settings";
 
 // --- MOCK DATA GENERATION ---
 
@@ -192,12 +192,14 @@ const generateDynamicMockData = (ownerId: string, businessName: string) => {
 // 3. The main seeding function
 export const seedDatabaseWithMockData = (batch: WriteBatch, businessId: string, ownerId: string) => {
   const addWithBusinessId = (collectionName: string, data: any) => {
-    const item = { ...data, businessId };
-    batch.set(doc(db, collectionName, item.id), item);
+    // For roles, generate a new ID each time to prevent conflicts between businesses
+    const docId = data.id && collectionName !== 'roles' ? data.id : doc(collection(db, collectionName)).id;
+    const item = { ...data, id: docId, businessId };
+    batch.set(doc(db, collectionName, docId), item);
   };
     
   // --- Add static data to batch ---
-  MOCK_INITIAL_ROLES.forEach(item => addWithBusinessId("roles", item));
+  initialMockRoles.forEach(item => addWithBusinessId("roles", item));
   MOCK_CATEGORIES.forEach(item => addWithBusinessId("categories", item));
   MOCK_PRODUCTS.forEach(item => addWithBusinessId("products", item));
   MOCK_CUSTOMERS.forEach(item => addWithBusinessId("customers", item));

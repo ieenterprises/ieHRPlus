@@ -80,7 +80,7 @@ const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof ty
 const systemRoles = ["Owner"];
 
 export default function TeamPage() {
-  const { users, roles, getPermissionsForRole, loggedInUser } = useSettings();
+  const { users, setUsers, roles, setRoles, getPermissionsForRole, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
   
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -142,43 +142,47 @@ export default function TeamPage() {
   const handleSaveUser = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editingUser || !loggedInUser?.businessId) return;
-  
+
     const formData = new FormData(event.currentTarget);
     const newPassword = formData.get("password") as string;
     const roleName = formData.get("role") as UserRole;
-    
-    const userData: Partial<User> & { password?: string } = {
-      name: formData.get("name") as string,
-      email: formData.get("email") as string,
-      role: roleName,
-      permissions: getPermissionsForRole(roleName),
-      avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
-      businessId: loggedInUser.businessId, // Assign to the owner's business
+
+    const userData: Partial<User> = {
+        name: formData.get("name") as string,
+        email: formData.get("email") as string,
+        role: roleName,
+        permissions: getPermissionsForRole(roleName),
+        avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
+        businessId: loggedInUser.businessId,
     };
-  
+
     try {
         if ('id' in editingUser && editingUser.id) {
-            const { password, ...updateData } = userData;
-            await updateDoc(doc(db, 'users', editingUser.id), updateData);
+            // NOTE: Updating Firebase Auth passwords from a client app is complex and requires
+            // re-authentication of the admin user. This functionality is removed to prevent errors.
+            // Only Firestore data is updated here.
+            await updateDoc(doc(db, 'users', editingUser.id), userData);
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
             if (!newPassword) {
                 toast({ title: "Password Required", description: "A password is required for new users.", variant: "destructive" });
                 return;
             }
-  
+            // Create user in Firebase Auth
             const userCredential = await createUserWithEmailAndPassword(auth, userData.email!, newPassword);
             const newAuthUser = userCredential.user;
-  
+
+            // Save user profile to Firestore
             const userDocRef = doc(db, "users", newAuthUser.uid);
             await setDoc(userDocRef, {
                 ...userData,
+                password: newPassword, // Storing for display as requested
                 created_at: new Date().toISOString(),
             });
 
             // Re-sign in the owner to refresh their token and avoid session interruption
-            if (loggedInUser && loggedInUser.email) {
-                const ownerPassword = prompt(`To finalize, please re-enter your password:`);
+             if (loggedInUser && loggedInUser.email) {
+                const ownerPassword = prompt(`To finalize, please re-enter your password to continue your session:`);
                 if (ownerPassword) {
                     try {
                         await signInWithEmailAndPassword(auth, loggedInUser.email, ownerPassword);
@@ -189,17 +193,34 @@ export default function TeamPage() {
                             variant: "destructive",
                         });
                     }
+                } else {
+                    toast({
+                        title: "Action Required",
+                        description: "You may need to sign in again to continue managing your application.",
+                        variant: "destructive"
+                    });
                 }
             }
+
             toast({ title: "User Created", description: `User ${userData.name} has been created.` });
         }
         handleUserDialogClose(false);
     } catch(error: any) {
-        toast({ title: "Error saving user", description: error.message, variant: "destructive" });
+        console.error("Error saving user:", error);
+        let errorMessage = "An unknown error occurred.";
+        if (error.code === 'auth/email-already-in-use') {
+            errorMessage = "This email is already registered. Please use a different email.";
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+        toast({ title: "Error saving user", description: errorMessage, variant: "destructive" });
     }
   };
 
+
   const handleDeleteUser = async (userId: string) => {
+    // Note: This only deletes the Firestore record, not the Firebase Auth user.
+    // Proper deletion would require a server-side function.
     try {
         await deleteDoc(doc(db, 'users', userId));
         toast({
@@ -484,6 +505,7 @@ export default function TeamPage() {
                           name="password" 
                           type={passwordVisible ? "text" : "password"} 
                           placeholder={editingUser?.id ? "Leave blank to keep current" : ""}
+                          defaultValue={editingUser?.password}
                           required={!editingUser?.id} 
                         />
                         <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2 h-7 w-7" onClick={() => setPasswordVisible(!passwordVisible)}>
