@@ -65,6 +65,7 @@ type ReportDataPoint = {
     name: string;
     sales: number; // Net sales (pre-tax)
     tax: number;
+    netPayment: number; // Net sales + tax
     quantity?: number;
     transactions: number;
     cashSales: number;
@@ -75,6 +76,7 @@ type ReportDataPoint = {
 type VisibleColumns = {
   netSales: boolean;
   tax: boolean;
+  netPayment: boolean;
   itemsSold: boolean;
   transactions: boolean;
   cashSales: boolean;
@@ -109,6 +111,7 @@ function ReportChart({ data, title, currency }: { data: ReportDataPoint[], title
 function ReportTable({ data, dataKeyLabel, currency, visibleColumns }: { data: ReportDataPoint[], dataKeyLabel: string, currency: string, visibleColumns: VisibleColumns }) {
     const totalSales = useMemo(() => data.reduce((acc, item) => acc + item.sales, 0), [data]);
     const totalTax = useMemo(() => data.reduce((acc, item) => acc + item.tax, 0), [data]);
+    const totalNetPayment = useMemo(() => data.reduce((acc, item) => acc + item.netPayment, 0), [data]);
     const totalQuantity = useMemo(() => data.reduce((acc, item) => acc + (item.quantity || 0), 0), [data]);
     const totalTransactions = useMemo(() => data.reduce((acc, item) => acc + item.transactions, 0), [data]);
     const totalCashSales = useMemo(() => data.reduce((acc, item) => acc + item.cashSales, 0), [data]);
@@ -128,6 +131,7 @@ function ReportTable({ data, dataKeyLabel, currency, visibleColumns }: { data: R
                                 <TableHead>{dataKeyLabel}</TableHead>
                                 {visibleColumns.netSales && <TableHead className="text-right">Net Sales</TableHead>}
                                 {visibleColumns.tax && <TableHead className="text-right">Tax</TableHead>}
+                                {visibleColumns.netPayment && <TableHead className="text-right">Net Payment</TableHead>}
                                 {visibleColumns.itemsSold && <TableHead className="text-right">Items Sold</TableHead>}
                                 {visibleColumns.transactions && <TableHead className="text-right">Transactions</TableHead>}
                                 {visibleColumns.cashSales && <TableHead className="text-right">Cash Sales</TableHead>}
@@ -141,6 +145,7 @@ function ReportTable({ data, dataKeyLabel, currency, visibleColumns }: { data: R
                                     <TableCell className="font-medium">{item.name}</TableCell>
                                     {visibleColumns.netSales && <TableCell className="text-right">{currency}{item.sales.toFixed(2)}</TableCell>}
                                     {visibleColumns.tax && <TableCell className="text-right">{currency}{item.tax.toFixed(2)}</TableCell>}
+                                    {visibleColumns.netPayment && <TableCell className="text-right">{currency}{item.netPayment.toFixed(2)}</TableCell>}
                                     {visibleColumns.itemsSold && <TableCell className="text-right">{item.quantity}</TableCell>}
                                     {visibleColumns.transactions && <TableCell className="text-right">{item.transactions}</TableCell>}
                                     {visibleColumns.cashSales && <TableCell className="text-right">{currency}{item.cashSales.toFixed(2)}</TableCell>}
@@ -154,6 +159,7 @@ function ReportTable({ data, dataKeyLabel, currency, visibleColumns }: { data: R
                                 <TableCell>Total</TableCell>
                                 {visibleColumns.netSales && <TableCell className="text-right">{currency}{totalSales.toFixed(2)}</TableCell>}
                                 {visibleColumns.tax && <TableCell className="text-right">{currency}{totalTax.toFixed(2)}</TableCell>}
+                                {visibleColumns.netPayment && <TableCell className="text-right">{currency}{totalNetPayment.toFixed(2)}</TableCell>}
                                 {visibleColumns.itemsSold && <TableCell className="text-right">{totalQuantity}</TableCell>}
                                 {visibleColumns.transactions && <TableCell className="text-right">{totalTransactions}</TableCell>}
                                 {visibleColumns.cashSales && <TableCell className="text-right">{currency}{totalCashSales.toFixed(2)}</TableCell>}
@@ -185,6 +191,7 @@ export default function ReportsPage() {
   const [visibleColumns, setVisibleColumns] = useState<VisibleColumns>({
     netSales: true,
     tax: true,
+    netPayment: true,
     itemsSold: true,
     transactions: true,
     cashSales: false,
@@ -236,19 +243,18 @@ export default function ReportsPage() {
           return match;
       });
       
-      const getProratedPayments = (saleTotal: number, paymentMethods: string[]) => {
+      const getProratedPayments = (netSaleAmount: number, paymentMethods: string[]) => {
           const payments = { cashSales: 0, cardSales: 0, creditSales: 0 };
           const creditPayment = paymentTypes.find(p => p.type === 'Credit');
 
           if (paymentMethods.includes(creditPayment?.name || 'Credit')) {
-              payments.creditSales = saleTotal;
+              payments.creditSales = netSaleAmount;
           } else {
-              // For simplicity, we'll assume cash if not credit or card. A more complex system could handle splits.
               const isCard = paymentTypes.some(p => paymentMethods.includes(p.name) && p.type === 'Card');
               if (isCard) {
-                 payments.cardSales = saleTotal;
+                 payments.cardSales = netSaleAmount;
               } else {
-                 payments.cashSales = saleTotal;
+                 payments.cashSales = netSaleAmount;
               }
           }
           return payments;
@@ -260,18 +266,19 @@ export default function ReportsPage() {
       }
 
       const createInitialDataPoint = (name: string): ReportDataPoint => ({
-          name, sales: 0, tax: 0, quantity: 0, transactions: 0, cashSales: 0, cardSales: 0, creditSales: 0
+          name, sales: 0, tax: 0, netPayment: 0, quantity: 0, transactions: 0, cashSales: 0, cardSales: 0, creditSales: 0
       });
 
       const itemSales = filteredSales.reduce((acc, sale) => {
         (sale.items as any[]).forEach(item => {
             const netAmount = item.price * item.quantity;
             const taxAmount = getTaxAmount(netAmount);
-            const { cashSales, cardSales, creditSales } = getProratedPayments(netAmount + taxAmount, sale.payment_methods);
+            const { cashSales, cardSales, creditSales } = getProratedPayments(netAmount, sale.payment_methods);
             
             acc[item.name] = acc[item.name] || createInitialDataPoint(item.name);
             acc[item.name].sales += netAmount;
             acc[item.name].tax += taxAmount;
+            acc[item.name].netPayment += netAmount + taxAmount;
             acc[item.name].quantity! += item.quantity;
             acc[item.name].transactions += 1; // This is imperfect, will count transaction per item
             acc[item.name].cashSales += cashSales;
@@ -290,11 +297,12 @@ export default function ReportsPage() {
             if (category) {
               const netAmount = item.price * item.quantity;
               const taxAmount = getTaxAmount(netAmount);
-              const { cashSales, cardSales, creditSales } = getProratedPayments(netAmount + taxAmount, sale.payment_methods);
+              const { cashSales, cardSales, creditSales } = getProratedPayments(netAmount, sale.payment_methods);
 
               acc[category.name] = acc[category.name] || createInitialDataPoint(category.name);
               acc[category.name].sales += netAmount;
               acc[category.name].tax += taxAmount;
+              acc[category.name].netPayment += netAmount + taxAmount;
               acc[category.name].quantity! += item.quantity;
               acc[category.name].transactions++;
               acc[category.name].cashSales += cashSales;
@@ -311,11 +319,12 @@ export default function ReportsPage() {
         const employeeName = users.find(u => u.id === sale.employee_id)?.name || 'N/A';
         const netAmount = sale.total / (1 + ((defaultTax?.rate || 0) / 100));
         const taxAmount = sale.total - netAmount;
-        const { cashSales, cardSales, creditSales } = getProratedPayments(sale.total, sale.payment_methods);
+        const { cashSales, cardSales, creditSales } = getProratedPayments(netAmount, sale.payment_methods);
 
         acc[employeeName] = acc[employeeName] || createInitialDataPoint(employeeName);
         acc[employeeName].sales += netAmount;
         acc[employeeName].tax += taxAmount;
+        acc[employeeName].netPayment += sale.total;
         acc[employeeName].quantity! += (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
         acc[employeeName].transactions++;
         acc[employeeName].cashSales += cashSales;
@@ -334,12 +343,13 @@ export default function ReportsPage() {
             acc[method] = acc[method] || createInitialDataPoint(method);
             acc[method].sales += netAmount; // Imperfect for split payments
             acc[method].tax += taxAmount;
+            acc[method].netPayment += netAmount + taxAmount;
             acc[method].quantity! += (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
             acc[method].transactions++;
             
-            if (paymentType === 'Credit') acc[method].creditSales += sale.total;
-            else if (paymentType === 'Card') acc[method].cardSales += sale.total;
-            else if (paymentType === 'Cash') acc[method].cashSales += sale.total;
+            if (paymentType === 'Credit') acc[method].creditSales += netAmount;
+            else if (paymentType === 'Card') acc[method].cardSales += netAmount;
+            else if (paymentType === 'Cash') acc[method].cashSales += netAmount;
         });
         return acc;
       }, {} as Record<string, ReportDataPoint>);
@@ -371,6 +381,7 @@ export default function ReportsPage() {
         Name: d.name,
         "Net Sales": d.sales.toFixed(2),
         "Tax": d.tax.toFixed(2),
+        "Net Payment": d.netPayment.toFixed(2),
         "Items Sold": d.quantity,
         Transactions: d.transactions,
         "Cash Sales": d.cashSales.toFixed(2),
@@ -476,6 +487,7 @@ export default function ReportsPage() {
                     <DropdownMenuSeparator />
                     <DropdownMenuCheckboxItem checked={visibleColumns.netSales} onCheckedChange={(c) => handleColumnVisibilityChange('netSales', c)}>Net Sales</DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem checked={visibleColumns.tax} onCheckedChange={(c) => handleColumnVisibilityChange('tax', c)}>Tax</DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={visibleColumns.netPayment} onCheckedChange={(c) => handleColumnVisibilityChange('netPayment', c)}>Net Payment</DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem checked={visibleColumns.itemsSold} onCheckedChange={(c) => handleColumnVisibilityChange('itemsSold', c)}>Items Sold</DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem checked={visibleColumns.transactions} onCheckedChange={(c) => handleColumnVisibilityChange('transactions', c)}>Transactions</DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem checked={visibleColumns.cashSales} onCheckedChange={(c) => handleColumnVisibilityChange('cashSales', c)}>Cash Sales</DropdownMenuCheckboxItem>
