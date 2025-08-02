@@ -189,10 +189,32 @@ export default function ReservationsPage() {
   
   const handleStatusChange = async (roomId: string, status: RoomStatus) => {
     try {
-        setProducts(prevProducts => 
+        await setProducts(prevProducts => 
             prevProducts.map(room => room.id === roomId ? { ...room, status } : room)
         );
-        toast({ title: "Room Status Updated" });
+
+        // Find the active reservation for this room to update its status
+        const activeReservation = reservations.find(r => r.product_id === roomId && r.status === 'Checked-in');
+        
+        if (activeReservation && activeReservation.id) {
+            let newReservationStatus: Reservation['status'] | null = null;
+            if (status === 'Available') {
+                newReservationStatus = 'Checked-out';
+            } else if (status === 'Maintenance') {
+                newReservationStatus = 'Maintenance';
+            }
+            
+            if (newReservationStatus) {
+                await setReservations(prev => prev.map(res => 
+                    res.id === activeReservation.id ? { ...res, status: newReservationStatus! } : res
+                ));
+                toast({ title: "Room & Booking Updated", description: `Booking status set to ${newReservationStatus}.` });
+            } else {
+                 toast({ title: "Room Status Updated" });
+            }
+        } else {
+             toast({ title: "Room Status Updated" });
+        }
     } catch (error: any) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
     }
@@ -599,4 +621,5 @@ export default function ReservationsPage() {
     </div>
   );
 }
+
 
