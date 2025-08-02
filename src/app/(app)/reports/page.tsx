@@ -52,27 +52,42 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 import { DateRange } from "react-day-picker";
 import { useState, useEffect, useMemo } from "react";
 import { subDays, format, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
-import type { Product, Category, User, StoreType, PosDeviceType, PaymentType } from "@/lib/types";
+import type { Sale, Product, Category, User, StoreType, PosDeviceType, PaymentType } from "@/lib/types";
 import Papa from "papaparse";
 
 type ReportDataPoint = {
     name: string;
-    sales: number; // Net sales (pre-tax)
+    category?: string;
+    sales: number;
     tax: number;
     netPayment: number;
-    quantity?: number;
+    quantity: number;
     transactions: number;
-    paymentSales: { [key: string]: number }; // Dynamic payment types
+    paymentSales: { [key: string]: number };
+    paymentQuantities: { [key: string]: number };
 };
 
+type TransactionDataPoint = {
+  id: string;
+  orderNumber: number;
+  date: string;
+  employee: string;
+  customer: string;
+  items: string;
+  categories: string;
+  total: number;
+  paymentMethods: string[];
+}
+
 type VisibleColumns = {
-  [key: string]: boolean; // All columns, including dynamic ones
+  [key: string]: boolean;
 };
 
 function ReportChart({ data, title, currency }: { data: ReportDataPoint[], title: string, currency: string }) {
@@ -113,6 +128,14 @@ function ReportTable({ data, dataKeyLabel, currency, visibleColumns, paymentType
         });
         return totals;
     }, [data, paymentTypes]);
+
+    const paymentQuantityTotals = useMemo(() => {
+        const totals: { [key: string]: number } = {};
+        paymentTypes.forEach(pt => {
+            totals[pt.name] = data.reduce((acc, item) => acc + (item.paymentQuantities[pt.name] || 0), 0);
+        });
+        return totals;
+    }, [data, paymentTypes]);
     
     return (
         <Card>
@@ -125,13 +148,17 @@ function ReportTable({ data, dataKeyLabel, currency, visibleColumns, paymentType
                         <TableHeader>
                             <TableRow>
                                 <TableHead>{dataKeyLabel}</TableHead>
+                                {dataKeyLabel === 'Item' && visibleColumns.category && <TableHead>Category</TableHead>}
                                 {visibleColumns.netSales && <TableHead className="text-right">Net Sales</TableHead>}
                                 {visibleColumns.tax && <TableHead className="text-right">Tax</TableHead>}
                                 {visibleColumns.netPayment && <TableHead className="text-right">Net Payment</TableHead>}
                                 {visibleColumns.itemsSold && <TableHead className="text-right">Items Sold</TableHead>}
                                 {visibleColumns.transactions && <TableHead className="text-right">Transactions</TableHead>}
                                 {paymentTypes.map(pt => visibleColumns[`${pt.name} Sales`] && (
-                                  <TableHead key={pt.id} className="text-right">{pt.name} Sales</TableHead>
+                                  <TableHead key={`${pt.id}-sales`} className="text-right">{pt.name} Sales</TableHead>
+                                ))}
+                                {paymentTypes.map(pt => visibleColumns[`Items Sold (${pt.name})`] && (
+                                    <TableHead key={`${pt.id}-items`} className="text-right">Items Sold ({pt.name})</TableHead>
                                 ))}
                             </TableRow>
                         </TableHeader>
@@ -139,13 +166,17 @@ function ReportTable({ data, dataKeyLabel, currency, visibleColumns, paymentType
                             {data.map(item => (
                                 <TableRow key={item.name}>
                                     <TableCell className="font-medium">{item.name}</TableCell>
+                                    {dataKeyLabel === 'Item' && visibleColumns.category && <TableCell>{item.category}</TableCell>}
                                     {visibleColumns.netSales && <TableCell className="text-right">{currency}{item.sales.toFixed(2)}</TableCell>}
                                     {visibleColumns.tax && <TableCell className="text-right">{currency}{item.tax.toFixed(2)}</TableCell>}
                                     {visibleColumns.netPayment && <TableCell className="text-right">{currency}{item.netPayment.toFixed(2)}</TableCell>}
                                     {visibleColumns.itemsSold && <TableCell className="text-right">{item.quantity}</TableCell>}
                                     {visibleColumns.transactions && <TableCell className="text-right">{item.transactions}</TableCell>}
                                     {paymentTypes.map(pt => visibleColumns[`${pt.name} Sales`] && (
-                                      <TableCell key={pt.id} className="text-right">{currency}{(item.paymentSales[pt.name] || 0).toFixed(2)}</TableCell>
+                                      <TableCell key={`${pt.id}-sales-val`} className="text-right">{currency}{(item.paymentSales[pt.name] || 0).toFixed(2)}</TableCell>
+                                    ))}
+                                    {paymentTypes.map(pt => visibleColumns[`Items Sold (${pt.name})`] && (
+                                        <TableCell key={`${pt.id}-items-val`} className="text-right">{item.paymentQuantities[pt.name] || 0}</TableCell>
                                     ))}
                                 </TableRow>
                             ))}
@@ -153,13 +184,17 @@ function ReportTable({ data, dataKeyLabel, currency, visibleColumns, paymentType
                         <TableFooter>
                             <TableRow className="font-bold">
                                 <TableCell>Total</TableCell>
+                                {dataKeyLabel === 'Item' && visibleColumns.category && <TableCell></TableCell>}
                                 {visibleColumns.netSales && <TableCell className="text-right">{currency}{totalSales.toFixed(2)}</TableCell>}
                                 {visibleColumns.tax && <TableCell className="text-right">{currency}{totalTax.toFixed(2)}</TableCell>}
                                 {visibleColumns.netPayment && <TableCell className="text-right">{currency}{totalNetPayment.toFixed(2)}</TableCell>}
                                 {visibleColumns.itemsSold && <TableCell className="text-right">{totalQuantity}</TableCell>}
                                 {visibleColumns.transactions && <TableCell className="text-right">{totalTransactions}</TableCell>}
                                 {paymentTypes.map(pt => visibleColumns[`${pt.name} Sales`] && (
-                                  <TableCell key={pt.id} className="text-right">{currency}{paymentTypeTotals[pt.name].toFixed(2)}</TableCell>
+                                  <TableCell key={`${pt.id}-sales-total`} className="text-right">{currency}{paymentTypeTotals[pt.name].toFixed(2)}</TableCell>
+                                ))}
+                                {paymentTypes.map(pt => visibleColumns[`Items Sold (${pt.name})`] && (
+                                    <TableCell key={`${pt.id}-items-total`} className="text-right">{paymentQuantityTotals[pt.name]}</TableCell>
                                 ))}
                             </TableRow>
                         </TableFooter>
@@ -191,6 +226,7 @@ export default function ReportsPage() {
     netPayment: true,
     itemsSold: true,
     transactions: true,
+    category: true,
   });
 
   const [activeTab, setActiveTab] = useState("item");
@@ -198,6 +234,7 @@ export default function ReportsPage() {
   const [salesByCategory, setSalesByCategory] = useState<ReportDataPoint[]>([]);
   const [salesByEmployee, setSalesByEmployee] = useState<ReportDataPoint[]>([]);
   const [salesByPayment, setSalesByPayment] = useState<ReportDataPoint[]>([]);
+  const [salesByTransaction, setSalesByTransaction] = useState<TransactionDataPoint[]>([]);
   
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -212,18 +249,13 @@ export default function ReportsPage() {
   }, [filters.storeId]);
 
   useEffect(() => {
-    // Initialize visible columns for payment types
     const initialVisibility: VisibleColumns = {
-        netSales: true,
-        tax: true,
-        netPayment: true,
-        itemsSold: true,
-        transactions: true,
+        netSales: true, tax: true, netPayment: true, itemsSold: true, transactions: true, category: true,
     };
     paymentTypes.forEach(pt => {
-        // Set default visibility to false unless it's a major type
         const isDefaultVisible = ['Cash', 'Card', 'Credit'].includes(pt.name);
         initialVisibility[`${pt.name} Sales`] = isDefaultVisible;
+        initialVisibility[`Items Sold (${pt.name})`] = false;
     });
     setVisibleColumns(initialVisibility);
   }, [paymentTypes]);
@@ -240,73 +272,95 @@ export default function ReportsPage() {
       let filteredSales = sales.filter(sale => {
           const saleDate = new Date(sale.created_at!);
           let match = saleDate >= fromDate && saleDate <= toDate;
-
-          if (filters.employeeId !== 'all') {
-            match &&= sale.employee_id === filters.employeeId;
-          }
-          
+          if (filters.employeeId !== 'all') match &&= sale.employee_id === filters.employeeId;
           if (filters.deviceId !== 'all') {
               match &&= sale.pos_device_id === filters.deviceId;
           } else if (filters.storeId !== 'all') {
               const device = posDevices.find(d => d.id === sale.pos_device_id);
               match &&= device?.store_id === filters.storeId;
           }
-          
           if (filters.paymentTypeId !== 'all') {
             const paymentType = paymentTypes.find(p => p.id === filters.paymentTypeId);
-            if (paymentType) {
-                match &&= sale.payment_methods.includes(paymentType.name);
-            }
+            if (paymentType) match &&= sale.payment_methods.includes(paymentType.name);
           }
-          
           return match;
       });
+
+      const transactionData = filteredSales.map(sale => {
+        const itemNames = (sale.items as any[]).map(i => `${i.name} (x${i.quantity})`).join(', ');
+        const categoryNames = [...new Set((sale.items as any[]).map(i => {
+            const product = products.find(p => p.id === i.id);
+            return product ? categories.find(c => c.id === product.category_id)?.name : 'N/A';
+        }).filter(Boolean))].join(', ');
+
+        return {
+          id: sale.id,
+          orderNumber: sale.order_number,
+          date: format(new Date(sale.created_at!), 'PPpp'),
+          employee: users.find(u => u.id === sale.employee_id)?.name || 'N/A',
+          customer: sale.customers?.name || 'Walk-in',
+          items: itemNames,
+          categories: categoryNames,
+          total: sale.total,
+          paymentMethods: sale.payment_methods as string[],
+        }
+      });
+      setSalesByTransaction(transactionData);
       
-      const getProratedPayments = (netSaleAmount: number, paymentMethods: string[]) => {
+      const getProratedData = (netSaleAmount: number, quantity: number, paymentMethods: string[]) => {
           const payments: { [key: string]: number } = {};
-          paymentTypes.forEach(pt => payments[pt.name] = 0);
+          const quantities: { [key: string]: number } = {};
+          paymentTypes.forEach(pt => {
+            payments[pt.name] = 0;
+            quantities[pt.name] = 0;
+          });
           
-          // Simplified proration logic: assumes equal split for multiple non-credit payments
           const nonCreditMethods = paymentMethods.filter(pm => paymentTypes.find(p => p.name === pm && p.type !== 'Credit'));
-          
           const creditMethod = paymentMethods.find(pm => paymentTypes.find(p => p.name === pm && p.type === 'Credit'));
 
           if (creditMethod) {
               payments[creditMethod] = netSaleAmount;
+              quantities[creditMethod] = quantity;
           } else if (nonCreditMethods.length > 0) {
               const splitAmount = netSaleAmount / nonCreditMethods.length;
+              const splitQuantity = quantity / nonCreditMethods.length; // Can be fractional
               nonCreditMethods.forEach(method => {
-                  payments[method] = (payments[method] || 0) + splitAmount;
+                  payments[method] += splitAmount;
+                  quantities[method] += splitQuantity;
               });
           }
-          return payments;
+          return { payments, quantities };
       }
 
-      const getTaxAmount = (netAmount: number) => {
-          if (!defaultTax) return 0;
-          return netAmount * (defaultTax.rate / 100);
-      }
+      const getTaxAmount = (netAmount: number) => defaultTax ? netAmount * (defaultTax.rate / 100) : 0;
 
       const createInitialDataPoint = (name: string): ReportDataPoint => {
         const initialPayments: { [key: string]: number } = {};
-        paymentTypes.forEach(pt => initialPayments[pt.name] = 0);
-        return { name, sales: 0, tax: 0, netPayment: 0, quantity: 0, transactions: 0, paymentSales: initialPayments };
+        const initialQuantities: { [key: string]: number } = {};
+        paymentTypes.forEach(pt => {
+            initialPayments[pt.name] = 0;
+            initialQuantities[pt.name] = 0;
+        });
+        return { name, sales: 0, tax: 0, netPayment: 0, quantity: 0, transactions: 0, paymentSales: initialPayments, paymentQuantities: initialQuantities };
       };
 
       const itemSales = filteredSales.reduce((acc, sale) => {
         (sale.items as any[]).forEach(item => {
+            const product = products.find(p => p.id === item.id);
             const netAmount = item.price * item.quantity;
             const taxAmount = getTaxAmount(netAmount);
-            const proratedPayments = getProratedPayments(netAmount, sale.payment_methods);
+            const { payments, quantities } = getProratedData(netAmount, item.quantity, sale.payment_methods);
             
             acc[item.name] = acc[item.name] || createInitialDataPoint(item.name);
+            acc[item.name].category = categories.find(c => c.id === product?.category_id)?.name || 'N/A';
             acc[item.name].sales += netAmount;
             acc[item.name].tax += taxAmount;
             acc[item.name].netPayment += netAmount + taxAmount;
             acc[item.name].quantity! += item.quantity;
             acc[item.name].transactions += 1; // Imperfect, counts transaction per item
             paymentTypes.forEach(pt => {
-                acc[item.name].paymentSales[pt.name] += proratedPayments[pt.name] || 0;
+                acc[item.name].paymentSales[pt.name] += payments[pt.name] || 0;
+                acc[item.name].paymentQuantities[pt.name] += quantities[pt.name] || 0;
             });
         });
         return acc;
@@ -321,7 +375,7 @@ export default function ReportsPage() {
             if (category) {
               const netAmount = item.price * item.quantity;
               const taxAmount = getTaxAmount(netAmount);
-              const proratedPayments = getProratedPayments(netAmount, sale.payment_methods);
+              const { payments, quantities } = getProratedData(netAmount, item.quantity, sale.payment_methods);
 
               acc[category.name] = acc[category.name] || createInitialDataPoint(category.name);
               acc[category.name].sales += netAmount;
@@ -330,7 +384,8 @@ export default function ReportsPage() {
               acc[category.name].quantity! += item.quantity;
               acc[category.name].transactions++;
               paymentTypes.forEach(pt => {
-                  acc[category.name].paymentSales[pt.name] += proratedPayments[pt.name] || 0;
+                  acc[category.name].paymentSales[pt.name] += payments[pt.name] || 0;
+                  acc[category.name].paymentQuantities[pt.name] += quantities[pt.name] || 0;
               });
             }
           }
@@ -343,16 +398,18 @@ export default function ReportsPage() {
         const employeeName = users.find(u => u.id === sale.employee_id)?.name || 'N/A';
         const netAmount = sale.total / (1 + ((defaultTax?.rate || 0) / 100));
         const taxAmount = sale.total - netAmount;
-        const proratedPayments = getProratedPayments(netAmount, sale.payment_methods);
+        const totalQuantity = (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
+        const { payments, quantities } = getProratedData(netAmount, totalQuantity, sale.payment_methods);
 
         acc[employeeName] = acc[employeeName] || createInitialDataPoint(employeeName);
         acc[employeeName].sales += netAmount;
         acc[employeeName].tax += taxAmount;
         acc[employeeName].netPayment += sale.total;
-        acc[employeeName].quantity! += (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
+        acc[employeeName].quantity! += totalQuantity;
         acc[employeeName].transactions++;
         paymentTypes.forEach(pt => {
-            acc[employeeName].paymentSales[pt.name] += proratedPayments[pt.name] || 0;
+            acc[employeeName].paymentSales[pt.name] += payments[pt.name] || 0;
+            acc[employeeName].paymentQuantities[pt.name] += quantities[pt.name] || 0;
         });
         return acc;
       }, {} as Record<string, ReportDataPoint>);
@@ -361,14 +418,16 @@ export default function ReportsPage() {
       const paymentSales = filteredSales.reduce((acc, sale) => {
         const netAmount = sale.total / (1 + ((defaultTax?.rate || 0) / 100));
         const taxAmount = sale.total - netAmount;
+        const totalQuantity = (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
         (sale.payment_methods as any[]).forEach(method => {
             acc[method] = acc[method] || createInitialDataPoint(method);
             acc[method].sales += netAmount; // Imperfect for split payments
             acc[method].tax += taxAmount;
             acc[method].netPayment += netAmount + taxAmount;
-            acc[method].quantity! += (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
+            acc[method].quantity! += totalQuantity;
             acc[method].transactions++;
             acc[method].paymentSales[method] += netAmount;
+            acc[method].paymentQuantities[method] += totalQuantity;
         });
         return acc;
       }, {} as Record<string, ReportDataPoint>);
@@ -394,19 +453,23 @@ export default function ReportsPage() {
       case 'category': dataToExport = salesByCategory; break;
       case 'employee': dataToExport = salesByEmployee; break;
       case 'payment': dataToExport = salesByPayment; break;
+      case 'transaction': dataToExport = salesByTransaction; break;
     }
 
     const csvData = dataToExport.map(d => {
+        if (activeTab === 'transaction') {
+            return {
+                "Order #": d.orderNumber, "Date": d.date, "Employee": d.employee, "Customer": d.customer,
+                "Items": d.items, "Categories": d.categories, "Total": d.total.toFixed(2), "Payment Methods": d.paymentMethods.join(', ')
+            };
+        }
         const row: {[key: string]: any} = {
-            Name: d.name,
-            "Net Sales": d.sales.toFixed(2),
-            "Tax": d.tax.toFixed(2),
-            "Net Payment": d.netPayment.toFixed(2),
-            "Items Sold": d.quantity,
-            Transactions: d.transactions,
+            Name: d.name, Category: d.category, "Net Sales": d.sales.toFixed(2), "Tax": d.tax.toFixed(2),
+            "Net Payment": d.netPayment.toFixed(2), "Items Sold": d.quantity, Transactions: d.transactions,
         };
         paymentTypes.forEach(pt => {
             row[`${pt.name} Sales`] = (d.paymentSales[pt.name] || 0).toFixed(2);
+            row[`Items Sold (${pt.name})`] = (d.paymentQuantities[pt.name] || 0).toFixed(0);
         });
         return row;
     });
@@ -435,38 +498,13 @@ export default function ReportsPage() {
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Popover>
             <PopoverTrigger asChild>
-                <Button
-                id="date"
-                variant={"outline"}
-                className={cn(
-                    "w-full sm:w-[260px] justify-start text-left font-normal",
-                    !date && "text-muted-foreground"
-                )}
-                >
+                <Button id="date" variant={"outline"} className={cn("w-full sm:w-[260px] justify-start text-left font-normal", !date && "text-muted-foreground")}>
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {date?.from ? (
-                    date.to ? (
-                    <>
-                        {format(date.from, "LLL dd, y")} -{" "}
-                        {format(date.to, "LLL dd, y")}
-                    </>
-                    ) : (
-                    format(date.from, "LLL dd, y")
-                    )
-                ) : (
-                    <span>Pick a date</span>
-                )}
+                {date?.from ? (date.to ? (<>{format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")}</>) : (format(date.from, "LLL dd, y"))) : (<span>Pick a date</span>)}
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                initialFocus
-                mode="range"
-                defaultMonth={date?.from}
-                selected={date}
-                onSelect={setDate}
-                numberOfMonths={2}
-                />
+                <Calendar initialFocus mode="range" defaultMonth={date?.from} selected={date} onSelect={setDate} numberOfMonths={2}/>
             </PopoverContent>
             </Popover>
             <Button onClick={handleExport} variant="outline"><Download className="h-4 w-4 mr-2 sm:mr-0"/> <span className="sm:hidden">Export</span></Button>
@@ -513,23 +551,28 @@ export default function ReportsPage() {
                         Display Columns
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[200px]">
-                    <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                <DropdownMenuContent align="end" className="w-[220px]">
+                    <DropdownMenuLabel>Toggle Metric Columns</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuCheckboxItem checked={visibleColumns.netSales} onCheckedChange={(c) => handleColumnVisibilityChange('netSales', c)}>Net Sales</DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem checked={visibleColumns.tax} onCheckedChange={(c) => handleColumnVisibilityChange('tax', c)}>Tax</DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem checked={visibleColumns.netPayment} onCheckedChange={(c) => handleColumnVisibilityChange('netPayment', c)}>Net Payment</DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem checked={visibleColumns.itemsSold} onCheckedChange={(c) => handleColumnVisibilityChange('itemsSold', c)}>Items Sold</DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem checked={visibleColumns.transactions} onCheckedChange={(c) => handleColumnVisibilityChange('transactions', c)}>Transactions</DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={visibleColumns.category} onCheckedChange={(c) => handleColumnVisibilityChange('category', c)}>Category</DropdownMenuCheckboxItem>
+
                     <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Payment Types</DropdownMenuLabel>
+                    <DropdownMenuLabel>Payment Sales</DropdownMenuLabel>
                     {paymentTypes.map(pt => (
-                      <DropdownMenuCheckboxItem
-                        key={pt.id}
-                        checked={visibleColumns[`${pt.name} Sales`]}
-                        onCheckedChange={(c) => handleColumnVisibilityChange(`${pt.name} Sales`, c)}
-                      >
+                      <DropdownMenuCheckboxItem key={pt.id} checked={visibleColumns[`${pt.name} Sales`]} onCheckedChange={(c) => handleColumnVisibilityChange(`${pt.name} Sales`, c)}>
                         {pt.name} Sales
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                     <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Items Sold by Payment</DropdownMenuLabel>
+                     {paymentTypes.map(pt => (
+                      <DropdownMenuCheckboxItem key={`${pt.id}-items`} checked={visibleColumns[`Items Sold (${pt.name})`]} onCheckedChange={(c) => handleColumnVisibilityChange(`Items Sold (${pt.name})`, c)}>
+                        Items Sold ({pt.name})
                       </DropdownMenuCheckboxItem>
                     ))}
                 </DropdownMenuContent>
@@ -538,11 +581,12 @@ export default function ReportsPage() {
     </Card>
 
       <Tabs defaultValue="item" onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
           <TabsTrigger value="item">By Item</TabsTrigger>
           <TabsTrigger value="category">By Category</TabsTrigger>
           <TabsTrigger value="employee">By Employee</TabsTrigger>
           <TabsTrigger value="payment">By Payment Type</TabsTrigger>
+          <TabsTrigger value="transaction">By Transaction</TabsTrigger>
         </TabsList>
         
         <TabsContent value="item" className="pt-4 space-y-4">
@@ -577,7 +621,49 @@ export default function ReportsPage() {
                 </>
             )}
         </TabsContent>
+        <TabsContent value="transaction" className="pt-4 space-y-4">
+            {loading ? <p>Loading report...</p> : (
+                <Card>
+                    <CardHeader><CardTitle>Sales Transactions</CardTitle><CardDescription>A detailed log of all individual sales.</CardDescription></CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Order #</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Employee</TableHead>
+                                    <TableHead>Customer</TableHead>
+                                    <TableHead>Items</TableHead>
+                                    <TableHead>Categories</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                    <TableHead>Payment</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {salesByTransaction.map(tx => (
+                                    <TableRow key={tx.id}>
+                                        <TableCell>#{tx.orderNumber}</TableCell>
+                                        <TableCell>{tx.date}</TableCell>
+                                        <TableCell>{tx.employee}</TableCell>
+                                        <TableCell>{tx.customer}</TableCell>
+                                        <TableCell className="max-w-xs truncate">{tx.items}</TableCell>
+                                        <TableCell className="max-w-xs truncate">{tx.categories}</TableCell>
+                                        <TableCell className="text-right">{currency}{tx.total.toFixed(2)}</TableCell>
+                                        <TableCell>
+                                          <div className="flex flex-wrap gap-1">
+                                            {tx.paymentMethods.map(pm => <Badge key={pm} variant="outline">{pm}</Badge>)}
+                                          </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
+        </TabsContent>
       </Tabs>
     </div>
   );
 }
+
