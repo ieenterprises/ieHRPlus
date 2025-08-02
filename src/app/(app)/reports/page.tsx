@@ -34,7 +34,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Download } from "lucide-react";
+import { Calendar as CalendarIcon, Download, ListFilter } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -44,6 +44,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DateRange } from "react-day-picker";
 import { useState, useEffect, useMemo } from "react";
 import { subDays, format, startOfDay, endOfDay } from "date-fns";
@@ -62,6 +70,16 @@ type ReportDataPoint = {
     cashSales: number;
     cardSales: number;
     creditSales: number;
+};
+
+type VisibleColumns = {
+  netSales: boolean;
+  tax: boolean;
+  itemsSold: boolean;
+  transactions: boolean;
+  cashSales: boolean;
+  cardSales: boolean;
+  creditSales: boolean;
 };
 
 function ReportChart({ data, title, currency }: { data: ReportDataPoint[], title: string, currency: string }) {
@@ -88,7 +106,7 @@ function ReportChart({ data, title, currency }: { data: ReportDataPoint[], title
   );
 }
 
-function ReportTable({ data, dataKeyLabel, currency }: { data: ReportDataPoint[], dataKeyLabel: string, currency: string }) {
+function ReportTable({ data, dataKeyLabel, currency, visibleColumns }: { data: ReportDataPoint[], dataKeyLabel: string, currency: string, visibleColumns: VisibleColumns }) {
     const totalSales = useMemo(() => data.reduce((acc, item) => acc + item.sales, 0), [data]);
     const totalTax = useMemo(() => data.reduce((acc, item) => acc + item.tax, 0), [data]);
     const totalQuantity = useMemo(() => data.reduce((acc, item) => acc + (item.quantity || 0), 0), [data]);
@@ -108,39 +126,39 @@ function ReportTable({ data, dataKeyLabel, currency }: { data: ReportDataPoint[]
                         <TableHeader>
                             <TableRow>
                                 <TableHead>{dataKeyLabel}</TableHead>
-                                <TableHead className="text-right">Net Sales</TableHead>
-                                <TableHead className="text-right">Tax</TableHead>
-                                <TableHead className="text-right">Items Sold</TableHead>
-                                <TableHead className="text-right">Transactions</TableHead>
-                                <TableHead className="text-right">Cash Sales</TableHead>
-                                <TableHead className="text-right">Card Sales</TableHead>
-                                <TableHead className="text-right">Credit Sales (Unpaid)</TableHead>
+                                {visibleColumns.netSales && <TableHead className="text-right">Net Sales</TableHead>}
+                                {visibleColumns.tax && <TableHead className="text-right">Tax</TableHead>}
+                                {visibleColumns.itemsSold && <TableHead className="text-right">Items Sold</TableHead>}
+                                {visibleColumns.transactions && <TableHead className="text-right">Transactions</TableHead>}
+                                {visibleColumns.cashSales && <TableHead className="text-right">Cash Sales</TableHead>}
+                                {visibleColumns.cardSales && <TableHead className="text-right">Card Sales</TableHead>}
+                                {visibleColumns.creditSales && <TableHead className="text-right">Credit Sales (Unpaid)</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {data.map(item => (
                                 <TableRow key={item.name}>
                                     <TableCell className="font-medium">{item.name}</TableCell>
-                                    <TableCell className="text-right">{currency}{item.sales.toFixed(2)}</TableCell>
-                                    <TableCell className="text-right">{currency}{item.tax.toFixed(2)}</TableCell>
-                                    <TableCell className="text-right">{item.quantity}</TableCell>
-                                    <TableCell className="text-right">{item.transactions}</TableCell>
-                                    <TableCell className="text-right">{currency}{item.cashSales.toFixed(2)}</TableCell>
-                                    <TableCell className="text-right">{currency}{item.cardSales.toFixed(2)}</TableCell>
-                                    <TableCell className="text-right">{currency}{item.creditSales.toFixed(2)}</TableCell>
+                                    {visibleColumns.netSales && <TableCell className="text-right">{currency}{item.sales.toFixed(2)}</TableCell>}
+                                    {visibleColumns.tax && <TableCell className="text-right">{currency}{item.tax.toFixed(2)}</TableCell>}
+                                    {visibleColumns.itemsSold && <TableCell className="text-right">{item.quantity}</TableCell>}
+                                    {visibleColumns.transactions && <TableCell className="text-right">{item.transactions}</TableCell>}
+                                    {visibleColumns.cashSales && <TableCell className="text-right">{currency}{item.cashSales.toFixed(2)}</TableCell>}
+                                    {visibleColumns.cardSales && <TableCell className="text-right">{currency}{item.cardSales.toFixed(2)}</TableCell>}
+                                    {visibleColumns.creditSales && <TableCell className="text-right">{currency}{item.creditSales.toFixed(2)}</TableCell>}
                                 </TableRow>
                             ))}
                         </TableBody>
                         <TableFooter>
                             <TableRow className="font-bold">
                                 <TableCell>Total</TableCell>
-                                <TableCell className="text-right">{currency}{totalSales.toFixed(2)}</TableCell>
-                                <TableCell className="text-right">{currency}{totalTax.toFixed(2)}</TableCell>
-                                <TableCell className="text-right">{totalQuantity}</TableCell>
-                                <TableCell className="text-right">{totalTransactions}</TableCell>
-                                <TableCell className="text-right">{currency}{totalCashSales.toFixed(2)}</TableCell>
-                                <TableCell className="text-right">{currency}{totalCardSales.toFixed(2)}</TableCell>
-                                <TableCell className="text-right">{currency}{totalCreditSales.toFixed(2)}</TableCell>
+                                {visibleColumns.netSales && <TableCell className="text-right">{currency}{totalSales.toFixed(2)}</TableCell>}
+                                {visibleColumns.tax && <TableCell className="text-right">{currency}{totalTax.toFixed(2)}</TableCell>}
+                                {visibleColumns.itemsSold && <TableCell className="text-right">{totalQuantity}</TableCell>}
+                                {visibleColumns.transactions && <TableCell className="text-right">{totalTransactions}</TableCell>}
+                                {visibleColumns.cashSales && <TableCell className="text-right">{currency}{totalCashSales.toFixed(2)}</TableCell>}
+                                {visibleColumns.cardSales && <TableCell className="text-right">{currency}{totalCardSales.toFixed(2)}</TableCell>}
+                                {visibleColumns.creditSales && <TableCell className="text-right">{currency}{totalCreditSales.toFixed(2)}</TableCell>}
                             </TableRow>
                         </TableFooter>
                     </Table>
@@ -162,7 +180,16 @@ export default function ReportsPage() {
       storeId: 'all',
       deviceId: 'all',
       employeeId: 'all',
-      paymentType: 'all',
+  });
+
+  const [visibleColumns, setVisibleColumns] = useState<VisibleColumns>({
+    netSales: true,
+    tax: true,
+    itemsSold: true,
+    transactions: true,
+    cashSales: false,
+    cardSales: false,
+    creditSales: false,
   });
 
   const [activeTab, setActiveTab] = useState("item");
@@ -197,10 +224,6 @@ export default function ReportsPage() {
 
           if (filters.employeeId !== 'all') {
             match &&= sale.employee_id === filters.employeeId;
-          }
-          
-          if (filters.paymentType !== 'all') {
-            match &&= sale.payment_methods.includes(filters.paymentType);
           }
           
           if (filters.deviceId !== 'all') {
@@ -329,6 +352,10 @@ export default function ReportsPage() {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
+  const handleColumnVisibilityChange = (column: keyof VisibleColumns, checked: boolean) => {
+    setVisibleColumns(prev => ({...prev, [column]: checked }));
+  };
+
   const handleExport = () => {
     let dataToExport: any[] = [];
     let reportName = activeTab;
@@ -437,13 +464,25 @@ export default function ReportsPage() {
                     {users.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
                 </SelectContent>
             </Select>
-             <Select value={filters.paymentType} onValueChange={(v) => handleFilterChange('paymentType', v)}>
-                <SelectTrigger><SelectValue placeholder="Filter by Payment Type"/></SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Payment Types</SelectItem>
-                    {paymentTypes.map(pt => <SelectItem key={pt.id} value={pt.name}>{pt.name}</SelectItem>)}
-                </SelectContent>
-            </Select>
+             <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full">
+                        <ListFilter className="mr-2 h-4 w-4" />
+                        Display Columns
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[200px]">
+                    <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuCheckboxItem checked={visibleColumns.netSales} onCheckedChange={(c) => handleColumnVisibilityChange('netSales', c)}>Net Sales</DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={visibleColumns.tax} onCheckedChange={(c) => handleColumnVisibilityChange('tax', c)}>Tax</DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={visibleColumns.itemsSold} onCheckedChange={(c) => handleColumnVisibilityChange('itemsSold', c)}>Items Sold</DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={visibleColumns.transactions} onCheckedChange={(c) => handleColumnVisibilityChange('transactions', c)}>Transactions</DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={visibleColumns.cashSales} onCheckedChange={(c) => handleColumnVisibilityChange('cashSales', c)}>Cash Sales</DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={visibleColumns.cardSales} onCheckedChange={(c) => handleColumnVisibilityChange('cardSales', c)}>Card Sales</DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={visibleColumns.creditSales} onCheckedChange={(c) => handleColumnVisibilityChange('creditSales', c)}>Credit Sales</DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </CardContent>
     </Card>
 
@@ -459,7 +498,7 @@ export default function ReportsPage() {
             {loading ? <p>Loading report...</p> : (
                 <>
                     <ReportChart data={salesByItem} title="Sales by Item" currency={currency} />
-                    <ReportTable data={salesByItem} dataKeyLabel="Item" currency={currency} />
+                    <ReportTable data={salesByItem} dataKeyLabel="Item" currency={currency} visibleColumns={visibleColumns} />
                 </>
             )}
         </TabsContent>
@@ -467,7 +506,7 @@ export default function ReportsPage() {
             {loading ? <p>Loading report...</p> : (
                 <>
                     <ReportChart data={salesByCategory} title="Sales by Category" currency={currency} />
-                    <ReportTable data={salesByCategory} dataKeyLabel="Category" currency={currency} />
+                    <ReportTable data={salesByCategory} dataKeyLabel="Category" currency={currency} visibleColumns={visibleColumns} />
                 </>
             )}
         </TabsContent>
@@ -475,7 +514,7 @@ export default function ReportsPage() {
             {loading ? <p>Loading report...</p> : (
                  <>
                     <ReportChart data={salesByEmployee} title="Sales by Employee" currency={currency} />
-                    <ReportTable data={salesByEmployee} dataKeyLabel="Employee" currency={currency} />
+                    <ReportTable data={salesByEmployee} dataKeyLabel="Employee" currency={currency} visibleColumns={visibleColumns} />
                 </>
             )}
         </TabsContent>
@@ -483,7 +522,7 @@ export default function ReportsPage() {
             {loading ? <p>Loading report...</p> : (
                  <>
                     <ReportChart data={salesByPayment} title="Sales by Payment Type" currency={currency} />
-                    <ReportTable data={salesByPayment} dataKeyLabel="Payment Type" currency={currency} />
+                    <ReportTable data={salesByPayment} dataKeyLabel="Payment Type" currency={currency} visibleColumns={visibleColumns} />
                 </>
             )}
         </TabsContent>
@@ -491,4 +530,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
