@@ -186,6 +186,7 @@ export default function ReportsPage() {
       storeId: 'all',
       deviceId: 'all',
       employeeId: 'all',
+      paymentTypeId: 'all',
   });
 
   const [visibleColumns, setVisibleColumns] = useState<VisibleColumns>({
@@ -238,6 +239,13 @@ export default function ReportsPage() {
           } else if (filters.storeId !== 'all') {
               const device = posDevices.find(d => d.id === sale.pos_device_id);
               match &&= device?.store_id === filters.storeId;
+          }
+          
+          if (filters.paymentTypeId !== 'all') {
+            const paymentType = paymentTypes.find(p => p.id === filters.paymentTypeId);
+            if (paymentType) {
+                match &&= sale.payment_methods.includes(paymentType.name);
+            }
           }
           
           return match;
@@ -453,7 +461,7 @@ export default function ReportsPage() {
         <CardHeader>
             <CardTitle>Filters</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
                 <SelectTrigger><SelectValue placeholder="Filter by Store"/></SelectTrigger>
                 <SelectContent>
@@ -473,6 +481,13 @@ export default function ReportsPage() {
                 <SelectContent>
                     <SelectItem value="all">All Employees</SelectItem>
                     {users.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
+            <Select value={filters.paymentTypeId} onValueChange={(v) => handleFilterChange('paymentTypeId', v)}>
+                <SelectTrigger><SelectValue placeholder="Filter by Payment Type"/></SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Payment Types</SelectItem>
+                    {paymentTypes.map(pt => <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>)}
                 </SelectContent>
             </Select>
              <DropdownMenu>
