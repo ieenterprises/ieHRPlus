@@ -293,25 +293,28 @@ export default function KitchenPage() {
                            {loading ? (
                                 <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
                             ) : filteredTickets.length > 0 ? (
-                                filteredTickets.map(ticket => (
-                                    <TableRow key={ticket.id}>
-                                        <TableCell className="font-medium">#{ticket.order_number}</TableCell>
-                                        <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
-                                        <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
-                                        <TableCell>{(ticket.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
-                                        <TableCell className="text-right">${ticket.total.toFixed(2)}</TableCell>
-                                        <TableCell className="text-right">
-                                          <div className="flex justify-end gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as OpenTicket)}>
-                                              Load
-                                            </Button>
-                                            <Button variant="outline" size="sm" onClick={() => onPrint(ticket, 'ticket')}>
-                                              <Printer className="mr-2 h-4 w-4" /> Print
-                                            </Button>
-                                          </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                filteredTickets.map(ticket => {
+                                    const canLoadTicket = loggedInUser?.id === ticket.employee_id || hasPermission('MANAGE_OPEN_TICKETS');
+                                    return (
+                                        <TableRow key={ticket.id}>
+                                            <TableCell className="font-medium">#{ticket.order_number}</TableCell>
+                                            <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
+                                            <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
+                                            <TableCell>{(ticket.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
+                                            <TableCell className="text-right">${ticket.total.toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">
+                                              <div className="flex justify-end gap-2">
+                                                <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as OpenTicket)} disabled={!canLoadTicket}>
+                                                  Load
+                                                </Button>
+                                                <Button variant="outline" size="sm" onClick={() => onPrint(ticket, 'ticket')}>
+                                                  <Printer className="mr-2 h-4 w-4" /> Print
+                                                </Button>
+                                              </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
