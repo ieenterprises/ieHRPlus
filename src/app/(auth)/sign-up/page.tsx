@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -22,11 +23,12 @@ import { doc, writeBatch, collection, getDocs, query, where, setDoc, addDoc } fr
 import { posPermissions, backOfficePermissions, AnyPermission } from "@/lib/permissions";
 import { MOCK_INITIAL_ROLES } from "@/hooks/use-settings";
 import { seedDatabaseWithMockData } from "@/lib/mock-data";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 
 export default function SignUpPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -123,7 +125,12 @@ export default function SignUpPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" required />
+               <div className="relative">
+                <Input id="password" name="password" type={passwordVisible ? "text" : "password"} required />
+                <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2 h-7 w-7" onClick={() => setPasswordVisible(!passwordVisible)}>
+                  {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
