@@ -10,34 +10,17 @@ import { MOCK_INITIAL_ROLES as initialMockRoles } from "@/hooks/use-settings";
 // Helper to generate unique IDs
 const uid = (prefix: string) => `${prefix}_${Math.random().toString(36).substr(2, 9)}`;
 
-// 1. Define static base data
+// 1. Define static base data for a fresh setup
 const MOCK_CATEGORIES = [
-  { id: "cat_food", name: "Food" },
-  { id: "cat_beverages", name: "Beverages" },
-  { id: "cat_snacks", name: "Snacks" },
-  { id: "cat_room", name: "Room" },
+  // User can create their own categories
 ];
 
-const MOCK_PRODUCTS = [
-  // Food
-  { id: "prod_burger", name: "Classic Burger", price: 12.99, stock: 50, category_id: "cat_food", image_url: "https://placehold.co/300x200.png", status: 'Available' },
-  { id: "prod_pizza", name: "Margherita Pizza", price: 15.50, stock: 30, category_id: "cat_food", image_url: "https://placehold.co/300x200.png", status: 'Available' },
-  { id: "prod_salad", name: "Chicken Caesar Salad", price: 10.25, stock: 40, category_id: "cat_food", image_url: "https://placehold.co/300x200.png", status: 'Available' },
-  // Beverages
-  { id: "prod_coke", name: "Coca-Cola", price: 2.50, stock: 100, category_id: "cat_beverages", image_url: "https://placehold.co/300x200.png", status: 'Available' },
-  { id: "prod_juice", name: "Fresh Orange Juice", price: 4.00, stock: 60, category_id: "cat_beverages", image_url: "https://placehold.co/300x200.png", status: 'Available' },
-  // Snacks
-  { id: "prod_fries", name: "French Fries", price: 4.50, stock: 80, category_id: "cat_snacks", image_url: "https://placehold.co/300x200.png", status: 'Available' },
-  // Rooms
-  { id: "prod_room_101", name: "Standard Room 101", price: 150.00, stock: 1, category_id: "cat_room", image_url: "https://placehold.co/300x200.png", status: 'Available' },
-  { id: "prod_room_102", name: "Standard Room 102", price: 150.00, stock: 1, category_id: "cat_room", image_url: "https://placehold.co/300x200.png", status: 'Available' },
-  { id: "prod_room_201", name: "Deluxe Suite 201", price: 250.00, stock: 1, category_id: "cat_room", image_url: "https://placehold.co/300x200.png", status: 'Maintenance' },
+const MOCK_PRODUCTS: any[] = [
+  // User will add their own products
 ];
 
 const MOCK_CUSTOMERS = [
   { id: "cust_walkin", name: "Walk-in Customer", email: "walkin@example.com", phone: null },
-  { id: "cust_johndoe", name: "John Doe", email: "john.doe@example.com", phone: "123-456-7890" },
-  { id: "cust_janesmith", name: "Jane Smith", email: "jane.smith@example.com", phone: "098-765-4321" },
 ];
 
 const MOCK_STORES = [
@@ -46,122 +29,24 @@ const MOCK_STORES = [
 
 const MOCK_POS_DEVICES = [
     { id: "pos_front", name: "Front Desk POS", store_id: "store_main" },
-    { id: "pos_bar", name: "Bar POS", store_id: "store_main" },
 ];
 
-const MOCK_PRINTERS = [
-    { id: uid("printer"), name: "Kitchen Printer", connection_type: "Network", ip_address: "192.188.1.100", pos_device_id: "pos_front" },
-    { id: uid("printer"), name: "Receipt Printer", connection_type: "Cable", pos_device_id: "pos_front" },
+const MOCK_PRINTERS: any[] = [
+    // User can configure printers as needed
 ];
 
 const MOCK_TAXES = [
-    { id: uid("tax"), name: "Sales Tax", rate: 8.0, type: "Added", is_default: true },
+    { id: uid("tax"), name: "Sales Tax", rate: 0.0, type: "Added", is_default: true },
 ];
 
 const MOCK_PAYMENT_TYPES = [
     { id: 'pay_1', name: 'Cash', type: 'Cash' },
     { id: 'pay_2', name: 'Card', type: 'Card' },
     { id: 'pay_3', name: 'Credit', type: 'Credit' },
-    { id: 'pay_4', name: 'Other', type: 'Other' },
 ];
 
-// 2. Define function to generate dynamic data
-const generateDynamicMockData = (ownerId: string, businessName: string) => {
-  const now = new Date();
-
-  const sales = [
-    // Sale 1: Recent cash sale
-    {
-      id: "sale_1",
-      order_number: 1001,
-      total: 19.96,
-      payment_methods: ["Cash"],
-      items: [{ id: "prod_burger", name: "Classic Burger", quantity: 1, price: 12.99 }, { id: "prod_coke", name: "Coca-Cola", quantity: 1, price: 2.50 }],
-      status: "Fulfilled",
-      created_at: subDays(now, 1).toISOString(),
-      customer_id: "cust_walkin",
-      employee_id: ownerId,
-      pos_device_id: "pos_front",
-    },
-    // Sale 2: Credit sale for John Doe
-    {
-      id: "sale_2",
-      order_number: 1002,
-      total: 15.50,
-      payment_methods: ["Credit"],
-      items: [{ id: "prod_pizza", name: "Margherita Pizza", quantity: 1, price: 15.50 }],
-      status: "Fulfilled",
-      created_at: subDays(now, 5).toISOString(),
-      customer_id: "cust_johndoe",
-      employee_id: ownerId,
-      pos_device_id: "pos_bar",
-    },
-    // Sale 4: Voided sale
-    {
-      id: "sale_4_voided",
-      order_number: 1004,
-      total: 4.50,
-      payment_methods: ["Cash"],
-      items: [{ id: "prod_fries", name: "French Fries", quantity: 1, price: 4.50 }],
-      status: "Fulfilled",
-      created_at: subDays(now, 3).toISOString(),
-      customer_id: "cust_walkin",
-      employee_id: ownerId,
-      pos_device_id: "pos_front",
-    },
-  ];
-
-  const debts = [
-    {
-      id: "debt_1",
-      sale_id: "sale_2",
-      customer_id: "cust_johndoe",
-      amount: 15.50,
-      status: "Unpaid",
-      created_at: subDays(now, 5).toISOString(),
-    },
-  ];
-
-  const reservations: any[] = [
-     
-  ];
-  
-  const openTickets = [
-    {
-        id: "ticket_1",
-        ticket_name: "Table 5 Order",
-        employee_id: ownerId,
-        customer_id: "cust_walkin",
-        items: [{ id: "prod_salad", name: "Chicken Caesar Salad", quantity: 2, price: 10.25 }, { id: "prod_juice", name: "Fresh Orange Juice", quantity: 2, price: 4.00 }] as SaleItem[],
-        total: (10.25 * 2) + (4.00 * 2),
-        created_at: subDays(now, 1).toISOString(),
-    }
-  ];
-
-  const voidedLogs = [
-    {
-        id: "void_1_receipt",
-        type: "receipt",
-        voided_by_employee_id: ownerId,
-        created_at: subDays(now, 2).toISOString(),
-        data: sales.find(s => s.id === "sale_4_voided")
-    },
-    {
-        id: "void_2_ticket",
-        type: "ticket",
-        voided_by_employee_id: ownerId,
-        created_at: subDays(now, 1).toISOString(),
-        data: {
-            id: "ticket_2_voided",
-            ticket_name: "Mistake Order",
-            employee_id: ownerId,
-            items: [{ id: "prod_coke", name: "Coca-Cola", quantity: 5, price: 2.50 }] as SaleItem[],
-            total: 12.50,
-            created_at: subDays(now, 2).toISOString(),
-        }
-    }
-  ];
-
+// 2. This function now generates an empty state, not mock data
+const generateInitialBusinessData = (ownerId: string, businessName: string) => {
   const settings = {
     featureSettings: {
       open_tickets: true,
@@ -186,7 +71,14 @@ const generateDynamicMockData = (ownerId: string, businessName: string) => {
     currency: "$",
   };
 
-  return { sales, debts, reservations, settings, openTickets, voidedLogs };
+  return {
+    sales: [],
+    debts: [],
+    reservations: [],
+    settings,
+    openTickets: [],
+    voidedLogs: []
+  };
 };
 
 // 3. The main seeding function
@@ -198,25 +90,16 @@ export const seedDatabaseWithMockData = (batch: WriteBatch, businessId: string, 
     batch.set(doc(db, collectionName, docId), item);
   };
     
-  // --- Add static data to batch ---
+  // --- Add essential configuration data to batch ---
   initialMockRoles.forEach(item => addWithBusinessId("roles", item));
-  MOCK_CATEGORIES.forEach(item => addWithBusinessId("categories", item));
-  MOCK_PRODUCTS.forEach(item => addWithBusinessId("products", item));
   MOCK_CUSTOMERS.forEach(item => addWithBusinessId("customers", item));
   MOCK_STORES.forEach(item => addWithBusinessId("stores", item));
   MOCK_POS_DEVICES.forEach(item => addWithBusinessId("pos_devices", item));
-  MOCK_PRINTERS.forEach(item => addWithBusinessId("printers", item));
   MOCK_TAXES.forEach(item => addWithBusinessId("taxes", item));
   MOCK_PAYMENT_TYPES.forEach(item => addWithBusinessId("payment_types", item));
 
-  // --- Generate and add dynamic data to batch ---
-  const { sales, debts, reservations, settings, openTickets, voidedLogs } = generateDynamicMockData(ownerId, "Your Business");
-
-  sales.forEach(item => addWithBusinessId("sales", item));
-  debts.forEach(item => addWithBusinessId("debts", item));
-  reservations.forEach(item => addWithBusinessId("reservations", item));
-  openTickets.forEach(item => addWithBusinessId("open_tickets", item));
-  voidedLogs.forEach(item => addWithBusinessId("voided_logs", item));
+  // --- Add empty transactional data collections if needed (or just the settings) ---
+  const { settings } = generateInitialBusinessData(ownerId, "Your Business");
 
   // --- Add settings document ---
   batch.set(doc(db, "settings", businessId), settings);
