@@ -377,7 +377,7 @@ export default function SalesPage() {
       return;
     }
     const hasRoom = orderItems.some(item => getCategoryName(item.product.category_id) === 'Room');
-    if (hasRoom && !forcePaymentDialog) {
+    if (hasRoom && !forcePaymentDialog && !debtToSettle) {
         setIsReservationPaymentDialogOpen(true);
     } else {
         setPayments([]);
@@ -1149,6 +1149,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 
