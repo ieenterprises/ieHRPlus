@@ -58,6 +58,7 @@ import Papa from "papaparse";
 import { db, auth } from "@/lib/firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
 import { collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, query, where, getDocs, addDoc } from "firebase/firestore";
+import { updateUserPassword } from './actions';
 
 
 const EMPTY_USER: Partial<User> = {
@@ -158,10 +159,19 @@ export default function TeamPage() {
 
     try {
         if ('id' in editingUser && editingUser.id) {
-            // NOTE: Updating Firebase Auth passwords from a client app is complex and requires
-            // re-authentication of the admin user. This functionality is removed to prevent errors.
-            // Only Firestore data is updated here.
-            await updateDoc(doc(db, 'users', editingUser.id), userData);
+            const userId = editingUser.id;
+            const firestoreData: any = { ...userData };
+            
+            if (newPassword) {
+                const result = await updateUserPassword(userId, newPassword);
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
+                firestoreData.password = newPassword; // Also update password in Firestore for display
+                toast({ title: "Password Updated", description: "The user's password has been successfully changed." });
+            }
+
+            await updateDoc(doc(db, 'users', userId), firestoreData);
             toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
         } else {
             if (!newPassword) {
@@ -181,25 +191,22 @@ export default function TeamPage() {
             });
 
             // Re-sign in the owner to refresh their token and avoid session interruption
-             if (loggedInUser && loggedInUser.email) {
-                const ownerPassword = prompt(`To finalize, please re-enter your password to continue your session:`);
-                if (ownerPassword) {
-                    try {
-                        await signInWithEmailAndPassword(auth, loggedInUser.email, ownerPassword);
-                    } catch (reauthError) {
-                         toast({
-                            title: "Session Warning",
-                            description: "Could not re-authenticate. You may need to sign in again.",
-                            variant: "destructive",
-                        });
-                    }
-                } else {
-                    toast({
-                        title: "Action Required",
-                        description: "You may need to sign in again to continue managing your application.",
-                        variant: "destructive"
+             if (loggedInUser && loggedInUser.email && loggedInUser.password) {
+                try {
+                    await signInWithEmailAndPassword(auth, loggedInUser.email, loggedInUser.password);
+                } catch (reauthError) {
+                     toast({
+                        title: "Session Warning",
+                        description: "Could not re-authenticate. You may need to sign in again.",
+                        variant: "destructive",
                     });
                 }
+            } else {
+                 toast({
+                    title: "Session Warning",
+                    description: "Could not re-authenticate admin. You may need to sign in again.",
+                    variant: "destructive"
+                });
             }
 
             toast({ title: "User Created", description: `User ${userData.name} has been created.` });
@@ -255,6 +262,7 @@ export default function TeamPage() {
     if (!editingRole || !loggedInUser?.businessId) return;
     const formData = new FormData(event.currentTarget);
     const roleName = formData.get("name") as string;
+    
     const roleData = {
       name: roleName,
       permissions: selectedRolePermissions,
@@ -276,7 +284,10 @@ export default function TeamPage() {
           await batch.commit();
           toast({ title: "Role Updated", description: `Permissions for all users with the '${roleName}' role have been updated.` });
       } else {
-          await addDoc(collection(db, 'roles'), roleData);
+          await addDoc(collection(db, 'roles'), {
+              ...roleData,
+              id: doc(collection(db, 'roles')).id // Pre-generate ID to avoid conflict
+          });
           toast({ title: "Role Added" });
       }
       handleRoleDialogClose(false);
@@ -505,7 +516,6 @@ export default function TeamPage() {
                           name="password" 
                           type={passwordVisible ? "text" : "password"} 
                           placeholder={editingUser?.id ? "Leave blank to keep current" : ""}
-                          defaultValue={editingUser?.password}
                           required={!editingUser?.id} 
                         />
                         <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2 h-7 w-7" onClick={() => setPasswordVisible(!passwordVisible)}>
