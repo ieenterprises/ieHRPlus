@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -70,10 +69,12 @@ function RoomStatusCard({
   room, 
   onStatusChange,
   categoryName,
+  canManageStatus,
 }: { 
   room: Product;
   onStatusChange: (roomId: string, status: RoomStatus) => void;
   categoryName: string;
+  canManageStatus: boolean;
 }) {
   const statusConfig = {
     Available: { icon: CheckCircle, color: "text-green-500", bg: "bg-green-50" },
@@ -99,18 +100,20 @@ function RoomStatusCard({
           {room.status}
         </Badge>
       </CardContent>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => onStatusChange(room.id, 'Available')}>Set as Available</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onStatusChange(room.id, 'Occupied')}>Set as Occupied</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onStatusChange(room.id, 'Maintenance')}>Set for Maintenance</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {canManageStatus && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onStatusChange(room.id, 'Available')}>Set as Available</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onStatusChange(room.id, 'Occupied')}>Set as Occupied</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onStatusChange(room.id, 'Maintenance')}>Set for Maintenance</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </Card>
   );
 }
@@ -152,6 +155,11 @@ export default function ReservationsPage() {
     const category = categories.find(c => c.id === p.category_id);
     return category?.name === 'Room';
   });
+
+  const canManageStatus = useMemo(() => {
+    if (!loggedInUser) return false;
+    return ['Owner', 'Administrator', 'Manager'].includes(loggedInUser.role);
+  }, [loggedInUser]);
 
   const filteredRooms = useMemo(() => {
     return rooms.filter(room => {
@@ -435,6 +443,7 @@ export default function ReservationsPage() {
                         room={room} 
                         onStatusChange={handleStatusChange}
                         categoryName={getCategoryName(room.category_id as string)}
+                        canManageStatus={canManageStatus}
                     />
                 ))}
             </div>
@@ -548,10 +557,12 @@ export default function ReservationsPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => handleEditReservation(reservation)}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Update Status
-                              </DropdownMenuItem>
+                              {canManageStatus && (
+                                <DropdownMenuItem onClick={() => handleEditReservation(reservation)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Update Status
+                                </DropdownMenuItem>
+                              )}
                               {hasPermission('CANCEL_RECEIPTS') && (
                                 <>
                                   <DropdownMenuSeparator />
@@ -621,5 +632,3 @@ export default function ReservationsPage() {
     </div>
   );
 }
-
-
