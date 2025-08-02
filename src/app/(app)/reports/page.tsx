@@ -55,9 +55,13 @@ import Papa from "papaparse";
 
 type ReportDataPoint = {
     name: string;
-    sales: number;
+    sales: number; // Net sales (pre-tax)
+    tax: number;
     quantity?: number;
     transactions: number;
+    cashSales: number;
+    cardSales: number;
+    creditSales: number;
 };
 
 function ReportChart({ data, title, currency }: { data: ReportDataPoint[], title: string, currency: string }) {
@@ -86,8 +90,12 @@ function ReportChart({ data, title, currency }: { data: ReportDataPoint[], title
 
 function ReportTable({ data, dataKeyLabel, currency }: { data: ReportDataPoint[], dataKeyLabel: string, currency: string }) {
     const totalSales = useMemo(() => data.reduce((acc, item) => acc + item.sales, 0), [data]);
+    const totalTax = useMemo(() => data.reduce((acc, item) => acc + item.tax, 0), [data]);
     const totalQuantity = useMemo(() => data.reduce((acc, item) => acc + (item.quantity || 0), 0), [data]);
     const totalTransactions = useMemo(() => data.reduce((acc, item) => acc + item.transactions, 0), [data]);
+    const totalCashSales = useMemo(() => data.reduce((acc, item) => acc + item.cashSales, 0), [data]);
+    const totalCardSales = useMemo(() => data.reduce((acc, item) => acc + item.cardSales, 0), [data]);
+    const totalCreditSales = useMemo(() => data.reduce((acc, item) => acc + item.creditSales, 0), [data]);
     
     return (
         <Card>
@@ -101,8 +109,12 @@ function ReportTable({ data, dataKeyLabel, currency }: { data: ReportDataPoint[]
                             <TableRow>
                                 <TableHead>{dataKeyLabel}</TableHead>
                                 <TableHead className="text-right">Net Sales</TableHead>
+                                <TableHead className="text-right">Tax</TableHead>
                                 <TableHead className="text-right">Items Sold</TableHead>
                                 <TableHead className="text-right">Transactions</TableHead>
+                                <TableHead className="text-right">Cash Sales</TableHead>
+                                <TableHead className="text-right">Card Sales</TableHead>
+                                <TableHead className="text-right">Credit Sales (Unpaid)</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -110,8 +122,12 @@ function ReportTable({ data, dataKeyLabel, currency }: { data: ReportDataPoint[]
                                 <TableRow key={item.name}>
                                     <TableCell className="font-medium">{item.name}</TableCell>
                                     <TableCell className="text-right">{currency}{item.sales.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right">{currency}{item.tax.toFixed(2)}</TableCell>
                                     <TableCell className="text-right">{item.quantity}</TableCell>
                                     <TableCell className="text-right">{item.transactions}</TableCell>
+                                    <TableCell className="text-right">{currency}{item.cashSales.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right">{currency}{item.cardSales.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right">{currency}{item.creditSales.toFixed(2)}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
@@ -119,8 +135,12 @@ function ReportTable({ data, dataKeyLabel, currency }: { data: ReportDataPoint[]
                             <TableRow className="font-bold">
                                 <TableCell>Total</TableCell>
                                 <TableCell className="text-right">{currency}{totalSales.toFixed(2)}</TableCell>
+                                <TableCell className="text-right">{currency}{totalTax.toFixed(2)}</TableCell>
                                 <TableCell className="text-right">{totalQuantity}</TableCell>
                                 <TableCell className="text-right">{totalTransactions}</TableCell>
+                                <TableCell className="text-right">{currency}{totalCashSales.toFixed(2)}</TableCell>
+                                <TableCell className="text-right">{currency}{totalCardSales.toFixed(2)}</TableCell>
+                                <TableCell className="text-right">{currency}{totalCreditSales.toFixed(2)}</TableCell>
                             </TableRow>
                         </TableFooter>
                     </Table>
@@ -136,7 +156,7 @@ export default function ReportsPage() {
     to: new Date(),
   });
   
-  const { stores, posDevices, paymentTypes, users, currency, sales, products, categories } = useSettings();
+  const { stores, posDevices, paymentTypes, users, currency, sales, products, categories, taxes: allTaxes } = useSettings();
 
   const [filters, setFilters] = useState({
       storeId: 'all',
@@ -169,6 +189,7 @@ export default function ReportsPage() {
 
       const fromDate = startOfDay(date.from);
       const toDate = date.to ? endOfDay(date.to) : endOfDay(new Date());
+      const defaultTax = allTaxes.find(t => t.is_default);
 
       let filteredSales = sales.filter(sale => {
           const saleDate = new Date(sale.created_at!);
@@ -192,12 +213,47 @@ export default function ReportsPage() {
           return match;
       });
       
+      const getProratedPayments = (saleTotal: number, paymentMethods: string[]) => {
+          const payments = { cashSales: 0, cardSales: 0, creditSales: 0 };
+          const creditPayment = paymentTypes.find(p => p.type === 'Credit');
+
+          if (paymentMethods.includes(creditPayment?.name || 'Credit')) {
+              payments.creditSales = saleTotal;
+          } else {
+              // For simplicity, we'll assume cash if not credit or card. A more complex system could handle splits.
+              const isCard = paymentTypes.some(p => paymentMethods.includes(p.name) && p.type === 'Card');
+              if (isCard) {
+                 payments.cardSales = saleTotal;
+              } else {
+                 payments.cashSales = saleTotal;
+              }
+          }
+          return payments;
+      }
+
+      const getTaxAmount = (netAmount: number) => {
+          if (!defaultTax) return 0;
+          return netAmount * (defaultTax.rate / 100);
+      }
+
+      const createInitialDataPoint = (name: string): ReportDataPoint => ({
+          name, sales: 0, tax: 0, quantity: 0, transactions: 0, cashSales: 0, cardSales: 0, creditSales: 0
+      });
+
       const itemSales = filteredSales.reduce((acc, sale) => {
         (sale.items as any[]).forEach(item => {
-            acc[item.name] = acc[item.name] || { name: item.name, sales: 0, quantity: 0, transactions: 0 };
-            acc[item.name].sales += item.price * item.quantity;
-            acc[item.name].quantity += item.quantity;
+            const netAmount = item.price * item.quantity;
+            const taxAmount = getTaxAmount(netAmount);
+            const { cashSales, cardSales, creditSales } = getProratedPayments(netAmount + taxAmount, sale.payment_methods);
+            
+            acc[item.name] = acc[item.name] || createInitialDataPoint(item.name);
+            acc[item.name].sales += netAmount;
+            acc[item.name].tax += taxAmount;
+            acc[item.name].quantity! += item.quantity;
             acc[item.name].transactions += 1; // This is imperfect, will count transaction per item
+            acc[item.name].cashSales += cashSales;
+            acc[item.name].cardSales += cardSales;
+            acc[item.name].creditSales += creditSales;
         });
         return acc;
       }, {} as Record<string, ReportDataPoint>);
@@ -209,10 +265,18 @@ export default function ReportsPage() {
           if (product) {
             const category = categories.find(c => c.id === product.category_id);
             if (category) {
-              acc[category.name] = acc[category.name] || { name: category.name, sales: 0, quantity: 0, transactions: 0 };
-              acc[category.name].sales += (item.price * item.quantity);
-              acc[category.name].quantity += item.quantity;
+              const netAmount = item.price * item.quantity;
+              const taxAmount = getTaxAmount(netAmount);
+              const { cashSales, cardSales, creditSales } = getProratedPayments(netAmount + taxAmount, sale.payment_methods);
+
+              acc[category.name] = acc[category.name] || createInitialDataPoint(category.name);
+              acc[category.name].sales += netAmount;
+              acc[category.name].tax += taxAmount;
+              acc[category.name].quantity! += item.quantity;
               acc[category.name].transactions++;
+              acc[category.name].cashSales += cashSales;
+              acc[category.name].cardSales += cardSales;
+              acc[category.name].creditSales += creditSales;
             }
           }
         });
@@ -222,27 +286,44 @@ export default function ReportsPage() {
 
       const employeeSales = filteredSales.reduce((acc, sale) => {
         const employeeName = users.find(u => u.id === sale.employee_id)?.name || 'N/A';
-        acc[employeeName] = acc[employeeName] || { name: employeeName, sales: 0, quantity: 0, transactions: 0 };
-        acc[employeeName].sales += sale.total;
-        acc[employeeName].quantity += (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
+        const netAmount = sale.total / (1 + ((defaultTax?.rate || 0) / 100));
+        const taxAmount = sale.total - netAmount;
+        const { cashSales, cardSales, creditSales } = getProratedPayments(sale.total, sale.payment_methods);
+
+        acc[employeeName] = acc[employeeName] || createInitialDataPoint(employeeName);
+        acc[employeeName].sales += netAmount;
+        acc[employeeName].tax += taxAmount;
+        acc[employeeName].quantity! += (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
         acc[employeeName].transactions++;
+        acc[employeeName].cashSales += cashSales;
+        acc[employeeName].cardSales += cardSales;
+        acc[employeeName].creditSales += creditSales;
         return acc;
       }, {} as Record<string, ReportDataPoint>);
       setSalesByEmployee(Object.values(employeeSales).sort((a, b) => b.sales - a.sales));
 
       const paymentSales = filteredSales.reduce((acc, sale) => {
+        const netAmount = sale.total / (1 + ((defaultTax?.rate || 0) / 100));
+        const taxAmount = sale.total - netAmount;
         (sale.payment_methods as any[]).forEach(method => {
-            acc[method] = acc[method] || { name: method, sales: 0, quantity: 0, transactions: 0};
-            acc[method].sales += sale.total; // Imperfect for split payments
-            acc[method].quantity += (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
+            const paymentType = paymentTypes.find(p => p.name === method)?.type || 'Other';
+            
+            acc[method] = acc[method] || createInitialDataPoint(method);
+            acc[method].sales += netAmount; // Imperfect for split payments
+            acc[method].tax += taxAmount;
+            acc[method].quantity! += (sale.items as any[]).reduce((sum, i) => sum + i.quantity, 0);
             acc[method].transactions++;
+            
+            if (paymentType === 'Credit') acc[method].creditSales += sale.total;
+            else if (paymentType === 'Card') acc[method].cardSales += sale.total;
+            else if (paymentType === 'Cash') acc[method].cashSales += sale.total;
         });
         return acc;
       }, {} as Record<string, ReportDataPoint>);
       setSalesByPayment(Object.values(paymentSales).sort((a, b) => b.sales - a.sales));
 
       setLoading(false);
-  }, [date, filters, sales, products, categories, users, posDevices]);
+  }, [date, filters, sales, products, categories, users, posDevices, paymentTypes, allTaxes]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -262,8 +343,12 @@ export default function ReportsPage() {
     const csv = Papa.unparse(dataToExport.map(d => ({
         Name: d.name,
         "Net Sales": d.sales.toFixed(2),
+        "Tax": d.tax.toFixed(2),
         "Items Sold": d.quantity,
         Transactions: d.transactions,
+        "Cash Sales": d.cashSales.toFixed(2),
+        "Card Sales": d.cardSales.toFixed(2),
+        "Credit Sales (Unpaid)": d.creditSales.toFixed(2),
     })));
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -406,3 +491,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+
