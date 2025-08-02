@@ -407,8 +407,12 @@ export default function SalesPage() {
         toast({ title: "Invalid Amount", description: "Please enter a valid payment amount.", variant: "destructive"});
         return;
     }
+    
+    // Convert to integers (cents) for reliable comparison
+    const amountInCents = Math.round(amount * 100);
+    const remainingBalanceInCents = Math.round(remainingBalance * 100);
 
-    if (amount > remainingBalance + 0.001) { 
+    if (amountInCents > remainingBalanceInCents) { 
          toast({ title: "Amount Exceeds Balance", description: `Cannot pay more than the remaining ${currency}${remainingBalance.toFixed(2)}.`, variant: "destructive"});
         return;
     }
@@ -1149,6 +1153,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 
