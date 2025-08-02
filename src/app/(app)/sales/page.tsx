@@ -503,7 +503,7 @@ export default function SalesPage() {
             await setDebts(prev => [...prev, newDebt]);
         }
         
-        if (isCheckingIn) {
+        if (isCheckingIn && !debtToSettle) {
             const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
             const guest = customers.find(c => c.id === reservationCustomerId);
             if (roomItem && guest && dateRange?.from && dateRange.to) {
@@ -1153,6 +1153,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 
