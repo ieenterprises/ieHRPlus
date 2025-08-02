@@ -81,7 +81,7 @@ const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof ty
 const systemRoles = ["Owner"];
 
 export default function TeamPage() {
-  const { users, setUsers, roles, setRoles, getPermissionsForRole, loggedInUser } from useSettings();
+  const { users, setUsers, roles, setRoles, getPermissionsForRole, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
   
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
