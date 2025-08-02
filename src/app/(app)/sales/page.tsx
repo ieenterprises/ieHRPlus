@@ -157,6 +157,7 @@ export default function SalesPage() {
   const { toast } = useToast();
   
   const [guestName, setGuestName] = useState("");
+  const [reservationCustomerId, setReservationCustomerId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState(configuredPaymentTypes[0]?.name || "Cash");
@@ -217,7 +218,10 @@ export default function SalesPage() {
       setSelectedCustomerId(debtToSettle.customer_id);
     } else {
       const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
-      if (walkIn) setSelectedCustomerId(walkIn.id);
+      if (walkIn) {
+        setSelectedCustomerId(walkIn.id);
+        setReservationCustomerId(walkIn.id);
+      }
     }
     setLoading(false);
   }, [customers, debtToSettle, products, ticketToLoad]);
@@ -233,8 +237,10 @@ export default function SalesPage() {
 
   const handleConfirmBooking = async (status: 'Confirmed' | 'Checked-in') => {
     const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
-    if (!roomItem || !guestName || !dateRange?.from || !dateRange?.to) {
-        toast({ title: "Missing Information", description: "Please provide guest name and reservation dates.", variant: "destructive" });
+    const guest = customers.find(c => c.id === reservationCustomerId);
+
+    if (!roomItem || !guest || !dateRange?.from || !dateRange?.to) {
+        toast({ title: "Missing Information", description: "Please select a guest and reservation dates.", variant: "destructive" });
         return;
     }
 
@@ -248,7 +254,7 @@ export default function SalesPage() {
     setIsProcessing(true);
     try {
         const reservationData = {
-            guest_name: guestName,
+            guest_name: guest.name,
             product_id: roomItem.product.id,
             check_in: dateRange.from.toISOString(),
             check_out: dateRange.to.toISOString(),
@@ -261,13 +267,13 @@ export default function SalesPage() {
         if (activeTicket?.id) await deleteTicket(activeTicket.id);
 
         setIsReservationPaymentDialogOpen(false);
-        setGuestName("");
+        setReservationCustomerId(null);
         setDateRange(undefined);
         handleClearOrder();
 
         toast({
           title: "Room Reserved",
-          description: `Booking for ${guestName} in ${roomItem.product.name} has been confirmed.`,
+          description: `Booking for ${guest.name} in ${roomItem.product.name} has been confirmed.`,
         });
 
     } catch(error: any) {
@@ -495,9 +501,10 @@ export default function SalesPage() {
         
         if (isCheckingIn) {
             const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
-            if (roomItem && guestName && dateRange?.from && dateRange.to) {
+            const guest = customers.find(c => c.id === reservationCustomerId);
+            if (roomItem && guest && dateRange?.from && dateRange.to) {
                 await addReservation({
-                    guest_name: guestName,
+                    guest_name: guest.name,
                     product_id: roomItem.product.id,
                     check_in: dateRange.from.toISOString(),
                     check_out: dateRange.to.toISOString(),
@@ -511,11 +518,11 @@ export default function SalesPage() {
 
                 toast({
                   title: "Room Checked In",
-                  description: `Booking for ${guestName} in ${roomItem.product.name} has been paid and confirmed.`,
+                  description: `Booking for ${guest.name} in ${roomItem.product.name} has been paid and confirmed.`,
                 });
             }
             setIsCheckingIn(false);
-            setGuestName("");
+            setReservationCustomerId(null);
             setDateRange(undefined);
         }
 
@@ -586,7 +593,10 @@ export default function SalesPage() {
     if(debtToSettle) setDebtToSettle(null);
     // Reset customer to walk-in
     const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
-    if (walkIn) setSelectedCustomerId(walkIn.id);
+    if (walkIn) {
+      setSelectedCustomerId(walkIn.id);
+      setReservationCustomerId(walkIn.id);
+    }
   };
 
   const handleSaveOrder = async () => {
@@ -656,6 +666,7 @@ export default function SalesPage() {
       };
       await setCustomers([newCustomer as Customer, ...customers]);
       setSelectedCustomerId(newCustomer.id);
+      setReservationCustomerId(newCustomer.id); // Also select for reservation
       setIsAddCustomerDialogOpen(false);
       toast({ title: "Customer Added", description: `${name} has been added and selected.` });
     } catch (error: any) {
@@ -870,7 +881,19 @@ export default function SalesPage() {
                     <Label htmlFor="guestName" className="text-right">
                     Guest Name
                     </Label>
-                    <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} className="col-span-3" required />
+                    <div className="col-span-3 flex items-center gap-1">
+                        <Select value={reservationCustomerId || ''} onValueChange={setReservationCustomerId}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select Customer" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <Button variant="outline" size="icon" onClick={() => setIsAddCustomerDialogOpen(true)} className="h-10 w-10 shrink-0">
+                            <PlusCircle className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                         <Label className="text-right">Dates</Label>
@@ -1126,6 +1149,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 
