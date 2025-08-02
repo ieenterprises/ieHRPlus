@@ -81,7 +81,7 @@ const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof ty
 const systemRoles = ["Owner"];
 
 export default function TeamPage() {
-  const { users, setUsers, roles, setRoles, getPermissionsForRole, loggedInUser } = useSettings();
+  const { users, setUsers, roles, setRoles, getPermissionsForRole, loggedInUser } from useSettings();
   const [loading, setLoading] = useState(true);
   
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -162,13 +162,15 @@ export default function TeamPage() {
             const userId = editingUser.id;
             const firestoreData: any = { ...userData };
             
-            if (newPassword) {
+            if (newPassword && newPassword !== editingUser.password) {
                 const result = await updateUserPassword(userId, newPassword);
                 if (!result.success) {
                     throw new Error(result.error);
                 }
                 firestoreData.password = newPassword; // Also update password in Firestore for display
                 toast({ title: "Password Updated", description: "The user's password has been successfully changed." });
+            } else {
+                firestoreData.password = editingUser.password;
             }
 
             await updateDoc(doc(db, 'users', userId), firestoreData);
@@ -516,6 +518,7 @@ export default function TeamPage() {
                           name="password" 
                           type={passwordVisible ? "text" : "password"} 
                           placeholder={editingUser?.id ? "Leave blank to keep current" : ""}
+                          defaultValue={editingUser?.password ?? ''}
                           required={!editingUser?.id} 
                         />
                         <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-2 -translate-y-1/2 h-7 w-7" onClick={() => setPasswordVisible(!passwordVisible)}>
