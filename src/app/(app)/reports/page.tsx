@@ -173,10 +173,22 @@ export default function ReportsPage() {
       let filteredSales = sales.filter(sale => {
           const saleDate = new Date(sale.created_at!);
           let match = saleDate >= fromDate && saleDate <= toDate;
-          if (filters.employeeId !== 'all') match &&= sale.employee_id === filters.employeeId;
-          // Note: In a real DB, we'd join to get store_id from pos_device_id. Here we mock it.
-          // This filter part for store/device is non-functional in demo mode without modifying sale data structure.
-          if (filters.paymentType !== 'all') match &&= sale.payment_methods.includes(filters.paymentType);
+
+          if (filters.employeeId !== 'all') {
+            match &&= sale.employee_id === filters.employeeId;
+          }
+          
+          if (filters.paymentType !== 'all') {
+            match &&= sale.payment_methods.includes(filters.paymentType);
+          }
+          
+          if (filters.deviceId !== 'all') {
+              match &&= sale.pos_device_id === filters.deviceId;
+          } else if (filters.storeId !== 'all') {
+              const device = posDevices.find(d => d.id === sale.pos_device_id);
+              match &&= device?.store_id === filters.storeId;
+          }
+          
           return match;
       });
       
@@ -230,7 +242,7 @@ export default function ReportsPage() {
       setSalesByPayment(Object.values(paymentSales).sort((a, b) => b.sales - a.sales));
 
       setLoading(false);
-  }, [date, filters, sales, products, categories, users]);
+  }, [date, filters, sales, products, categories, users, posDevices]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
