@@ -111,9 +111,9 @@ function ProductCard({
 }
 
 const generateUniqueOrderNumber = () => {
-  const timestamp = new Date().getTime();
+  const timestamp = Date.now();
   const randomSuffix = Math.floor(Math.random() * 1000);
-  return parseInt(`${timestamp % 1000000}${randomSuffix}`);
+  return parseInt(`${timestamp.toString().slice(-6)}${randomSuffix.toString().padStart(3, '0')}`);
 };
 
 export default function SalesPage() {
@@ -369,7 +369,7 @@ export default function SalesPage() {
 
   const total = subtotal + tax;
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
-  const remainingBalance = total - totalPaid;
+  const remainingBalance = parseFloat((total - totalPaid).toFixed(2));
 
   const handlePayment = (forcePaymentDialog = false) => {
     if (orderItems.length === 0) {
@@ -1054,7 +1054,7 @@ export default function SalesPage() {
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setIsSplitPaymentDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={() => handleCompleteSale()} disabled={Math.abs(remainingBalance) > 0.001 || isProcessing}>
+                    <Button onClick={() => handleCompleteSale()} disabled={remainingBalance > 0.001 || isProcessing}>
                         {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Complete Sale
                     </Button>
@@ -1153,6 +1153,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 
