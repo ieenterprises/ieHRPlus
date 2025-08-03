@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay, isPast, isEqual } from "date-fns";
+import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay, isPast, isEqual, set, differenceInSeconds, isAfter } from "date-fns";
 import { Calendar as CalendarIcon, PlusCircle, Bed, Wrench, CheckCircle, MoreVertical, Edit, Download, ShieldOff, Trash2, Search, Loader2 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
@@ -118,6 +118,17 @@ function RoomStatusCard({
   );
 }
 
+const formatCountdown = (seconds: number) => {
+  if (seconds <= 0) return "Checked Out";
+  const d = Math.floor(seconds / (3600 * 24));
+  const h = Math.floor((seconds % (3600 * 24)) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  
+  return `${d}d ${h}h ${m}m ${s}s`;
+};
+
+
 export default function ReservationsPage() {
   const { 
     reservations, setReservations, 
@@ -150,7 +161,8 @@ export default function ReservationsPage() {
     roomId: "all",
   });
   const [bookingDateRange, setBookingDateRange] = useState<DateRange | undefined>();
-  
+  const [now, setNow] = useState(new Date());
+
   const rooms = products.filter(p => {
     const category = categories.find(c => c.id === p.category_id);
     return category?.name === 'Room';
@@ -190,18 +202,17 @@ export default function ReservationsPage() {
 
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
 
-  useEffect(() => {
-    setLoading(false);
-  }, []);
+  const getCategoryName = (categoryId: string | null) => {
+    if(!categoryId) return 'N/A';
+    return categories.find(c => c.id === categoryId)?.name || 'N/A';
+  }
 
-  
-  const handleStatusChange = async (roomId: string, status: RoomStatus) => {
+  const handleStatusChange = useCallback(async (roomId: string, status: RoomStatus) => {
     try {
         await setProducts(prevProducts => 
             prevProducts.map(room => room.id === roomId ? { ...room, status } : room)
         );
 
-        // Find the active reservation for this room to update its status
         const activeReservation = reservations.find(r => r.product_id === roomId && r.status === 'Checked-in');
         
         if (activeReservation && activeReservation.id) {
@@ -216,7 +227,11 @@ export default function ReservationsPage() {
                 await setReservations(prev => prev.map(res => 
                     res.id === activeReservation.id ? { ...res, status: newReservationStatus! } : res
                 ));
-                toast({ title: "Room & Booking Updated", description: `Booking status set to ${newReservationStatus}.` });
+                if (status === 'Available') {
+                   toast({ title: "Room & Booking Updated", description: `Booking for ${activeReservation.guest_name} is now Checked-out.` });
+                } else {
+                   toast({ title: "Room & Booking Updated", description: `Booking status set to ${newReservationStatus}.` });
+                }
             } else {
                  toast({ title: "Room Status Updated" });
             }
@@ -226,7 +241,33 @@ export default function ReservationsPage() {
     } catch (error: any) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
     }
-  };
+  }, [setProducts, setReservations, reservations, toast]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
+    const checkoutsToProcess = reservations.filter(r => {
+      if (r.status !== 'Checked-in') return false;
+      const checkoutDateTime = set(new Date(r.check_out), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 });
+      return isAfter(new Date(), checkoutDateTime);
+    });
+
+    if (checkoutsToProcess.length > 0) {
+      checkoutsToProcess.forEach(res => {
+        if (res.product_id) {
+          handleStatusChange(res.product_id, 'Available');
+        }
+      });
+    }
+
+    return () => clearInterval(timer);
+  }, [now, reservations, handleStatusChange]);
+
+  useEffect(() => {
+    setLoading(false);
+  }, []);
 
   const handleEditReservation = (reservation: Reservation) => {
     setEditingReservation(reservation);
@@ -291,11 +332,6 @@ export default function ReservationsPage() {
         default:
             return 'outline';
     }
-  }
-
-  const getCategoryName = (categoryId: string | null) => {
-    if(!categoryId) return 'N/A';
-    return categories.find(c => c.id === categoryId)?.name || 'N/A';
   }
   
   const calculateTotal = (reservation: Reservation) => {
@@ -501,6 +537,7 @@ export default function ReservationsPage() {
                   <TableHead>Customer</TableHead>
                   <TableHead>Room</TableHead>
                   <TableHead>Dates</TableHead>
+                  <TableHead>Time to Checkout</TableHead>
                   <TableHead className="text-right hidden md:table-cell">Total</TableHead>
                   <TableHead className="hidden lg:table-cell">Payment</TableHead>
                   <TableHead>Status</TableHead>
@@ -510,7 +547,7 @@ export default function ReservationsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
                       Loading...
                     </TableCell>
                   </TableRow>
@@ -523,6 +560,9 @@ export default function ReservationsPage() {
                     const isSaleVoided = reservation.sale_id ? !sales.some(s => s.id === reservation.sale_id) : false;
                     const canClearBooking = hasExported || isCheckOutDateReached || isSaleVoided;
 
+                    const checkoutDateTime = set(new Date(reservation.check_out), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 });
+                    const secondsRemaining = differenceInSeconds(checkoutDateTime, now);
+
                     return (
                       <TableRow key={reservation.id}>
                         <TableCell className="font-medium hidden sm:table-cell">#{sale?.order_number || 'N/A'}</TableCell>
@@ -530,6 +570,15 @@ export default function ReservationsPage() {
                         <TableCell>{reservation.products?.name}</TableCell>
                         <TableCell>
                             {format(new Date(reservation.check_in), "LLL dd, y")} - {format(new Date(reservation.check_out), "LLL dd, y")}
+                        </TableCell>
+                         <TableCell>
+                          {reservation.status === 'Checked-in' ? (
+                            <span className={cn(secondsRemaining < 3600 && "text-destructive font-semibold")}>
+                              {formatCountdown(secondsRemaining)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">N/A</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right hidden md:table-cell">{currency}{calculateTotal(reservation).toFixed(2)}</TableCell>
                         <TableCell className="hidden lg:table-cell">
@@ -584,7 +633,7 @@ export default function ReservationsPage() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
                       No reservations found for the current filters.
                     </TableCell>
                   </TableRow>
