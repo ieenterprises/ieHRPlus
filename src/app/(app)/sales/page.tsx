@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
@@ -170,6 +170,25 @@ export default function SalesPage() {
   const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false);
 
   const isReservationsEnabled = featureSettings.reservations;
+
+  const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
+
+  useEffect(() => {
+    const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
+    if (roomItem && dateRange?.from && dateRange?.to) {
+      const nights = differenceInDays(dateRange.to, dateRange.from);
+      const validNights = Math.max(1, nights); // Ensure at least 1 night
+      if (roomItem.quantity !== validNights) {
+        setOrderItems(prevItems =>
+          prevItems.map(item =>
+            item.product.id === roomItem.product.id
+              ? { ...item, quantity: validNights }
+              : item
+          )
+        );
+      }
+    }
+  }, [dateRange, orderItems, getCategoryName]);
 
   const handleLoadTicket = async (ticket: OpenTicket) => {
     if (orderItems.length > 0 && !activeTicket && !debtToSettle) {
@@ -567,7 +586,6 @@ export default function SalesPage() {
     }
   };
   
-  const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
   
   const visibleCategories = useMemo(() => {
     if (isReservationsEnabled) return categories;
@@ -1153,6 +1171,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 
