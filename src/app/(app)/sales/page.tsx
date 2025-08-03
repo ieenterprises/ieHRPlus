@@ -1053,18 +1053,23 @@ export default function SalesPage() {
                              {currentPaymentType?.type === 'Credit' && (
                                 <div className="space-y-2">
                                     <Label htmlFor="creditCustomer">Customer</Label>
-                                    <Select name="creditCustomer" required>
-                                        <SelectTrigger id="creditCustomer">
-                                        <SelectValue placeholder="Select a customer" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                        {customers.map((customer) => (
-                                            <SelectItem key={customer.id} value={customer.id}>
-                                            {customer.name}
-                                            </SelectItem>
-                                        ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <div className="flex items-center gap-1">
+                                        <Select name="creditCustomer" required>
+                                            <SelectTrigger id="creditCustomer">
+                                            <SelectValue placeholder="Select a customer" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                            {customers.map((customer) => (
+                                                <SelectItem key={customer.id} value={customer.id}>
+                                                {customer.name}
+                                                </SelectItem>
+                                            ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button variant="outline" size="icon" onClick={() => setIsAddCustomerDialogOpen(true)} className="h-10 w-10 shrink-0">
+                                            <PlusCircle className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
                         </form>
@@ -1171,6 +1176,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 
