@@ -399,6 +399,41 @@ export default function InventoryPage() {
         }
     });
   };
+  
+  const handleDownloadTemplate = () => {
+    const headers = ["ID", "Name", "Category", "ImageURL"];
+    stores.forEach(store => {
+      headers.push(`${store.name} Price`, `${store.name} Stock`);
+    });
+    
+    const exampleCategory = categories[0]?.name || "Sample Category";
+
+    const exampleRow: any = {
+      ID: "prod_example_123",
+      Name: "Sample Product",
+      Category: exampleCategory,
+      ImageURL: "https://placehold.co/300x200.png",
+    };
+    stores.forEach(store => {
+      exampleRow[`${store.name} Price`] = "10.99";
+      exampleRow[`${store.name} Stock`] = "100";
+    });
+
+    const csv = Papa.unparse({
+      fields: headers,
+      data: [Object.values(exampleRow)],
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "products_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Template Downloaded" });
+  };
 
   return (
     <div className="space-y-8">
@@ -715,8 +750,11 @@ export default function InventoryPage() {
                     Upload a CSV file to bulk add or update products. Make sure your CSV has columns: `ID`, `Name`, `Category`, `ImageURL`, and then `Store Name Price` and `Store Name Stock` for each store.
                 </DialogDescription>
             </DialogHeader>
-            <div className="py-4">
-                <Input type="file" accept=".csv" ref={fileInputRef} onChange={handleImport} disabled={isProcessing} />
+            <div className="py-4 space-y-4">
+                <div className="flex items-center gap-4">
+                    <Input type="file" accept=".csv" ref={fileInputRef} onChange={handleImport} disabled={isProcessing} className="flex-1" />
+                    <Button variant="outline" onClick={handleDownloadTemplate}><Download className="mr-2 h-4 w-4"/> Template</Button>
+                </div>
                 {isProcessing && <p className="text-sm text-muted-foreground mt-2 flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing file...</p>}
             </div>
         </DialogContent>
