@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2, Search, PlusCircle, Loader2 } from "lucide-react";
+import { Plus, Minus, X, CreditCard, CalendarIcon, DollarSign, Save, Ticket, Trash2, Search, PlusCircle, Loader2, Store } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -128,6 +128,9 @@ export default function SalesPage() {
     loggedInUser,
     users,
     selectedDevice,
+    ownerSelectedStore,
+    setOwnerSelectedStore,
+    stores,
     currency,
     products,
     setProducts,
@@ -175,20 +178,26 @@ export default function SalesPage() {
   const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false);
 
   const isReservationsEnabled = featureSettings.reservations;
+  
+  const isAdmin = useMemo(() => {
+    if (!loggedInUser) return false;
+    return ['Owner', 'Administrator', 'Manager'].includes(loggedInUser.role);
+  }, [loggedInUser]);
 
   const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
   
   const productsForCurrentStore = useMemo((): EnrichedProduct[] => {
-    if (!selectedDevice?.store_id) return [];
+    const currentStoreId = isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id;
+    if (!currentStoreId) return [];
     
     return products.map(p => {
-        const storeProduct = p.store_products?.find(sp => sp.store_id === selectedDevice.store_id);
+        const storeProduct = p.store_products?.find(sp => sp.store_id === currentStoreId);
         if (storeProduct) {
             return { ...p, price: storeProduct.price, stock: storeProduct.stock };
         }
         return null;
     }).filter((p): p is EnrichedProduct => p !== null);
-  }, [products, selectedDevice]);
+  }, [products, selectedDevice, isAdmin, ownerSelectedStore]);
 
   useEffect(() => {
     const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
@@ -467,6 +476,8 @@ export default function SalesPage() {
         return;
     }
     
+    const currentPosDeviceId = isAdmin ? null : selectedDevice?.id || null;
+
     setIsProcessing(true);
     try {
         const saleItems: SaleItem[] = orderItems.map(item => ({
@@ -511,7 +522,7 @@ export default function SalesPage() {
               payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
               customer_id: creditInfo ? creditInfo.customerId : selectedCustomerId,
               employee_id: loggedInUser?.id || null,
-              pos_device_id: selectedDevice?.id || null,
+              pos_device_id: currentPosDeviceId,
               status: 'Fulfilled' as const,
               customers: customers.find(c => c.id === (creditInfo ? creditInfo.customerId : selectedCustomerId)) || null,
               users: { name: loggedInUser?.name || null },
@@ -565,18 +576,19 @@ export default function SalesPage() {
 
         const stockUpdates = orderItems
             .filter(item => getCategoryName(item.product.category_id) !== 'Room')
-            .map(item => ({ id: item.product.id, stock: item.product.stock - item.quantity }));
+            .map(item => ({ id: item.product.id, quantity: item.quantity }));
         
-        if(stockUpdates.length > 0) {
+        const updateStoreId = isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id;
+
+        if(stockUpdates.length > 0 && updateStoreId) {
             await setProducts(prevProducts =>
                 prevProducts.map(p => {
                     const update = stockUpdates.find(u => u.id === p.id);
-                    if (!update || !selectedDevice?.store_id) return p;
+                    if (!update) return p;
 
                     const newStoreProducts = p.store_products.map(sp => 
-                        sp.store_id === selectedDevice.store_id ? { ...sp, stock: sp.stock - update.stock } : sp
+                        sp.store_id === updateStoreId ? { ...sp, stock: sp.stock - update.quantity } : sp
                     );
-
                     return { ...p, store_products: newStoreProducts };
                 })
             );
@@ -737,6 +749,24 @@ export default function SalesPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <PageHeader title="Sales" description="Create a new order." />
                 <div className="w-full sm:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-2 self-start sm:self-center">
+                    {isAdmin && (
+                         <div className="grid gap-2 w-full sm:w-auto">
+                            <Select 
+                                value={ownerSelectedStore?.id || ''} 
+                                onValueChange={(storeId) => {
+                                    const store = stores.find(s => s.id === storeId);
+                                    if(store) setOwnerSelectedStore(store);
+                                }}
+                            >
+                                <SelectTrigger className="w-full sm:w-[200px]">
+                                    <SelectValue placeholder="Select Store..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                     <div className="w-full sm:w-auto flex items-center gap-1">
                         <Select value={selectedCustomerId || ''} onValueChange={setSelectedCustomerId} disabled={!!debtToSettle}>
                             <SelectTrigger className="w-full sm:w-[200px]">
@@ -1187,29 +1217,3 @@ export default function SalesPage() {
     </TooltipProvider>
   );
 }
-
-
-
-    
-
-
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -74,6 +74,8 @@ type SettingsContextType = {
     setSelectedStore: React.Dispatch<React.SetStateAction<StoreType | null>>;
     selectedDevice: PosDeviceType | null;
     setSelectedDevice: React.Dispatch<React.SetStateAction<PosDeviceType | null>>;
+    ownerSelectedStore: StoreType | null;
+    setOwnerSelectedStore: React.Dispatch<React.SetStateAction<StoreType | null>>;
     currency: string;
     setCurrency: (value: React.SetStateAction<string>) => void;
     getPermissionsForRole: (role: UserRole) => AnyPermission[];
@@ -150,6 +152,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     // Local session state
     const [selectedStore, setSelectedStore] = useLocalStorage<StoreType | null>('selectedStore', null);
     const [selectedDevice, setSelectedDevice] = useLocalStorage<PosDeviceType | null>('selectedDevice', null);
+    const [ownerSelectedStore, setOwnerSelectedStore] = useLocalStorage<StoreType | null>('ownerSelectedStore', null);
     const [debtToSettle, setDebtToSettle] = useLocalStorage<Sale | null>('debtToSettle', null);
     const [printableData, setPrintableData] = useLocalStorage<any | null>('printableData', null);
     
@@ -253,8 +256,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setLoggedInUser(null);
         setSelectedStore(null);
         setSelectedDevice(null);
+        setOwnerSelectedStore(null);
         window.localStorage.removeItem('selectedStore');
         window.localStorage.removeItem('selectedDevice');
+        window.localStorage.removeItem('ownerSelectedStore');
         router.push('/sign-in');
     };
 
@@ -330,7 +335,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             if (!item.id || !oldIds.has(item.id) || JSON.stringify(oldItem) !== JSON.stringify(item)) {
                 const itemWithBusinessId = { ...item, businessId: loggedInUser.businessId };
                 // If it's a new item without an ID, Firestore will generate one, but our local state won't match.
-                // This approach requires IDs to be generated client-side for consistency, or a more complex logic.
+                // This approach requires IDs to be generated client-side for new items.
                 // For now, we assume client-generated IDs for new items.
                 if (!item.id) {
                     const newRef = doc(collection(db, collectionName));
@@ -420,6 +425,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         logout,
         selectedStore, setSelectedStore,
         selectedDevice, setSelectedDevice,
+        ownerSelectedStore, setOwnerSelectedStore,
         currency, setCurrency,
         getPermissionsForRole,
         debtToSettle, setDebtToSettle,
@@ -437,5 +443,3 @@ export function useSettings() {
     }
     return context;
 }
-
-    
