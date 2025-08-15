@@ -9,8 +9,20 @@ export type Business = {
     created_at: string;
 }
 
+export type StoreProduct = {
+  id: string;
+  store_id: string;
+  product_id: string;
+  price: number;
+  stock: number;
+  businessId: string;
+};
+
 export type Category = Database['public']['Tables']['categories']['Row'] & { businessId: string };
-export type Product = Database['public']['Tables']['products']['Row'] & { businessId: string };
+export type Product = Omit<Database['public']['Tables']['products']['Row'], 'price' | 'stock'> & { 
+  businessId: string;
+  store_products: StoreProduct[];
+};
 export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions'> & {
     permissions: AnyPermission[];
     password?: string;

@@ -46,22 +46,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, PlusCircle, Trash2, Edit, Upload, Download, Search, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { type Product, type Category } from "@/lib/types";
+import { type Product, type Category, type StoreProduct, StoreType } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
 import Papa from "papaparse";
+import { Badge } from "@/components/ui/badge";
 
 
 const EMPTY_PRODUCT: Partial<Product> = {
   name: "",
   category_id: "",
-  price: 0,
-  stock: 0,
   image_url: "https://placehold.co/300x200.png",
 };
 
 const EMPTY_CATEGORY: Partial<Category> = {
   name: "",
+};
+
+const EMPTY_STORE_PRODUCT: Partial<StoreProduct> = {
+    price: 0,
+    stock: 0,
 };
 
 export default function InventoryPage() {
@@ -71,6 +75,7 @@ export default function InventoryPage() {
     currency,
     featureSettings,
     loggedInUser,
+    stores,
   } = useSettings();
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -82,15 +87,15 @@ export default function InventoryPage() {
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
 
+  const [isStoreProductDialogOpen, setIsStoreProductDialogOpen] = useState(false);
+  const [editingStoreProduct, setEditingStoreProduct] = useState<Partial<StoreProduct> & { product_id?: string } | null>(null);
+
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { toast } = useToast();
 
   const isReservationsEnabled = featureSettings.reservations;
-
-  const [editingCell, setEditingCell] = useState<{ productId: string; field: keyof Product } | null>(null);
-  const [editingValue, setEditingValue] = useState<string | number>('');
   
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -108,7 +113,7 @@ export default function InventoryPage() {
   }, [categories, isReservationsEnabled]);
 
   const filteredProducts = useMemo(() => {
-    let prods = isReservationsEnabled ? products : products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
+    let prods = products;
     
     if (categoryFilter !== "all") {
         prods = prods.filter(p => p.category_id === categoryFilter);
@@ -119,49 +124,12 @@ export default function InventoryPage() {
     }
     
     return prods;
-  }, [products, categories, isReservationsEnabled, getCategoryName, categoryFilter, searchTerm]);
+  }, [products, categoryFilter, searchTerm]);
 
   useEffect(() => {
     setLoading(false);
   }, []);
 
-  const handleInlineEditClick = (product: Product, field: keyof Product) => {
-    if (!canManageInventory) return;
-    setEditingCell({ productId: product.id, field });
-    setEditingValue(product[field] as string | number);
-  };
-  
-  const handleInlineEditSave = async () => {
-    if (!editingCell || !canManageInventory) return;
-  
-    const { productId, field } = editingCell;
-    const originalProduct = products.find(p => p.id === productId);
-    if (!originalProduct) return;
-  
-    const updatedValue = field === 'price' || field === 'stock'
-      ? Number(editingValue)
-      : editingValue;
-  
-    if (originalProduct[field] !== updatedValue) {
-      await setProducts(prevProducts =>
-        prevProducts.map(p =>
-          p.id === productId ? { ...p, [field]: updatedValue } as Product : p
-        )
-      );
-      toast({ title: `Product updated`, description: `Set ${field} to ${editingValue}.` });
-    }
-  
-    setEditingCell(null);
-  };
-  
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
-    if (e.key === 'Enter') {
-      handleInlineEditSave();
-    } else if (e.key === 'Escape') {
-      setEditingCell(null);
-    }
-  };
-  
   // Product Handlers
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product);
@@ -214,8 +182,6 @@ export default function InventoryPage() {
     const productData = {
       name: formData.get("name") as string,
       category_id: formData.get("category") as string,
-      price: parseFloat(formData.get("price") as string),
-      stock: parseInt(formData.get("stock") as string, 10),
       image_url: imagePreview || EMPTY_PRODUCT.image_url!,
       status: editingProduct.status || 'Available',
     };
@@ -225,7 +191,7 @@ export default function InventoryPage() {
         await setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...productData } as Product : p));
         toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
       } else {
-        const newProduct = { ...productData, id: `prod_${new Date().getTime()}`, created_at: new Date().toISOString() };
+        const newProduct = { ...productData, id: `prod_${new Date().getTime()}`, created_at: new Date().toISOString(), store_products: [] };
         await setProducts([newProduct as Product, ...products]);
         toast({ title: "Product Added", description: `${productData.name} has been added to inventory.` });
       }
@@ -317,161 +283,74 @@ export default function InventoryPage() {
     }
   };
 
-  // Import/Export Handlers
-  const handleExportProducts = () => {
-    const dataToExport = filteredProducts.map(p => ({
-      name: p.name,
-      category_name: getCategoryName(p.category_id),
-      price: p.price,
-      stock: p.stock
-    }));
-
-    const csv = Papa.unparse(dataToExport);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `products_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast({ title: "Export Complete", description: "Product list has been downloaded." });
+  // Store Product Handlers
+  const handleOpenStoreProductDialog = (storeProduct: Partial<StoreProduct> | null, productId: string) => {
+    setEditingStoreProduct(storeProduct ? { ...storeProduct, product_id: productId } : { ...EMPTY_STORE_PRODUCT, product_id: productId });
+    setIsStoreProductDialogOpen(true);
   };
 
-  const handleDownloadTemplate = () => {
-    const templateData = [{ name: "Sample Burger", category_name: "Food", price: 10.99, stock: 50 }];
-    const csv = Papa.unparse(templateData);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "product_import_template.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleStoreProductDialogClose = (open: boolean) => {
+      if (!open) {
+          setEditingStoreProduct(null);
+      }
+      setIsStoreProductDialogOpen(open);
   };
 
-  const handleImportProducts = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      toast({ title: "No file selected", variant: "destructive" });
-      return;
-    }
-    
+  const handleStoreProductFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingStoreProduct || !editingStoreProduct.product_id) return;
+
     setIsProcessing(true);
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const importedData = results.data as any[];
-        let newProducts: Product[] = [];
-        let errors = 0;
+    const formData = new FormData(event.currentTarget);
+    const storeId = formData.get("store_id") as string;
+    const price = parseFloat(formData.get("price") as string);
+    const stock = parseInt(formData.get("stock") as string, 10);
 
-        importedData.forEach((row, index) => {
-          const { name, category_name, price, stock } = row;
-          const category = categories.find(c => c.name.toLowerCase() === category_name?.toLowerCase());
-
-          if (!name || !category || isNaN(parseFloat(price)) || isNaN(parseInt(stock))) {
-            errors++;
-            console.warn(`Skipping invalid row ${index + 1}:`, row);
-            return;
-          }
-
-          newProducts.push({
-            id: `prod_${new Date().getTime()}_${index}`,
-            name,
-            category_id: category.id,
-            price: parseFloat(price),
-            stock: parseInt(stock),
-            image_url: "https://placehold.co/300x200.png",
-            created_at: new Date().toISOString(),
-            status: 'Available',
-          });
-        });
-        
-        await setProducts(prev => [...prev, ...newProducts]);
-
-        toast({
-          title: "Import Complete",
-          description: `${newProducts.length} products imported successfully. ${errors > 0 ? `${errors} rows failed.` : ''}`,
-        });
-        setIsImportDialogOpen(false);
+    try {
+        await setProducts(prevProducts => prevProducts.map(p => {
+            if (p.id === editingStoreProduct.product_id) {
+                const existingStoreProduct = p.store_products.find(sp => sp.store_id === storeId);
+                let newStoreProducts: StoreProduct[];
+                if (existingStoreProduct) {
+                    newStoreProducts = p.store_products.map(sp => 
+                        sp.id === existingStoreProduct.id ? { ...sp, price, stock } : sp
+                    );
+                } else {
+                    const newStoreProduct: StoreProduct = {
+                        id: `sp_${new Date().getTime()}`,
+                        store_id: storeId,
+                        product_id: p.id,
+                        price,
+                        stock,
+                        businessId: loggedInUser?.businessId || '',
+                    };
+                    newStoreProducts = [...p.store_products, newStoreProduct];
+                }
+                return { ...p, store_products: newStoreProducts };
+            }
+            return p;
+        }));
+        toast({ title: "Store Inventory Updated" });
+        handleStoreProductDialogClose(false);
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
         setIsProcessing(false);
-      },
-      error: (error) => {
-        toast({ title: "Import Failed", description: error.message, variant: "destructive" });
-        setIsProcessing(false);
-      }
-    });
-  };
-
-  const renderCell = (product: Product, field: keyof Product) => {
-    if (editingCell?.productId === product.id && editingCell.field === field) {
-      if (field === 'category_id') {
-        return (
-          <Select
-            value={editingValue as string}
-            onValueChange={(value) => setEditingValue(value)}
-            onOpenChange={(isOpen) => !isOpen && handleInlineEditSave()}
-          >
-            <SelectTrigger className="h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {visibleCategories.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        );
-      }
-      return (
-        <Input
-          autoFocus
-          value={editingValue}
-          onChange={(e) => setEditingValue(field === 'name' ? e.target.value : Number(e.target.value))}
-          onBlur={handleInlineEditSave}
-          onKeyDown={handleKeyDown}
-          type={field === 'name' ? 'text' : 'number'}
-          className="h-8"
-        />
-      );
     }
-
-    let displayValue: React.ReactNode;
-    switch (field) {
-        case 'category_id':
-            displayValue = getCategoryName(product.category_id);
-            break;
-        case 'price':
-            displayValue = `${currency}${product.price.toFixed(2)}`;
-            break;
-        case 'stock':
-            displayValue = getCategoryName(product.category_id) === 'Room' ? 'N/A' : product.stock;
-            break;
-        default:
-            displayValue = product[field];
-    }
-    
-    return (
-      <div onClick={() => handleInlineEditClick(product, field)} className="cursor-pointer min-h-[2rem] flex items-center">
-        {displayValue}
-      </div>
-    );
   };
-
 
   return (
     <div className="space-y-8">
         <PageHeader
           title="Inventory Management"
-          description="Manage your products and categories."
+          description="Manage your products, categories, and store-specific inventory."
         />
 
         <Tabs defaultValue="products">
             <TabsList className="mb-4">
                 <TabsTrigger value="products">Products</TabsTrigger>
                 <TabsTrigger value="categories">Categories</TabsTrigger>
+                <TabsTrigger value="stores">Stores</TabsTrigger>
             </TabsList>
 
             <TabsContent value="products">
@@ -479,16 +358,10 @@ export default function InventoryPage() {
                     <CardHeader className="relative">
                         <CardTitle>Products</CardTitle>
                         <CardDescription>
-                           {canManageInventory ? "A list of all products in your inventory. Click on a cell to edit." : "A list of all products in your inventory."}
+                           A list of all products in your inventory. Assign products to stores from the Stores tab.
                         </CardDescription>
                          {canManageInventory && (
                             <div className="absolute top-6 right-6 flex items-center gap-2">
-                                <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
-                                <Upload className="mr-2 h-4 w-4" /> Import
-                                </Button>
-                                <Button variant="outline" onClick={handleExportProducts}>
-                                <Download className="mr-2 h-4 w-4" /> Export
-                                </Button>
                                 <Button onClick={handleAddProduct}>
                                     <PlusCircle className="mr-2 h-4 w-4" />
                                     Add Product
@@ -530,14 +403,13 @@ export default function InventoryPage() {
                                     <TableHead className="w-[80px] hidden sm:table-cell">Image</TableHead>
                                     <TableHead>Name</TableHead>
                                     <TableHead>Category</TableHead>
-                                    <TableHead>Price</TableHead>
-                                    <TableHead>Stock</TableHead>
+                                    <TableHead>Available In</TableHead>
                                     {canManageInventory && <TableHead><span className="sr-only">Actions</span></TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
-                                    <TableRow><TableCell colSpan={canManageInventory ? 6 : 5} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={canManageInventory ? 5 : 4} className="h-24 text-center">Loading...</TableCell></TableRow>
                                 ) : filteredProducts.length > 0 ? (
                                     filteredProducts.map((product) => (
                                         <TableRow key={product.id}>
@@ -550,10 +422,21 @@ export default function InventoryPage() {
                                                     className="rounded-md object-cover"
                                                 />
                                             </TableCell>
-                                            <TableCell className="font-medium">{renderCell(product, 'name')}</TableCell>
-                                            <TableCell>{renderCell(product, 'category_id')}</TableCell>
-                                            <TableCell>{renderCell(product, 'price')}</TableCell>
-                                            <TableCell>{renderCell(product, 'stock')}</TableCell>
+                                            <TableCell className="font-medium">{product.name}</TableCell>
+                                            <TableCell>{getCategoryName(product.category_id)}</TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {product.store_products?.length > 0 ? (
+                                                        product.store_products.map(sp => (
+                                                            <Badge key={sp.id} variant="secondary">
+                                                                {stores.find(s => s.id === sp.store_id)?.name || 'Unknown Store'}
+                                                            </Badge>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">Not in any store</span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
                                              {canManageInventory && (
                                                 <TableCell className="text-right">
                                                     <DropdownMenu>
@@ -566,7 +449,7 @@ export default function InventoryPage() {
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                             <DropdownMenuItem onClick={() => handleEditProduct(product)}>
-                                                                <Edit className="mr-2 h-4 w-4" /> Edit Full Details
+                                                                <Edit className="mr-2 h-4 w-4" /> Edit Details
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
                                                             <Trash2 className="mr-2 h-4 w-4" />
@@ -579,7 +462,7 @@ export default function InventoryPage() {
                                         </TableRow>
                                     ))
                                 ) : (
-                                    <TableRow><TableCell colSpan={canManageInventory ? 6 : 5} className="h-24 text-center">No products found for the current filters.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={canManageInventory ? 5 : 4} className="h-24 text-center">No products found for the current filters.</TableCell></TableRow>
                                 )}
                             </TableBody>
                         </Table>
@@ -639,6 +522,58 @@ export default function InventoryPage() {
                 </Card>
             </TabsContent>
 
+            <TabsContent value="stores">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Store Inventory</CardTitle>
+                        <CardDescription>Manage product price and stock for each store.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-6">
+                            {stores.map(store => (
+                                <div key={store.id}>
+                                    <h3 className="text-lg font-semibold mb-2">{store.name}</h3>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Product</TableHead>
+                                                <TableHead>Price</TableHead>
+                                                <TableHead>Stock</TableHead>
+                                                {canManageInventory && <TableHead><span className="sr-only">Actions</span></TableHead>}
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {products.filter(p => p.store_products?.some(sp => sp.store_id === store.id)).map(product => {
+                                                const storeProduct = product.store_products.find(sp => sp.store_id === store.id)!;
+                                                return (
+                                                    <TableRow key={product.id}>
+                                                        <TableCell>{product.name}</TableCell>
+                                                        <TableCell>{currency}{storeProduct.price.toFixed(2)}</TableCell>
+                                                        <TableCell>{storeProduct.stock}</TableCell>
+                                                        {canManageInventory && (
+                                                            <TableCell className="text-right">
+                                                                <Button variant="ghost" size="icon" onClick={() => handleOpenStoreProductDialog(storeProduct, product.id)}>
+                                                                    <Edit className="h-4 w-4" />
+                                                                </Button>
+                                                            </TableCell>
+                                                        )}
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                    {canManageInventory && (
+                                        <Button className="mt-4" variant="outline" onClick={() => handleOpenStoreProductDialog(null, "new")}>
+                                            <PlusCircle className="mr-2 h-4 w-4" /> Add Product to {store.name}
+                                        </Button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+
         </Tabs>
       
       <Dialog open={isProductDialogOpen} onOpenChange={handleProductDialogClose}>
@@ -691,14 +626,6 @@ export default function InventoryPage() {
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="price" className="text-right">Price ({currency})</Label>
-                  <Input id="price" name="price" type="number" step="0.01" defaultValue={editingProduct?.price} className="col-span-3" required />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="stock" className="text-right">Stock</Label>
-                  <Input id="stock" name="stock" type="number" step="1" defaultValue={editingProduct?.stock} className="col-span-3" required />
-                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={isProcessing}>
@@ -734,36 +661,54 @@ export default function InventoryPage() {
             </form>
           </DialogContent>
       </Dialog>
-
-      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+      
+      <Dialog open={isStoreProductDialogOpen} onOpenChange={handleStoreProductDialogClose}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Import Products</DialogTitle>
-            <DialogDescription>
-              Upload a CSV file to add multiple products at once.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <p className="text-sm">
-              Your CSV file should have the following columns: `name`, `category_name`, `price`, `stock`. The `category_name` must match an existing category in your system.
-            </p>
-            <Button variant="link" onClick={handleDownloadTemplate} className="p-0 h-auto">
-              Download Template
-            </Button>
-            <Input
-              id="import-file"
-              type="file"
-              accept=".csv"
-              ref={fileInputRef}
-              onChange={handleImportProducts}
-              disabled={isProcessing}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
+            <form onSubmit={handleStoreProductFormSubmit}>
+                <DialogHeader>
+                    <DialogTitle>{editingStoreProduct?.id ? 'Edit Store Inventory' : 'Add Product to Store'}</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 grid gap-4">
+                    {editingStoreProduct?.product_id === 'new' && (
+                         <div className="space-y-2">
+                            <Label htmlFor="product_id">Product</Label>
+                            <Select name="product_id" required>
+                                <SelectTrigger><SelectValue placeholder="Select a product" /></SelectTrigger>
+                                <SelectContent>
+                                    {products.map(p => (
+                                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    <div className="space-y-2">
+                        <Label htmlFor="store_id">Store</Label>
+                        <Select name="store_id" required defaultValue={editingStoreProduct?.store_id}>
+                            <SelectTrigger><SelectValue placeholder="Select a store" /></SelectTrigger>
+                            <SelectContent>
+                                {stores.map(s => (
+                                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="price">Price ({currency})</Label>
+                        <Input id="price" name="price" type="number" step="0.01" defaultValue={editingStoreProduct?.price} required />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="stock">Stock</Label>
+                        <Input id="stock" name="stock" type="number" step="1" defaultValue={editingStoreProduct?.stock} required />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="submit" disabled={isProcessing}>
+                         {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Save
+                    </Button>
+                </DialogFooter>
+            </form>
         </DialogContent>
       </Dialog>
     </div>

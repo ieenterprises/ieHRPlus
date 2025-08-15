@@ -60,8 +60,13 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { usePos } from "@/hooks/use-pos";
 import { useSettings } from "@/hooks/use-settings";
 
+type EnrichedProduct = Product & {
+    price: number;
+    stock: number;
+};
+
 type OrderItem = {
-  product: Product;
+  product: EnrichedProduct;
   quantity: number;
 };
 
@@ -71,8 +76,8 @@ function ProductCard({
   categoryName,
   currency,
 }: {
-  product: Product;
-  onAddToCart: (product: Product) => void;
+  product: EnrichedProduct;
+  onAddToCart: (product: EnrichedProduct) => void;
   categoryName: string;
   currency: string;
 }) {
@@ -172,6 +177,18 @@ export default function SalesPage() {
   const isReservationsEnabled = featureSettings.reservations;
 
   const getCategoryName = (categoryId: string | null) => categories.find(c => c.id === categoryId)?.name;
+  
+  const productsForCurrentStore = useMemo((): EnrichedProduct[] => {
+    if (!selectedDevice?.store_id) return [];
+    
+    return products.map(p => {
+        const storeProduct = p.store_products?.find(sp => sp.store_id === selectedDevice.store_id);
+        if (storeProduct) {
+            return { ...p, price: storeProduct.price, stock: storeProduct.stock };
+        }
+        return null;
+    }).filter((p): p is EnrichedProduct => p !== null);
+  }, [products, selectedDevice]);
 
   useEffect(() => {
     const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
@@ -204,7 +221,7 @@ export default function SalesPage() {
 
     const ticketItems = ticket.items as SaleItem[];
     const newOrderItems: OrderItem[] = ticketItems.map(item => {
-        const product = products.find(p => p.id === item.id);
+        const product = productsForCurrentStore.find(p => p.id === item.id);
         return product ? { product, quantity: item.quantity } : null;
     }).filter((item): item is OrderItem => item !== null);
     
@@ -230,7 +247,7 @@ export default function SalesPage() {
       handleLoadTicket(ticketToLoad);
     } else if (debtToSettle) {
       const debtItems: OrderItem[] = debtToSettle.items.map(item => {
-        const product = products.find(p => p.id === item.id);
+        const product = productsForCurrentStore.find(p => p.id === item.id);
         return product ? { product, quantity: item.quantity } : null;
       }).filter((item): item is OrderItem => item !== null);
       setOrderItems(debtItems);
@@ -243,7 +260,7 @@ export default function SalesPage() {
       }
     }
     setLoading(false);
-  }, [customers, debtToSettle, products, ticketToLoad]);
+  }, [customers, debtToSettle, productsForCurrentStore, ticketToLoad]);
 
   const addReservation = async (reservationData: Omit<Reservation, 'id' | 'created_at' | 'products' | 'businessId'>) => {
     const newReservation: Omit<Reservation, 'id' | 'businessId'> = {
@@ -303,16 +320,15 @@ export default function SalesPage() {
   };
 
 
-  const handleAddToCart = (product: Product) => {
+  const handleAddToCart = (product: EnrichedProduct) => {
     const categoryName = getCategoryName(product.category_id);
-    const productInStock = products.find(p => p.id === product.id);
 
-    if (!productInStock || (productInStock.stock <= 0 && categoryName !== 'Room')) {
+    if (product.stock <= 0 && categoryName !== 'Room') {
       toast({ title: "Out of Stock", description: `${product.name} is currently unavailable.`, variant: "destructive" });
       return;
     }
     
-    if (categoryName === 'Room' && productInStock.status !== 'Available') {
+    if (categoryName === 'Room' && product.status !== 'Available') {
         toast({ title: "Room Not Available", description: `${product.name} is currently ${product.status}.`, variant: "destructive" });
         return;
     }
@@ -325,8 +341,8 @@ export default function SalesPage() {
 
       const existingItem = prevItems.find((item) => item.product.id === product.id);
       if (existingItem) {
-        if (categoryName !== 'Room' && existingItem.quantity + 1 > productInStock.stock) {
-          toast({ title: "Stock Limit Reached", description: `Only ${productInStock.stock} ${productInStock.name} in stock.`, variant: "destructive" });
+        if (categoryName !== 'Room' && existingItem.quantity + 1 > product.stock) {
+          toast({ title: "Stock Limit Reached", description: `Only ${product.stock} ${product.name} in stock.`, variant: "destructive" });
           return prevItems;
         }
 
@@ -343,15 +359,13 @@ export default function SalesPage() {
   const handleUpdateQuantity = (productId: string, amount: number) => {
     setOrderItems((prevItems) => {
       const itemToUpdate = prevItems.find(item => item.product.id === productId);
-      const productInStock = products.find(p => p.id === productId);
-
-      if (!itemToUpdate || !productInStock) return prevItems;
+      if (!itemToUpdate) return prevItems;
       
       const categoryName = getCategoryName(itemToUpdate.product.category_id);
       const newQuantity = itemToUpdate.quantity + amount;
 
-      if (newQuantity > 0 && categoryName !== 'Room' && newQuantity > productInStock.stock) {
-        toast({ title: "Stock Limit Reached", description: `Only ${productInStock.stock} ${productInStock.name} in stock.`, variant: "destructive" });
+      if (newQuantity > 0 && categoryName !== 'Room' && newQuantity > itemToUpdate.product.stock) {
+        toast({ title: "Stock Limit Reached", description: `Only ${itemToUpdate.product.stock} ${itemToUpdate.product.name} in stock.`, variant: "destructive" });
         return prevItems;
       }
       
@@ -557,7 +571,13 @@ export default function SalesPage() {
             await setProducts(prevProducts =>
                 prevProducts.map(p => {
                     const update = stockUpdates.find(u => u.id === p.id);
-                    return update ? { ...p, stock: update.stock } : p;
+                    if (!update || !selectedDevice?.store_id) return p;
+
+                    const newStoreProducts = p.store_products.map(sp => 
+                        sp.store_id === selectedDevice.store_id ? { ...sp, stock: sp.stock - update.stock } : sp
+                    );
+
+                    return { ...p, store_products: newStoreProducts };
                 })
             );
         }
@@ -593,7 +613,7 @@ export default function SalesPage() {
   }, [categories, isReservationsEnabled]);
   
   const filteredProducts = useMemo(() => {
-    let prods = isReservationsEnabled ? products : products.filter(p => getCategoryName(p.category_id)?.toLowerCase() !== 'room');
+    let prods = productsForCurrentStore;
     
     if (categoryFilter !== 'all') {
       prods = prods.filter(p => p.category_id === categoryFilter);
@@ -604,7 +624,7 @@ export default function SalesPage() {
     }
 
     return prods;
-  }, [products, categoryFilter, productSearchTerm, isReservationsEnabled, getCategoryName]);
+  }, [productsForCurrentStore, categoryFilter, productSearchTerm]);
 
   const handleClearOrder = () => {
     setOrderItems([]);
@@ -1176,6 +1196,7 @@ export default function SalesPage() {
 
 
     
+
 
 
 
