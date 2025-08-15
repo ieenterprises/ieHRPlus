@@ -46,26 +46,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, PlusCircle, Trash2, Edit, Upload, Download, Search, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { type Product, type Category, type StoreProduct, StoreType } from "@/lib/types";
+import { type Product, type Category, type StoreProduct } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
 import Papa from "papaparse";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 
 const EMPTY_PRODUCT: Partial<Product> = {
   name: "",
   category_id: "",
   image_url: "https://placehold.co/300x200.png",
+  store_products: [],
 };
 
 const EMPTY_CATEGORY: Partial<Category> = {
   name: "",
-};
-
-const EMPTY_STORE_PRODUCT: Partial<StoreProduct> = {
-    price: 0,
-    stock: 0,
 };
 
 export default function InventoryPage() {
@@ -83,12 +80,9 @@ export default function InventoryPage() {
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-
+  
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
-
-  const [isStoreProductDialogOpen, setIsStoreProductDialogOpen] = useState(false);
-  const [editingStoreProduct, setEditingStoreProduct] = useState<Partial<StoreProduct> & { product_id?: string } | null>(null);
 
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -183,15 +177,35 @@ export default function InventoryPage() {
       name: formData.get("name") as string,
       category_id: formData.get("category") as string,
       image_url: imagePreview || EMPTY_PRODUCT.image_url!,
-      status: editingProduct.status || 'Available',
     };
+
+    const newStoreProducts: StoreProduct[] = stores.map(store => {
+      const price = parseFloat(formData.get(`price-${store.id}`) as string);
+      const stock = parseInt(formData.get(`stock-${store.id}`) as string, 10);
+      const existingStoreProduct = editingProduct.store_products?.find(sp => sp.store_id === store.id);
+
+      return {
+        id: existingStoreProduct?.id || `sp_${store.id}_${new Date().getTime()}`,
+        product_id: editingProduct.id || '', // Will be set for new products later
+        store_id: store.id,
+        price: isNaN(price) ? (existingStoreProduct?.price || 0) : price,
+        stock: isNaN(stock) ? (existingStoreProduct?.stock || 0) : stock,
+        businessId: loggedInUser?.businessId || '',
+      };
+    }).filter(sp => sp.price > 0 || sp.stock > 0);
     
     try {
       if ('id' in editingProduct && editingProduct.id) {
-        await setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...productData } as Product : p));
+        await setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...productData, store_products: newStoreProducts.map(sp => ({...sp, product_id: p.id})) } as Product : p));
         toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
       } else {
-        const newProduct = { ...productData, id: `prod_${new Date().getTime()}`, created_at: new Date().toISOString(), store_products: [] };
+        const newProductId = `prod_${new Date().getTime()}`;
+        const newProduct = { 
+            ...productData, 
+            id: newProductId, 
+            created_at: new Date().toISOString(),
+            store_products: newStoreProducts.map(sp => ({ ...sp, product_id: newProductId }))
+        };
         await setProducts([newProduct as Product, ...products]);
         toast({ title: "Product Added", description: `${productData.name} has been added to inventory.` });
       }
@@ -283,74 +297,120 @@ export default function InventoryPage() {
     }
   };
 
-  // Store Product Handlers
-  const handleOpenStoreProductDialog = (storeProduct: Partial<StoreProduct> | null, productId: string) => {
-    setEditingStoreProduct(storeProduct ? { ...storeProduct, product_id: productId } : { ...EMPTY_STORE_PRODUCT, product_id: productId });
-    setIsStoreProductDialogOpen(true);
+  // Import/Export Handlers
+  const handleExport = () => {
+    const dataToExport = products.map(p => {
+        const row: any = {
+            ID: p.id,
+            Name: p.name,
+            Category: getCategoryName(p.category_id),
+            ImageURL: p.image_url,
+        };
+        stores.forEach(store => {
+            const sp = p.store_products.find(sp => sp.store_id === store.id);
+            row[`${store.name} Price`] = sp?.price || 0;
+            row[`${store.name} Stock`] = sp?.stock || 0;
+        });
+        return row;
+    });
+
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `products_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete" });
   };
 
-  const handleStoreProductDialogClose = (open: boolean) => {
-      if (!open) {
-          setEditingStoreProduct(null);
-      }
-      setIsStoreProductDialogOpen(open);
-  };
-
-  const handleStoreProductFormSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!editingStoreProduct || !editingStoreProduct.product_id) return;
+  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
     setIsProcessing(true);
-    const formData = new FormData(event.currentTarget);
-    const storeId = formData.get("store_id") as string;
-    const price = parseFloat(formData.get("price") as string);
-    const stock = parseInt(formData.get("stock") as string, 10);
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+            try {
+                const importedProducts = results.data as any[];
+                
+                const updatedProducts: Product[] = [...products];
 
-    try {
-        await setProducts(prevProducts => prevProducts.map(p => {
-            if (p.id === editingStoreProduct.product_id) {
-                const existingStoreProduct = p.store_products.find(sp => sp.store_id === storeId);
-                let newStoreProducts: StoreProduct[];
-                if (existingStoreProduct) {
-                    newStoreProducts = p.store_products.map(sp => 
-                        sp.id === existingStoreProduct.id ? { ...sp, price, stock } : sp
-                    );
-                } else {
-                    const newStoreProduct: StoreProduct = {
-                        id: `sp_${new Date().getTime()}`,
-                        store_id: storeId,
-                        product_id: p.id,
-                        price,
-                        stock,
+                for (const row of importedProducts) {
+                    const category = categories.find(c => c.name === row.Category);
+                    if (!category) {
+                        console.warn(`Skipping product "${row.Name}": Category "${row.Category}" not found.`);
+                        continue;
+                    }
+
+                    const store_products: StoreProduct[] = stores.map(store => ({
+                        id: `sp_imp_${store.id}_${row.ID || new Date().getTime()}`,
+                        store_id: store.id,
+                        product_id: row.ID || '',
+                        price: parseFloat(row[`${store.name} Price`]) || 0,
+                        stock: parseInt(row[`${store.name} Stock`], 10) || 0,
                         businessId: loggedInUser?.businessId || '',
-                    };
-                    newStoreProducts = [...p.store_products, newStoreProduct];
+                    }));
+
+                    const existingProductIndex = updatedProducts.findIndex(p => p.id === row.ID);
+
+                    if (existingProductIndex > -1) {
+                        // Update existing product
+                        updatedProducts[existingProductIndex] = {
+                            ...updatedProducts[existingProductIndex],
+                            name: row.Name,
+                            category_id: category.id,
+                            image_url: row.ImageURL || updatedProducts[existingProductIndex].image_url,
+                            store_products: store_products.map(sp => ({...sp, product_id: row.ID})),
+                        };
+                    } else {
+                        // Add new product
+                        const newId = `prod_imp_${new Date().getTime()}_${Math.random()}`;
+                        updatedProducts.push({
+                            id: newId,
+                            name: row.Name,
+                            category_id: category.id,
+                            image_url: row.ImageURL || EMPTY_PRODUCT.image_url!,
+                            created_at: new Date().toISOString(),
+                            status: 'Available',
+                            store_products: store_products.map(sp => ({...sp, product_id: newId})),
+                            businessId: loggedInUser?.businessId || '',
+                        });
+                    }
                 }
-                return { ...p, store_products: newStoreProducts };
+
+                await setProducts(updatedProducts);
+                toast({ title: "Import Successful", description: `${importedProducts.length} products processed.` });
+            } catch (error: any) {
+                toast({ title: "Import Error", description: error.message, variant: "destructive" });
+            } finally {
+                setIsProcessing(false);
+                setIsImportDialogOpen(false);
+                if (fileInputRef.current) fileInputRef.current.value = "";
             }
-            return p;
-        }));
-        toast({ title: "Store Inventory Updated" });
-        handleStoreProductDialogClose(false);
-    } catch (error: any) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-        setIsProcessing(false);
-    }
+        },
+        error: (error: any) => {
+            toast({ title: "Import Error", description: error.message, variant: "destructive" });
+            setIsProcessing(false);
+        }
+    });
   };
 
   return (
     <div className="space-y-8">
         <PageHeader
           title="Inventory Management"
-          description="Manage your products, categories, and store-specific inventory."
+          description="Manage your products and categories across all stores."
         />
 
         <Tabs defaultValue="products">
             <TabsList className="mb-4">
                 <TabsTrigger value="products">Products</TabsTrigger>
                 <TabsTrigger value="categories">Categories</TabsTrigger>
-                <TabsTrigger value="stores">Stores</TabsTrigger>
             </TabsList>
 
             <TabsContent value="products">
@@ -358,10 +418,16 @@ export default function InventoryPage() {
                     <CardHeader className="relative">
                         <CardTitle>Products</CardTitle>
                         <CardDescription>
-                           A list of all products in your inventory. Assign products to stores from the Stores tab.
+                           A list of all products in your inventory.
                         </CardDescription>
                          {canManageInventory && (
                             <div className="absolute top-6 right-6 flex items-center gap-2">
+                                <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+                                    <Upload className="mr-2 h-4 w-4" /> Import
+                                </Button>
+                                <Button variant="outline" onClick={handleExport}>
+                                    <Download className="mr-2 h-4 w-4" /> Export
+                                </Button>
                                 <Button onClick={handleAddProduct}>
                                     <PlusCircle className="mr-2 h-4 w-4" />
                                     Add Product
@@ -396,76 +462,79 @@ export default function InventoryPage() {
                                 />
                             </div>
                         </div>
-
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-[80px] hidden sm:table-cell">Image</TableHead>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Category</TableHead>
-                                    <TableHead>Available In</TableHead>
-                                    {canManageInventory && <TableHead><span className="sr-only">Actions</span></TableHead>}
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {loading ? (
-                                    <TableRow><TableCell colSpan={canManageInventory ? 5 : 4} className="h-24 text-center">Loading...</TableCell></TableRow>
-                                ) : filteredProducts.length > 0 ? (
-                                    filteredProducts.map((product) => (
-                                        <TableRow key={product.id}>
-                                            <TableCell className="hidden sm:table-cell">
-                                                <Image
-                                                    src={product.image_url || 'https://placehold.co/80x80.png'}
-                                                    alt={product.name}
-                                                    width={40}
-                                                    height={40}
-                                                    className="rounded-md object-cover"
-                                                />
-                                            </TableCell>
-                                            <TableCell className="font-medium">{product.name}</TableCell>
-                                            <TableCell>{getCategoryName(product.category_id)}</TableCell>
-                                            <TableCell>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {product.store_products?.length > 0 ? (
-                                                        product.store_products.map(sp => (
-                                                            <Badge key={sp.id} variant="secondary">
-                                                                {stores.find(s => s.id === sp.store_id)?.name || 'Unknown Store'}
-                                                            </Badge>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-xs text-muted-foreground">Not in any store</span>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                             {canManageInventory && (
-                                                <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                            <span className="sr-only">Toggle menu</span>
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                            <DropdownMenuItem onClick={() => handleEditProduct(product)}>
-                                                                <Edit className="mr-2 h-4 w-4" /> Edit Details
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
-                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                            Delete
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[80px] hidden sm:table-cell">Image</TableHead>
+                                        <TableHead>Name</TableHead>
+                                        <TableHead>Category</TableHead>
+                                        {stores.map(store => (
+                                            <React.Fragment key={store.id}>
+                                                <TableHead>{store.name} Price</TableHead>
+                                                <TableHead>{store.name} Stock</TableHead>
+                                            </React.Fragment>
+                                        ))}
+                                        {canManageInventory && <TableHead><span className="sr-only">Actions</span></TableHead>}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {loading ? (
+                                        <TableRow><TableCell colSpan={canManageInventory ? 4 + stores.length * 2 : 3 + stores.length * 2} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                    ) : filteredProducts.length > 0 ? (
+                                        filteredProducts.map((product) => (
+                                            <TableRow key={product.id}>
+                                                <TableCell className="hidden sm:table-cell">
+                                                    <Image
+                                                        src={product.image_url || 'https://placehold.co/80x80.png'}
+                                                        alt={product.name}
+                                                        width={40}
+                                                        height={40}
+                                                        className="rounded-md object-cover"
+                                                        data-ai-hint="product image"
+                                                    />
                                                 </TableCell>
-                                             )}
-                                        </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow><TableCell colSpan={canManageInventory ? 5 : 4} className="h-24 text-center">No products found for the current filters.</TableCell></TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
+                                                <TableCell className="font-medium">{product.name}</TableCell>
+                                                <TableCell>{getCategoryName(product.category_id)}</TableCell>
+                                                {stores.map(store => {
+                                                    const storeProduct = product.store_products?.find(sp => sp.store_id === store.id);
+                                                    return (
+                                                        <React.Fragment key={store.id}>
+                                                            <TableCell>{currency}{storeProduct?.price?.toFixed(2) || '0.00'}</TableCell>
+                                                            <TableCell>{storeProduct?.stock || 0}</TableCell>
+                                                        </React.Fragment>
+                                                    );
+                                                })}
+                                                 {canManageInventory && (
+                                                    <TableCell className="text-right">
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                                <span className="sr-only">Toggle menu</span>
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end">
+                                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                                <DropdownMenuItem onClick={() => handleEditProduct(product)}>
+                                                                    <Edit className="mr-2 h-4 w-4" /> Edit Details
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
+                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                                Delete
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    </TableCell>
+                                                 )}
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow><TableCell colSpan={canManageInventory ? 4 + stores.length * 2 : 3 + stores.length * 2} className="h-24 text-center">No products found for the current filters.</TableCell></TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
                     </CardContent>
                 </Card>
             </TabsContent>
@@ -521,63 +590,10 @@ export default function InventoryPage() {
                     </CardContent>
                 </Card>
             </TabsContent>
-
-            <TabsContent value="stores">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Store Inventory</CardTitle>
-                        <CardDescription>Manage product price and stock for each store.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-6">
-                            {stores.map(store => (
-                                <div key={store.id}>
-                                    <h3 className="text-lg font-semibold mb-2">{store.name}</h3>
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Product</TableHead>
-                                                <TableHead>Price</TableHead>
-                                                <TableHead>Stock</TableHead>
-                                                {canManageInventory && <TableHead><span className="sr-only">Actions</span></TableHead>}
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {products.filter(p => p.store_products?.some(sp => sp.store_id === store.id)).map(product => {
-                                                const storeProduct = product.store_products.find(sp => sp.store_id === store.id)!;
-                                                return (
-                                                    <TableRow key={product.id}>
-                                                        <TableCell>{product.name}</TableCell>
-                                                        <TableCell>{currency}{storeProduct.price.toFixed(2)}</TableCell>
-                                                        <TableCell>{storeProduct.stock}</TableCell>
-                                                        {canManageInventory && (
-                                                            <TableCell className="text-right">
-                                                                <Button variant="ghost" size="icon" onClick={() => handleOpenStoreProductDialog(storeProduct, product.id)}>
-                                                                    <Edit className="h-4 w-4" />
-                                                                </Button>
-                                                            </TableCell>
-                                                        )}
-                                                    </TableRow>
-                                                );
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                    {canManageInventory && (
-                                        <Button className="mt-4" variant="outline" onClick={() => handleOpenStoreProductDialog(null, "new")}>
-                                            <PlusCircle className="mr-2 h-4 w-4" /> Add Product to {store.name}
-                                        </Button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-
         </Tabs>
       
       <Dialog open={isProductDialogOpen} onOpenChange={handleProductDialogClose}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-3xl">
             <form onSubmit={handleProductFormSubmit}>
               <DialogHeader>
                 <DialogTitle>{editingProduct && 'id' in editingProduct ? 'Edit Product' : 'Add Product'}</DialogTitle>
@@ -585,48 +601,77 @@ export default function InventoryPage() {
                   {editingProduct && 'id' in editingProduct ? 'Update the details of this product.' : 'Fill in the details to add a new product.'}
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                 <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="image" className="text-right">Image</Label>
-                    <div className="col-span-3 space-y-2">
-                        {imagePreview && (
-                            <Image
-                                src={imagePreview}
-                                alt="Product preview"
-                                width={80}
-                                height={80}
-                                className="rounded-md object-cover"
-                            />
-                        )}
-                        <Input
-                            id="image"
-                            name="image"
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageChange}
-                        />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+                    <div className="space-y-4">
+                         <div className="space-y-2">
+                            <Label htmlFor="image">Image</Label>
+                            <div className="flex items-center gap-4">
+                                {imagePreview && (
+                                    <Image
+                                        src={imagePreview}
+                                        alt="Product preview"
+                                        width={80}
+                                        height={80}
+                                        className="rounded-md object-cover"
+                                        data-ai-hint="product image"
+                                    />
+                                )}
+                                <Input
+                                    id="image"
+                                    name="image"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleImageChange}
+                                    className="flex-1"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="name">Name</Label>
+                          <Input id="name" name="name" defaultValue={editingProduct?.name} required />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="category">Category</Label>
+                            <Select name="category" required defaultValue={editingProduct?.category_id ?? ""}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {visibleCategories.map((category) => (
+                                        <SelectItem key={category.id} value={category.id}>
+                                            {category.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Store Inventory</h3>
+                        <ScrollArea className="h-64 border rounded-md p-4">
+                            <div className="space-y-4">
+                                {stores.map(store => {
+                                    const storeProduct = editingProduct?.store_products?.find(sp => sp.store_id === store.id);
+                                    return (
+                                        <div key={store.id} className="space-y-2 p-2 bg-muted/50 rounded-md">
+                                            <Label className="font-semibold">{store.name}</Label>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <Label htmlFor={`price-${store.id}`} className="text-xs">Price ({currency})</Label>
+                                                    <Input id={`price-${store.id}`} name={`price-${store.id}`} type="number" step="0.01" defaultValue={storeProduct?.price || ''} placeholder="0.00" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label htmlFor={`stock-${store.id}`} className="text-xs">Stock</Label>
+                                                    <Input id={`stock-${store.id}`} name={`stock-${store.id}`} type="number" step="1" defaultValue={storeProduct?.stock || ''} placeholder="0" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </ScrollArea>
                     </div>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">Name</Label>
-                  <Input id="name" name="name" defaultValue={editingProduct?.name} className="col-span-3" required />
-                </div>
-                 <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="category" className="text-right">Category</Label>
-                    <Select name="category" required defaultValue={editingProduct?.category_id ?? ""}>
-                        <SelectTrigger className="col-span-3">
-                            <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {visibleCategories.map((category) => (
-                                <SelectItem key={category.id} value={category.id}>
-                                    {category.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-              </div>
               <DialogFooter>
                 <Button type="submit" disabled={isProcessing}>
                     {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -661,54 +706,19 @@ export default function InventoryPage() {
             </form>
           </DialogContent>
       </Dialog>
-      
-      <Dialog open={isStoreProductDialogOpen} onOpenChange={handleStoreProductDialogClose}>
+
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
         <DialogContent>
-            <form onSubmit={handleStoreProductFormSubmit}>
-                <DialogHeader>
-                    <DialogTitle>{editingStoreProduct?.id ? 'Edit Store Inventory' : 'Add Product to Store'}</DialogTitle>
-                </DialogHeader>
-                <div className="py-4 grid gap-4">
-                    {editingStoreProduct?.product_id === 'new' && (
-                         <div className="space-y-2">
-                            <Label htmlFor="product_id">Product</Label>
-                            <Select name="product_id" required>
-                                <SelectTrigger><SelectValue placeholder="Select a product" /></SelectTrigger>
-                                <SelectContent>
-                                    {products.map(p => (
-                                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
-                    <div className="space-y-2">
-                        <Label htmlFor="store_id">Store</Label>
-                        <Select name="store_id" required defaultValue={editingStoreProduct?.store_id}>
-                            <SelectTrigger><SelectValue placeholder="Select a store" /></SelectTrigger>
-                            <SelectContent>
-                                {stores.map(s => (
-                                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="price">Price ({currency})</Label>
-                        <Input id="price" name="price" type="number" step="0.01" defaultValue={editingStoreProduct?.price} required />
-                    </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="stock">Stock</Label>
-                        <Input id="stock" name="stock" type="number" step="1" defaultValue={editingStoreProduct?.stock} required />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button type="submit" disabled={isProcessing}>
-                         {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Save
-                    </Button>
-                </DialogFooter>
-            </form>
+            <DialogHeader>
+                <DialogTitle>Import Products</DialogTitle>
+                <DialogDescription>
+                    Upload a CSV file to bulk add or update products. Make sure your CSV has columns: `ID`, `Name`, `Category`, `ImageURL`, and then `Store Name Price` and `Store Name Stock` for each store.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+                <Input type="file" accept=".csv" ref={fileInputRef} onChange={handleImport} disabled={isProcessing} />
+                {isProcessing && <p className="text-sm text-muted-foreground mt-2 flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing file...</p>}
+            </div>
         </DialogContent>
       </Dialog>
     </div>
