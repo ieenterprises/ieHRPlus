@@ -21,7 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type Sale, type OpenTicket } from "@/lib/types";
+import { type Sale, type OpenTicket, type SaleItem } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -60,7 +60,7 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function KitchenPage() {
-  const { sales, products, categories, users, loggedInUser, voidSale, setPrintableData } = useSettings();
+  const { sales, products, categories, users, loggedInUser, voidSale, setPrintableData, currency } = useSettings();
   const { openTickets, setTicketToLoad } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -149,8 +149,7 @@ export default function KitchenPage() {
             });
       
       const totalForAmountCheck = itemsForAmountCheck.reduce((acc, item) => {
-          const product = products.find((p) => p.id === item.id);
-          return acc + (product ? product.price * item.quantity : 0);
+          return acc + (item.price * item.quantity);
       }, 0);
 
       const amountMatch =
@@ -169,8 +168,7 @@ export default function KitchenPage() {
           });
 
       const displayTotal = displayItems.reduce((acc, item) => {
-          const product = products.find(p => p.id === item.id);
-          return acc + (product ? product.price * item.quantity : 0);
+          return acc + (item.price * item.quantity);
       }, 0);
 
       return {
@@ -301,7 +299,7 @@ export default function KitchenPage() {
                                             <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
                                             <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
                                             <TableCell>{(ticket.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
-                                            <TableCell className="text-right">${ticket.total.toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">{currency}{ticket.total.toFixed(2)}</TableCell>
                                             <TableCell className="text-right">
                                               <div className="flex justify-end gap-2">
                                                 <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as OpenTicket)} disabled={!canLoadTicket}>
@@ -459,7 +457,7 @@ export default function KitchenPage() {
                                     ))}
                                 </div>
                             </TableCell>
-                            <TableCell className="text-right">${sale.displayTotal.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">{currency}{sale.displayTotal.toFixed(2)}</TableCell>
                             <TableCell className="text-center">
                             <div className="flex items-center justify-center gap-1">
                                 {sale.payment_methods.map((method: string) => (
