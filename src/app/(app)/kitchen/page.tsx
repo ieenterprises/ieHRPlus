@@ -46,6 +46,7 @@ import { usePos } from "@/hooks/use-pos";
 import { useSettings } from "@/hooks/use-settings";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PrintPreviewDialog } from "@/components/print-preview-dialog";
 
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -62,7 +63,7 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function KitchenPage() {
-  const { sales, products, categories, users, loggedInUser, voidSale, setPrintableData, currency, setDebtToSettle } = useSettings();
+  const { sales, products, categories, users, loggedInUser, voidSale, setPrintableData, currency, setDebtToSettle, isPrintModalOpen, setIsPrintModalOpen } = useSettings();
   const { openTickets, setTicketToLoad } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -81,7 +82,7 @@ export default function KitchenPage() {
   
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
     setPrintableData({ ...data, type });
-    router.push('/print');
+    setIsPrintModalOpen(true);
   };
   
   useEffect(() => {
@@ -233,6 +234,7 @@ export default function KitchenPage() {
 
   return (
     <TooltipProvider>
+      <PrintPreviewDialog />
       <div className="space-y-8">
         <PageHeader
           title="Orders"

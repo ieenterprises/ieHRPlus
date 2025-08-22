@@ -84,6 +84,9 @@ type SettingsContextType = {
     setDebtToSettle: React.Dispatch<React.SetStateAction<Sale | null>>;
     printableData: any | null;
     setPrintableData: React.Dispatch<React.SetStateAction<any | null>>;
+    isPrintModalOpen: boolean;
+    setIsPrintModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+
 
     // Direct state setters for complex pages
     setProducts: (value: React.SetStateAction<Product[]>) => Promise<void>;
@@ -154,6 +157,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [ownerSelectedStore, setOwnerSelectedStore] = useLocalStorage<StoreType | null>('ownerSelectedStore', null);
     const [debtToSettle, setDebtToSettle] = useLocalStorage<Sale | null>('debtToSettle', null);
     const [printableData, setPrintableData] = useLocalStorage<any | null>('printableData', null);
+    const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
     
     const router = useRouter();
 
@@ -477,6 +482,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         getPermissionsForRole,
         debtToSettle, setDebtToSettle,
         printableData, setPrintableData,
+        isPrintModalOpen, setIsPrintModalOpen,
         voidSale,
     };
 

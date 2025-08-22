@@ -1,12 +1,2 @@
 
-export default function PrintLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <>
-        {children}
-    </>
-  );
-}
+// This file is intentionally blank. It will be deleted.
