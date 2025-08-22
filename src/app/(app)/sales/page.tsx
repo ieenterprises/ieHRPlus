@@ -257,10 +257,29 @@ export default function SalesPage() {
     } else if (debtToSettle) {
       const correspondingDebt = debts.find(d => d.sale_id === debtToSettle.id && d.status === 'Unpaid');
       if (correspondingDebt) {
+          // Directly use the items from the debtToSettle (Sale) object.
+          // This is more reliable as it doesn't depend on product lookups.
           const debtItems: OrderItem[] = debtToSettle.items.map(item => {
-            const product = productsForCurrentStore.find(p => p.id === item.id);
-            return product ? { product, quantity: item.quantity } : null;
-          }).filter((item): item is OrderItem => item !== null);
+            // Construct a partial Product object from the SaleItem.
+            // This ensures the OrderItem structure is met without needing a full product lookup.
+            const productData: EnrichedProduct = {
+              ...(products.find(p => p.id === item.id) || {}), // Get other details if available, but don't fail if not
+              id: item.id,
+              name: item.name,
+              price: item.price,
+              quantity: item.quantity,
+              // These are placeholders as they aren't critical for settlement
+              category_id: null,
+              created_at: null,
+              image_url: null,
+              status: 'Available',
+              store_products: [],
+              businessId: loggedInUser?.businessId || '',
+              stock: 999, // Assume enough stock for settlement purposes
+            };
+            return { product: productData, quantity: item.quantity };
+          });
+
           setOrderItems(debtItems);
           setSelectedCustomerId(debtToSettle.customer_id);
       } else {
@@ -280,7 +299,7 @@ export default function SalesPage() {
       }
     }
     setLoading(false);
-  }, [customers, debtToSettle, productsForCurrentStore, ticketToLoad, debts, setDebtToSettle]);
+  }, [customers, debtToSettle, ticketToLoad, debts, setDebtToSettle, products, loggedInUser]);
 
   const addReservation = async (reservationData: Omit<Reservation, 'id' | 'created_at' | 'products' | 'businessId'>) => {
     const newReservation: Omit<Reservation, 'id' | 'businessId'> = {
