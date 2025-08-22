@@ -255,12 +255,26 @@ export default function SalesPage() {
     if (ticketToLoad) {
       handleLoadTicket(ticketToLoad);
     } else if (debtToSettle) {
-      const debtItems: OrderItem[] = debtToSettle.items.map(item => {
-        const product = productsForCurrentStore.find(p => p.id === item.id);
-        return product ? { product, quantity: item.quantity } : null;
-      }).filter((item): item is OrderItem => item !== null);
-      setOrderItems(debtItems);
-      setSelectedCustomerId(debtToSettle.customer_id);
+      // **BUG FIX**: Validate that the debt to settle actually exists and is unpaid.
+      // If not, clear the stale `debtToSettle` state to unlock the POS.
+      const correspondingDebt = debts.find(d => d.sale_id === debtToSettle.id && d.status === 'Unpaid');
+      if (correspondingDebt) {
+          const debtItems: OrderItem[] = debtToSettle.items.map(item => {
+            const product = productsForCurrentStore.find(p => p.id === item.id);
+            return product ? { product, quantity: item.quantity } : null;
+          }).filter((item): item is OrderItem => item !== null);
+          setOrderItems(debtItems);
+          setSelectedCustomerId(debtToSettle.customer_id);
+      } else {
+          // The debt doesn't exist or is already paid. Clear the stale state.
+          setDebtToSettle(null);
+          handleClearOrder();
+          toast({
+            title: "Cleared Stale Debt",
+            description: "A previously selected debt was no longer valid and has been cleared.",
+            variant: "default"
+          });
+      }
     } else {
       const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
       if (walkIn) {
@@ -269,7 +283,7 @@ export default function SalesPage() {
       }
     }
     setLoading(false);
-  }, [customers, debtToSettle, productsForCurrentStore, ticketToLoad]);
+  }, [customers, debtToSettle, productsForCurrentStore, ticketToLoad, debts, setDebtToSettle]);
 
   const addReservation = async (reservationData: Omit<Reservation, 'id' | 'created_at' | 'products' | 'businessId'>) => {
     const newReservation: Omit<Reservation, 'id' | 'businessId'> = {
