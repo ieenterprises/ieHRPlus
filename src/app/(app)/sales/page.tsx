@@ -469,7 +469,7 @@ export default function SalesPage() {
       setPayments(payments.filter((_, i) => i !== index));
   };
 
-  const handleCompleteSale = async (options: { creditInfo?: { customerId: string; amount: number; } } = {}) => {
+ const handleCompleteSale = async (options: { creditInfo?: { customerId: string; amount: number; } } = {}) => {
     const { creditInfo } = options;
     if (remainingBalance > 0.001 && !creditInfo && !isCheckingIn) {
         toast({ title: "Payment Incomplete", description: `There is still a remaining balance of ${currency}${remainingBalance.toFixed(2)}.`, variant: "destructive" });
@@ -487,23 +487,18 @@ export default function SalesPage() {
             price: item.product.price,
         }));
 
-        let newSale: Sale;
-        const newSaleId = `sale_${new Date().getTime()}`;
-
         if (debtToSettle) {
           const originalSale = sales.find(s => s.id === debtToSettle.id);
           if (!originalSale) {
-            toast({ title: "Error", description: "Original sale not found for this debt.", variant: "destructive" });
-            setIsProcessing(false);
-            return;
+            throw new Error("Original sale for this debt could not be found.");
           }
           const settlementPayments = payments.map(p => p.method);
-          newSale = {
+          const updatedSale = {
             ...originalSale,
             payment_methods: [...originalSale.payment_methods.filter(pm => pm !== 'Credit'), ...settlementPayments],
           };
 
-          await setSales(prevSales => prevSales.map(s => s.id === newSale.id ? newSale : s));
+          await setSales(prevSales => prevSales.map(s => s.id === updatedSale.id ? updatedSale : s));
 
           const originalDebt = debts.find(d => d.sale_id === debtToSettle.id);
           if (originalDebt) {
@@ -511,10 +506,11 @@ export default function SalesPage() {
               d.id === originalDebt.id ? { ...d, status: 'Paid' } : d
             ));
           }
+           toast({ title: "Debt Settled", description: `Debt for order #${originalSale.order_number} has been settled.` });
         } else {
           // This is a new sale
-          newSale = {
-              id: newSaleId,
+          const newSale: Sale = {
+              id: `sale_${new Date().getTime()}`,
               order_number: generateUniqueOrderNumber(),
               created_at: new Date().toISOString(),
               items: saleItems,
@@ -530,50 +526,57 @@ export default function SalesPage() {
               businessId: loggedInUser?.businessId || '',
           };
           await setSales(prev => [...prev, newSale]);
+        
+          if (creditInfo) {
+              const newDebt = {
+                id: `debt_${new Date().getTime()}`,
+                sale_id: newSale.id,
+                customer_id: creditInfo.customerId,
+                amount: creditInfo.amount,
+                status: "Unpaid" as const,
+                created_at: new Date().toISOString(),
+                sales: { order_number: newSale.order_number },
+                customers: { name: customers.find(c => c.id === creditInfo.customerId)?.name || null },
+                businessId: loggedInUser?.businessId || '',
+              };
+              await setDebts(prev => [...prev, newDebt]);
+          }
+          
+          if (isCheckingIn) {
+              const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
+              const guest = customers.find(c => c.id === reservationCustomerId);
+              if (roomItem && guest && dateRange?.from && dateRange.to) {
+                  await addReservation({
+                      guest_name: guest.name,
+                      product_id: roomItem.product.id,
+                      check_in: dateRange.from.toISOString(),
+                      check_out: dateRange.to.toISOString(),
+                      status: 'Checked-in',
+                      sale_id: newSale.id,
+                  });
+
+                  await setProducts(prevProducts => 
+                      prevProducts.map(room => room.id === roomItem.product.id ? { ...room, status: 'Occupied' } : room)
+                  );
+
+                  toast({
+                    title: "Room Checked In",
+                    description: `Booking for ${guest.name} in ${roomItem.product.name} has been paid and confirmed.`,
+                  });
+              }
+              setIsCheckingIn(false);
+              setReservationCustomerId(null);
+              setDateRange(undefined);
+          }
+          let toastDescription = `Order complete. Total: ${currency}${total.toFixed(2)}.`;
+
+          if (creditInfo) {
+              const customer = customers.find(c => c.id === creditInfo.customerId);
+              toastDescription += ` ${currency}${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
+          }
+          toast({ title: "Sale Completed", description: toastDescription });
         }
         
-        if (creditInfo) {
-            const newDebt = {
-              id: `debt_${new Date().getTime()}`,
-              sale_id: newSale.id,
-              customer_id: creditInfo.customerId,
-              amount: creditInfo.amount,
-              status: "Unpaid" as const,
-              created_at: new Date().toISOString(),
-              sales: { order_number: newSale.order_number },
-              customers: { name: customers.find(c => c.id === creditInfo.customerId)?.name || null },
-              businessId: loggedInUser?.businessId || '',
-            };
-            await setDebts(prev => [...prev, newDebt]);
-        }
-        
-        if (isCheckingIn && !debtToSettle) {
-            const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
-            const guest = customers.find(c => c.id === reservationCustomerId);
-            if (roomItem && guest && dateRange?.from && dateRange.to) {
-                await addReservation({
-                    guest_name: guest.name,
-                    product_id: roomItem.product.id,
-                    check_in: dateRange.from.toISOString(),
-                    check_out: dateRange.to.toISOString(),
-                    status: 'Checked-in',
-                    sale_id: newSale.id,
-                });
-
-                await setProducts(prevProducts => 
-                    prevProducts.map(room => room.id === roomItem.product.id ? { ...room, status: 'Occupied' } : room)
-                );
-
-                toast({
-                  title: "Room Checked In",
-                  description: `Booking for ${guest.name} in ${roomItem.product.name} has been paid and confirmed.`,
-                });
-            }
-            setIsCheckingIn(false);
-            setReservationCustomerId(null);
-            setDateRange(undefined);
-        }
-
         const stockUpdates = orderItems
             .filter(item => getCategoryName(item.product.category_id) !== 'Room')
             .map(item => ({ id: item.product.id, quantity: item.quantity }));
@@ -596,19 +599,6 @@ export default function SalesPage() {
         
         if (activeTicket?.id) await deleteTicket(activeTicket.id);
 
-        if (!isCheckingIn) {
-            let toastDescription = debtToSettle 
-              ? `Debt settled. Total: ${currency}${total.toFixed(2)}.`
-              : `Order complete. Total: ${currency}${total.toFixed(2)}.`;
-
-            if (creditInfo) {
-                const customer = customers.find(c => c.id === creditInfo.customerId);
-                toastDescription += ` ${currency}${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
-            }
-
-            toast({ title: debtToSettle ? "Debt Settled" : "Sale Completed", description: toastDescription });
-        }
-        
         handleClearOrder();
 
     } catch (error: any) {
