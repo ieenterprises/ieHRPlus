@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence, initializeFirestore, CACHE_SIZE_UNLIMITED } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -17,11 +17,18 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
-const db = getFirestore(app);
+
+// Initialize Firestore with multi-tab persistence
+const db = initializeFirestore(app, {
+  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+  experimentalForceOwningTab: false, // Ensure this is false for multi-tab
+});
 
 // Enable offline persistence
 if (typeof window !== 'undefined') {
-  enableIndexedDbPersistence(db)
+  enableIndexedDbPersistence(db, {
+    forceOwnership: false // Redundant with experimentalForceOwningTab: false, but good for clarity
+  })
     .catch((err) => {
       if (err.code == 'failed-precondition') {
         // Multiple tabs open, persistence can only be enabled in one tab at a time.
