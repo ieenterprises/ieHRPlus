@@ -255,8 +255,6 @@ export default function SalesPage() {
     if (ticketToLoad) {
       handleLoadTicket(ticketToLoad);
     } else if (debtToSettle) {
-      // **BUG FIX**: Validate that the debt to settle actually exists and is unpaid.
-      // If not, clear the stale `debtToSettle` state to unlock the POS.
       const correspondingDebt = debts.find(d => d.sale_id === debtToSettle.id && d.status === 'Unpaid');
       if (correspondingDebt) {
           const debtItems: OrderItem[] = debtToSettle.items.map(item => {
@@ -266,7 +264,6 @@ export default function SalesPage() {
           setOrderItems(debtItems);
           setSelectedCustomerId(debtToSettle.customer_id);
       } else {
-          // The debt doesn't exist or is already paid. Clear the stale state.
           setDebtToSettle(null);
           handleClearOrder();
           toast({
