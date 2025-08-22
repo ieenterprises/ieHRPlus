@@ -8,7 +8,7 @@ import { format, differenceInDays } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
-import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole, Sale, Reservation } from "@/lib/types";
+import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole, Sale, Reservation, Debt } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -255,34 +255,8 @@ export default function SalesPage() {
     if (ticketToLoad) {
       handleLoadTicket(ticketToLoad);
     } else if (debtToSettle) {
-      const correspondingDebt = debts.find(d => d.sale_id === debtToSettle.id && d.status === 'Unpaid');
-      if (correspondingDebt) {
-          // Directly use the items from the debtToSettle (Sale) object.
-          // This is more reliable as it doesn't depend on product lookups.
-          const debtItems: OrderItem[] = debtToSettle.items.map(item => {
-            // Construct a partial Product object from the SaleItem.
-            // This ensures the OrderItem structure is met without needing a full product lookup.
-            const productData: EnrichedProduct = {
-              ...(products.find(p => p.id === item.id) || {}), // Get other details if available, but don't fail if not
-              id: item.id,
-              name: item.name,
-              price: item.price,
-              quantity: item.quantity,
-              // These are placeholders as they aren't critical for settlement
-              category_id: null,
-              created_at: null,
-              image_url: null,
-              status: 'Available',
-              store_products: [],
-              businessId: loggedInUser?.businessId || '',
-              stock: 999, // Assume enough stock for settlement purposes
-            };
-            return { product: productData, quantity: item.quantity };
-          });
-
-          setOrderItems(debtItems);
-          setSelectedCustomerId(debtToSettle.customer_id);
-      } else {
+       const correspondingDebt = debts.find(d => d.sale_id === debtToSettle.id && d.status === 'Unpaid');
+        if (!correspondingDebt) {
           setDebtToSettle(null);
           handleClearOrder();
           toast({
@@ -290,7 +264,30 @@ export default function SalesPage() {
             description: "A previously selected debt was no longer valid and has been cleared.",
             variant: "default"
           });
-      }
+          return;
+        }
+
+        const debtItems: OrderItem[] = debtToSettle.items.map(item => {
+            const product = products.find(p => p.id === item.id);
+            const enrichedProduct: EnrichedProduct = {
+                ...(product || {}),
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                stock: product ? (product.store_products?.find(sp => sp.store_id === (isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id))?.stock ?? 999) : 999,
+                category_id: product?.category_id || null,
+                created_at: product?.created_at || new Date().toISOString(),
+                image_url: product?.image_url || null,
+                status: product?.status || 'Available',
+                store_products: product?.store_products || [],
+                businessId: loggedInUser?.businessId || '',
+            };
+            return { product: enrichedProduct, quantity: item.quantity };
+        });
+
+        setOrderItems(debtItems);
+        setSelectedCustomerId(debtToSettle.customer_id);
+
     } else {
       const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
       if (walkIn) {
@@ -299,7 +296,7 @@ export default function SalesPage() {
       }
     }
     setLoading(false);
-  }, [customers, debtToSettle, ticketToLoad, debts, setDebtToSettle, products, loggedInUser]);
+  }, [customers, debtToSettle, ticketToLoad, debts, setDebtToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin]);
 
   const addReservation = async (reservationData: Omit<Reservation, 'id' | 'created_at' | 'products' | 'businessId'>) => {
     const newReservation: Omit<Reservation, 'id' | 'businessId'> = {
@@ -523,7 +520,7 @@ export default function SalesPage() {
             throw new Error("Original sale for this debt could not be found.");
           }
           const settlementPayments = payments.map(p => p.method);
-          const updatedSale = {
+          const updatedSale: Sale = {
             ...originalSale,
             payment_methods: [...originalSale.payment_methods.filter(pm => pm !== 'Credit'), ...settlementPayments],
           };
@@ -532,8 +529,9 @@ export default function SalesPage() {
 
           const originalDebt = debts.find(d => d.sale_id === debtToSettle.id);
           if (originalDebt) {
+            const updatedDebt = { ...originalDebt, status: 'Paid' as const };
             await setDebts(prevDebts => prevDebts.map(d => 
-              d.id === originalDebt.id ? { ...d, status: 'Paid' } : d
+              d.id === originalDebt.id ? updatedDebt : d
             ));
           }
            toast({ title: "Debt Settled", description: `Debt for order #${originalSale.order_number} has been settled.` });
@@ -558,15 +556,16 @@ export default function SalesPage() {
           await setSales(prev => [...prev, newSale]);
         
           if (creditInfo) {
-              const newDebt = {
+              const customerForDebt = customers.find(c => c.id === creditInfo.customerId);
+              const newDebt: Debt = {
                 id: `debt_${new Date().getTime()}`,
                 sale_id: newSale.id,
                 customer_id: creditInfo.customerId,
                 amount: creditInfo.amount,
                 status: "Unpaid" as const,
                 created_at: new Date().toISOString(),
-                sales: { order_number: newSale.order_number },
-                customers: { name: customers.find(c => c.id === creditInfo.customerId)?.name || null },
+                sales: newSale, // Embed the full sale object for offline availability
+                customers: customerForDebt || null, // Embed the full customer object
                 businessId: loggedInUser?.businessId || '',
               };
               await setDebts(prev => [...prev, newDebt]);
@@ -715,7 +714,7 @@ export default function SalesPage() {
   
   const currentPaymentType = configuredPaymentTypes.find(p => p.name === splitPaymentMethod);
   
-  const cardTitle = debtToSettle ? "Settle Debt" : activeTicket ? `Editing Order #${activeTicket.order_number}` : "Current Order";
+  const cardTitle = debtToSettle ? `Settle Debt` : activeTicket ? `Editing Order #${activeTicket.order_number}` : "Current Order";
 
   const handleAddCustomer = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
