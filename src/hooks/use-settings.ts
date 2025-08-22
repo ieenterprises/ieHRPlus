@@ -248,6 +248,48 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             subscriptions.forEach(sub => sub());
         };
     }, [fetchAndSetUser]);
+
+    // Effect for syncing debts when sales data changes (e.g., after coming online)
+    useEffect(() => {
+      const syncDebts = async () => {
+        if (sales.length === 0 || !loggedInUser?.businessId) return;
+
+        const creditSales = sales.filter(s => s.payment_methods.includes('Credit'));
+        const existingDebtSaleIds = new Set(debts.map(d => d.sale_id));
+        const missingDebts: Omit<Debt, 'id'>[] = [];
+
+        for (const sale of creditSales) {
+          if (!existingDebtSaleIds.has(sale.id)) {
+            const customerForDebt = customers.find(c => c.id === sale.customer_id);
+            missingDebts.push({
+              sale_id: sale.id,
+              customer_id: sale.customer_id,
+              amount: sale.total,
+              status: "Unpaid" as const,
+              created_at: sale.created_at!,
+              sales: sale,
+              customers: customerForDebt || null,
+              businessId: loggedInUser.businessId,
+            });
+          }
+        }
+
+        if (missingDebts.length > 0) {
+          console.log(`Syncing ${missingDebts.length} missing debt(s)...`);
+          const batch = writeBatch(db);
+          missingDebts.forEach(debtData => {
+            const debtRef = doc(collection(db, 'debts'));
+            batch.set(debtRef, debtData);
+          });
+          await batch.commit();
+        }
+      };
+
+      // Run sync after a short delay to allow initial data to settle
+      const timeoutId = setTimeout(syncDebts, 2000);
+      return () => clearTimeout(timeoutId);
+
+    }, [sales, debts, customers, loggedInUser?.businessId]);
     
 
     const logout = async () => {
