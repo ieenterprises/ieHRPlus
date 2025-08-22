@@ -256,7 +256,7 @@ export default function SalesPage() {
       handleLoadTicket(ticketToLoad);
     } else if (debtToSettle) {
        const correspondingDebt = debts.find(d => d.sale_id === debtToSettle.id && d.status === 'Unpaid');
-        if (!correspondingDebt) {
+        if (!correspondingDebt && debtToSettle.id) {
           setDebtToSettle(null);
           handleClearOrder();
           toast({
@@ -564,8 +564,8 @@ export default function SalesPage() {
                 amount: creditInfo.amount,
                 status: "Unpaid" as const,
                 created_at: new Date().toISOString(),
-                sales: newSale, // Embed the full sale object for offline availability
-                customers: customerForDebt || null, // Embed the full customer object
+                sales: newSale,
+                customers: customerForDebt || null,
                 businessId: loggedInUser?.businessId || '',
               };
               await setDebts(prev => [...prev, newDebt]);
@@ -1235,3 +1235,6 @@ export default function SalesPage() {
     </TooltipProvider>
   );
 }
+
+
+    
