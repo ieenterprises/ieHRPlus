@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
@@ -377,6 +376,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (!saleToVoid) return;
 
         const reservationToVoid = reservations.find(r => r.sale_id === saleId);
+        const debtToVoid = debts.find(d => d.sale_id === saleId);
 
         const batch = writeBatch(db);
         
@@ -397,6 +397,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         // 3. If there's a linked reservation, delete it
         if (reservationToVoid && reservationToVoid.id) {
             batch.delete(doc(db, 'reservations', reservationToVoid.id));
+        }
+
+        // 4. If there's a linked debt, delete it
+        if (debtToVoid && debtToVoid.id) {
+            batch.delete(doc(db, 'debts', debtToVoid.id));
         }
 
         await batch.commit();
