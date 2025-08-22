@@ -156,7 +156,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [selectedDevice, setSelectedDevice] = useLocalStorage<PosDeviceType | null>('selectedDevice', null);
     const [ownerSelectedStore, setOwnerSelectedStore] = useLocalStorage<StoreType | null>('ownerSelectedStore', null);
     const [debtToSettle, setDebtToSettle] = useLocalStorage<Sale | null>('debtToSettle', null);
-    const [printableData, setPrintableData] = useLocalStorage<any | null>('printableData', null);
+    
+    // Note: printableData is NOT persisted to localStorage, it's just for passing data to the new tab.
+    const [printableData, setPrintableData] = useState<any | null>(null);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
     
