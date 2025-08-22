@@ -1,35 +1,78 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useSettings } from '@/hooks/use-settings';
 import { PrintableReceipt } from '@/components/printable-receipt';
 import { PrintableA4Receipt } from '@/components/printable-a4-receipt';
 import { Button } from '@/components/ui/button';
-import { Printer } from 'lucide-react';
+import { Printer, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from './ui/scroll-area';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export function PrintPreviewDialog() {
     const { printableData, setPrintableData, isPrintModalOpen, setIsPrintModalOpen } = useSettings();
     const [printFormat, setPrintFormat] = useState<'thermal' | 'a4'>('thermal');
+    const [isPrinting, setIsPrinting] = useState(false);
+    
+    const printRef = useRef<HTMLDivElement>(null);
 
     if (!isPrintModalOpen || !printableData) {
         return null;
     }
     
-    const handlePrint = () => {
-        // Save the data to localStorage so the new tab can access it
-        localStorage.setItem('printableData', JSON.stringify({ ...printableData, printFormat }));
-        // Open the new print page in a new tab
-        window.open('/print', '_blank');
+    const handlePrint = async () => {
+        if (!printRef.current) return;
+        
+        setIsPrinting(true);
+
+        try {
+            const canvas = await html2canvas(printRef.current, { scale: 3 });
+            const imgData = canvas.toDataURL('image/png');
+            
+            let pdf;
+            if (printFormat === 'a4') {
+                pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = 210;
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            } else {
+                 // 80mm thermal paper width
+                const pdfWidth = 80;
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: [pdfWidth, pdfHeight]
+                });
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            }
+            
+            // Open PDF in a new tab
+            const pdfBlob = pdf.output('blob');
+            const pdfUrl = URL.createObjectURL(pdfBlob);
+            window.open(pdfUrl, '_blank');
+
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+            // You might want to show a toast message to the user here
+        } finally {
+            setIsPrinting(false);
+        }
     };
 
     const handleClose = () => {
         setIsPrintModalOpen(false);
         setPrintableData(null); // Clear data when closing
     }
+
+    // A wrapper component to apply the ref
+    const PrintableWrapper = ({ children }: { children: React.ReactNode }) => (
+        <div ref={printRef}>{children}</div>
+    );
 
     return (
         <Dialog open={isPrintModalOpen} onOpenChange={handleClose}>
@@ -40,11 +83,13 @@ export function PrintPreviewDialog() {
                 <div className="flex-1 min-h-0">
                    <ScrollArea className="h-full bg-gray-100 rounded-md p-4">
                         <div className="flex justify-center">
-                             {printFormat === 'thermal' ? (
-                                <PrintableReceipt data={printableData} type={printableData.type} />
-                            ) : (
-                                <PrintableA4Receipt data={printableData} type={printableData.type} />
-                            )}
+                             <PrintableWrapper>
+                                {printFormat === 'thermal' ? (
+                                    <PrintableReceipt data={printableData} type={printableData.type} />
+                                ) : (
+                                    <PrintableA4Receipt data={printableData} type={printableData.type} />
+                                )}
+                             </PrintableWrapper>
                         </div>
                    </ScrollArea>
                 </div>
@@ -59,9 +104,18 @@ export function PrintPreviewDialog() {
                        <Button variant="outline" onClick={handleClose}>
                             Close
                         </Button>
-                        <Button onClick={handlePrint}>
-                            <Printer className="mr-2 h-4 w-4" />
-                            Print
+                        <Button onClick={handlePrint} disabled={isPrinting}>
+                            {isPrinting ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Generating...
+                                </>
+                            ) : (
+                                <>
+                                    <Printer className="mr-2 h-4 w-4" />
+                                    Print
+                                </>
+                            )}
                         </Button>
                     </div>
                 </DialogFooter>
