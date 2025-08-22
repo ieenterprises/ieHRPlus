@@ -25,7 +25,7 @@ import { type Sale, type OpenTicket, type SaleItem } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar as CalendarIcon, Printer, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, Printer, Trash2, Coins } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -60,7 +60,7 @@ const getPaymentBadgeVariant = (method: string) => {
 }
 
 export default function KitchenPage() {
-  const { sales, products, categories, users, loggedInUser, voidSale, setPrintableData, currency } = useSettings();
+  const { sales, products, categories, users, loggedInUser, voidSale, setPrintableData, currency, setDebtToSettle } = useSettings();
   const { openTickets, setTicketToLoad } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -221,6 +221,11 @@ export default function KitchenPage() {
   const handleLoadTicket = (ticket: OpenTicket) => {
     setTicketToLoad(ticket);
     router.push('/sales');
+  };
+
+  const handleSettleDebtFromReceipts = (sale: Sale) => {
+    setDebtToSettle(sale);
+    router.push("/sales");
   };
 
   return (
@@ -440,6 +445,7 @@ export default function KitchenPage() {
                     ) : filteredReceipts.length > 0 ? (
                         filteredReceipts.map((sale) => {
                         const categoriesForDisplay = getItemCategoryNames(sale.displayItems);
+                        const isCreditSale = sale.payment_methods.includes('Credit');
         
                         return (
                         <TableRow key={sale.id}>
@@ -469,6 +475,12 @@ export default function KitchenPage() {
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-2">
+                                    {isCreditSale && (
+                                        <Button variant="outline" size="sm" onClick={() => handleSettleDebtFromReceipts(sale)}>
+                                            <Coins className="mr-2 h-4 w-4" />
+                                            Settle Debt
+                                        </Button>
+                                    )}
                                     <Button variant="outline" size="sm" onClick={() => onPrint(sale, 'receipt')}>
                                         <Printer className="mr-2 h-4 w-4" /> Print
                                     </Button>
