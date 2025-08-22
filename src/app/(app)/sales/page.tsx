@@ -643,9 +643,8 @@ export default function SalesPage() {
     setActiveTicket(null);
     setPayments([]);
     setIsSplitPaymentDialogOpen(false);
-    setLoadedTicketItemIds(new Set()); // Clear tracked items
-    if(debtToSettle) setDebtToSettle(null);
-    // Reset customer to walk-in
+    setLoadedTicketItemIds(new Set());
+    setDebtToSettle(null);
     const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
     if (walkIn) {
       setSelectedCustomerId(walkIn.id);
