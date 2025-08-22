@@ -54,12 +54,16 @@ export default function DebtsPage() {
     return debts
       .map(debt => {
         const sale = sales.find(s => s.id === debt.sale_id);
-        if (!sale) return null;
+        const customer = customers.find(c => c.id === debt.customer_id);
+        // If sale exists, find user from sale. Otherwise, it might be null.
+        const user = sale ? users.find(u => u.id === sale.employee_id) : null;
+        
+        // Always show the debt, even if the sale hasn't synced yet.
         return {
           ...debt,
           sales: sale ? { ...sale, order_number: sale.order_number } : null,
-          customers: customers.find(c => c.id === debt.customer_id) || null,
-          users: users.find(u => u.id === sale?.employee_id) || null,
+          customers: customer || (debt.customers ? { name: debt.customers.name } : null),
+          users: user,
         }
       })
       .filter((debt): debt is NonNullable<typeof debt> => debt !== null);
@@ -93,12 +97,18 @@ export default function DebtsPage() {
 
   const handleSettleDebt = (debt: (typeof filteredDebts)[0]) => {
     if (!debt.sales) {
-      toast({
-        title: "Sale Not Found",
-        description: "The original sale for this debt could not be found.",
-        variant: "destructive",
-      });
-      return;
+        // Construct a temporary Sale object from the debt info if the full sale isn't found.
+        // This makes the settlement process more resilient to sync delays.
+        const temporarySale: Partial<Sale> = {
+            id: debt.sale_id!,
+            order_number: debt.sales?.order_number ?? 0,
+            customer_id: debt.customer_id,
+            total: debt.amount,
+            items: [], // Items aren't essential for settlement, but the structure is needed.
+        };
+        setDebtToSettle(temporarySale as Sale);
+        router.push("/sales");
+        return;
     }
     setDebtToSettle(debt.sales as Sale);
     router.push("/sales");
@@ -211,7 +221,7 @@ export default function DebtsPage() {
                     const canSettleDebt = hasPermission('MANAGE_CUSTOMERS') || loggedInUser?.id === debt.sales?.employee_id;
                     return (
                       <TableRow key={debt.id}>
-                        <TableCell className="font-medium">{debt.sales?.order_number}</TableCell>
+                        <TableCell className="font-medium">{debt.sales?.order_number || '...'}</TableCell>
                         <TableCell>{debt.customers?.name}</TableCell>
                         <TableCell className="hidden sm:table-cell">{debt.users?.name || 'N/A'}</TableCell>
                         <TableCell className="hidden md:table-cell">{format(new Date(debt.created_at!), "LLL dd, y")}</TableCell>
