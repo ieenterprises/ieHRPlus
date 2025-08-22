@@ -80,7 +80,7 @@ export const PrintableReceipt = ({ data, type }: PrintableReceiptProps) => {
           </>
         ) : (
           <>
-            <p className="font-bold">OPEN TICKET: {data.ticket_name}</p>
+            <p className="font-bold">OPEN TICKET #{ (data as OpenTicket).order_number }</p>
             <p>Employee: {(data as OpenTicket).users?.name || 'N/A'}</p>
           </>
         )}
