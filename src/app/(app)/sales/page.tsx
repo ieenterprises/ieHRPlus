@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { format, differenceInDays } from "date-fns";
 import { type DateRange } from "react-day-picker";
+import { useRouter } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
 import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole, Sale, Reservation, Debt } from "@/lib/types";
@@ -122,6 +123,7 @@ const generateUniqueOrderNumber = () => {
 };
 
 export default function SalesPage() {
+  const router = useRouter();
   const { 
     featureSettings, 
     paymentTypes: configuredPaymentTypes,
@@ -237,16 +239,16 @@ export default function SalesPage() {
     if (newOrderItems.length !== ticketItems.length) {
         toast({ title: "Error Loading Ticket", description: "Some items in this ticket no longer exist and were removed.", variant: "destructive" });
     }
-
-    // Immediately delete ticket from backend and state after loading
-    await deleteTicket(ticket.id);
-
+    
     setOrderItems(newOrderItems);
     setActiveTicket(ticket);
     setSelectedCustomerId(ticket.customer_id);
     setLoadedTicketItemIds(new Set(ticketItems.map(item => item.id))); // Track original items
     setIsTicketsDialogOpen(false);
     setTicketToLoad(null);
+
+    // Immediately delete ticket from backend and state after loading
+    await deleteTicket(ticket.id);
     
     toast({ title: "Ticket Loaded", description: `Order #${ticket.order_number} has been loaded and removed from open tickets.`});
   };
@@ -555,8 +557,6 @@ export default function SalesPage() {
           };
           await setSales(prev => [...prev, newSale]);
         
-          // DEBT CREATION IS NOW HANDLED BY A SYNC EFFECT IN use-settings.ts
-          
           if (isCheckingIn) {
               const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
               const guest = customers.find(c => c.id === reservationCustomerId);
@@ -615,6 +615,7 @@ export default function SalesPage() {
         if (activeTicket?.id) await deleteTicket(activeTicket.id);
 
         handleClearOrder();
+        router.push('/kitchen');
 
     } catch (error: any) {
         toast({ title: "Error completing sale", description: error.message, variant: "destructive" });
@@ -1226,3 +1227,4 @@ export default function SalesPage() {
     
 
     
+
