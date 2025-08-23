@@ -23,7 +23,7 @@ import {
 import { type Debt, type Sale } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { CheckCircle2, Download, Coins, Search, Calendar as CalendarIcon } from "lucide-react";
+import { CheckCircle2, Download, Coins, Search, Calendar as CalendarIcon, Wrench, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
 import Papa from "papaparse";
@@ -35,10 +35,14 @@ import { type DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { db } from "@/lib/firebase";
+import { writeBatch, collection, doc } from "firebase/firestore";
 
 export default function DebtsPage() {
   const { debts, setDebts, sales, users, customers, currency, setDebtToSettle, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
+  const [isCleaning, setIsCleaning] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const isOnline = useOnlineStatus();
@@ -58,10 +62,8 @@ export default function DebtsPage() {
       .map(debt => {
         const sale = sales.find(s => s.id === debt.sale_id);
         const customer = customers.find(c => c.id === debt.customer_id);
-        // If sale exists, find user from sale. Otherwise, it might be null.
         const user = sale ? users.find(u => u.id === sale.employee_id) : null;
         
-        // Always show the debt, even if the sale hasn't synced yet.
         return {
           ...debt,
           sales: sale ? { ...sale, order_number: sale.order_number } : null,
@@ -100,14 +102,12 @@ export default function DebtsPage() {
 
   const handleSettleDebt = (debt: (typeof filteredDebts)[0]) => {
     if (!debt.sales) {
-        // Construct a temporary Sale object from the debt info if the full sale isn't found.
-        // This makes the settlement process more resilient to sync delays.
         const temporarySale: Partial<Sale> = {
             id: debt.sale_id!,
             order_number: debt.sales?.order_number ?? 0,
             customer_id: debt.customer_id,
             total: debt.amount,
-            items: [], // Items aren't essential for settlement, but the structure is needed.
+            items: [], 
         };
         setDebtToSettle(temporarySale as Sale);
         router.push("/sales");
@@ -139,6 +139,50 @@ export default function DebtsPage() {
     toast({ title: "Export Complete", description: "Debt report has been downloaded." });
   };
 
+  const handleCleanUpDuplicates = async () => {
+    setIsCleaning(true);
+    try {
+        const debtsBySaleId = new Map<string, Debt[]>();
+        debts.forEach(debt => {
+            if (debt.sale_id) {
+                if (!debtsBySaleId.has(debt.sale_id)) {
+                    debtsBySaleId.set(debt.sale_id, []);
+                }
+                debtsBySaleId.get(debt.sale_id)!.push(debt);
+            }
+        });
+
+        const batch = writeBatch(db);
+        let duplicatesFound = 0;
+
+        for (const [saleId, debtGroup] of debtsBySaleId.entries()) {
+            if (debtGroup.length > 1) {
+                // Sort by creation date to keep the oldest one
+                const sortedDebts = debtGroup.sort((a, b) => new Date(a.created_at!).getTime() - new Date(b.created_at!).getTime());
+                const debtsToDelete = sortedDebts.slice(1); // Keep the first (oldest), delete the rest
+
+                debtsToDelete.forEach(dup => {
+                    if (dup.id) {
+                        batch.delete(doc(db, 'debts', dup.id));
+                        duplicatesFound++;
+                    }
+                });
+            }
+        }
+
+        if (duplicatesFound > 0) {
+            await batch.commit();
+            toast({ title: "Cleanup Complete", description: `${duplicatesFound} duplicate debt record(s) have been deleted.` });
+        } else {
+            toast({ title: "No Duplicates Found", description: "Your debt records are already clean." });
+        }
+    } catch (error: any) {
+        toast({ title: "Cleanup Failed", description: error.message, variant: "destructive" });
+    } finally {
+        setIsCleaning(false);
+    }
+  };
+
 
   return (
     <TooltipProvider>
@@ -148,10 +192,35 @@ export default function DebtsPage() {
             title="Debt Management"
             description="Track and recover outstanding credit sales."
           />
-          <Button onClick={handleExport} variant="outline" size="sm" className="self-end">
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" disabled={!isOnline}>
+                      <Wrench className="mr-2 h-4 w-4" />
+                      Clean Up Duplicates
+                  </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete any duplicate debt records from the database. This action cannot be undone. It is recommended to do this only once.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleCleanUpDuplicates} disabled={isCleaning}>
+                      {isCleaning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Yes, Clean Up
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Button onClick={handleExport} variant="outline" size="sm">
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+          </div>
         </div>
         <Card>
           <CardHeader>
