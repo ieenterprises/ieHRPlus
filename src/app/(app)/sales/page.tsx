@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -60,6 +59,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { usePos } from "@/hooks/use-pos";
 import { useSettings } from "@/hooks/use-settings";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 
 type EnrichedProduct = Product & {
     price: number;
@@ -150,6 +150,7 @@ export default function SalesPage() {
     taxes,
   } = useSettings();
   const { openTickets, saveTicket, deleteTicket, ticketToLoad, setTicketToLoad } = usePos();
+  const isOnline = useOnlineStatus();
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   
@@ -218,7 +219,7 @@ export default function SalesPage() {
     }
   }, [dateRange, orderItems, getCategoryName]);
 
-  const handleLoadTicket = async (ticket: OpenTicket) => {
+  const handleLoadTicket = (ticket: OpenTicket) => {
     if (orderItems.length > 0 && !activeTicket && !debtToSettle) {
       if (!window.confirm("Loading this ticket will replace your current unsaved order. Are you sure?")) {
         return;
@@ -247,8 +248,9 @@ export default function SalesPage() {
     setIsTicketsDialogOpen(false);
     setTicketToLoad(null);
 
-    // Immediately delete ticket from backend and state after loading
-    await deleteTicket(ticket.id);
+    // After loading, we want to remove the original ticket from the list
+    // The usePos hook should handle the DB operation
+    deleteTicket(ticket.id);
     
     toast({ title: "Ticket Loaded", description: `Order #${ticket.order_number} has been loaded and removed from open tickets.`});
   };
@@ -934,9 +936,9 @@ export default function SalesPage() {
                          <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className="w-full">
-                                    <Button size="lg" className="w-full" onClick={() => handlePayment(false)} disabled={!loggedInUser || isProcessing}>
-                                        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
-                                        {isProcessing ? 'Processing...' : 'Proceed to Payment'}
+                                    <Button size="lg" className="w-full" onClick={() => handlePayment(false)} disabled={!loggedInUser}>
+                                        <CreditCard className="mr-2 h-5 w-5" />
+                                        Proceed to Payment
                                     </Button>
                                 </div>
                             </TooltipTrigger>
@@ -1225,10 +1227,3 @@ export default function SalesPage() {
     </TooltipProvider>
   );
 }
-
-
-    
-
-    
-
-
