@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
@@ -9,6 +10,7 @@ import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, Unsubscribe } from "firebase/auth";
+import { useOnlineStatus } from './use-online-status';
 
 export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
 
@@ -163,6 +165,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     
     const router = useRouter();
+    const isOnline = useOnlineStatus();
 
     const fetchAndSetUser = useCallback(async (uid: string) => {
         setLoadingUser(true);
@@ -256,10 +259,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         };
     }, [fetchAndSetUser]);
 
-    // Effect for syncing debts when sales data changes (e.g., after coming online)
+    // Effect for syncing debts when sales data changes or when coming online
     useEffect(() => {
       const syncDebts = async () => {
-        if (sales.length === 0 || !loggedInUser?.businessId) return;
+        if (!isOnline || sales.length === 0 || !loggedInUser?.businessId) return;
 
         const creditSales = sales.filter(s => s.payment_methods.includes('Credit'));
         const existingDebtSaleIds = new Set(debts.map(d => d.sale_id));
@@ -286,17 +289,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           const batch = writeBatch(db);
           missingDebts.forEach(debtData => {
             const debtRef = doc(collection(db, 'debts'));
-            batch.set(debtRef, debtData);
+            // Ensure we don't include nested objects that Firestore can't handle directly
+            const { sales, customers, ...restOfDebt } = debtData;
+            batch.set(debtRef, restOfDebt);
           });
           await batch.commit();
         }
       };
 
-      // Run sync after a short delay to allow initial data to settle
-      const timeoutId = setTimeout(syncDebts, 2000);
-      return () => clearTimeout(timeoutId);
+      // Run sync when sales data changes or when coming online
+      syncDebts();
 
-    }, [sales, debts, customers, loggedInUser?.businessId]);
+    }, [sales, debts, customers, loggedInUser?.businessId, isOnline]);
     
 
     const logout = async () => {

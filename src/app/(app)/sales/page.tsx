@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays } from "fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
@@ -555,21 +555,7 @@ export default function SalesPage() {
           };
           await setSales(prev => [...prev, newSale]);
         
-          if (creditInfo) {
-              const customerForDebt = customers.find(c => c.id === creditInfo.customerId);
-              const newDebt: Debt = {
-                id: `debt_${new Date().getTime()}`,
-                sale_id: newSale.id,
-                customer_id: creditInfo.customerId,
-                amount: creditInfo.amount,
-                status: "Unpaid" as const,
-                created_at: new Date().toISOString(),
-                sales: newSale,
-                customers: customerForDebt || null,
-                businessId: loggedInUser?.businessId || '',
-              };
-              await setDebts(prev => [...prev, newDebt]);
-          }
+          // DEBT CREATION IS NOW HANDLED BY A SYNC EFFECT IN use-settings.ts
           
           if (isCheckingIn) {
               const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
