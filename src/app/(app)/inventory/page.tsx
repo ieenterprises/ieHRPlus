@@ -42,9 +42,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Trash2, Edit, Upload, Download, Search, Loader2 } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Upload, Download, Search, Loader2, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Product, type Category, type StoreProduct } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -63,6 +64,15 @@ const EMPTY_PRODUCT: Partial<Product> = {
 
 const EMPTY_CATEGORY: Partial<Category> = {
   name: "",
+};
+
+type QuickEditState = {
+    [productId: string]: {
+        [storeId: string]: {
+            price: string;
+            stock: string;
+        };
+    };
 };
 
 export default function InventoryPage() {
@@ -94,6 +104,9 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
+  const [quickEditingProductId, setQuickEditingProductId] = useState<string | null>(null);
+  const [quickEditData, setQuickEditData] = useState<QuickEditState>({});
+
   const canManageInventory = useMemo(() => loggedInUser?.permissions.includes('MANAGE_ITEMS_BO') ?? false, [loggedInUser]);
 
   const getCategoryName = (categoryId: string | null) => {
@@ -123,6 +136,78 @@ export default function InventoryPage() {
   useEffect(() => {
     setLoading(false);
   }, []);
+
+  // Quick Edit Handlers
+  const handleQuickEdit = (product: Product) => {
+    setQuickEditingProductId(product.id);
+    const initialData: QuickEditState = {};
+    initialData[product.id] = {};
+    stores.forEach(store => {
+        const sp = product.store_products.find(sp => sp.store_id === store.id);
+        initialData[product.id][store.id] = {
+            price: sp?.price?.toString() || '0',
+            stock: sp?.stock?.toString() || '0'
+        };
+    });
+    setQuickEditData(initialData);
+  };
+
+  const handleQuickEditChange = (productId: string, storeId: string, field: 'price' | 'stock', value: string) => {
+    setQuickEditData(prev => ({
+        ...prev,
+        [productId]: {
+            ...prev[productId],
+            [storeId]: {
+                ...prev[productId][storeId],
+                [field]: value,
+            }
+        }
+    }));
+  };
+
+  const handleSaveQuickEdit = async (productId: string) => {
+    const productToUpdate = products.find(p => p.id === productId);
+    const editData = quickEditData[productId];
+    if (!productToUpdate || !editData) return;
+
+    setIsProcessing(true);
+    try {
+        const newStoreProducts: StoreProduct[] = stores.map(store => {
+            const currentData = editData[store.id];
+            const price = parseFloat(currentData.price);
+            const stock = parseInt(currentData.stock, 10);
+            const existingSp = productToUpdate.store_products.find(sp => sp.store_id === store.id);
+
+            return {
+                id: existingSp?.id || `sp_${store.id}_${new Date().getTime()}`,
+                product_id: productId,
+                store_id: store.id,
+                price: isNaN(price) ? (existingSp?.price || 0) : price,
+                stock: isNaN(stock) ? (existingSp?.stock || 0) : stock,
+                businessId: loggedInUser?.businessId || '',
+            };
+        });
+
+        const updatedProduct: Product = {
+            ...productToUpdate,
+            store_products: newStoreProducts,
+        };
+        
+        await setProducts(products.map(p => p.id === productId ? updatedProduct : p));
+        toast({ title: "Product Updated", description: `${updatedProduct.name} has been updated.` });
+        setQuickEditingProductId(null);
+    } catch(error: any) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+        setIsProcessing(false);
+    }
+  };
+
+  const handleCancelQuickEdit = () => {
+    setQuickEditingProductId(null);
+    setQuickEditData({});
+  };
+
 
   // Product Handlers
   const handleEditProduct = (product: Product) => {
@@ -533,33 +618,71 @@ export default function InventoryPage() {
                                                 <TableCell>{getCategoryName(product.category_id)}</TableCell>
                                                 {stores.map(store => {
                                                     const storeProduct = product.store_products?.find(sp => sp.store_id === store.id);
+                                                    const isEditingThisRow = quickEditingProductId === product.id;
                                                     return (
                                                         <React.Fragment key={store.id}>
-                                                            <TableCell>{currency}{storeProduct?.price?.toFixed(2) || '0.00'}</TableCell>
-                                                            <TableCell>{storeProduct?.stock || 0}</TableCell>
+                                                            <TableCell>
+                                                                {isEditingThisRow ? (
+                                                                    <Input 
+                                                                        type="number"
+                                                                        value={quickEditData[product.id]?.[store.id]?.price ?? ''}
+                                                                        onChange={(e) => handleQuickEditChange(product.id, store.id, 'price', e.target.value)}
+                                                                        className="h-8 w-24"
+                                                                    />
+                                                                ) : (
+                                                                    <span>{currency}{storeProduct?.price?.toFixed(2) || '0.00'}</span>
+                                                                )}
+                                                            </TableCell>
+                                                             <TableCell>
+                                                                {isEditingThisRow ? (
+                                                                    <Input 
+                                                                        type="number"
+                                                                        value={quickEditData[product.id]?.[store.id]?.stock ?? ''}
+                                                                        onChange={(e) => handleQuickEditChange(product.id, store.id, 'stock', e.target.value)}
+                                                                        className="h-8 w-20"
+                                                                    />
+                                                                ) : (
+                                                                    <span>{storeProduct?.stock || 0}</span>
+                                                                )}
+                                                            </TableCell>
                                                         </React.Fragment>
                                                     );
                                                 })}
                                                  {canManageInventory && (
                                                     <TableCell className="text-right">
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                                <span className="sr-only">Toggle menu</span>
+                                                        {quickEditingProductId === product.id ? (
+                                                            <div className="flex items-center justify-end gap-2">
+                                                                <Button size="icon" variant="ghost" onClick={() => handleSaveQuickEdit(product.id)} disabled={isProcessing}>
+                                                                    {isProcessing ? <Loader2 className="h-4 w-4 animate-spin"/> : <Check className="h-4 w-4 text-green-600" />}
                                                                 </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                <DropdownMenuItem onClick={() => handleEditProduct(product)}>
-                                                                    <Edit className="mr-2 h-4 w-4" /> Edit Details
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
-                                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                                Delete
-                                                                </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
+                                                                <Button size="icon" variant="ghost" onClick={handleCancelQuickEdit}>
+                                                                    <X className="h-4 w-4 text-destructive" />
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                                    <MoreHorizontal className="h-4 w-4" />
+                                                                    <span className="sr-only">Toggle menu</span>
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                                    <DropdownMenuItem onClick={() => handleQuickEdit(product)}>
+                                                                        <Edit className="mr-2 h-4 w-4" /> Quick Edit
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem onClick={() => handleEditProduct(product)}>
+                                                                        <Edit className="mr-2 h-4 w-4" /> Edit Details
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteProduct(product.id)}>
+                                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                                        Delete
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        )}
                                                     </TableCell>
                                                  )}
                                             </TableRow>
