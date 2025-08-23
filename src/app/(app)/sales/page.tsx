@@ -247,12 +247,8 @@ export default function SalesPage() {
     setLoadedTicketItemIds(new Set(ticketItems.map(item => item.id))); // Track original items
     setIsTicketsDialogOpen(false);
     setTicketToLoad(null);
-
-    // After loading, we want to remove the original ticket from the list
-    // The usePos hook should handle the DB operation
-    deleteTicket(ticket.id);
     
-    toast({ title: "Ticket Loaded", description: `Order #${ticket.order_number} has been loaded and removed from open tickets.`});
+    toast({ title: "Ticket Loaded", description: `Order #${ticket.order_number} has been loaded.`});
   };
 
   useEffect(() => {
@@ -502,13 +498,7 @@ export default function SalesPage() {
 
  const handleCompleteSale = (options: { creditInfo?: { customerId: string; amount: number; } } = {}) => {
     const { creditInfo } = options;
-    if (remainingBalance > 0.001 && !creditInfo && !isCheckingIn) {
-        toast({ title: "Payment Incomplete", description: `There is still a remaining balance of ${currency}${remainingBalance.toFixed(2)}.`, variant: "destructive" });
-        return;
-    }
     
-    // We don't want to wait for the DB operations, so we don't use await here
-    // This makes the UI feel instant, especially in offline mode.
     const processSale = async () => {
         const currentPosDeviceId = isAdmin ? null : selectedDevice?.id || null;
         try {
@@ -619,15 +609,15 @@ export default function SalesPage() {
 
         } catch (error: any) {
             toast({ title: "Error completing sale", description: error.message, variant: "destructive" });
+        } finally {
+            // This ensures the UI always resets, crucial for offline mode.
+            handleClearOrder();
+            router.push('/kitchen');
         }
     }
     
-    // Fire off the processing, but don't wait for it.
+    // Fire off the processing, but don't wait for it to make UI feel instant.
     processSale();
-
-    // Immediately clear the UI and navigate away.
-    handleClearOrder();
-    router.push('/kitchen');
   };
   
   
@@ -690,6 +680,7 @@ export default function SalesPage() {
         // If it's an update to a loaded ticket, create a new one instead of updating
         if (activeTicket) {
              toast({ title: "Order Saved", description: "The updated order has been saved as a new open ticket." });
+             await deleteTicket(activeTicket.id); // Delete the old ticket
         } else {
              toast({ title: "Order Saved", description: "The order has been saved as an open ticket." });
         }
@@ -847,7 +838,7 @@ export default function SalesPage() {
                 <Card>
                 <CardHeader>
                     <CardTitle>{cardTitle}</CardTitle>
-                    {activeTicket && <CardDescription>This ticket is now active and has been removed from the open tickets list.</CardDescription>}
+                    {activeTicket && <CardDescription>This ticket is now active. You can update it and re-save or proceed to payment.</CardDescription>}
                     {debtToSettle && <CardDescription>Paying off order #{debtToSettle.order_number}</CardDescription>}
                 </CardHeader>
                 <CardContent className="p-0">

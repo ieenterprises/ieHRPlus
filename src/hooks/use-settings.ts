@@ -2,7 +2,7 @@
 
 "use client";
 
-import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
 import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem } from '@/lib/types';
@@ -166,6 +166,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     
     const router = useRouter();
     const isOnline = useOnlineStatus();
+    const isSyncingDebts = useRef(false);
 
     const fetchAndSetUser = useCallback(async (uid: string) => {
         setLoadingUser(true);
@@ -262,7 +263,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     // Effect for syncing debts when sales data changes or when coming online
     useEffect(() => {
       const syncDebts = async () => {
-        if (!isOnline || sales.length === 0 || !loggedInUser?.businessId) return;
+        if (isSyncingDebts.current || sales.length === 0 || !loggedInUser?.businessId) return;
+        
+        isSyncingDebts.current = true;
 
         const creditSales = sales.filter(s => s.payment_methods.includes('Credit'));
         const existingDebtSaleIds = new Set(debts.map(d => d.sale_id));
@@ -285,7 +288,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         }
 
         if (missingDebts.length > 0) {
-          console.log(`Syncing ${missingDebts.length} missing debt(s)...`);
           const batch = writeBatch(db);
           missingDebts.forEach(debtData => {
             const debtRef = doc(collection(db, 'debts'));
@@ -295,9 +297,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           });
           await batch.commit();
         }
+        isSyncingDebts.current = false;
       };
 
-      // Run sync when sales data changes or when coming online
       syncDebts();
 
     }, [sales, debts, customers, loggedInUser?.businessId, isOnline]);
