@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
+import Papa from "papaparse";
 import { PageHeader } from "@/components/page-header";
 import {
   Table,
@@ -25,7 +26,7 @@ import { type Sale, type OpenTicket, type SaleItem } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar as CalendarIcon, Printer, Trash2, Coins } from "lucide-react";
+import { Calendar as CalendarIcon, Printer, Trash2, Coins, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -79,6 +80,7 @@ export default function KitchenPage() {
     maxAmount: "",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [activeTab, setActiveTab] = useState("receipts");
   
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
     setPrintableData({ ...data, type });
@@ -232,15 +234,68 @@ export default function KitchenPage() {
     router.push("/sales");
   };
 
+  const handleExport = () => {
+    let dataToExport: any[] = [];
+    let fileName = "";
+
+    if (activeTab === 'receipts') {
+      fileName = `receipts_${new Date().toISOString().split('T')[0]}.csv`;
+      dataToExport = filteredReceipts.map(sale => ({
+        "Order #": sale.order_number,
+        "Date": format(new Date(sale.created_at!), "yyyy-MM-dd HH:mm"),
+        "Customer": sale.customers?.name ?? 'Walk-in',
+        "Employee": sale.users?.name,
+        "Items": sale.items.map(item => `${item.name} (x${item.quantity})`).join(', '),
+        "Total": sale.total.toFixed(2),
+        "Payment Methods": sale.payment_methods.join(', '),
+      }));
+    } else { // Open Tickets
+      fileName = `open_tickets_${new Date().toISOString().split('T')[0]}.csv`;
+      dataToExport = filteredTickets.map(ticket => ({
+        "Order #": ticket.order_number,
+        "Date": format(new Date(ticket.created_at!), "yyyy-MM-dd HH:mm"),
+        "Employee": ticket.users?.name ?? 'N/A',
+        "Items": (ticket.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', '),
+        "Total": ticket.total.toFixed(2),
+      }));
+    }
+
+    if (dataToExport.length === 0) {
+      toast({
+        title: "No data to export",
+        description: `There are no ${activeTab} for the current filters.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete", description: `Your ${activeTab} data has been downloaded.` });
+  };
+
   return (
     <TooltipProvider>
       <PrintPreviewDialog />
       <div className="space-y-8">
-        <PageHeader
-          title="Orders"
-          description="View open tickets and completed receipts."
-        />
-        <Tabs defaultValue="receipts">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <PageHeader
+            title="Orders"
+            description="View open tickets and completed receipts."
+          />
+           <Button onClick={handleExport} variant="outline" size="sm" className="self-end">
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+        </div>
+        <Tabs defaultValue="receipts" onValueChange={setActiveTab}>
           <TabsList>
               <TabsTrigger value="open_tickets">Open Tickets</TabsTrigger>
               <TabsTrigger value="receipts">Receipts</TabsTrigger>
@@ -523,3 +578,5 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
+
+    
