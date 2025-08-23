@@ -144,8 +144,9 @@ export default function InventoryPage() {
     }
   }, [editingCell]);
   
-  const handleDoubleClick = (product: Product, field: EditingCell['field'], storeId?: string) => {
+  const handleDoubleClick = (product: Product, field: NonNullable<EditingCell>['field'], storeId?: string) => {
     if (!canManageInventory) return;
+    if (isProcessing) return; // Prevent editing while another save is in progress
 
     let currentValue: string | number;
     switch (field) {
@@ -171,10 +172,6 @@ export default function InventoryPage() {
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditValue(e.target.value);
   };
-  
-  const handleSelectChange = (value: string) => {
-    setEditValue(value);
-  }
 
   const handleCancelEdit = () => {
     setEditingCell(null);
@@ -182,18 +179,22 @@ export default function InventoryPage() {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingCell) return;
+    if (!editingCell || isProcessing) return;
     setIsProcessing(true);
     
     const { productId, field, storeId } = editingCell;
     const productToUpdate = products.find(p => p.id === productId);
-    if (!productToUpdate) return;
+    if (!productToUpdate) {
+        setIsProcessing(false);
+        return;
+    };
     
     let updatedProduct = { ...productToUpdate };
 
     try {
         switch (field) {
             case 'name':
+                if (typeof editValue === 'string' && editValue.trim() === '') throw new Error("Name cannot be empty.");
                 updatedProduct.name = editValue as string;
                 break;
             case 'category':
@@ -203,7 +204,7 @@ export default function InventoryPage() {
             case 'stock':
                 if (storeId) {
                     const value = field === 'price' ? parseFloat(editValue as string) : parseInt(editValue as string, 10);
-                    if (isNaN(value)) throw new Error("Invalid number format");
+                    if (isNaN(value) || value < 0) throw new Error("Invalid number format. Must be a positive number.");
 
                     let spFound = false;
                     updatedProduct.store_products = updatedProduct.store_products.map(sp => {
@@ -238,8 +239,8 @@ export default function InventoryPage() {
         setIsProcessing(false);
     }
   };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
     if (e.key === 'Enter') {
         e.preventDefault();
         handleSaveEdit();
@@ -671,14 +672,38 @@ export default function InventoryPage() {
                                                 </TableCell>
                                                 <TableCell onDoubleClick={() => handleDoubleClick(product, 'category')}>
                                                     {editingCell?.productId === product.id && editingCell?.field === 'category' ? (
-                                                      <Select value={editValue as string} onValueChange={async (value) => {
-                                                        await setEditValue(value);
-                                                        await handleSaveEdit();
-                                                      }}>
-                                                          <SelectTrigger className="h-8">
+                                                      <Select 
+                                                        value={editValue as string} 
+                                                        onValueChange={async (value) => {
+                                                            // A bit of a workaround to save immediately on change for selects
+                                                            setEditValue(value);
+                                                            // We need to use a timeout to allow the state to update before saving
+                                                            setTimeout(() => {
+                                                                // Manually construct a temporary editingCell to save
+                                                                const tempEditingCell = { productId: product.id, field: 'category' as const };
+                                                                const save = async () => {
+                                                                    if (!tempEditingCell || isProcessing) return;
+                                                                    setIsProcessing(true);
+                                                                    try {
+                                                                        const updatedProduct = { ...product, category_id: value };
+                                                                        await setProducts(products.map(p => p.id === product.id ? updatedProduct : p));
+                                                                        toast({ title: "Product Updated" });
+                                                                    } catch (error: any) {
+                                                                        toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+                                                                    } finally {
+                                                                        handleCancelEdit();
+                                                                        setIsProcessing(false);
+                                                                    }
+                                                                };
+                                                                save();
+                                                            }, 0);
+                                                        }}
+                                                        onOpenChange={(isOpen) => !isOpen && handleCancelEdit()}
+                                                      >
+                                                          <SelectTrigger className="h-8" onKeyDown={handleKeyDown}>
                                                               <SelectValue/>
                                                           </SelectTrigger>
-                                                          <SelectContent onBlur={handleCancelEdit}>
+                                                          <SelectContent>
                                                               {visibleCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
                                                           </SelectContent>
                                                       </Select>
@@ -948,5 +973,3 @@ export default function InventoryPage() {
     </div>
   );
 }
-
-    
