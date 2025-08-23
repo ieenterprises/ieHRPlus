@@ -538,7 +538,7 @@ export default function InventoryPage() {
                     <CardHeader className="relative">
                         <CardTitle>Products</CardTitle>
                         <CardDescription>
-                           A list of all products in your inventory.
+                           A list of all products in your inventory. Double-click a row to quick edit.
                         </CardDescription>
                          {canManageInventory && (
                             <div className="absolute top-6 right-6 flex items-center gap-2">
@@ -603,7 +603,11 @@ export default function InventoryPage() {
                                         <TableRow><TableCell colSpan={canManageInventory ? 4 + stores.length * 2 : 3 + stores.length * 2} className="h-24 text-center">Loading...</TableCell></TableRow>
                                     ) : filteredProducts.length > 0 ? (
                                         filteredProducts.map((product) => (
-                                            <TableRow key={product.id}>
+                                            <TableRow 
+                                                key={product.id}
+                                                onDoubleClick={() => canManageInventory && handleQuickEdit(product)}
+                                                className={canManageInventory ? 'cursor-pointer' : ''}
+                                            >
                                                 <TableCell className="hidden sm:table-cell">
                                                     <Image
                                                         src={product.image_url || 'https://placehold.co/80x80.png'}
@@ -628,6 +632,7 @@ export default function InventoryPage() {
                                                                         value={quickEditData[product.id]?.[store.id]?.price ?? ''}
                                                                         onChange={(e) => handleQuickEditChange(product.id, store.id, 'price', e.target.value)}
                                                                         className="h-8 w-24"
+                                                                        onClick={(e) => e.stopPropagation()}
                                                                     />
                                                                 ) : (
                                                                     <span>{currency}{storeProduct?.price?.toFixed(2) || '0.00'}</span>
@@ -640,6 +645,7 @@ export default function InventoryPage() {
                                                                         value={quickEditData[product.id]?.[store.id]?.stock ?? ''}
                                                                         onChange={(e) => handleQuickEditChange(product.id, store.id, 'stock', e.target.value)}
                                                                         className="h-8 w-20"
+                                                                        onClick={(e) => e.stopPropagation()}
                                                                     />
                                                                 ) : (
                                                                     <span>{storeProduct?.stock || 0}</span>
@@ -652,26 +658,23 @@ export default function InventoryPage() {
                                                     <TableCell className="text-right">
                                                         {quickEditingProductId === product.id ? (
                                                             <div className="flex items-center justify-end gap-2">
-                                                                <Button size="icon" variant="ghost" onClick={() => handleSaveQuickEdit(product.id)} disabled={isProcessing}>
+                                                                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleSaveQuickEdit(product.id); }} disabled={isProcessing}>
                                                                     {isProcessing ? <Loader2 className="h-4 w-4 animate-spin"/> : <Check className="h-4 w-4 text-green-600" />}
                                                                 </Button>
-                                                                <Button size="icon" variant="ghost" onClick={handleCancelQuickEdit}>
+                                                                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleCancelQuickEdit(); }}>
                                                                     <X className="h-4 w-4 text-destructive" />
                                                                 </Button>
                                                             </div>
                                                         ) : (
                                                             <DropdownMenu>
                                                                 <DropdownMenuTrigger asChild>
-                                                                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                                    <Button aria-haspopup="true" size="icon" variant="ghost" onClick={(e) => e.stopPropagation()}>
                                                                     <MoreHorizontal className="h-4 w-4" />
                                                                     <span className="sr-only">Toggle menu</span>
                                                                     </Button>
                                                                 </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end">
+                                                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                    <DropdownMenuItem onClick={() => handleQuickEdit(product)}>
-                                                                        <Edit className="mr-2 h-4 w-4" /> Quick Edit
-                                                                    </DropdownMenuItem>
                                                                     <DropdownMenuItem onClick={() => handleEditProduct(product)}>
                                                                         <Edit className="mr-2 h-4 w-4" /> Edit Details
                                                                     </DropdownMenuItem>
