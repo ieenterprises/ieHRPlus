@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
-import { format, differenceInDays } from "fns";
+import { format, differenceInDays } from "date-fns";
 import { type DateRange } from "react-day-picker";
 
 import { PageHeader } from "@/components/page-header";
@@ -1222,5 +1222,7 @@ export default function SalesPage() {
   );
 }
 
+
+    
 
     
