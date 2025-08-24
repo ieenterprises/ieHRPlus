@@ -61,6 +61,8 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { usePos } from "@/hooks/use-pos";
 import { useSettings } from "@/hooks/use-settings";
 import { useOnlineStatus } from "@/hooks/use-online-status";
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 
 type EnrichedProduct = Product & {
     price: number;
@@ -553,6 +555,27 @@ export default function SalesPage() {
           };
           await setSales(prev => [...prev, newSale!]);
         
+          if (creditInfo && loggedInUser?.businessId) {
+            // GUARANTEED DUPLICATE CHECK
+            const debtsRef = collection(db, "debts");
+            const q = query(debtsRef, where("sale_id", "==", newSale.id));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                const customer = customers.find(c => c.id === creditInfo.customerId);
+                const debtData = {
+                    sale_id: newSale.id,
+                    customer_id: creditInfo.customerId,
+                    amount: creditInfo.amount,
+                    status: 'Unpaid' as const,
+                    created_at: newSale.created_at,
+                    sales: { order_number: newSale.order_number },
+                    customers: { name: customer?.name || null },
+                    businessId: loggedInUser.businessId,
+                };
+                await addDoc(collection(db, 'debts'), debtData);
+            }
+          }
           if (isCheckingIn) {
               const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
               const guest = customers.find(c => c.id === reservationCustomerId);

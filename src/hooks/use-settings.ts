@@ -261,51 +261,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         };
     }, [fetchAndSetUser]);
     
-    // *** CENTRALIZED DEBT CREATION LOGIC ***
-    useEffect(() => {
-      const syncDebts = async () => {
-        if (!sales.length || !loggedInUser?.businessId || isSyncingDebts.current) {
-          return;
-        }
-        isSyncingDebts.current = true;
-    
-        try {
-          const creditSales = sales.filter(s => s.payment_methods.includes('Credit'));
-          if (creditSales.length === 0) return;
-    
-          const existingDebtSaleIds = new Set(debts.map(d => d.sale_id));
-          const missingDebts = creditSales.filter(s => !existingDebtSaleIds.has(s.id));
-    
-          if (missingDebts.length > 0) {
-            const batch = writeBatch(db);
-            missingDebts.forEach(sale => {
-              const customer = customers.find(c => c.id === sale.customer_id);
-              const newDebtRef = doc(collection(db, 'debts'));
-              const debtData = {
-                id: newDebtRef.id,
-                sale_id: sale.id,
-                customer_id: sale.customer_id,
-                amount: sale.total,
-                status: 'Unpaid' as const,
-                created_at: sale.created_at,
-                sales: { order_number: sale.order_number },
-                customers: { name: customer?.name || null },
-                businessId: loggedInUser.businessId,
-              };
-              batch.set(newDebtRef, debtData);
-            });
-            await batch.commit();
-          }
-        } catch (error) {
-          console.error("Error during debt synchronization:", error);
-        } finally {
-          isSyncingDebts.current = false;
-        }
-      };
-    
-      syncDebts();
-    }, [sales, debts, customers, loggedInUser?.businessId]);
-
 
     const logout = async () => {
         await auth.signOut();
