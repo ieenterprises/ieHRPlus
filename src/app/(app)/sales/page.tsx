@@ -150,7 +150,7 @@ export default function SalesPage() {
     setDebtToSettle,
     taxes,
   } = useSettings();
-  const { openTickets, saveTicket, deleteTicket, ticketToLoad, setTicketToLoad } = usePos();
+  const { openTickets, saveTicket, deleteTicket, ticketToLoad, setTicketToLoad, ticketToSettle, setTicketToSettle } = usePos();
   const isOnline = useOnlineStatus();
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -284,7 +284,7 @@ export default function SalesPage() {
       }
     }
     setLoading(false);
-  }, [customers, debtToSettle, ticketToSettle, setDebtToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin]);
+  }, [customers, debtToSettle, ticketToSettle, setDebtToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin, setTicketToSettle]);
 
 
   const addReservation = async (reservationData: Omit<Reservation, 'id' | 'created_at' | 'products' | 'businessId'>) => {
@@ -494,9 +494,9 @@ export default function SalesPage() {
     // Perform UI updates immediately
     if (!creditInfo) {
         setIsSplitPaymentDialogOpen(false);
-        handleClearOrder();
-        router.push('/kitchen');
     }
+    handleClearOrder();
+    router.push('/kitchen');
 
     (async () => {
         try {
