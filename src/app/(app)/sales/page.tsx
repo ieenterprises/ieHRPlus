@@ -252,30 +252,30 @@ export default function SalesPage() {
   };
 
   useEffect(() => {
-    if (ticketToLoad) {
-      handleLoadTicket(ticketToLoad);
+    if (ticketToSettle) {
+      handleLoadTicket(ticketToSettle);
+      setTicketToSettle(null);
     } else if (debtToSettle) {
-        const debtItems: OrderItem[] = debtToSettle.items.map(item => {
-            const product = products.find(p => p.id === item.id);
-            const enrichedProduct: EnrichedProduct = {
-                ...(product || {}),
-                id: item.id,
-                name: item.name,
-                price: item.price,
-                stock: product ? (product.store_products?.find(sp => sp.store_id === (isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id))?.stock ?? 999) : 999,
-                category_id: product?.category_id || null,
-                created_at: product?.created_at || new Date().toISOString(),
-                image_url: product?.image_url || null,
-                status: product?.status || 'Available',
-                store_products: product?.store_products || [],
-                businessId: loggedInUser?.businessId || '',
-            };
-            return { product: enrichedProduct, quantity: item.quantity };
-        });
+      const debtItems: OrderItem[] = debtToSettle.items.map((item) => {
+        const product = products.find((p) => p.id === item.id);
+        const enrichedProduct: EnrichedProduct = {
+          ...(product || {}),
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          stock: product ? (product.store_products?.find(sp => sp.store_id === (isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id))?.stock ?? 999) : 999,
+          category_id: product?.category_id || null,
+          created_at: product?.created_at || new Date().toISOString(),
+          image_url: product?.image_url || null,
+          status: product?.status || 'Available',
+          store_products: product?.store_products || [],
+          businessId: loggedInUser?.businessId || '',
+        };
+        return { product: enrichedProduct, quantity: item.quantity };
+      });
 
-        setOrderItems(debtItems);
-        setSelectedCustomerId(debtToSettle.customer_id);
-
+      setOrderItems(debtItems);
+      setSelectedCustomerId(debtToSettle.customer_id);
     } else {
       const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
       if (walkIn) {
@@ -284,7 +284,8 @@ export default function SalesPage() {
       }
     }
     setLoading(false);
-  }, [customers, debtToSettle, ticketToLoad, setDebtToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin]);
+  }, [customers, debtToSettle, ticketToSettle, setDebtToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin]);
+
 
   const addReservation = async (reservationData: Omit<Reservation, 'id' | 'created_at' | 'products' | 'businessId'>) => {
     const newReservation: Omit<Reservation, 'id' | 'businessId'> = {
@@ -444,23 +445,22 @@ export default function SalesPage() {
     const formData = new FormData(event.currentTarget);
     const method = formData.get("paymentMethod") as string;
     const paymentTypeDetails = configuredPaymentTypes.find(p => p.name === method);
-
+    
+    // UI actions are now immediate
     if (paymentTypeDetails?.type === "Credit") {
       const creditCustomerId = formData.get("creditCustomer") as string;
       if (!creditCustomerId) {
         toast({ title: "Customer Required", description: "Please select a customer.", variant: "destructive" });
         return;
       }
-      
-      // Perform UI actions immediately
       setIsSplitPaymentDialogOpen(false);
       handleClearOrder();
       router.push('/kitchen');
 
-      // Process sale in the background
       handleCompleteSale({ creditInfo: { customerId: creditCustomerId, amount: remainingBalance } });
       return;
     }
+    
 
     const amount = parseFloat(formData.get("paymentAmount") as string);
 
@@ -492,13 +492,12 @@ export default function SalesPage() {
     const { creditInfo } = options;
     
     // Perform UI updates immediately
-    if (!creditInfo) { // For credit sales, this is handled in handleAddPayment
+    if (!creditInfo) {
         setIsSplitPaymentDialogOpen(false);
         handleClearOrder();
         router.push('/kitchen');
     }
 
-    // Process data in the background
     (async () => {
         try {
             const currentPosDeviceId = isAdmin ? null : selectedDevice?.id || null;
@@ -525,7 +524,6 @@ export default function SalesPage() {
               
                toast({ title: "Debt Settled", description: `Debt for order #${originalSale.order_number} has been settled.` });
             } else {
-              // This is a new sale
               const newSale: Sale = {
                   id: `sale_${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}`,
                   order_number: generateUniqueOrderNumber(),
@@ -544,27 +542,24 @@ export default function SalesPage() {
               };
               await setSales(prev => [...prev, newSale!]);
             
-              if (creditInfo && loggedInUser?.businessId) {
-                // GUARANTEED DUPLICATE CHECK
-                const debtsRef = collection(db, "sales");
-                const q = query(debtsRef, where("id", "==", newSale.id), where("payment_methods", "array-contains", "Credit"));
+               if (creditInfo && loggedInUser?.businessId) {
+                const q = query(
+                  collection(db, "sales"),
+                  where("id", "==", newSale.id),
+                  where("businessId", "==", loggedInUser.businessId)
+                );
+                
                 const querySnapshot = await getDocs(q);
 
-                if (querySnapshot.docs.length > 0) {
+                if (querySnapshot.docs.length === 0) { // Check if debt for this sale already exists
                     const customer = customers.find(c => c.id === creditInfo.customerId);
-                    const debtData = {
-                        sale_id: newSale.id,
-                        customer_id: creditInfo.customerId,
-                        amount: creditInfo.amount,
-                        status: 'Unpaid' as const,
-                        created_at: newSale.created_at,
-                        sales: { order_number: newSale.order_number },
-                        customers: { name: customer?.name || null },
-                        businessId: loggedInUser.businessId,
-                    };
-                    await addDoc(collection(db, 'sales'), { ...debtData, payment_methods: ['Settlement']});
+                    await addDoc(collection(db, 'sales'), { 
+                      ...newSale,
+                      payment_methods: ['Settlement'], // Mark as a settlement record
+                    });
                 }
               }
+
               if (isCheckingIn) {
                   const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
                   const guest = customers.find(c => c.id === reservationCustomerId);
@@ -680,20 +675,20 @@ export default function SalesPage() {
             total: total,
             employee_id: loggedInUser?.id ?? null,
             customer_id: selectedCustomerId,
-            order_number: generateUniqueOrderNumber(),
+            order_number: activeTicket?.order_number || generateUniqueOrderNumber(),
             businessId: loggedInUser.businessId,
         };
         
-        // If it's an update to a loaded ticket, create a new one instead of updating
         if (activeTicket) {
-             toast({ title: "Order Saved", description: "The updated order has been saved as a new open ticket." });
-             await deleteTicket(activeTicket.id); // Delete the old ticket
+             toast({ title: "Order Updated", description: "The open ticket has been updated." });
+             ticketPayload.id = activeTicket.id;
         } else {
              toast({ title: "Order Saved", description: "The order has been saved as an open ticket." });
         }
         
         await saveTicket(ticketPayload);
         handleClearOrder();
+        router.push('/kitchen?tab=open_tickets');
     } catch (error: any) {
         toast({ title: "Error Saving Order", description: error.message, variant: "destructive" });
     }

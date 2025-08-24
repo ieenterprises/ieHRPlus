@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
@@ -65,9 +65,10 @@ const getPaymentBadgeVariant = (method: string) => {
 
 export default function KitchenPage() {
   const { sales, products, categories, users, loggedInUser, voidSale, setPrintableData, currency, setDebtToSettle, isPrintModalOpen, setIsPrintModalOpen } = useSettings();
-  const { openTickets, setTicketToLoad } = usePos();
+  const { openTickets, setTicketToSettle } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const isOnline = useOnlineStatus();
   
@@ -80,7 +81,9 @@ export default function KitchenPage() {
     maxAmount: "",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [activeTab, setActiveTab] = useState("receipts");
+  
+  const defaultTab = searchParams.get('tab') || "receipts";
+  const [activeTab, setActiveTab] = useState(defaultTab);
   
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
     setPrintableData({ ...data, type });
@@ -225,7 +228,7 @@ export default function KitchenPage() {
   };
   
   const handleLoadTicket = (ticket: OpenTicket) => {
-    setTicketToLoad(ticket);
+    setTicketToSettle(ticket);
     router.push('/sales');
   };
 
@@ -295,7 +298,7 @@ export default function KitchenPage() {
               Export
             </Button>
         </div>
-        <Tabs defaultValue="receipts" onValueChange={setActiveTab}>
+        <Tabs defaultValue={defaultTab} onValueChange={setActiveTab}>
           <TabsList>
               <TabsTrigger value="open_tickets">Open Tickets</TabsTrigger>
               <TabsTrigger value="receipts">Receipts</TabsTrigger>

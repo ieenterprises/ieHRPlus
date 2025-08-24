@@ -21,6 +21,8 @@ type PosContextType = {
   setReservationMode: (mode: boolean) => void;
   ticketToLoad: OpenTicket | null;
   setTicketToLoad: React.Dispatch<React.SetStateAction<OpenTicket | null>>;
+  ticketToSettle: OpenTicket | null;
+  setTicketToSettle: React.Dispatch<React.SetStateAction<OpenTicket | null>>;
 };
 
 const PosContext = createContext<PosContextType | undefined>(undefined);
@@ -30,6 +32,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
   const [openTickets, setOpenTickets] = useState<OpenTicketWithRelations[]>([]);
   const [reservationMode, setReservationMode] = useState(false);
   const [ticketToLoad, setTicketToLoad] = useState<OpenTicket | null>(null);
+  const [ticketToSettle, setTicketToSettle] = useState<OpenTicket | null>(null);
 
   useEffect(() => {
     const enrichedTickets = openTicketsData.map(ticket => ({
@@ -68,17 +71,23 @@ export function PosProvider({ children }: { children: ReactNode }) {
   };
   
   const deleteTicket = async (ticketId: string) => {
-      try {
-          if (ticketId) {
-              await deleteDoc(doc(db, 'open_tickets', ticketId));
-          }
-      } catch (error) {
-          console.error("Error deleting ticket:", error);
-      }
+    // Optimistic UI update
+    setOpenTicketsData(prev => prev.filter(ticket => ticket.id !== ticketId));
+    
+    // Background DB operation
+    try {
+        if (ticketId) {
+            await deleteDoc(doc(db, 'open_tickets', ticketId));
+        }
+    } catch (error) {
+        console.error("Error deleting ticket from DB, it will sync later:", error);
+        // If it fails, the optimistic update might be reverted on next data sync from Firestore if not handled properly.
+        // However, with offline persistence, this should eventually resolve.
+    }
   };
   
   return createElement(PosContext.Provider, {
-    value: { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode, ticketToLoad, setTicketToLoad }
+    value: { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode, ticketToLoad, setTicketToLoad, ticketToSettle, setTicketToSettle }
   }, children);
 }
 
