@@ -9,7 +9,7 @@ import { type DateRange } from "react-day-picker";
 import { useRouter } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
-import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole, Sale, Reservation, Debt } from "@/lib/types";
+import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole, Sale, Reservation } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -61,7 +61,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { usePos } from "@/hooks/use-pos";
 import { useSettings } from "@/hooks/use-settings";
 import { useOnlineStatus } from "@/hooks/use-online-status";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 
 type EnrichedProduct = Product & {
@@ -144,8 +144,6 @@ export default function SalesPage() {
     setCustomers,
     sales,
     setSales,
-    debts,
-    setDebts,
     reservations,
     setReservations,
     debtToSettle,
@@ -158,7 +156,6 @@ export default function SalesPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   
   const [loading, setLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
 
   const [isTicketsDialogOpen, setIsTicketsDialogOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState<OpenTicket | null>(null);
@@ -258,18 +255,6 @@ export default function SalesPage() {
     if (ticketToLoad) {
       handleLoadTicket(ticketToLoad);
     } else if (debtToSettle) {
-       const correspondingDebt = debts.find(d => d.sale_id === debtToSettle.id && d.status === 'Unpaid');
-        if (!correspondingDebt && debtToSettle.id) {
-          setDebtToSettle(null);
-          handleClearOrder();
-          toast({
-            title: "Cleared Stale Debt",
-            description: "A previously selected debt was no longer valid and has been cleared.",
-            variant: "default"
-          });
-          return;
-        }
-
         const debtItems: OrderItem[] = debtToSettle.items.map(item => {
             const product = products.find(p => p.id === item.id);
             const enrichedProduct: EnrichedProduct = {
@@ -299,7 +284,7 @@ export default function SalesPage() {
       }
     }
     setLoading(false);
-  }, [customers, debtToSettle, ticketToLoad, debts, setDebtToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin]);
+  }, [customers, debtToSettle, ticketToLoad, setDebtToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin]);
 
   const addReservation = async (reservationData: Omit<Reservation, 'id' | 'created_at' | 'products' | 'businessId'>) => {
     const newReservation: Omit<Reservation, 'id' | 'businessId'> = {
@@ -326,7 +311,6 @@ export default function SalesPage() {
       return;
     }
     
-    setIsProcessing(true);
     try {
         const reservationData = {
             guest_name: guest.name,
@@ -353,8 +337,6 @@ export default function SalesPage() {
 
     } catch(error: any) {
          toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-        setIsProcessing(false);
     }
   };
 
@@ -540,14 +522,7 @@ export default function SalesPage() {
               };
 
               await setSales(prevSales => prevSales.map(s => s.id === updatedSale.id ? updatedSale : s));
-
-              const originalDebt = debts.find(d => d.sale_id === debtToSettle.id);
-              if (originalDebt) {
-                const updatedDebt = { ...originalDebt, status: 'Paid' as const };
-                await setDebts(prevDebts => prevDebts.map(d => 
-                  d.id === originalDebt.id ? updatedDebt : d
-                ));
-              }
+              
                toast({ title: "Debt Settled", description: `Debt for order #${originalSale.order_number} has been settled.` });
             } else {
               // This is a new sale
@@ -571,11 +546,11 @@ export default function SalesPage() {
             
               if (creditInfo && loggedInUser?.businessId) {
                 // GUARANTEED DUPLICATE CHECK
-                const debtsRef = collection(db, "debts");
-                const q = query(debtsRef, where("sale_id", "==", newSale.id));
+                const debtsRef = collection(db, "sales");
+                const q = query(debtsRef, where("id", "==", newSale.id), where("payment_methods", "array-contains", "Credit"));
                 const querySnapshot = await getDocs(q);
 
-                if (querySnapshot.empty) {
+                if (querySnapshot.docs.length > 0) {
                     const customer = customers.find(c => c.id === creditInfo.customerId);
                     const debtData = {
                         sale_id: newSale.id,
@@ -587,7 +562,7 @@ export default function SalesPage() {
                         customers: { name: customer?.name || null },
                         businessId: loggedInUser.businessId,
                     };
-                    await addDoc(collection(db, 'debts'), debtData);
+                    await addDoc(collection(db, 'sales'), { ...debtData, payment_methods: ['Settlement']});
                 }
               }
               if (isCheckingIn) {
@@ -699,7 +674,6 @@ export default function SalesPage() {
   
     const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
     
-    setIsProcessing(true);
     try {
         const ticketPayload: Partial<OpenTicket> = {
             items: saleItems,
@@ -722,8 +696,6 @@ export default function SalesPage() {
         handleClearOrder();
     } catch (error: any) {
         toast({ title: "Error Saving Order", description: error.message, variant: "destructive" });
-    } finally {
-        setIsProcessing(false);
     }
   };
   
@@ -744,7 +716,6 @@ export default function SalesPage() {
       return;
     }
     
-    setIsProcessing(true);
     try {
       const newCustomer = {
         name,
@@ -760,8 +731,6 @@ export default function SalesPage() {
       toast({ title: "Customer Added", description: `${name} has been added and selected.` });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-        setIsProcessing(false);
     }
   };
 
@@ -950,9 +919,9 @@ export default function SalesPage() {
                     </div>
                     <div className="grid grid-cols-1 gap-2">
                          {featureSettings.open_tickets && !debtToSettle && (
-                            <Button variant="secondary" onClick={handleSaveOrder} className="w-full" disabled={isProcessing}>
-                                {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                {isProcessing ? 'Saving...' : 'Save Order'}
+                            <Button variant="secondary" onClick={handleSaveOrder} className="w-full">
+                                <Save className="mr-2 h-4 w-4" />
+                                Save Order
                             </Button>
                          )}
                     </div>
@@ -1044,8 +1013,7 @@ export default function SalesPage() {
                 </div>
             </div>
             <DialogFooter>
-                <Button onClick={() => handleConfirmBooking('Checked-in')} className="w-full" disabled={isProcessing}>
-                    {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                <Button onClick={() => handleConfirmBooking('Checked-in')} className="w-full">
                     Pay & Check-in Now
                 </Button>
             </DialogFooter>
@@ -1240,8 +1208,7 @@ export default function SalesPage() {
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => setIsAddCustomerDialogOpen(false)}>Cancel</Button>
-                        <Button type="submit" disabled={isProcessing}>
-                            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        <Button type="submit">
                             Save Customer
                         </Button>
                     </DialogFooter>
