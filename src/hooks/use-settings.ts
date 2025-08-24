@@ -42,7 +42,6 @@ type SettingsContextType = {
     categories: Category[];
     customers: Customer[];
     sales: Sale[];
-    debts: Debt[];
     reservations: Reservation[];
     voidedLogs: VoidedLog[];
     openTickets: OpenTicket[];
@@ -95,7 +94,6 @@ type SettingsContextType = {
     setCategories: (value: React.SetStateAction<Category[]>) => Promise<void>;
     setCustomers: (value: React.SetStateAction<Customer[]>) => Promise<void>;
     setSales: (value: React.SetStateAction<Sale[]>) => Promise<void>;
-    setDebts: (value: React.SetStateAction<Debt[]>) => Promise<void>;
     setReservations: (value: React.SetStateAction<Reservation[]>) => Promise<void>;
     setOpenTickets: (value: React.SetStateAction<OpenTicket[]>) => Promise<void>;
     setVoidedLogs: (value: React.SetStateAction<VoidedLog[]>) => Promise<void>;
@@ -144,7 +142,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [categories, setCategoriesState] = useState<Category[]>([]);
     const [customers, setCustomersState] = useState<Customer[]>([]);
     const [sales, setSalesState] = useState<Sale[]>([]);
-    const [debts, setDebtsState] = useState<Debt[]>([]);
     const [reservations, setReservationsState] = useState<Reservation[]>([]);
     const [voidedLogs, setVoidedLogsState] = useState<VoidedLog[]>([]);
     const [openTickets, setOpenTicketsState] = useState<OpenTicket[]>([]);
@@ -166,7 +163,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     
     const router = useRouter();
     const isOnline = useOnlineStatus();
-    const isSyncingDebts = useRef(false);
 
 
     const fetchAndSetUser = useCallback(async (uid: string) => {
@@ -213,7 +209,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         products: setProductsState,
                         customers: setCustomersState,
                         sales: setSalesState,
-                        debts: setDebtsState,
                         reservations: setReservationsState,
                         open_tickets: setOpenTicketsState,
                         voided_logs: setVoidedLogsState,
@@ -250,7 +245,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setDebtsState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setStores, setPosDevices, setPrinters, setTaxes, setPaymentTypes];
+                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setStores, setPosDevices, setPrinters, setTaxes, setPaymentTypes];
                 collections.forEach(setter => setter([]));
             }
         });
@@ -377,7 +372,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const setCategories = createBatchSetter('categories', categories, setCategoriesState);
     const setCustomers = createBatchSetter('customers', customers, setCustomersState);
     const setSales = createBatchSetter('sales', sales, setSalesState);
-    const setDebts = createBatchSetter('debts', debts, setDebtsState);
     const setReservations = createBatchSetter('reservations', reservations, setReservationsState);
     const setOpenTickets = createBatchSetter('open_tickets', openTickets, setOpenTicketsState);
     const setVoidedLogs = createBatchSetter('voided_logs', voidedLogs, setVoidedLogsState);
@@ -388,7 +382,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (!saleToVoid) return;
 
         const reservationToVoid = reservations.find(r => r.sale_id === saleId);
-        const debtToVoid = debts.find(d => d.sale_id === saleId);
 
         const batch = writeBatch(db);
         
@@ -411,11 +404,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             batch.delete(doc(db, 'reservations', reservationToVoid.id));
         }
 
-        // 4. If there's a linked debt, delete it
-        if (debtToVoid && debtToVoid.id) {
-            batch.delete(doc(db, 'debts', debtToVoid.id));
-        }
-
         await batch.commit();
     };
 
@@ -433,7 +421,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         categories, setCategories,
         customers, setCustomers,
         sales, setSales,
-        debts, setDebts,
         reservations, setReservations,
         voidedLogs, setVoidedLogs,
         openTickets, setOpenTickets,

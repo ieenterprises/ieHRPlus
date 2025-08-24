@@ -56,7 +56,6 @@ const navItems: NavItem[] = [
   { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES" },
   { href: "/customers", icon: BookUser, label: "Customers", permission: ["MANAGE_CUSTOMERS", "VIEW_CUSTOMERS"] },
-  { href: "/debts", icon: ReceiptText, label: "Debts", permission: "VIEW_ALL_RECEIPTS" },
   { href: "/voided", icon: Trash2, label: "Voided", permission: "VIEW_SALES_REPORTS" },
 ];
 
