@@ -16,11 +16,9 @@ type OpenTicketWithRelations = OpenTicket & {
 type PosContextType = {
   openTickets: OpenTicketWithRelations[];
   saveTicket: (ticket: Partial<OpenTicket>) => Promise<OpenTicket | null>;
-  deleteTicket: (ticketId: string) => Promise<void>;
+  deleteTicket: (ticketId: string) => void;
   reservationMode: boolean;
   setReservationMode: (mode: boolean) => void;
-  ticketToLoad: OpenTicket | null;
-  setTicketToLoad: React.Dispatch<React.SetStateAction<OpenTicket | null>>;
   ticketToSettle: OpenTicket | null;
   setTicketToSettle: React.Dispatch<React.SetStateAction<OpenTicket | null>>;
 };
@@ -31,7 +29,6 @@ export function PosProvider({ children }: { children: ReactNode }) {
   const { openTickets: openTicketsData, setOpenTickets: setOpenTicketsData, users, customers, loggedInUser } = useSettings();
   const [openTickets, setOpenTickets] = useState<OpenTicketWithRelations[]>([]);
   const [reservationMode, setReservationMode] = useState(false);
-  const [ticketToLoad, setTicketToLoad] = useState<OpenTicket | null>(null);
   const [ticketToSettle, setTicketToSettle] = useState<OpenTicket | null>(null);
 
   useEffect(() => {
@@ -70,24 +67,14 @@ export function PosProvider({ children }: { children: ReactNode }) {
       }
   };
   
-  const deleteTicket = async (ticketId: string) => {
-    // Optimistic UI update
+  const deleteTicket = (ticketId: string) => {
+    // This is now purely an optimistic UI update.
+    // The background DB operation is handled in the sales page.
     setOpenTicketsData(prev => prev.filter(ticket => ticket.id !== ticketId));
-    
-    // Background DB operation
-    try {
-        if (ticketId) {
-            await deleteDoc(doc(db, 'open_tickets', ticketId));
-        }
-    } catch (error) {
-        console.error("Error deleting ticket from DB, it will sync later:", error);
-        // If it fails, the optimistic update might be reverted on next data sync from Firestore if not handled properly.
-        // However, with offline persistence, this should eventually resolve.
-    }
   };
   
   return createElement(PosContext.Provider, {
-    value: { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode, ticketToLoad, setTicketToLoad, ticketToSettle, setTicketToSettle }
+    value: { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode, ticketToSettle, setTicketToSettle }
   }, children);
 }
 

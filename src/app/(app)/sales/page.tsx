@@ -62,7 +62,7 @@ import { usePos } from "@/hooks/use-pos";
 import { useSettings } from "@/hooks/use-settings";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, doc, deleteDoc } from "firebase/firestore";
 
 type EnrichedProduct = Product & {
     price: number;
@@ -150,7 +150,7 @@ export default function SalesPage() {
     setDebtToSettle,
     taxes,
   } = useSettings();
-  const { openTickets, saveTicket, deleteTicket, ticketToLoad, setTicketToLoad, ticketToSettle, setTicketToSettle } = usePos();
+  const { openTickets, saveTicket, deleteTicket, ticketToSettle, setTicketToSettle } = usePos();
   const isOnline = useOnlineStatus();
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -246,7 +246,7 @@ export default function SalesPage() {
     setSelectedCustomerId(ticket.customer_id);
     setLoadedTicketItemIds(new Set(ticketItems.map(item => item.id))); // Track original items
     setIsTicketsDialogOpen(false);
-    setTicketToLoad(null);
+    setTicketToSettle(null);
     
     toast({ title: "Ticket Loaded", description: `Order #${ticket.order_number} has been loaded.`});
   };
@@ -446,17 +446,12 @@ export default function SalesPage() {
     const method = formData.get("paymentMethod") as string;
     const paymentTypeDetails = configuredPaymentTypes.find(p => p.name === method);
     
-    // UI actions are now immediate
     if (paymentTypeDetails?.type === "Credit") {
       const creditCustomerId = formData.get("creditCustomer") as string;
       if (!creditCustomerId) {
         toast({ title: "Customer Required", description: "Please select a customer.", variant: "destructive" });
         return;
       }
-      setIsSplitPaymentDialogOpen(false);
-      handleClearOrder();
-      router.push('/kitchen');
-
       handleCompleteSale({ creditInfo: { customerId: creditCustomerId, amount: remainingBalance } });
       return;
     }
@@ -469,7 +464,6 @@ export default function SalesPage() {
         return;
     }
     
-    // Convert to integers (cents) for reliable comparison
     const amountInCents = Math.round(amount * 100);
     const remainingBalanceInCents = Math.round(remainingBalance * 100);
 
@@ -543,20 +537,15 @@ export default function SalesPage() {
               await setSales(prev => [...prev, newSale!]);
             
                if (creditInfo && loggedInUser?.businessId) {
-                const q = query(
-                  collection(db, "sales"),
-                  where("id", "==", newSale.id),
-                  where("businessId", "==", loggedInUser.businessId)
+                 const q = query(
+                    collection(db, "sales"),
+                    where("id", "==", newSale.id),
+                    where("businessId", "==", loggedInUser.businessId)
                 );
-                
                 const querySnapshot = await getDocs(q);
 
-                if (querySnapshot.docs.length === 0) { // Check if debt for this sale already exists
-                    const customer = customers.find(c => c.id === creditInfo.customerId);
-                    await addDoc(collection(db, 'sales'), { 
-                      ...newSale,
-                      payment_methods: ['Settlement'], // Mark as a settlement record
-                    });
+                if (querySnapshot.docs.length === 0) {
+                    await addDoc(collection(db, 'sales'), { ...newSale });
                 }
               }
 
@@ -615,7 +604,16 @@ export default function SalesPage() {
                 );
             }
             
-            if (activeTicket?.id) await deleteTicket(activeTicket.id);
+            if (activeTicket?.id) {
+              // Now we call the separated delete function
+              deleteTicket(activeTicket.id);
+              try {
+                // And also trigger the background DB deletion
+                await deleteDoc(doc(db, 'open_tickets', activeTicket.id));
+              } catch (error) {
+                 console.error("Error deleting ticket from DB, it will sync later:", error);
+              }
+            }
         } catch (error) {
             console.error("Error processing sale in background:", error);
             toast({ title: "Sync Error", description: "Failed to save sale data. It will be synced when you're online.", variant: "destructive" });
