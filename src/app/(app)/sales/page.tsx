@@ -469,8 +469,13 @@ export default function SalesPage() {
         toast({ title: "Customer Required", description: "Please select a customer.", variant: "destructive" });
         return;
       }
-      // Close the payment dialog and immediately proceed to sale completion
+      
+      // Perform UI actions immediately
       setIsSplitPaymentDialogOpen(false);
+      handleClearOrder();
+      router.push('/kitchen');
+
+      // Process sale in the background
       handleCompleteSale({ creditInfo: { customerId: creditCustomerId, amount: remainingBalance } });
       return;
     }
@@ -504,143 +509,148 @@ export default function SalesPage() {
  const handleCompleteSale = (options: { creditInfo?: { customerId: string; amount: number; } } = {}) => {
     const { creditInfo } = options;
     
-    const processSale = async () => {
-        const currentPosDeviceId = isAdmin ? null : selectedDevice?.id || null;
-        
-        const saleItems: SaleItem[] = orderItems.map(item => ({
-            id: item.product.id,
-            name: item.product.name,
-            quantity: item.quantity,
-            price: item.product.price,
-        }));
+    // Perform UI updates immediately
+    if (!creditInfo) { // For credit sales, this is handled in handleAddPayment
+        setIsSplitPaymentDialogOpen(false);
+        handleClearOrder();
+        router.push('/kitchen');
+    }
 
-        if (debtToSettle) {
-          const originalSale = sales.find(s => s.id === debtToSettle.id);
-          if (!originalSale) {
-            throw new Error("Original sale for this debt could not be found.");
-          }
-          const settlementPayments = payments.map(p => p.method);
-          const updatedSale: Sale = {
-            ...originalSale,
-            payment_methods: [...originalSale.payment_methods.filter(pm => pm !== 'Credit'), ...settlementPayments],
-          };
+    // Process data in the background
+    (async () => {
+        try {
+            const currentPosDeviceId = isAdmin ? null : selectedDevice?.id || null;
+            
+            const saleItems: SaleItem[] = orderItems.map(item => ({
+                id: item.product.id,
+                name: item.product.name,
+                quantity: item.quantity,
+                price: item.product.price,
+            }));
 
-          await setSales(prevSales => prevSales.map(s => s.id === updatedSale.id ? updatedSale : s));
-
-          const originalDebt = debts.find(d => d.sale_id === debtToSettle.id);
-          if (originalDebt) {
-            const updatedDebt = { ...originalDebt, status: 'Paid' as const };
-            await setDebts(prevDebts => prevDebts.map(d => 
-              d.id === originalDebt.id ? updatedDebt : d
-            ));
-          }
-           toast({ title: "Debt Settled", description: `Debt for order #${originalSale.order_number} has been settled.` });
-        } else {
-          // This is a new sale
-          const newSale: Sale = {
-              id: `sale_${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}`,
-              order_number: generateUniqueOrderNumber(),
-              created_at: new Date().toISOString(),
-              items: saleItems,
-              total: total,
-              payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
-              customer_id: creditInfo ? creditInfo.customerId : selectedCustomerId,
-              employee_id: loggedInUser?.id || null,
-              pos_device_id: currentPosDeviceId,
-              status: 'Fulfilled' as const,
-              customers: customers.find(c => c.id === (creditInfo ? creditInfo.customerId : selectedCustomerId)) || null,
-              users: { name: loggedInUser?.name || null },
-              pos_devices: selectedDevice ? { store_id: selectedDevice.store_id } : null,
-              businessId: loggedInUser?.businessId || '',
-          };
-          await setSales(prev => [...prev, newSale!]);
-        
-          if (creditInfo && loggedInUser?.businessId) {
-            // GUARANTEED DUPLICATE CHECK
-            const debtsRef = collection(db, "debts");
-            const q = query(debtsRef, where("sale_id", "==", newSale.id));
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                const customer = customers.find(c => c.id === creditInfo.customerId);
-                const debtData = {
-                    sale_id: newSale.id,
-                    customer_id: creditInfo.customerId,
-                    amount: creditInfo.amount,
-                    status: 'Unpaid' as const,
-                    created_at: newSale.created_at,
-                    sales: { order_number: newSale.order_number },
-                    customers: { name: customer?.name || null },
-                    businessId: loggedInUser.businessId,
-                };
-                await addDoc(collection(db, 'debts'), debtData);
-            }
-          }
-          if (isCheckingIn) {
-              const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
-              const guest = customers.find(c => c.id === reservationCustomerId);
-              if (roomItem && guest && dateRange?.from && dateRange.to) {
-                  await addReservation({
-                      guest_name: guest.name,
-                      product_id: roomItem.product.id,
-                      check_in: dateRange.from.toISOString(),
-                      check_out: dateRange.to.toISOString(),
-                      status: 'Checked-in',
-                      sale_id: newSale.id,
-                  });
-
-                  await setProducts(prevProducts => 
-                      prevProducts.map(room => room.id === roomItem.product.id ? { ...room, status: 'Occupied' } : room)
-                  );
-
-                  toast({
-                    title: "Room Checked In",
-                    description: `Booking for ${guest.name} in ${roomItem.product.name} has been paid and confirmed.`,
-                  });
+            if (debtToSettle) {
+              const originalSale = sales.find(s => s.id === debtToSettle.id);
+              if (!originalSale) {
+                throw new Error("Original sale for this debt could not be found.");
               }
-              setIsCheckingIn(false);
-              setReservationCustomerId(null);
-              setDateRange(undefined);
-          }
+              const settlementPayments = payments.map(p => p.method);
+              const updatedSale: Sale = {
+                ...originalSale,
+                payment_methods: [...originalSale.payment_methods.filter(pm => pm !== 'Credit'), ...settlementPayments],
+              };
 
-          let toastDescription = `Order complete. Total: ${currency}${total.toFixed(2)}.`;
-          if (creditInfo) {
-              const customer = customers.find(c => c.id === creditInfo.customerId);
-              toastDescription += ` ${currency}${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
-          }
-          toast({ title: "Sale Completed", description: toastDescription });
+              await setSales(prevSales => prevSales.map(s => s.id === updatedSale.id ? updatedSale : s));
+
+              const originalDebt = debts.find(d => d.sale_id === debtToSettle.id);
+              if (originalDebt) {
+                const updatedDebt = { ...originalDebt, status: 'Paid' as const };
+                await setDebts(prevDebts => prevDebts.map(d => 
+                  d.id === originalDebt.id ? updatedDebt : d
+                ));
+              }
+               toast({ title: "Debt Settled", description: `Debt for order #${originalSale.order_number} has been settled.` });
+            } else {
+              // This is a new sale
+              const newSale: Sale = {
+                  id: `sale_${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}`,
+                  order_number: generateUniqueOrderNumber(),
+                  created_at: new Date().toISOString(),
+                  items: saleItems,
+                  total: total,
+                  payment_methods: creditInfo ? ['Credit'] : payments.map(p => p.method),
+                  customer_id: creditInfo ? creditInfo.customerId : selectedCustomerId,
+                  employee_id: loggedInUser?.id || null,
+                  pos_device_id: currentPosDeviceId,
+                  status: 'Fulfilled' as const,
+                  customers: customers.find(c => c.id === (creditInfo ? creditInfo.customerId : selectedCustomerId)) || null,
+                  users: { name: loggedInUser?.name || null },
+                  pos_devices: selectedDevice ? { store_id: selectedDevice.store_id } : null,
+                  businessId: loggedInUser?.businessId || '',
+              };
+              await setSales(prev => [...prev, newSale!]);
+            
+              if (creditInfo && loggedInUser?.businessId) {
+                // GUARANTEED DUPLICATE CHECK
+                const debtsRef = collection(db, "debts");
+                const q = query(debtsRef, where("sale_id", "==", newSale.id));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    const customer = customers.find(c => c.id === creditInfo.customerId);
+                    const debtData = {
+                        sale_id: newSale.id,
+                        customer_id: creditInfo.customerId,
+                        amount: creditInfo.amount,
+                        status: 'Unpaid' as const,
+                        created_at: newSale.created_at,
+                        sales: { order_number: newSale.order_number },
+                        customers: { name: customer?.name || null },
+                        businessId: loggedInUser.businessId,
+                    };
+                    await addDoc(collection(db, 'debts'), debtData);
+                }
+              }
+              if (isCheckingIn) {
+                  const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
+                  const guest = customers.find(c => c.id === reservationCustomerId);
+                  if (roomItem && guest && dateRange?.from && dateRange.to) {
+                      await addReservation({
+                          guest_name: guest.name,
+                          product_id: roomItem.product.id,
+                          check_in: dateRange.from.toISOString(),
+                          check_out: dateRange.to.toISOString(),
+                          status: 'Checked-in',
+                          sale_id: newSale.id,
+                      });
+
+                      await setProducts(prevProducts => 
+                          prevProducts.map(room => room.id === roomItem.product.id ? { ...room, status: 'Occupied' } : room)
+                      );
+
+                      toast({
+                        title: "Room Checked In",
+                        description: `Booking for ${guest.name} in ${roomItem.product.name} has been paid and confirmed.`,
+                      });
+                  }
+                  setIsCheckingIn(false);
+                  setReservationCustomerId(null);
+                  setDateRange(undefined);
+              }
+
+              let toastDescription = `Order complete. Total: ${currency}${total.toFixed(2)}.`;
+              if (creditInfo) {
+                  const customer = customers.find(c => c.id === creditInfo.customerId);
+                  toastDescription += ` ${currency}${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
+              }
+              toast({ title: "Sale Completed", description: toastDescription });
+            }
+            
+            const stockUpdates = orderItems
+                .filter(item => getCategoryName(item.product.category_id) !== 'Room')
+                .map(item => ({ id: item.product.id, quantity: item.quantity }));
+            
+            const updateStoreId = isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id;
+
+            if(stockUpdates.length > 0 && updateStoreId) {
+                await setProducts(prevProducts =>
+                    prevProducts.map(p => {
+                        const update = stockUpdates.find(u => u.id === p.id);
+                        if (!update) return p;
+
+                        const newStoreProducts = p.store_products.map(sp => 
+                            sp.store_id === updateStoreId ? { ...sp, stock: sp.stock - update.quantity } : sp
+                        );
+                        return { ...p, store_products: newStoreProducts };
+                    })
+                );
+            }
+            
+            if (activeTicket?.id) await deleteTicket(activeTicket.id);
+        } catch (error) {
+            console.error("Error processing sale in background:", error);
+            toast({ title: "Sync Error", description: "Failed to save sale data. It will be synced when you're online.", variant: "destructive" });
         }
-        
-        const stockUpdates = orderItems
-            .filter(item => getCategoryName(item.product.category_id) !== 'Room')
-            .map(item => ({ id: item.product.id, quantity: item.quantity }));
-        
-        const updateStoreId = isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id;
-
-        if(stockUpdates.length > 0 && updateStoreId) {
-            await setProducts(prevProducts =>
-                prevProducts.map(p => {
-                    const update = stockUpdates.find(u => u.id === p.id);
-                    if (!update) return p;
-
-                    const newStoreProducts = p.store_products.map(sp => 
-                        sp.store_id === updateStoreId ? { ...sp, stock: sp.stock - update.quantity } : sp
-                    );
-                    return { ...p, store_products: newStoreProducts };
-                })
-            );
-        }
-        
-        if (activeTicket?.id) await deleteTicket(activeTicket.id);
-
-    };
-    
-    // Execute and then handle UI updates
-    processSale().finally(() => {
-      setIsSplitPaymentDialogOpen(false);
-      handleClearOrder();
-      router.push('/kitchen');
-    });
+    })();
   };
   
   
