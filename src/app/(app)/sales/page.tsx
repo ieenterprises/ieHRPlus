@@ -509,6 +509,8 @@ export default function SalesPage() {
                 price: item.product.price,
             }));
 
+            let newSale: Sale | null = null;
+
             if (debtToSettle) {
               const originalSale = sales.find(s => s.id === debtToSettle.id);
               if (!originalSale) {
@@ -532,8 +534,8 @@ export default function SalesPage() {
                toast({ title: "Debt Settled", description: `Debt for order #${originalSale.order_number} has been settled.` });
             } else {
               // This is a new sale
-              const newSale: Sale = {
-                  id: `sale_${new Date().getTime()}`,
+              newSale = {
+                  id: `sale_${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}`,
                   order_number: generateUniqueOrderNumber(),
                   created_at: new Date().toISOString(),
                   items: saleItems,
@@ -548,7 +550,7 @@ export default function SalesPage() {
                   pos_devices: selectedDevice ? { store_id: selectedDevice.store_id } : null,
                   businessId: loggedInUser?.businessId || '',
               };
-              await setSales(prev => [...prev, newSale]);
+              await setSales(prev => [...prev, newSale!]);
             
               if (isCheckingIn) {
                   const roomItem = orderItems.find(item => getCategoryName(item.product.category_id) === 'Room');
@@ -578,9 +580,21 @@ export default function SalesPage() {
               }
               let toastDescription = `Order complete. Total: ${currency}${total.toFixed(2)}.`;
 
-              if (creditInfo) {
+              if (creditInfo && newSale) {
                   const customer = customers.find(c => c.id === creditInfo.customerId);
                   toastDescription += ` ${currency}${creditInfo.amount.toFixed(2)} recorded as debt for ${customer?.name}.`;
+                  
+                  const newDebt: Omit<Debt, 'id'> = {
+                    sale_id: newSale.id,
+                    customer_id: creditInfo.customerId,
+                    amount: creditInfo.amount,
+                    status: 'Unpaid' as const,
+                    created_at: new Date().toISOString(),
+                    sales: { order_number: newSale.order_number },
+                    customers: { name: customer?.name || null },
+                    businessId: loggedInUser?.businessId || '',
+                  };
+                  await setDebts(prev => [...prev, {id: `debt_${new Date().getTime()}`, ...newDebt}]);
               }
               toast({ title: "Sale Completed", description: toastDescription });
             }
@@ -610,13 +624,11 @@ export default function SalesPage() {
         } catch (error: any) {
             toast({ title: "Error completing sale", description: error.message, variant: "destructive" });
         } finally {
-            // This ensures the UI always resets, crucial for offline mode.
             handleClearOrder();
             router.push('/kitchen');
         }
     }
     
-    // Fire off the processing, but don't wait for it to make UI feel instant.
     processSale();
   };
   

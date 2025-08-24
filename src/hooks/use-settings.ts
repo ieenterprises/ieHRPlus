@@ -166,7 +166,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     
     const router = useRouter();
     const isOnline = useOnlineStatus();
-    const isSyncingDebts = useRef(false);
 
     const fetchAndSetUser = useCallback(async (uid: string) => {
         setLoadingUser(true);
@@ -259,50 +258,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             subscriptions.forEach(sub => sub());
         };
     }, [fetchAndSetUser]);
-
-    // Effect for syncing debts when sales data changes or when coming online
-    useEffect(() => {
-      const syncDebts = async () => {
-        if (isSyncingDebts.current || sales.length === 0 || !loggedInUser?.businessId) return;
-        
-        isSyncingDebts.current = true;
-
-        const creditSales = sales.filter(s => s.payment_methods.includes('Credit'));
-        const existingDebtSaleIds = new Set(debts.map(d => d.sale_id));
-        const missingDebts: Omit<Debt, 'id'>[] = [];
-
-        for (const sale of creditSales) {
-          if (!existingDebtSaleIds.has(sale.id)) {
-            const customerForDebt = customers.find(c => c.id === sale.customer_id);
-            missingDebts.push({
-              sale_id: sale.id,
-              customer_id: sale.customer_id,
-              amount: sale.total,
-              status: "Unpaid" as const,
-              created_at: sale.created_at!,
-              sales: sale,
-              customers: customerForDebt || null,
-              businessId: loggedInUser.businessId,
-            });
-          }
-        }
-
-        if (missingDebts.length > 0) {
-          const batch = writeBatch(db);
-          missingDebts.forEach(debtData => {
-            const debtRef = doc(collection(db, 'debts'));
-            // Ensure we don't include nested objects that Firestore can't handle directly
-            const { sales, customers, ...restOfDebt } = debtData;
-            batch.set(debtRef, restOfDebt);
-          });
-          await batch.commit();
-        }
-        isSyncingDebts.current = false;
-      };
-
-      syncDebts();
-
-    }, [sales, debts, customers, loggedInUser?.businessId, isOnline]);
     
 
     const logout = async () => {
