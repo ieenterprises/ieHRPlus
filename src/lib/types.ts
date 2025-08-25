@@ -87,7 +87,7 @@ export type SaleItem = {
   name: string;
   quantity: number;
   price: number;
-  fulfilled?: boolean;
+  fulfilled_quantity?: number;
 }
 
 export type Role = {

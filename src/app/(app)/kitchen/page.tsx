@@ -80,7 +80,7 @@ const getStatusBadgeVariant = (status: Sale['fulfillment_status']) => {
 }
 
 export default function KitchenPage() {
-  const { sales, setSales, products, categories, users, loggedInUser, setPrintableData, currency, setDebtToSettle, isPrintModalOpen, setIsPrintModalOpen, voidSale } = useSettings();
+  const { sales, setSales, products, categories, users, loggedInUser, setPrintableData, currency, isPrintModalOpen, setIsPrintModalOpen, voidSale } = useSettings();
   const { openTickets, setTicketToSettle, updateTicket } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -248,8 +248,10 @@ export default function KitchenPage() {
   };
 
   const handleSettleDebtFromReceipts = (sale: Sale) => {
-    setDebtToSettle(sale);
-    router.push("/sales");
+    // The use-settings hook will now pick this up and preload it on the sales page.
+    const debtSale: Sale = { ...sale, payment_methods: ['Credit'] };
+    // This now correctly sets the sale object for debt settlement
+    router.push(`/sales?settleDebt=${sale.id}`);
   };
   
   const handleMoveToVoid = async (sale: Sale) => {
@@ -317,28 +319,34 @@ export default function KitchenPage() {
 
   const openPreviewModal = (order: Sale | OpenTicket, type: 'receipt' | 'ticket') => {
     setPreviewingOrder({ ...order, type });
-    setPreviewItems(order.items.map(item => ({ ...item }))); // Create a mutable copy
+    setPreviewItems(order.items.map(item => ({ ...item, fulfilled_quantity: item.fulfilled_quantity || 0 }))); 
     setIsPreviewOpen(true);
   };
   
-  const handleItemFulfillmentToggle = (itemId: string, checked: boolean) => {
+  const handleItemFulfillmentToggle = (itemId: string, itemIndex: number, checked: boolean) => {
     setPreviewItems(currentItems =>
-      currentItems.map(item => (item.id === itemId ? { ...item, fulfilled: checked } : item))
+      currentItems.map(item => {
+        if (item.id === itemId) {
+          const newFulfilledQuantity = (item.fulfilled_quantity || 0) + (checked ? 1 : -1);
+          return { ...item, fulfilled_quantity: Math.max(0, Math.min(item.quantity, newFulfilledQuantity)) };
+        }
+        return item;
+      })
     );
   };
 
   const handleMarkAllFulfilled = () => {
     setPreviewItems(currentItems =>
-      currentItems.map(item => ({ ...item, fulfilled: true }))
+      currentItems.map(item => ({ ...item, fulfilled_quantity: item.quantity }))
     );
   };
 
   const calculateFulfillmentStatus = (items: SaleItem[]): Sale['fulfillment_status'] => {
-    const totalItems = items.length;
-    const fulfilledItems = items.filter(item => item.fulfilled).length;
+    const totalItemUnits = items.reduce((sum, item) => sum + item.quantity, 0);
+    const fulfilledItemUnits = items.reduce((sum, item) => sum + (item.fulfilled_quantity || 0), 0);
 
-    if (fulfilledItems === 0) return 'Unfulfilled';
-    if (fulfilledItems === totalItems) return 'Fulfilled';
+    if (fulfilledItemUnits === 0) return 'Unfulfilled';
+    if (fulfilledItemUnits === totalItemUnits) return 'Fulfilled';
     return 'Pending';
   };
 
@@ -676,23 +684,30 @@ export default function KitchenPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-4">
+            <div className="space-y-4 max-h-80 overflow-y-auto pr-4">
               {previewItems.map(item => (
-                <div key={item.id} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`item-${item.id}`}
-                    checked={item.fulfilled}
-                    onCheckedChange={(checked) => handleItemFulfillmentToggle(item.id, checked as boolean)}
-                  />
-                  <Label
-                    htmlFor={`item-${item.id}`}
-                    className={cn(
-                      "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1",
-                      item.fulfilled && "line-through text-muted-foreground"
-                    )}
-                  >
-                    {item.name} (x{item.quantity})
-                  </Label>
+                <div key={item.id}>
+                    <Label className="font-semibold">{item.name} (Fulfilled: {item.fulfilled_quantity || 0}/{item.quantity})</Label>
+                    <div className="grid grid-cols-5 gap-2 mt-2">
+                    {Array.from({ length: item.quantity }).map((_, index) => (
+                        <div key={index} className="flex items-center space-x-2 p-2 rounded-md border">
+                        <Checkbox
+                            id={`item-${item.id}-${index}`}
+                            checked={index < (item.fulfilled_quantity || 0)}
+                            onCheckedChange={(checked) => handleItemFulfillmentToggle(item.id, index, checked as boolean)}
+                        />
+                        <Label
+                            htmlFor={`item-${item.id}-${index}`}
+                            className={cn(
+                                "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1",
+                                index < (item.fulfilled_quantity || 0) && "line-through text-muted-foreground"
+                            )}
+                        >
+                            Unit {index + 1}
+                        </Label>
+                        </div>
+                    ))}
+                    </div>
                 </div>
               ))}
             </div>

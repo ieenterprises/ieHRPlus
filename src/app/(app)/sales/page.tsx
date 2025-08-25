@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { format, differenceInDays } from "date-fns";
 import { type DateRange } from "react-day-picker";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
 import { type Product, type Customer, type Category, type SaleItem, type OpenTicket, UserRole, Sale, Reservation } from "@/lib/types";
@@ -72,7 +72,7 @@ type EnrichedProduct = Product & {
 type OrderItem = {
   product: EnrichedProduct;
   quantity: number;
-  fulfilled?: boolean;
+  fulfilled_quantity?: number;
 };
 
 function ProductCard({
@@ -128,6 +128,7 @@ const generateUniqueOrderNumber = () => {
 
 export default function SalesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { 
     featureSettings, 
     paymentTypes: configuredPaymentTypes,
@@ -147,8 +148,6 @@ export default function SalesPage() {
     setSales,
     reservations,
     setReservations,
-    debtToSettle,
-    setDebtToSettle,
     taxes,
   } = useSettings();
   const { openTickets, saveTicket, deleteTicket, ticketToSettle, setTicketToSettle } = usePos();
@@ -176,6 +175,9 @@ export default function SalesPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [productSearchTerm, setProductSearchTerm] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  
+  const [debtToSettle, setDebtToSettle] = useState<Sale | null>(null);
+
 
   const [isCheckingIn, setIsCheckingIn] = useState(false);
 
@@ -248,37 +250,46 @@ export default function SalesPage() {
     setLoadedTicketItemIds(new Set(ticketItems.map(item => item.id))); // Track original items
     setIsTicketsDialogOpen(false);
     setTicketToSettle(null);
+    setDebtToSettle(null);
     
     toast({ title: "Ticket Loaded", description: `Order #${ticket.order_number} has been loaded.`});
   };
 
  useEffect(() => {
     const loadData = async () => {
-      if (ticketToSettle) {
-        handleLoadTicket(ticketToSettle);
+      const debtSaleId = searchParams.get('settleDebt');
+      const ticketToLoad = ticketToSettle;
+      
+      if (debtSaleId) {
+        const saleToSettle = sales.find(s => s.id === debtSaleId);
+        if (saleToSettle) {
+            const debtItems: OrderItem[] = saleToSettle.items.map((item) => {
+                const product = products.find((p) => p.id === item.id);
+                const enrichedProduct: EnrichedProduct = {
+                    ...(product || {}),
+                    id: item.id,
+                    name: item.name,
+                    price: item.price,
+                    stock: product ? (product.store_products?.find(sp => sp.store_id === (isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id))?.stock ?? 999) : 999,
+                    category_id: product?.category_id || null,
+                    created_at: product?.created_at || new Date().toISOString(),
+                    image_url: product?.image_url || null,
+                    status: product?.status || 'Available',
+                    store_products: product?.store_products || [],
+                    businessId: loggedInUser?.businessId || '',
+                };
+                return { product: enrichedProduct, quantity: item.quantity };
+            });
+
+            setOrderItems(debtItems);
+            setSelectedCustomerId(saleToSettle.customer_id);
+            setDebtToSettle(saleToSettle);
+            // Clear the param from URL to prevent re-triggering
+            router.replace('/sales', undefined);
+        }
+      } else if (ticketToLoad) {
+        handleLoadTicket(ticketToLoad);
         setTicketToSettle(null); // Clear after loading
-      } else if (debtToSettle) {
-        const debtItems: OrderItem[] = debtToSettle.items.map((item) => {
-          const product = products.find((p) => p.id === item.id);
-          const enrichedProduct: EnrichedProduct = {
-            ...(product || {}),
-            id: item.id,
-            name: item.name,
-            price: item.price,
-            stock: product ? (product.store_products?.find(sp => sp.store_id === (isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id))?.stock ?? 999) : 999,
-            category_id: product?.category_id || null,
-            created_at: product?.created_at || new Date().toISOString(),
-            image_url: product?.image_url || null,
-            status: product?.status || 'Available',
-            store_products: product?.store_products || [],
-            businessId: loggedInUser?.businessId || '',
-          };
-          return { product: enrichedProduct, quantity: item.quantity };
-        });
-
-        setOrderItems(debtItems);
-        setSelectedCustomerId(debtToSettle.customer_id);
-
       } else {
         const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
         if (walkIn) {
@@ -290,7 +301,7 @@ export default function SalesPage() {
 
     loadData();
     setLoading(false);
-  }, [customers, debtToSettle, ticketToSettle, setDebtToSettle, setTicketToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin]);
+  }, [customers, debtToSettle, ticketToSettle, setTicketToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin, searchParams, sales, router]);
 
 
   const addReservation = async (reservationData: Omit<Reservation, 'id' | 'created_at' | 'products' | 'businessId'>) => {
@@ -380,7 +391,7 @@ export default function SalesPage() {
             : item
         );
       }
-      return [...prevItems, { product, quantity: 1, fulfilled: false }];
+      return [...prevItems, { product, quantity: 1, fulfilled_quantity: 0 }];
     });
   };
 
@@ -507,7 +518,7 @@ export default function SalesPage() {
                 name: item.product.name,
                 quantity: item.quantity,
                 price: item.product.price,
-                fulfilled: false,
+                fulfilled_quantity: 0,
             }));
 
             if (debtToSettle) {
@@ -525,8 +536,9 @@ export default function SalesPage() {
               
                toast({ title: "Debt Settled", description: `Debt for order #${originalSale.order_number} has been settled.` });
             } else {
+              const newSaleId = `sale_${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}`;
               const newSale: Sale = {
-                  id: `sale_${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}`,
+                  id: newSaleId,
                   order_number: generateUniqueOrderNumber(),
                   created_at: new Date().toISOString(),
                   items: saleItems,
@@ -546,14 +558,13 @@ export default function SalesPage() {
             
                if (creditInfo && loggedInUser?.businessId) {
                 const q = query(collection(db, "sales"), where("id", "==", newSale.id));
-                const querySnapshot = await getDocs(q);
-                 if (querySnapshot.empty) {
-                     const debtQuery = query(collection(db, "debts"), where("sale_id", "==", newSale.id));
-                     const debtSnapshot = await getDocs(debtQuery);
-                     if (debtSnapshot.empty) {
-                        await addDoc(collection(db, 'sales'), { ...newSale });
-                     }
-                 }
+                const debtQuery = query(collection(db, "debts"), where("sale_id", "==", newSale.id));
+                
+                const [saleSnapshot, debtSnapshot] = await Promise.all([getDocs(q), getDocs(debtQuery)]);
+
+                if (saleSnapshot.empty && debtSnapshot.empty) {
+                    await addDoc(collection(db, 'sales'), { ...newSale });
+                }
               }
 
               if (isCheckingIn) {
@@ -612,14 +623,7 @@ export default function SalesPage() {
             }
             
             if (activeTicket?.id) {
-              // Now we call the separated delete function
-              deleteTicket(activeTicket.id);
-              try {
-                // And also trigger the background DB deletion
-                await deleteDoc(doc(db, 'open_tickets', activeTicket.id));
-              } catch (error) {
-                 console.error("Error deleting ticket from DB, it will sync later:", error);
-              }
+              await deleteTicket(activeTicket.id);
             }
         } catch (error) {
             console.error("Error processing sale in background:", error);
@@ -672,7 +676,7 @@ export default function SalesPage() {
       return;
     }
   
-    const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price, fulfilled: false }));
+    const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price, fulfilled_quantity: 0 }));
     
     try {
         const ticketPayload: Partial<OpenTicket> = {
