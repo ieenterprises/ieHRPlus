@@ -335,8 +335,8 @@ export default function KitchenPage() {
   
   const handleItemFulfillmentToggle = (itemId: string, itemIndex: number, checked: boolean) => {
     setPreviewItems(currentItems =>
-      currentItems.map(item => {
-        if (item.id === itemId) {
+      currentItems.map((item, idx) => {
+        if (item.id === itemId && idx === itemIndex) { // Check both id and original index
           const newFulfilledQuantity = (item.fulfilled_quantity || 0) + (checked ? 1 : -1);
           return { ...item, fulfilled_quantity: Math.max(0, Math.min(item.quantity, newFulfilledQuantity)) };
         }
@@ -410,7 +410,7 @@ export default function KitchenPage() {
         const primaryTicket = ticketsToMerge.find(t => t.id === primaryMergeId);
         if (!primaryTicket) return;
 
-        const allItems = ticketsToMerge.flatMap(t => t.items as SaleItem[]);
+        const allItems = ticketsToMerge.flatMap(t => t.items);
         const newTotal = ticketsToMerge.reduce((sum, ticket) => sum + ticket.total, 0);
         
         const newTicket: Partial<OpenTicket> = {
@@ -789,25 +789,25 @@ export default function KitchenPage() {
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="space-y-4 max-h-80 overflow-y-auto pr-4">
-              {previewItems.map(item => (
-                <div key={item.id}>
+              {previewItems.map((item, itemIndex) => (
+                <div key={`${item.id}-${itemIndex}`}>
                     <Label className="font-semibold">{item.name} (Fulfilled: {item.fulfilled_quantity || 0}/{item.quantity})</Label>
                     <div className="grid grid-cols-5 gap-2 mt-2">
-                    {Array.from({ length: item.quantity }).map((_, index) => (
-                        <div key={index} className="flex items-center space-x-2 p-2 rounded-md border">
+                    {Array.from({ length: item.quantity }).map((_, unitIndex) => (
+                        <div key={unitIndex} className="flex items-center space-x-2 p-2 rounded-md border">
                         <Checkbox
-                            id={`item-${item.id}-${index}`}
-                            checked={index < (item.fulfilled_quantity || 0)}
-                            onCheckedChange={(checked) => handleItemFulfillmentToggle(item.id, index, checked as boolean)}
+                            id={`item-${item.id}-${itemIndex}-${unitIndex}`}
+                            checked={unitIndex < (item.fulfilled_quantity || 0)}
+                            onCheckedChange={(checked) => handleItemFulfillmentToggle(item.id, itemIndex, checked as boolean)}
                         />
                         <Label
-                            htmlFor={`item-${item.id}-${index}`}
+                            htmlFor={`item-${item.id}-${itemIndex}-${unitIndex}`}
                             className={cn(
                                 "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1",
-                                index < (item.fulfilled_quantity || 0) && "line-through text-muted-foreground"
+                                unitIndex < (item.fulfilled_quantity || 0) && "line-through text-muted-foreground"
                             )}
                         >
-                            Unit {index + 1}
+                            Unit {unitIndex + 1}
                         </Label>
                         </div>
                     ))}
