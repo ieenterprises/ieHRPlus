@@ -62,7 +62,7 @@ import { usePos } from "@/hooks/use-pos";
 import { useSettings } from "@/hooks/use-settings";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, where, getDocs, addDoc, doc, deleteDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, doc, deleteDoc, getDoc } from "firebase/firestore";
 
 type EnrichedProduct = Product & {
     price: number;
@@ -72,6 +72,7 @@ type EnrichedProduct = Product & {
 type OrderItem = {
   product: EnrichedProduct;
   quantity: number;
+  fulfilled?: boolean;
 };
 
 function ProductCard({
@@ -251,40 +252,45 @@ export default function SalesPage() {
     toast({ title: "Ticket Loaded", description: `Order #${ticket.order_number} has been loaded.`});
   };
 
-  useEffect(() => {
-    if (ticketToSettle) {
-      handleLoadTicket(ticketToSettle);
-      setTicketToSettle(null);
-    } else if (debtToSettle) {
-      const debtItems: OrderItem[] = debtToSettle.items.map((item) => {
-        const product = products.find((p) => p.id === item.id);
-        const enrichedProduct: EnrichedProduct = {
-          ...(product || {}),
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          stock: product ? (product.store_products?.find(sp => sp.store_id === (isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id))?.stock ?? 999) : 999,
-          category_id: product?.category_id || null,
-          created_at: product?.created_at || new Date().toISOString(),
-          image_url: product?.image_url || null,
-          status: product?.status || 'Available',
-          store_products: product?.store_products || [],
-          businessId: loggedInUser?.businessId || '',
-        };
-        return { product: enrichedProduct, quantity: item.quantity };
-      });
+ useEffect(() => {
+    const loadData = async () => {
+      if (ticketToSettle) {
+        handleLoadTicket(ticketToSettle);
+        setTicketToSettle(null); // Clear after loading
+      } else if (debtToSettle) {
+        const debtItems: OrderItem[] = debtToSettle.items.map((item) => {
+          const product = products.find((p) => p.id === item.id);
+          const enrichedProduct: EnrichedProduct = {
+            ...(product || {}),
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            stock: product ? (product.store_products?.find(sp => sp.store_id === (isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id))?.stock ?? 999) : 999,
+            category_id: product?.category_id || null,
+            created_at: product?.created_at || new Date().toISOString(),
+            image_url: product?.image_url || null,
+            status: product?.status || 'Available',
+            store_products: product?.store_products || [],
+            businessId: loggedInUser?.businessId || '',
+          };
+          return { product: enrichedProduct, quantity: item.quantity };
+        });
 
-      setOrderItems(debtItems);
-      setSelectedCustomerId(debtToSettle.customer_id);
-    } else {
-      const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
-      if (walkIn) {
-        setSelectedCustomerId(walkIn.id);
-        setReservationCustomerId(walkIn.id);
+        setOrderItems(debtItems);
+        setSelectedCustomerId(debtToSettle.customer_id);
+
+      } else {
+        const walkIn = customers.find(c => c.name.toLowerCase() === 'walk-in customer');
+        if (walkIn) {
+          setSelectedCustomerId(walkIn.id);
+          setReservationCustomerId(walkIn.id);
+        }
       }
-    }
+    };
+
+    loadData();
     setLoading(false);
-  }, [customers, debtToSettle, ticketToSettle, setDebtToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin, setTicketToSettle]);
+  }, [customers, debtToSettle, ticketToSettle, setDebtToSettle, setTicketToSettle, products, loggedInUser, productsForCurrentStore, selectedDevice, ownerSelectedStore, isAdmin]);
 
 
   const addReservation = async (reservationData: Omit<Reservation, 'id' | 'created_at' | 'products' | 'businessId'>) => {
@@ -374,7 +380,7 @@ export default function SalesPage() {
             : item
         );
       }
-      return [...prevItems, { product, quantity: 1 }];
+      return [...prevItems, { product, quantity: 1, fulfilled: false }];
     });
   };
 
@@ -501,6 +507,7 @@ export default function SalesPage() {
                 name: item.product.name,
                 quantity: item.quantity,
                 price: item.product.price,
+                fulfilled: false,
             }));
 
             if (debtToSettle) {
@@ -529,6 +536,7 @@ export default function SalesPage() {
                   employee_id: loggedInUser?.id || null,
                   pos_device_id: currentPosDeviceId,
                   status: 'Fulfilled' as const,
+                  fulfillment_status: 'Unfulfilled' as const,
                   customers: customers.find(c => c.id === (creditInfo ? creditInfo.customerId : selectedCustomerId)) || null,
                   users: { name: loggedInUser?.name || null },
                   pos_devices: selectedDevice ? { store_id: selectedDevice.store_id } : null,
@@ -537,16 +545,15 @@ export default function SalesPage() {
               await setSales(prev => [...prev, newSale!]);
             
                if (creditInfo && loggedInUser?.businessId) {
-                 const q = query(
-                    collection(db, "sales"),
-                    where("id", "==", newSale.id),
-                    where("businessId", "==", loggedInUser.businessId)
-                );
+                const q = query(collection(db, "sales"), where("id", "==", newSale.id));
                 const querySnapshot = await getDocs(q);
-
-                if (querySnapshot.docs.length === 0) {
-                    await addDoc(collection(db, 'sales'), { ...newSale });
-                }
+                 if (querySnapshot.empty) {
+                     const debtQuery = query(collection(db, "debts"), where("sale_id", "==", newSale.id));
+                     const debtSnapshot = await getDocs(debtQuery);
+                     if (debtSnapshot.empty) {
+                        await addDoc(collection(db, 'sales'), { ...newSale });
+                     }
+                 }
               }
 
               if (isCheckingIn) {
@@ -665,7 +672,7 @@ export default function SalesPage() {
       return;
     }
   
-    const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price }));
+    const saleItems: SaleItem[] = orderItems.map(item => ({ id: item.product.id, name: item.product.name, quantity: item.quantity, price: item.product.price, fulfilled: false }));
     
     try {
         const ticketPayload: Partial<OpenTicket> = {
@@ -675,6 +682,7 @@ export default function SalesPage() {
             customer_id: selectedCustomerId,
             order_number: activeTicket?.order_number || generateUniqueOrderNumber(),
             businessId: loggedInUser.businessId,
+            fulfillment_status: 'Unfulfilled',
         };
         
         if (activeTicket) {

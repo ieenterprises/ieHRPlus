@@ -1,5 +1,4 @@
 
-
 import type { AnyPermission } from "./permissions";
 
 export type Business = {
@@ -36,11 +35,7 @@ export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 
   users: Pick<User, 'name'> | null;
   pos_devices: { store_id: string } | null;
   businessId: string;
-};
-export type Debt = Database['public']['Tables']['debts']['Row'] & {
-  sales: { order_number: number | null } | null;
-  customers: { name: string | null } | null;
-  businessId: string;
+  fulfillment_status?: 'Unfulfilled' | 'Pending' | 'Fulfilled';
 };
 export type Reservation = Omit<Database['public']['Tables']['reservations']['Row'], 'id'> & {
   id?: string;
@@ -53,6 +48,7 @@ export type OpenTicket = Database['public']['Tables']['open_tickets']['Row'] & {
   users: { name: string | null } | null;
   customers: { name: string | null } | null;
   businessId: string;
+  fulfillment_status?: 'Unfulfilled' | 'Pending' | 'Fulfilled';
 };
 export type StoreType = Database['public']['Tables']['stores']['Row'] & { businessId: string };
 export type PosDeviceType = Database['public']['Tables']['pos_devices']['Row'] & { businessId: string };
@@ -91,6 +87,7 @@ export type SaleItem = {
   name: string;
   quantity: number;
   price: number;
+  fulfilled?: boolean;
 }
 
 export type Role = {
@@ -177,48 +174,6 @@ export type Database = {
           phone?: string | null
         }
         Relationships: []
-      }
-      debts: {
-        Row: {
-          amount: number
-          created_at: string | null
-          customer_id: string | null
-          id: string
-          sale_id: string | null
-          status: string
-        }
-        Insert: {
-          amount: number
-          created_at?: string | null
-          customer_id?: string | null
-          id?: string
-          sale_id?: string | null
-          status: string
-        }
-        Update: {
-          amount?: number
-          created_at?: string | null
-          customer_id?: string | null
-          id?: string
-          sale_id?: string | null
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "debts_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "debts_sale_id_fkey"
-            columns: ["sale_id"]
-            isOneToOne: false
-            referencedRelation: "sales"
-            referencedColumns: ["id"]
-          }
-        ]
       }
       open_tickets: {
         Row: {

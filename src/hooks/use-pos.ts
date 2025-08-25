@@ -16,6 +16,7 @@ type OpenTicketWithRelations = OpenTicket & {
 type PosContextType = {
   openTickets: OpenTicketWithRelations[];
   saveTicket: (ticket: Partial<OpenTicket>) => Promise<OpenTicket | null>;
+  updateTicket: (ticket: OpenTicket) => Promise<void>;
   deleteTicket: (ticketId: string) => void;
   reservationMode: boolean;
   setReservationMode: (mode: boolean) => void;
@@ -67,6 +68,23 @@ export function PosProvider({ children }: { children: ReactNode }) {
       }
   };
   
+  const updateTicket = async (ticketData: OpenTicket) => {
+    // Optimistic UI update first
+    setOpenTicketsData(prev =>
+      prev.map(t => (t.id === ticketData.id ? ticketData : t))
+    );
+    // Then update in the background
+    try {
+      if (ticketData.id) {
+        const ticketRef = doc(db, 'open_tickets', ticketData.id);
+        await updateDoc(ticketRef, ticketData);
+      }
+    } catch (error) {
+      console.error("Error updating ticket in DB:", error);
+      // You might want to add error handling to revert the optimistic update
+    }
+  };
+
   const deleteTicket = (ticketId: string) => {
     // This is now purely an optimistic UI update.
     // The background DB operation is handled in the sales page.
@@ -74,7 +92,7 @@ export function PosProvider({ children }: { children: ReactNode }) {
   };
   
   return createElement(PosContext.Provider, {
-    value: { openTickets, saveTicket, deleteTicket, reservationMode, setReservationMode, ticketToSettle, setTicketToSettle }
+    value: { openTickets, saveTicket, updateTicket, deleteTicket, reservationMode, setReservationMode, ticketToSettle, setTicketToSettle }
   }, children);
 }
 

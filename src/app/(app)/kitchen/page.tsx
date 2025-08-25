@@ -26,7 +26,7 @@ import { type Sale, type OpenTicket, type SaleItem } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar as CalendarIcon, Printer, Trash2, Coins, Download } from "lucide-react";
+import { Calendar as CalendarIcon, Printer, Coins, Download, Eye } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -48,6 +48,9 @@ import { useSettings } from "@/hooks/use-settings";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -63,9 +66,22 @@ const getPaymentBadgeVariant = (method: string) => {
     }
 }
 
+const getStatusBadgeVariant = (status: Sale['fulfillment_status']) => {
+    switch (status) {
+        case 'Fulfilled':
+            return 'default';
+        case 'Pending':
+            return 'secondary';
+        case 'Unfulfilled':
+            return 'destructive';
+        default:
+            return 'outline';
+    }
+}
+
 export default function KitchenPage() {
-  const { sales, products, categories, users, loggedInUser, voidSale, setPrintableData, currency, setDebtToSettle, isPrintModalOpen, setIsPrintModalOpen } = useSettings();
-  const { openTickets, setTicketToSettle } = usePos();
+  const { sales, setSales, products, categories, users, loggedInUser, setPrintableData, currency, setDebtToSettle, isPrintModalOpen, setIsPrintModalOpen } = useSettings();
+  const { openTickets, setTicketToSettle, updateTicket } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -85,6 +101,10 @@ export default function KitchenPage() {
   const defaultTab = searchParams.get('tab') || "receipts";
   const [activeTab, setActiveTab] = useState(defaultTab);
   
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewingOrder, setPreviewingOrder] = useState<(Sale | OpenTicket) & { type: 'receipt' | 'ticket' } | null>(null);
+  const [previewItems, setPreviewItems] = useState<SaleItem[]>([]);
+
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
     setPrintableData({ ...data, type });
     setIsPrintModalOpen(true);
@@ -221,11 +241,6 @@ export default function KitchenPage() {
   }, [openTickets, filters, dateRange, products, categories]);
   
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
-
-  const handleMoveReceiptToVoid = (saleId: string) => {
-    voidSale(saleId, loggedInUser?.id || 'unknown');
-    toast({ title: "Receipt Moved", description: `The receipt has been moved to the voided logs.` });
-  };
   
   const handleLoadTicket = (ticket: OpenTicket) => {
     setTicketToSettle(ticket);
@@ -251,6 +266,7 @@ export default function KitchenPage() {
         "Items": sale.items.map(item => `${item.name} (x${item.quantity})`).join(', '),
         "Total": sale.total.toFixed(2),
         "Payment Methods": sale.payment_methods.join(', '),
+        "Fulfillment Status": sale.fulfillment_status || 'Unfulfilled',
       }));
     } else { // Open Tickets
       fileName = `open_tickets_${new Date().toISOString().split('T')[0]}.csv`;
@@ -260,6 +276,7 @@ export default function KitchenPage() {
         "Employee": ticket.users?.name ?? 'N/A',
         "Items": (ticket.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', '),
         "Total": ticket.total.toFixed(2),
+        "Fulfillment Status": ticket.fulfillment_status || 'Unfulfilled',
       }));
     }
 
@@ -282,6 +299,62 @@ export default function KitchenPage() {
     link.click();
     document.body.removeChild(link);
     toast({ title: "Export Complete", description: `Your ${activeTab} data has been downloaded.` });
+  };
+
+  const openPreviewModal = (order: Sale | OpenTicket, type: 'receipt' | 'ticket') => {
+    setPreviewingOrder({ ...order, type });
+    setPreviewItems(order.items.map(item => ({ ...item }))); // Create a mutable copy
+    setIsPreviewOpen(true);
+  };
+  
+  const handleItemFulfillmentToggle = (itemId: string, checked: boolean) => {
+    setPreviewItems(currentItems =>
+      currentItems.map(item => (item.id === itemId ? { ...item, fulfilled: checked } : item))
+    );
+  };
+
+  const handleMarkAllFulfilled = () => {
+    setPreviewItems(currentItems =>
+      currentItems.map(item => ({ ...item, fulfilled: true }))
+    );
+  };
+
+  const calculateFulfillmentStatus = (items: SaleItem[]): Sale['fulfillment_status'] => {
+    const totalItems = items.length;
+    const fulfilledItems = items.filter(item => item.fulfilled).length;
+
+    if (fulfilledItems === 0) return 'Unfulfilled';
+    if (fulfilledItems === totalItems) return 'Fulfilled';
+    return 'Pending';
+  };
+
+  const handleSaveFulfillment = async () => {
+    if (!previewingOrder) return;
+    
+    const newStatus = calculateFulfillmentStatus(previewItems);
+    
+    if (previewingOrder.type === 'receipt') {
+      await setSales(prevSales =>
+        prevSales.map(sale =>
+          sale.id === previewingOrder.id
+            ? { ...sale, items: previewItems, fulfillment_status: newStatus }
+            : sale
+        )
+      );
+    } else {
+      const updatedTicket: OpenTicket = {
+        ...previewingOrder,
+        items: previewItems,
+        fulfillment_status: newStatus
+      };
+      await updateTicket(updatedTicket);
+    }
+    
+    toast({
+      title: "Order Updated",
+      description: `Order #${previewingOrder.order_number} status is now ${newStatus}.`
+    });
+    setIsPreviewOpen(false);
   };
 
   return (
@@ -353,12 +426,13 @@ export default function KitchenPage() {
                                   <TableHead>Date</TableHead>
                                   <TableHead>Items</TableHead>
                                   <TableHead className="text-right">Total</TableHead>
+                                  <TableHead>Status</TableHead>
                                   <TableHead className="text-right">Actions</TableHead>
                               </TableRow>
                           </TableHeader>
                           <TableBody>
                              {loading ? (
-                                  <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                  <TableRow><TableCell colSpan={7} className="h-24 text-center">Loading...</TableCell></TableRow>
                               ) : filteredTickets.length > 0 ? (
                                   filteredTickets.map(ticket => {
                                       const canLoadTicket = loggedInUser?.id === ticket.employee_id || hasPermission('MANAGE_OPEN_TICKETS');
@@ -369,8 +443,14 @@ export default function KitchenPage() {
                                               <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
                                               <TableCell>{(ticket.items as any[]).map(item => `${item.name} (x${item.quantity})`).join(', ')}</TableCell>
                                               <TableCell className="text-right">{currency}{ticket.total.toFixed(2)}</TableCell>
+                                              <TableCell>
+                                                <Badge variant={getStatusBadgeVariant(ticket.fulfillment_status)}>{ticket.fulfillment_status || 'Unfulfilled'}</Badge>
+                                              </TableCell>
                                               <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
+                                                  <Button variant="outline" size="sm" onClick={() => openPreviewModal(ticket, 'ticket')}>
+                                                    <Eye className="mr-2 h-4 w-4" /> Preview
+                                                  </Button>
                                                   <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as OpenTicket)} disabled={!canLoadTicket}>
                                                     Load
                                                   </Button>
@@ -384,7 +464,7 @@ export default function KitchenPage() {
                                   })
                               ) : (
                                   <TableRow>
-                                      <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
+                                      <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
                                           No open tickets found for the selected filters.
                                       </TableCell>
                                   </TableRow>
@@ -499,13 +579,14 @@ export default function KitchenPage() {
                           <TableHead>Items</TableHead>
                           <TableHead>Category</TableHead>
                           <TableHead className="text-right">Total</TableHead>
+                           <TableHead>Status</TableHead>
                           <TableHead className="text-center">Payment</TableHead>
                           <TableHead>Actions</TableHead>
                       </TableRow>
                       </TableHeader>
                       <TableBody>
                       {loading ? (
-                          <TableRow><TableCell colSpan={9} className="h-24 text-center">Loading...</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={10} className="h-24 text-center">Loading...</TableCell></TableRow>
                       ) : filteredReceipts.length > 0 ? (
                           filteredReceipts.map((sale) => {
                           const categoriesForDisplay = getItemCategoryNames(sale.displayItems);
@@ -528,6 +609,9 @@ export default function KitchenPage() {
                                   </div>
                               </TableCell>
                               <TableCell className="text-right">{currency}{sale.displayTotal.toFixed(2)}</TableCell>
+                              <TableCell>
+                                <Badge variant={getStatusBadgeVariant(sale.fulfillment_status)}>{sale.fulfillment_status || 'Unfulfilled'}</Badge>
+                              </TableCell>
                               <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-1">
                                   {sale.payment_methods.map((method: string) => (
@@ -539,13 +623,16 @@ export default function KitchenPage() {
                               </TableCell>
                               <TableCell>
                                   <div className="flex items-center gap-2">
+                                      <Button variant="outline" size="sm" onClick={() => openPreviewModal(sale, 'receipt')}>
+                                          <Eye className="mr-2 h-4 w-4" /> Preview
+                                      </Button>
                                       {isCreditSale && (
                                         <Tooltip>
                                           <TooltipTrigger asChild>
                                             <div className="inline-block">
                                               <Button variant="outline" size="sm" onClick={() => handleSettleDebtFromReceipts(sale)} disabled={!isOnline}>
                                                   <Coins className="mr-2 h-4 w-4" />
-                                                  Settle Debt
+                                                  Settle
                                               </Button>
                                             </div>
                                           </TooltipTrigger>
@@ -555,18 +642,13 @@ export default function KitchenPage() {
                                       <Button variant="outline" size="sm" onClick={() => onPrint(sale, 'receipt')}>
                                           <Printer className="mr-2 h-4 w-4" /> Print
                                       </Button>
-                                      {hasPermission('CANCEL_RECEIPTS') && (
-                                          <Button variant="destructive" size="sm" onClick={() => handleMoveReceiptToVoid(sale.id)}>
-                                              Move to Void
-                                          </Button>
-                                      )}
                                   </div>
                               </TableCell>
                           </TableRow>
                           )})
                       ) : (
                           <TableRow>
-                              <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
+                              <TableCell colSpan={10} className="text-center text-muted-foreground h-24">
                                   No receipts found for the selected filters.
                               </TableCell>
                           </TableRow>
@@ -578,6 +660,50 @@ export default function KitchenPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Order Preview #{previewingOrder?.order_number}</DialogTitle>
+            <DialogDescription>
+              Mark items as fulfilled for the kitchen.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-4">
+              {previewItems.map(item => (
+                <div key={item.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`item-${item.id}`}
+                    checked={item.fulfilled}
+                    onCheckedChange={(checked) => handleItemFulfillmentToggle(item.id, checked as boolean)}
+                  />
+                  <Label
+                    htmlFor={`item-${item.id}`}
+                    className={cn(
+                      "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1",
+                      item.fulfilled && "line-through text-muted-foreground"
+                    )}
+                  >
+                    {item.name} (x{item.quantity})
+                  </Label>
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" onClick={handleMarkAllFulfilled} className="w-full">
+                Mark All as Fulfilled
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setIsPreviewOpen(false)}>
+              Close
+            </Button>
+            <Button type="button" onClick={handleSaveFulfillment}>
+              Save Status
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }
