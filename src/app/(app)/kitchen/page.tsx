@@ -80,6 +80,12 @@ const getStatusBadgeVariant = (status: Sale['fulfillment_status']) => {
     }
 }
 
+const generateUniqueOrderNumber = () => {
+  const timestamp = Date.now();
+  const randomSuffix = Math.floor(Math.random() * 1000);
+  return parseInt(`${timestamp.toString().slice(-6)}${randomSuffix.toString().padStart(3, '0')}`);
+};
+
 export default function KitchenPage() {
   const { sales, setSales, products, categories, users, loggedInUser, setPrintableData, currency, isPrintModalOpen, setIsPrintModalOpen, voidSale } = useSettings();
   const { openTickets, saveTicket, deleteTicket, setTicketToSettle, updateTicket } = usePos();
@@ -452,6 +458,7 @@ export default function KitchenPage() {
         
         const newTotal = mergedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         const allPaymentMethods = [...new Set(receiptsToMerge.flatMap(s => s.payment_methods))];
+        const newId = `sale_${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}`;
 
         const newSale: Omit<Sale, 'id'> = {
             ...primaryReceipt,
@@ -459,10 +466,10 @@ export default function KitchenPage() {
             total: newTotal,
             payment_methods: allPaymentMethods,
             created_at: new Date().toISOString(),
-            order_number: primaryReceipt.order_number, // Or generate new
+            order_number: generateUniqueOrderNumber(),
         };
-        // This setter will create a new document in Firestore
-        await setSales(prev => [...prev, newSale as Sale]);
+        
+        await setSales(prev => [...prev, { ...newSale, id: newId } as Sale]);
         
         // Void old receipts
         for (const receipt of receiptsToMerge) {
@@ -872,5 +879,7 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
+
+    
 
     
