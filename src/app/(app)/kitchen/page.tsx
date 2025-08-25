@@ -411,21 +411,11 @@ export default function KitchenPage() {
         if (!primaryTicket) return;
 
         const allItems = ticketsToMerge.flatMap(t => t.items as SaleItem[]);
-        const mergedItems = allItems.reduce((acc, item) => {
-            const existing = acc.find(i => i.id === item.id);
-            if (existing) {
-                existing.quantity += item.quantity;
-            } else {
-                acc.push({ ...item });
-            }
-            return acc;
-        }, [] as SaleItem[]);
-
-        const newTotal = mergedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const newTotal = ticketsToMerge.reduce((sum, ticket) => sum + ticket.total, 0);
         
         const newTicket: Partial<OpenTicket> = {
             ...primaryTicket,
-            items: mergedItems,
+            items: allItems,
             total: newTotal,
             created_at: new Date().toISOString(),
         };
@@ -446,23 +436,13 @@ export default function KitchenPage() {
         if (!primaryReceipt) return;
         
         const allItems = receiptsToMerge.flatMap(s => s.items);
-        const mergedItems = allItems.reduce((acc, item) => {
-            const existing = acc.find(i => i.id === item.id);
-            if (existing) {
-                existing.quantity += item.quantity;
-            } else {
-                acc.push({ ...item });
-            }
-            return acc;
-        }, [] as SaleItem[]);
-        
-        const newTotal = mergedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const newTotal = receiptsToMerge.reduce((sum, receipt) => sum + receipt.total, 0);
         const allPaymentMethods = [...new Set(receiptsToMerge.flatMap(s => s.payment_methods))];
         const newId = `sale_${new Date().getTime()}_${Math.random().toString(36).substring(2, 9)}`;
 
         const newSale: Omit<Sale, 'id'> = {
             ...primaryReceipt,
-            items: mergedItems,
+            items: allItems,
             total: newTotal,
             payment_methods: allPaymentMethods,
             created_at: new Date().toISOString(),
