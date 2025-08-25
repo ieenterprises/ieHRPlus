@@ -26,7 +26,7 @@ import { type Sale, type OpenTicket, type SaleItem } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar as CalendarIcon, Printer, Coins, Download, Eye } from "lucide-react";
+import { Calendar as CalendarIcon, Printer, Coins, Download, Eye, LogIn, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -80,7 +80,7 @@ const getStatusBadgeVariant = (status: Sale['fulfillment_status']) => {
 }
 
 export default function KitchenPage() {
-  const { sales, setSales, products, categories, users, loggedInUser, setPrintableData, currency, setDebtToSettle, isPrintModalOpen, setIsPrintModalOpen } = useSettings();
+  const { sales, setSales, products, categories, users, loggedInUser, setPrintableData, currency, setDebtToSettle, isPrintModalOpen, setIsPrintModalOpen, voidSale } = useSettings();
   const { openTickets, setTicketToSettle, updateTicket } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -250,6 +250,20 @@ export default function KitchenPage() {
   const handleSettleDebtFromReceipts = (sale: Sale) => {
     setDebtToSettle(sale);
     router.push("/sales");
+  };
+  
+  const handleMoveToVoid = async (sale: Sale) => {
+    if (!loggedInUser?.id) {
+        toast({ title: "Authentication Error", description: "You must be logged in to void a sale.", variant: "destructive" });
+        return;
+    }
+
+    try {
+        await voidSale(sale.id, loggedInUser.id);
+        toast({ title: "Sale Voided", description: `Order #${sale.order_number} has been moved to voided logs.` });
+    } catch (error: any) {
+        toast({ title: "Error", description: `Failed to void sale: ${error.message}`, variant: "destructive" });
+    }
   };
 
   const handleExport = () => {
@@ -446,17 +460,11 @@ export default function KitchenPage() {
                                               <TableCell>
                                                 <Badge variant={getStatusBadgeVariant(ticket.fulfillment_status)}>{ticket.fulfillment_status || 'Unfulfilled'}</Badge>
                                               </TableCell>
-                                              <TableCell className="text-right">
+                                              <TableCell>
                                                 <div className="flex justify-end gap-2">
-                                                  <Button variant="outline" size="sm" onClick={() => openPreviewModal(ticket, 'ticket')}>
-                                                    <Eye className="mr-2 h-4 w-4" /> Preview
-                                                  </Button>
-                                                  <Button variant="outline" size="sm" onClick={() => handleLoadTicket(ticket as OpenTicket)} disabled={!canLoadTicket}>
-                                                    Load
-                                                  </Button>
-                                                  <Button variant="outline" size="sm" onClick={() => onPrint(ticket, 'ticket')}>
-                                                    <Printer className="mr-2 h-4 w-4" /> Print
-                                                  </Button>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(ticket, 'ticket')}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Preview Order</p></TooltipContent></Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => handleLoadTicket(ticket as OpenTicket)} disabled={!canLoadTicket}><LogIn className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Load Ticket</p></TooltipContent></Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(ticket, 'ticket')}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Print</p></TooltipContent></Tooltip>
                                                 </div>
                                               </TableCell>
                                           </TableRow>
@@ -581,7 +589,7 @@ export default function KitchenPage() {
                           <TableHead className="text-right">Total</TableHead>
                            <TableHead>Status</TableHead>
                           <TableHead className="text-center">Payment</TableHead>
-                          <TableHead>Actions</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -622,26 +630,24 @@ export default function KitchenPage() {
                               </div>
                               </TableCell>
                               <TableCell>
-                                  <div className="flex items-center gap-2">
-                                      <Button variant="outline" size="sm" onClick={() => openPreviewModal(sale, 'receipt')}>
-                                          <Eye className="mr-2 h-4 w-4" /> Preview
-                                      </Button>
-                                      {isCreditSale && (
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <div className="inline-block">
-                                              <Button variant="outline" size="sm" onClick={() => handleSettleDebtFromReceipts(sale)} disabled={!isOnline}>
-                                                  <Coins className="mr-2 h-4 w-4" />
-                                                  Settle
-                                              </Button>
-                                            </div>
-                                          </TooltipTrigger>
-                                          {!isOnline && <TooltipContent><p>Connect to the internet to settle debts.</p></TooltipContent>}
-                                        </Tooltip>
-                                      )}
-                                      <Button variant="outline" size="sm" onClick={() => onPrint(sale, 'receipt')}>
-                                          <Printer className="mr-2 h-4 w-4" /> Print
-                                      </Button>
+                                  <div className="flex items-center justify-end gap-2">
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(sale, 'receipt')}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Preview Order</p></TooltipContent></Tooltip>
+                                    {isCreditSale && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                        <div className="inline-block">
+                                            <Button variant="outline" size="icon" onClick={() => handleSettleDebtFromReceipts(sale)} disabled={!isOnline}>
+                                                <Coins className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                        </TooltipTrigger>
+                                        {!isOnline ? <TooltipContent><p>Connect to the internet to settle debts.</p></TooltipContent> : <TooltipContent><p>Settle Debt</p></TooltipContent>}
+                                    </Tooltip>
+                                    )}
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Print</p></TooltipContent></Tooltip>
+                                    {hasPermission('CANCEL_RECEIPTS') && (
+                                        <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" onClick={() => handleMoveToVoid(sale)}><Trash2 className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Move to Void</p></TooltipContent></Tooltip>
+                                    )}
                                   </div>
                               </TableCell>
                           </TableRow>
@@ -707,5 +713,3 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
-
-    
