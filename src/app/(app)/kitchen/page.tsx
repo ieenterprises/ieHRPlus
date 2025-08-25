@@ -879,7 +879,3 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
-
-    
-
-    
