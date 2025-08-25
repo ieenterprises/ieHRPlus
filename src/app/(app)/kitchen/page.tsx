@@ -26,7 +26,7 @@ import { type Sale, type OpenTicket, type SaleItem } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar as CalendarIcon, Printer, Coins, Download, Eye, LogIn, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, Printer, Coins, Download, Eye, LogIn, Trash2, GitMerge } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -51,6 +51,7 @@ import { PrintPreviewDialog } from "@/components/print-preview-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -81,7 +82,7 @@ const getStatusBadgeVariant = (status: Sale['fulfillment_status']) => {
 
 export default function KitchenPage() {
   const { sales, setSales, products, categories, users, loggedInUser, setPrintableData, currency, isPrintModalOpen, setIsPrintModalOpen, voidSale } = useSettings();
-  const { openTickets, setTicketToSettle, updateTicket } = usePos();
+  const { openTickets, saveTicket, deleteTicket, setTicketToSettle, updateTicket } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -104,6 +105,11 @@ export default function KitchenPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewingOrder, setPreviewingOrder] = useState<(Sale | OpenTicket) & { type: 'receipt' | 'ticket' } | null>(null);
   const [previewItems, setPreviewItems] = useState<SaleItem[]>([]);
+  
+  const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
+  const [selectedReceipts, setSelectedReceipts] = useState<Set<string>>(new Set());
+  const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+  const [primaryMergeId, setPrimaryMergeId] = useState<string | null>(null);
 
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
     setPrintableData({ ...data, type });
@@ -248,8 +254,6 @@ export default function KitchenPage() {
   };
 
   const handleSettleDebtFromReceipts = (sale: Sale) => {
-    // The use-settings hook will now pick this up and preload it on the sales page.
-    const debtSale: Sale = { ...sale, payment_methods: ['Credit'] };
     // This now correctly sets the sale object for debt settlement
     router.push(`/sales?settleDebt=${sale.id}`);
   };
@@ -378,6 +382,104 @@ export default function KitchenPage() {
     });
     setIsPreviewOpen(false);
   };
+  
+  const handleMergeSelection = (id: string, isSelected: boolean, type: 'ticket' | 'receipt') => {
+    const setter = type === 'ticket' ? setSelectedTickets : setSelectedReceipts;
+    setter(prev => {
+        const newSet = new Set(prev);
+        if (isSelected) {
+            newSet.add(id);
+        } else {
+            newSet.delete(id);
+        }
+        return newSet;
+    });
+  };
+
+  const handleMerge = async () => {
+    if (!primaryMergeId || !loggedInUser?.id) return;
+
+    if (activeTab === 'open_tickets') {
+        const ticketsToMerge = openTickets.filter(t => selectedTickets.has(t.id));
+        const primaryTicket = ticketsToMerge.find(t => t.id === primaryMergeId);
+        if (!primaryTicket) return;
+
+        const allItems = ticketsToMerge.flatMap(t => t.items as SaleItem[]);
+        const mergedItems = allItems.reduce((acc, item) => {
+            const existing = acc.find(i => i.id === item.id);
+            if (existing) {
+                existing.quantity += item.quantity;
+            } else {
+                acc.push({ ...item });
+            }
+            return acc;
+        }, [] as SaleItem[]);
+
+        const newTotal = mergedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        
+        const newTicket: Partial<OpenTicket> = {
+            ...primaryTicket,
+            items: mergedItems,
+            total: newTotal,
+            created_at: new Date().toISOString(),
+        };
+        delete newTicket.id; // Create a new ticket
+
+        const savedTicket = await saveTicket(newTicket);
+        if (savedTicket) {
+            // Delete old tickets
+            for (const ticket of ticketsToMerge) {
+                await deleteTicket(ticket.id);
+            }
+        }
+        toast({ title: "Tickets Merged", description: `Created new ticket #${savedTicket?.order_number}`});
+
+    } else { // Receipts
+        const receiptsToMerge = sales.filter(s => selectedReceipts.has(s.id));
+        const primaryReceipt = receiptsToMerge.find(s => s.id === primaryMergeId);
+        if (!primaryReceipt) return;
+        
+        const allItems = receiptsToMerge.flatMap(s => s.items);
+        const mergedItems = allItems.reduce((acc, item) => {
+            const existing = acc.find(i => i.id === item.id);
+            if (existing) {
+                existing.quantity += item.quantity;
+            } else {
+                acc.push({ ...item });
+            }
+            return acc;
+        }, [] as SaleItem[]);
+        
+        const newTotal = mergedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const allPaymentMethods = [...new Set(receiptsToMerge.flatMap(s => s.payment_methods))];
+
+        const newSale: Omit<Sale, 'id'> = {
+            ...primaryReceipt,
+            items: mergedItems,
+            total: newTotal,
+            payment_methods: allPaymentMethods,
+            created_at: new Date().toISOString(),
+            order_number: primaryReceipt.order_number, // Or generate new
+        };
+        // This setter will create a new document in Firestore
+        await setSales(prev => [...prev, newSale as Sale]);
+        
+        // Void old receipts
+        for (const receipt of receiptsToMerge) {
+            await voidSale(receipt.id, loggedInUser.id);
+        }
+        toast({ title: "Receipts Merged", description: `Created new receipt #${newSale.order_number} and voided originals.` });
+    }
+    
+    setIsMergeDialogOpen(false);
+    setSelectedTickets(new Set());
+    setSelectedReceipts(new Set());
+    setPrimaryMergeId(null);
+  };
+  
+  const mergeCandidates = activeTab === 'open_tickets'
+    ? openTickets.filter(t => selectedTickets.has(t.id))
+    : sales.filter(s => selectedReceipts.has(s.id));
 
   return (
     <TooltipProvider>
@@ -388,12 +490,23 @@ export default function KitchenPage() {
             title="Orders"
             description="View open tickets and completed receipts."
           />
-           <Button onClick={handleExport} variant="outline" size="sm" className="self-end">
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
+           <div className="flex items-center gap-2 self-end">
+                <Button 
+                    onClick={() => setIsMergeDialogOpen(true)} 
+                    variant="outline" 
+                    size="sm"
+                    disabled={(activeTab === 'open_tickets' && selectedTickets.size < 2) || (activeTab === 'receipts' && selectedReceipts.size < 2)}
+                >
+                    <GitMerge className="mr-2 h-4 w-4" />
+                    Merge
+                </Button>
+                <Button onClick={handleExport} variant="outline" size="sm">
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                </Button>
+            </div>
         </div>
-        <Tabs defaultValue={defaultTab} onValueChange={setActiveTab}>
+        <Tabs defaultValue={defaultTab} onValueChange={(tab) => { setActiveTab(tab); setSelectedReceipts(new Set()); setSelectedTickets(new Set()); }}>
           <TabsList>
               <TabsTrigger value="open_tickets">Open Tickets</TabsTrigger>
               <TabsTrigger value="receipts">Receipts</TabsTrigger>
@@ -443,6 +556,7 @@ export default function KitchenPage() {
                       <Table>
                           <TableHeader>
                               <TableRow>
+                                  <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredTickets.map(t => t.id)); setSelectedTickets(checked ? allIds : new Set()); }} checked={selectedTickets.size > 0 && selectedTickets.size === filteredTickets.length} /></TableHead>
                                   <TableHead>Order #</TableHead>
                                   <TableHead>Employee</TableHead>
                                   <TableHead>Date</TableHead>
@@ -454,12 +568,13 @@ export default function KitchenPage() {
                           </TableHeader>
                           <TableBody>
                              {loading ? (
-                                  <TableRow><TableCell colSpan={7} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                  <TableRow><TableCell colSpan={8} className="h-24 text-center">Loading...</TableCell></TableRow>
                               ) : filteredTickets.length > 0 ? (
                                   filteredTickets.map(ticket => {
                                       const canLoadTicket = loggedInUser?.id === ticket.employee_id || hasPermission('MANAGE_OPEN_TICKETS');
                                       return (
                                           <TableRow key={ticket.id}>
+                                              <TableCell><Checkbox checked={selectedTickets.has(ticket.id)} onCheckedChange={(checked) => handleMergeSelection(ticket.id, checked as boolean, 'ticket')} /></TableCell>
                                               <TableCell className="font-medium">#{ticket.order_number}</TableCell>
                                               <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
                                               <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
@@ -480,7 +595,7 @@ export default function KitchenPage() {
                                   })
                               ) : (
                                   <TableRow>
-                                      <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
+                                      <TableCell colSpan={8} className="text-center h-24 text-muted-foreground">
                                           No open tickets found for the selected filters.
                                       </TableCell>
                                   </TableRow>
@@ -588,6 +703,7 @@ export default function KitchenPage() {
                   <Table>
                       <TableHeader>
                       <TableRow>
+                          <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredReceipts.map(r => r.id)); setSelectedReceipts(checked ? allIds : new Set()); }} checked={selectedReceipts.size > 0 && selectedReceipts.size === filteredReceipts.length} /></TableHead>
                           <TableHead>Order #</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead className="hidden sm:table-cell">Customer</TableHead>
@@ -602,7 +718,7 @@ export default function KitchenPage() {
                       </TableHeader>
                       <TableBody>
                       {loading ? (
-                          <TableRow><TableCell colSpan={10} className="h-24 text-center">Loading...</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={11} className="h-24 text-center">Loading...</TableCell></TableRow>
                       ) : filteredReceipts.length > 0 ? (
                           filteredReceipts.map((sale) => {
                           const categoriesForDisplay = getItemCategoryNames(sale.displayItems);
@@ -610,6 +726,7 @@ export default function KitchenPage() {
           
                           return (
                           <TableRow key={sale.id}>
+                              <TableCell><Checkbox checked={selectedReceipts.has(sale.id)} onCheckedChange={(checked) => handleMergeSelection(sale.id, checked as boolean, 'receipt')} /></TableCell>
                               <TableCell className="font-medium">#{sale.order_number}</TableCell>
                               <TableCell>{format(new Date(sale.created_at!), "LLL dd, y HH:mm")}</TableCell>
                               <TableCell className="hidden sm:table-cell">{sale.customers?.name ?? 'Walk-in'}</TableCell>
@@ -662,7 +779,7 @@ export default function KitchenPage() {
                           )})
                       ) : (
                           <TableRow>
-                              <TableCell colSpan={10} className="text-center text-muted-foreground h-24">
+                              <TableCell colSpan={11} className="text-center text-muted-foreground h-24">
                                   No receipts found for the selected filters.
                               </TableCell>
                           </TableRow>
@@ -725,6 +842,35 @@ export default function KitchenPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <Dialog open={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Merge Orders</DialogTitle>
+            <DialogDescription>
+              Select a primary order to inherit details from. All items will be combined.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <RadioGroup onValueChange={setPrimaryMergeId}>
+              {mergeCandidates.map((order: any) => (
+                <div key={order.id} className="flex items-center space-x-2">
+                  <RadioGroupItem value={order.id} id={order.id} />
+                  <Label htmlFor={order.id} className="flex-1">
+                    Order #{order.order_number} ({order.customers?.name || 'Walk-in'}) - {currency}{order.total.toFixed(2)}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsMergeDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleMerge} disabled={!primaryMergeId}>Confirm Merge</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }
+
+    
