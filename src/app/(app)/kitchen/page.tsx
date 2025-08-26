@@ -492,7 +492,7 @@ export default function KitchenPage() {
   const canPerformAction = (orderEmployeeId: string | null): boolean => {
     if (!loggedInUser) return false;
     // Users with permission can perform actions on any order
-    if (hasPermission('VIEW_ALL_RECEIPTS')) {
+    if (hasPermission('MANAGE_OPEN_TICKETS')) {
       return true;
     }
     // Users can perform actions on their own orders
@@ -612,9 +612,9 @@ export default function KitchenPage() {
                                               </TableCell>
                                               <TableCell>
                                                 <div className="flex justify-end gap-2">
-                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(ticket, 'ticket')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Preview Order</p> : <p>Permission denied. You can only preview your own orders.</p>}</TooltipContent></Tooltip>
-                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => handleLoadTicket(ticket as OpenTicket)} disabled={!canLoadTicket}><LogIn className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Load Ticket</p></TooltipContent></Tooltip>
-                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(ticket, 'ticket')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Print</p> : <p>Permission denied. You can only print your own orders.</p>}</TooltipContent></Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(ticket, 'ticket')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Preview Order</p> : <p>Permission denied</p>}</TooltipContent></Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => handleLoadTicket(ticket as OpenTicket)} disabled={!canLoadTicket}><LogIn className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{canLoadTicket ? <p>Load Ticket</p> : <p>Permission denied</p>}</TooltipContent></Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(ticket, 'ticket')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Print</p> : <p>Permission denied</p>}</TooltipContent></Tooltip>
                                                 </div>
                                               </TableCell>
                                           </TableRow>
@@ -784,7 +784,7 @@ export default function KitchenPage() {
                               </TableCell>
                               <TableCell>
                                   <div className="flex items-center justify-end gap-2">
-                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(sale, 'receipt')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Preview Order</p> : <p>Permission denied. You can only preview your own orders.</p>}</TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(sale, 'receipt')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Preview Order</p> : <p>Permission denied.</p>}</TooltipContent></Tooltip>
                                     {isCreditSale && (
                                     <Tooltip>
                                         <TooltipTrigger asChild>
@@ -794,10 +794,10 @@ export default function KitchenPage() {
                                             </Button>
                                         </div>
                                         </TooltipTrigger>
-                                        {!isOnline ? <TooltipContent><p>Connect to the internet to settle debts.</p></TooltipContent> : <TooltipContent>{hasActionPermission ? <p>Settle Debt</p> : <p>Permission denied. You can only settle your own debts.</p>}</TooltipContent>}
+                                        {!isOnline ? <TooltipContent><p>Connect to the internet to settle debts.</p></TooltipContent> : <TooltipContent>{hasActionPermission ? <p>Settle Debt</p> : <p>Permission denied.</p>}</TooltipContent>}
                                     </Tooltip>
                                     )}
-                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Print</p> : <p>Permission denied. You can only print your own orders.</p>}</TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Print</p> : <p>Permission denied.</p>}</TooltipContent></Tooltip>
                                     {hasPermission('CANCEL_RECEIPTS') && (
                                         <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" onClick={() => handleMoveToVoid(sale)}><Trash2 className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Move to Void</p></TooltipContent></Tooltip>
                                     )}
@@ -916,3 +916,5 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
+
+    
