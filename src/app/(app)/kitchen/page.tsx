@@ -125,7 +125,11 @@ export default function KitchenPage() {
   
   useEffect(() => {
     setLoading(false);
-  }, []);
+    const debtSaleId = searchParams.get('debtSaleId');
+    if (debtSaleId) {
+        setFilters(prev => ({...prev, searchTerm: debtSaleId}));
+    }
+  }, [searchParams]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -160,7 +164,8 @@ export default function KitchenPage() {
         sale.order_number.toString().includes(searchTermLower) ||
         (sale.customers?.name ?? 'Walk-in').toLowerCase().includes(searchTermLower) ||
         (sale.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
-        sale.items.some((item) => item.name.toLowerCase().includes(searchTermLower));
+        sale.items.some((item) => item.name.toLowerCase().includes(searchTermLower)) ||
+        sale.id.includes(filters.searchTerm); // Search by sale ID for debt settlement
       
       const saleCategories = getItemCategoryNames(sale.items);
       const categoryMatch = filters.category === "all" || saleCategories.includes(filters.category);
@@ -261,7 +266,6 @@ export default function KitchenPage() {
   };
 
   const handleSettleDebtFromReceipts = (sale: Sale) => {
-    // This now correctly sets the sale object for debt settlement
     router.push(`/sales?settleDebt=${sale.id}`);
   };
   
@@ -889,4 +893,3 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
-

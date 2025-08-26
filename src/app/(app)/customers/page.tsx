@@ -150,7 +150,7 @@ export default function CustomersPage() {
   }
   
   const handleSettleDebt = (debt: Debt) => {
-    router.push(`/sales?settleDebt=${debt.sale_id}`);
+    router.push(`/kitchen?tab=receipts&debtSaleId=${debt.sale_id}`);
   };
 
   const handleExport = () => {
@@ -180,7 +180,7 @@ export default function CustomersPage() {
           description="Manage your customer database."
         />
         <div className="flex items-center gap-2 self-end">
-            <Button onClick={handleExport} variant="outline" size="sm">
+            <Button onClick={handleExport} variant="outline" size="sm" disabled={!isOnline}>
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
