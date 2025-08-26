@@ -129,7 +129,18 @@ export default function KitchenPage() {
     if (debtSaleId) {
         setFilters(prev => ({...prev, searchTerm: debtSaleId}));
     }
-  }, [searchParams]);
+
+    const customerName = searchParams.get('customerName');
+    const paymentMethod = searchParams.get('paymentMethod');
+    if (customerName && paymentMethod) {
+        setFilters(prev => ({
+            ...prev,
+            searchTerm: customerName,
+            paymentMethod: paymentMethod,
+        }));
+        router.replace('/kitchen?tab=receipts', undefined);
+    }
+  }, [searchParams, router]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));

@@ -151,8 +151,12 @@ export default function CustomersPage() {
     }
   }
   
-  const handleSettleDebt = (debt: Debt) => {
-    router.push(`/kitchen?tab=receipts&debtSaleId=${debt.sale_id}`);
+  const handleSettleDebt = (customer: Customer) => {
+    const params = new URLSearchParams();
+    params.set('tab', 'receipts');
+    params.set('paymentMethod', 'Credit');
+    params.set('customerName', customer.name);
+    router.push(`/kitchen?${params.toString()}`);
   };
 
   const handleExport = () => {
@@ -255,7 +259,7 @@ export default function CustomersPage() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                 {outstandingDebt && (
-                                  <DropdownMenuItem onClick={() => handleSettleDebt(outstandingDebt)}>
+                                  <DropdownMenuItem onClick={() => handleSettleDebt(customer)}>
                                     <Coins className="mr-2 h-4 w-4" /> In Debt
                                   </DropdownMenuItem>
                                 )}
@@ -322,5 +326,3 @@ export default function CustomersPage() {
     </div>
   );
 }
-
-    
