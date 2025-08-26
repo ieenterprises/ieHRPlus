@@ -20,8 +20,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { Customer } from "@/lib/types";
-import { MoreHorizontal, PlusCircle, Trash2, Edit, Download, Search, Loader2 } from "lucide-react";
+import type { Customer, Debt } from "@/lib/types";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Download, Search, Loader2, Coins } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,6 +60,18 @@ export default function CustomersPage() {
   const router = useRouter();
 
   const canManageCustomers = useMemo(() => loggedInUser?.permissions.includes('MANAGE_CUSTOMERS') ?? false, [loggedInUser]);
+
+  const customerDebts = useMemo(() => {
+    const debtMap = new Map<string, Debt>();
+    if (debts) {
+      debts.forEach(debt => {
+        if (debt.status === 'Unpaid' && debt.customer_id) {
+          debtMap.set(debt.customer_id, debt);
+        }
+      });
+    }
+    return debtMap;
+  }, [debts]);
 
   const filteredCustomers = useMemo(() => {
     if (!searchTerm) return customers;
@@ -136,6 +148,10 @@ export default function CustomersPage() {
         setIsProcessing(false);
     }
   }
+  
+  const handleSettleDebt = (debt: Debt) => {
+    router.push(`/sales?settleDebt=${debt.sale_id}`);
+  };
 
   const handleExport = () => {
     const dataToExport = filteredCustomers.map(c => ({
@@ -218,34 +234,42 @@ export default function CustomersPage() {
                     </TableCell>
                   </TableRow>
                 ) : filteredCustomers.length > 0 ? (
-                  filteredCustomers.map((customer) => (
-                    <TableRow key={customer.id}>
-                      <TableCell className="font-medium">{customer.name}</TableCell>
-                      <TableCell className="hidden md:table-cell">{customer.email}</TableCell>
-                      <TableCell className="hidden sm:table-cell">{customer.phone}</TableCell>
-                      {canManageCustomers && (
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button aria-haspopup="true" size="icon" variant="ghost">
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Toggle menu</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => handleOpenDialog(customer)}>
-                                <Edit className="mr-2 h-4 w-4" /> Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteCustomer(customer.id)}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))
+                  filteredCustomers.map((customer) => {
+                    const outstandingDebt = customerDebts.get(customer.id);
+                    return (
+                      <TableRow key={customer.id}>
+                        <TableCell className="font-medium">{customer.name}</TableCell>
+                        <TableCell className="hidden md:table-cell">{customer.email}</TableCell>
+                        <TableCell className="hidden sm:table-cell">{customer.phone}</TableCell>
+                        {canManageCustomers && (
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                  <span className="sr-only">Toggle menu</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                {outstandingDebt && (
+                                  <DropdownMenuItem onClick={() => handleSettleDebt(outstandingDebt)}>
+                                    <Coins className="mr-2 h-4 w-4" /> Settle Debt
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => handleOpenDialog(customer)}>
+                                  <Edit className="mr-2 h-4 w-4" /> Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteCustomer(customer.id)} disabled={!!outstandingDebt}>
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    )
+                  })
                 ) : (
                   <TableRow>
                     <TableCell colSpan={canManageCustomers ? 4 : 3} className="text-center text-muted-foreground h-24">
