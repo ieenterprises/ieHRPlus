@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { Customer, Debt } from "@/lib/types";
+import type { Customer, Sale } from "@/lib/types";
 import { MoreHorizontal, PlusCircle, Trash2, Edit, Download, Search, Loader2, Coins } from "lucide-react";
 import {
   DropdownMenu,
@@ -51,7 +51,7 @@ const EMPTY_CUSTOMER: Partial<Customer> = {
 };
 
 export default function CustomersPage() {
-  const { customers, setCustomers, debts, loggedInUser } = useSettings();
+  const { customers, setCustomers, sales, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -64,16 +64,17 @@ export default function CustomersPage() {
   const canManageCustomers = useMemo(() => loggedInUser?.permissions.includes('MANAGE_CUSTOMERS') ?? false, [loggedInUser]);
 
   const customerDebts = useMemo(() => {
-    const debtMap = new Map<string, Debt>();
-    if (debts) {
-      debts.forEach(debt => {
-        if (debt.status === 'Unpaid' && debt.customer_id) {
-          debtMap.set(debt.customer_id, debt);
+    const debtMap = new Map<string, Sale>();
+    if (sales) {
+      sales.forEach(sale => {
+        // A debt exists if a sale was paid by credit and it's still in the sales list (not voided)
+        if (sale.payment_methods.includes('Credit') && sale.customer_id) {
+          debtMap.set(sale.customer_id, sale);
         }
       });
     }
     return debtMap;
-  }, [debts]);
+  }, [sales]);
 
   const filteredCustomers = useMemo(() => {
     if (!searchTerm) return customers;
@@ -132,7 +133,7 @@ export default function CustomersPage() {
   };
 
   const handleDeleteCustomer = async (customerId: string) => {
-     if (debts && debts.some(d => d.customer_id === customerId && d.status === 'Unpaid')) {
+     if (customerDebts.has(customerId)) {
         toast({ title: "Cannot Delete Customer", description: "This customer has outstanding debts.", variant: "destructive" });
         return;
       }
