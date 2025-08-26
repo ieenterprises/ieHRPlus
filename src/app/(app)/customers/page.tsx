@@ -41,6 +41,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import Papa from "papaparse";
 
 const EMPTY_CUSTOMER: Partial<Customer> = {
@@ -58,6 +59,7 @@ export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const router = useRouter();
+  const isOnline = useOnlineStatus();
 
   const canManageCustomers = useMemo(() => loggedInUser?.permissions.includes('MANAGE_CUSTOMERS') ?? false, [loggedInUser]);
 
@@ -320,3 +322,5 @@ export default function CustomersPage() {
     </div>
   );
 }
+
+    
