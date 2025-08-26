@@ -855,6 +855,7 @@ export default function KitchenPage() {
                         <Checkbox
                             id={`item-${item.id}-${itemIndex}-${unitIndex}`}
                             checked={unitIndex < (item.fulfilled_quantity || 0)}
+                            disabled={unitIndex < (item.fulfilled_quantity || 0)}
                             onCheckedChange={(checked) => handleItemFulfillmentToggle(item.id, itemIndex, checked as boolean)}
                         />
                         <Label
@@ -916,5 +917,7 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
+
+    
 
     
