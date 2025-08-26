@@ -22,7 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type Sale, type OpenTicket, type SaleItem } from "@/lib/types";
+import { type Sale, type OpenTicket, type SaleItem, UserRole } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -489,6 +489,18 @@ export default function KitchenPage() {
     return getItemCategoryNames(previewItems);
   }, [previewItems]);
 
+  const privilegedRoles: UserRole[] = ["Owner", "Administrator", "Manager", "Cashier", "Bar Man"];
+
+  const canPerformAction = (orderEmployeeId: string | null): boolean => {
+    if (!loggedInUser) return false;
+    // Privileged roles can perform actions on any order
+    if (privilegedRoles.includes(loggedInUser.role as UserRole)) {
+      return true;
+    }
+    // Users can perform actions on their own orders
+    return loggedInUser.id === orderEmployeeId;
+  };
+
 
   return (
     <TooltipProvider>
@@ -588,6 +600,7 @@ export default function KitchenPage() {
                               ) : filteredTickets.length > 0 ? (
                                   filteredTickets.map(ticket => {
                                       const canLoadTicket = loggedInUser?.id === ticket.employee_id || hasPermission('MANAGE_OPEN_TICKETS');
+                                      const hasActionPermission = canPerformAction(ticket.employee_id);
                                       return (
                                           <TableRow key={ticket.id}>
                                               <TableCell><Checkbox checked={selectedTickets.has(ticket.id)} onCheckedChange={(checked) => handleMergeSelection(ticket.id, checked as boolean, 'ticket')} /></TableCell>
@@ -601,9 +614,9 @@ export default function KitchenPage() {
                                               </TableCell>
                                               <TableCell>
                                                 <div className="flex justify-end gap-2">
-                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(ticket, 'ticket')}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Preview Order</p></TooltipContent></Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(ticket, 'ticket')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Preview Order</p> : <p>You can only preview your own orders.</p>}</TooltipContent></Tooltip>
                                                     <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => handleLoadTicket(ticket as OpenTicket)} disabled={!canLoadTicket}><LogIn className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Load Ticket</p></TooltipContent></Tooltip>
-                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(ticket, 'ticket')}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Print</p></TooltipContent></Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(ticket, 'ticket')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Print</p> : <p>You can only print your own orders.</p>}</TooltipContent></Tooltip>
                                                 </div>
                                               </TableCell>
                                           </TableRow>
@@ -739,6 +752,7 @@ export default function KitchenPage() {
                           filteredReceipts.map((sale) => {
                           const categoriesForDisplay = getItemCategoryNames(sale.displayItems);
                           const isCreditSale = sale.payment_methods.includes('Credit');
+                          const hasActionPermission = canPerformAction(sale.employee_id);
           
                           return (
                           <TableRow key={sale.id}>
@@ -772,20 +786,20 @@ export default function KitchenPage() {
                               </TableCell>
                               <TableCell>
                                   <div className="flex items-center justify-end gap-2">
-                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(sale, 'receipt')}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Preview Order</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(sale, 'receipt')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Preview Order</p> : <p>You can only preview your own orders.</p>}</TooltipContent></Tooltip>
                                     {isCreditSale && (
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                         <div className="inline-block">
-                                            <Button variant="outline" size="icon" onClick={() => handleSettleDebtFromReceipts(sale)} disabled={!isOnline}>
+                                            <Button variant="outline" size="icon" onClick={() => handleSettleDebtFromReceipts(sale)} disabled={!isOnline || !hasActionPermission}>
                                                 <Coins className="h-4 w-4" />
                                             </Button>
                                         </div>
                                         </TooltipTrigger>
-                                        {!isOnline ? <TooltipContent><p>Connect to the internet to settle debts.</p></TooltipContent> : <TooltipContent><p>Settle Debt</p></TooltipContent>}
+                                        {!isOnline ? <TooltipContent><p>Connect to the internet to settle debts.</p></TooltipContent> : <TooltipContent>{hasActionPermission ? <p>Settle Debt</p> : <p>You can only settle your own debts.</p>}</TooltipContent>}
                                     </Tooltip>
                                     )}
-                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Print</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Print</p> : <p>You can only print your own orders.</p>}</TooltipContent></Tooltip>
                                     {hasPermission('CANCEL_RECEIPTS') && (
                                         <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" onClick={() => handleMoveToVoid(sale)}><Trash2 className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Move to Void</p></TooltipContent></Tooltip>
                                     )}
