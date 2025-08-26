@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +57,7 @@ export default function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Partial<Customer> | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
+  const router = useRouter();
 
   const canManageCustomers = useMemo(() => loggedInUser?.permissions.includes('MANAGE_CUSTOMERS') ?? false, [loggedInUser]);
 
@@ -107,6 +109,7 @@ export default function CustomersPage() {
         toast({ title: "Customer Added", description: `${customerData.name} has been added.` });
       }
       handleDialogClose(false);
+      router.push('/customers');
     } catch (error: any) {
       toast({ title: "Error saving customer", description: error.message, variant: "destructive" });
     } finally {
