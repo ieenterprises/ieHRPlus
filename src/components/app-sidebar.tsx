@@ -88,15 +88,13 @@ export function AppSidebar() {
       return;
     }
     setIsSyncing(true);
-    const syncToast = toast({
+    toast({
       title: "Syncing Data...",
       description: "Please wait while we sync your data.",
     });
 
-    setTimeout(() => {
-      syncToast.update({ id: syncToast.id, title: "Data Synchronized", description: "All offline data has been successfully synced." });
-      setIsSyncing(false);
-    }, 1500);
+    // Force a hard reload to fetch the latest data from the server
+    window.location.reload();
   };
 
   const hasPermission = (permission?: AnyPermission | AnyPermission[]) => {
