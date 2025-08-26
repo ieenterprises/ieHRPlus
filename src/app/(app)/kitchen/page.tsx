@@ -489,12 +489,10 @@ export default function KitchenPage() {
     return getItemCategoryNames(previewItems);
   }, [previewItems]);
 
-  const privilegedRoles: UserRole[] = ["Owner", "Administrator", "Manager", "Cashier", "Bar Man"];
-
   const canPerformAction = (orderEmployeeId: string | null): boolean => {
     if (!loggedInUser) return false;
-    // Privileged roles can perform actions on any order
-    if (privilegedRoles.includes(loggedInUser.role as UserRole)) {
+    // Users with permission can perform actions on any order
+    if (hasPermission('VIEW_ALL_RECEIPTS')) {
       return true;
     }
     // Users can perform actions on their own orders
