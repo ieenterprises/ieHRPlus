@@ -45,16 +45,17 @@ type NavItem = {
   label: string;
   permission?: AnyPermission | AnyPermission[];
   featureFlag?: string;
+  offlineDisabled?: boolean;
 };
 
 const navItems: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permission: "VIEW_SALES_REPORTS" },
   { href: "/sales", icon: ShoppingCart, label: "Sales", permission: "ACCEPT_PAYMENTS" },
   { href: "/kitchen", icon: ClipboardList, label: "Orders", permission: "VIEW_ALL_RECEIPTS" },
-  { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"] },
+  { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"], offlineDisabled: true },
   { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "ACCEPT_PAYMENTS", featureFlag: "reservations" },
   { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS" },
-  { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES" },
+  { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES", offlineDisabled: true },
   { href: "/customers", icon: BookUser, label: "Customers", permission: ["MANAGE_CUSTOMERS", "VIEW_CUSTOMERS"] },
   { href: "/voided", icon: Trash2, label: "Voided", permission: "VIEW_SALES_REPORTS" },
 ];
@@ -126,20 +127,37 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
-          {visibleNavItems.map((item) => (
-            <SidebarMenuItem key={item.href}>
+          {visibleNavItems.map((item) => {
+            const isDisabled = item.offlineDisabled && !isOnline;
+            const button = (
               <SidebarMenuButton
                 asChild
                 isActive={pathname === item.href}
                 tooltip={item.label}
+                disabled={isDisabled}
               >
-                <Link href={item.href}>
+                <Link href={isDisabled ? "#" : item.href} aria-disabled={isDisabled} tabIndex={isDisabled ? -1 : undefined} className={isDisabled ? "pointer-events-none" : ""}>
                   <item.icon />
                   <span>{item.label}</span>
                 </Link>
               </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+            );
+
+            return (
+              <SidebarMenuItem key={item.href}>
+                {isDisabled ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>{button}</TooltipTrigger>
+                    <TooltipContent side="right" align="center">
+                      <p>Internet connection required</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  button
+                )}
+              </SidebarMenuItem>
+            );
+          })}
            <SidebarMenuItem>
             <Tooltip>
                 <TooltipTrigger asChild>
@@ -162,14 +180,21 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {hasPermission("MANAGE_FEATURE_SETTINGS") && (
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
-                  <Link href="/settings">
-                      <Settings />
-                      <span>Settings</span>
-                  </Link>
-              </SidebarMenuButton>
+          {(hasPermission("MANAGE_FEATURE_SETTINGS")) && (
+             <SidebarMenuItem>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="w-full">
+                      <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings" disabled={!isOnline}>
+                          <Link href={!isOnline ? "#" : "/settings"} aria-disabled={!isOnline} tabIndex={!isOnline ? -1 : undefined} className={!isOnline ? "pointer-events-none" : ""}>
+                              <Settings />
+                              <span>Settings</span>
+                          </Link>
+                      </SidebarMenuButton>
+                    </div>
+                  </TooltipTrigger>
+                  {!isOnline && <TooltipContent side="right" align="center"><p>Internet connection required</p></TooltipContent>}
+                </Tooltip>
             </SidebarMenuItem>
           )}
           <SidebarMenuItem>

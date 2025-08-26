@@ -790,10 +790,17 @@ export default function SalesPage() {
                         </Button>
                     </div>
                     {featureSettings.open_tickets && !debtToSettle && (
-                        <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)} className="w-full sm:w-auto">
-                            <Ticket className="mr-2 h-4 w-4" />
-                            Open Tickets ({openTickets.length})
-                        </Button>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="inline-block w-full sm:w-auto">
+                                    <Button variant="outline" onClick={() => setIsTicketsDialogOpen(true)} className="w-full" disabled={!isOnline}>
+                                        <Ticket className="mr-2 h-4 w-4" />
+                                        Open Tickets ({openTickets.length})
+                                    </Button>
+                                </div>
+                            </TooltipTrigger>
+                            {!isOnline && <TooltipContent><p>This feature requires an internet connection.</p></TooltipContent>}
+                        </Tooltip>
                     )}
                 </div>
             </div>
@@ -924,10 +931,17 @@ export default function SalesPage() {
                     </div>
                     <div className="grid grid-cols-1 gap-2">
                          {featureSettings.open_tickets && !debtToSettle && (
-                            <Button variant="secondary" onClick={handleSaveOrder} className="w-full">
-                                <Save className="mr-2 h-4 w-4" />
-                                Save Order
-                            </Button>
+                             <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="inline-block w-full">
+                                        <Button variant="secondary" onClick={handleSaveOrder} className="w-full" disabled={!isOnline}>
+                                            <Save className="mr-2 h-4 w-4" />
+                                            Save Order
+                                        </Button>
+                                    </div>
+                                </TooltipTrigger>
+                                {!isOnline && <TooltipContent><p>This feature requires an internet connection.</p></TooltipContent>}
+                            </Tooltip>
                          )}
                     </div>
                     <div className="flex flex-col gap-2">
