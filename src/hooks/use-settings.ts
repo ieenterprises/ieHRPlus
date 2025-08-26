@@ -333,23 +333,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const batch = writeBatch(db);
 
         newItems.forEach(item => {
-            const docId = item.id || `temp_${Math.random().toString(36).substring(2, 9)}`;
+            const docId = item.id;
+            if (!docId) return; // Should not happen if items are created with an ID
+            
             const ref = doc(db, collectionName, docId);
             const oldItem = localState.find(i => i.id === item.id);
             
-            // Check if it's a new item or a changed item
-            if (!item.id || !oldIds.has(item.id) || JSON.stringify(oldItem) !== JSON.stringify(item)) {
+            // Set (create or overwrite) if it's a new item or a changed item
+            if (!oldIds.has(docId) || JSON.stringify(oldItem) !== JSON.stringify(item)) {
                 const itemWithBusinessId = { ...item, businessId: loggedInUser.businessId };
-                // If it's a new item without an ID, Firestore will generate one, but our local state won't match.
-                // This approach requires IDs to be generated client-side for new items.
-                // For now, we assume client-generated IDs for new items.
-                if (!item.id) {
-                    const newRef = doc(collection(db, collectionName));
-                    item.id = newRef.id;
-                    batch.set(newRef, itemWithBusinessId);
-                } else {
-                    batch.set(ref, itemWithBusinessId, { merge: true });
-                }
+                batch.set(ref, itemWithBusinessId, { merge: true });
             }
         });
 

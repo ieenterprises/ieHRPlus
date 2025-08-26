@@ -109,7 +109,7 @@ export default function CustomersPage() {
         toast({ title: "Customer Added", description: `${customerData.name} has been added.` });
       }
       handleDialogClose(false);
-      router.push('/customers');
+      router.push('/customers'); // Navigate after closing the dialog
     } catch (error: any) {
       toast({ title: "Error saving customer", description: error.message, variant: "destructive" });
     } finally {
