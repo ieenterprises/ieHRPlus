@@ -254,7 +254,7 @@ export default function CustomersPage() {
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                 {outstandingDebt && (
                                   <DropdownMenuItem onClick={() => handleSettleDebt(outstandingDebt)}>
-                                    <Coins className="mr-2 h-4 w-4" /> Settle Debt
+                                    <Coins className="mr-2 h-4 w-4" /> In Debt
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem onClick={() => handleOpenDialog(customer)}>
