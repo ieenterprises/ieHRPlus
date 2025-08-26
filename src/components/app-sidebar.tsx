@@ -72,7 +72,7 @@ export function AppSidebar() {
     if (wasOffline.current && isOnline) {
       toast({
         title: "Back Online",
-        description: "You are connected. Press the sync button to update your data.",
+        description: "Syncing changes to the server...",
       });
     }
     wasOffline.current = !isOnline;
@@ -90,7 +90,7 @@ export function AppSidebar() {
     setIsSyncing(true);
     toast({
       title: "Syncing Data...",
-      description: "Please wait while we sync your data.",
+      description: "Refreshing the application with the latest data.",
     });
 
     // Force a hard reload to fetch the latest data from the server
