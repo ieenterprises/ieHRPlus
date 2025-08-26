@@ -226,9 +226,16 @@ export function AppSidebar() {
                         {isOnline ? "Online" : "Offline Mode"}
                       </TooltipContent>
                     </Tooltip>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 group-data-[collapsible=icon]:hidden" onClick={handleLogout}>
-                        <LogOut className="h-4 w-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="inline-block group-data-[collapsible=icon]:hidden">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout} disabled={!isOnline}>
+                                <LogOut className="h-4 w-4" />
+                            </Button>
+                        </div>
+                      </TooltipTrigger>
+                      {!isOnline && <TooltipContent side="top" align="center"><p>Internet connection required to log out</p></TooltipContent>}
+                    </Tooltip>
                  </div>
             </div>
           </SidebarMenuItem>

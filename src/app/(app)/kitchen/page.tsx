@@ -485,15 +485,22 @@ export default function KitchenPage() {
             description="View open tickets and completed receipts."
           />
            <div className="flex items-center gap-2 self-end">
-                <Button 
-                    onClick={() => setIsMergeDialogOpen(true)} 
-                    variant="outline" 
-                    size="sm"
-                    disabled={(activeTab === 'open_tickets' && selectedTickets.size < 2) || (activeTab === 'receipts' && selectedReceipts.size < 2)}
-                >
-                    <GitMerge className="mr-2 h-4 w-4" />
-                    Merge
-                </Button>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div className="inline-block">
+                             <Button 
+                                onClick={() => setIsMergeDialogOpen(true)} 
+                                variant="outline" 
+                                size="sm"
+                                disabled={((activeTab === 'open_tickets' && selectedTickets.size < 2) || (activeTab === 'receipts' && selectedReceipts.size < 2)) || !isOnline}
+                            >
+                                <GitMerge className="mr-2 h-4 w-4" />
+                                Merge
+                            </Button>
+                        </div>
+                    </TooltipTrigger>
+                    {!isOnline && <TooltipContent><p>Internet connection required</p></TooltipContent>}
+                </Tooltip>
                 <Button onClick={handleExport} variant="outline" size="sm">
                     <Download className="mr-2 h-4 w-4" />
                     Export
