@@ -52,6 +52,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Separator } from "@/components/ui/separator";
 
 
 const getPaymentBadgeVariant = (method: string) => {
@@ -468,6 +469,12 @@ export default function KitchenPage() {
     ? openTickets.filter(t => selectedTickets.has(t.id))
     : sales.filter(s => selectedReceipts.has(s.id));
 
+  const previewOrderCategories = useMemo(() => {
+    if (!previewItems) return [];
+    return getItemCategoryNames(previewItems);
+  }, [previewItems]);
+
+
   return (
     <TooltipProvider>
       <PrintPreviewDialog />
@@ -780,15 +787,31 @@ export default function KitchenPage() {
       </div>
 
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Order Preview #{previewingOrder?.order_number}</DialogTitle>
             <DialogDescription>
               Mark items as fulfilled for the kitchen.
             </DialogDescription>
           </DialogHeader>
+
           <div className="py-4 space-y-4">
-            <div className="space-y-4 max-h-80 overflow-y-auto pr-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <p><span className="font-semibold">Date:</span> {previewingOrder?.created_at ? format(new Date(previewingOrder.created_at), 'PPpp') : 'N/A'}</p>
+                    <p><span className="font-semibold">Customer:</span> {previewingOrder?.customers?.name || 'Walk-in'}</p>
+                    <p><span className="font-semibold">Employee:</span> {previewingOrder?.users?.name || 'N/A'}</p>
+                </div>
+                <div className="text-right">
+                    <p><span className="font-semibold">Total:</span> {currency}{previewingOrder?.total.toFixed(2)}</p>
+                    <p><span className="font-semibold">Categories:</span></p>
+                    <div className="flex flex-wrap gap-1 justify-end">
+                        {previewOrderCategories.map(c => <Badge key={c} variant="outline">{c}</Badge>)}
+                    </div>
+                </div>
+            </div>
+            <Separator />
+            <div className="space-y-4 max-h-64 overflow-y-auto pr-4">
               {previewItems.map((item, itemIndex) => (
                 <div key={`${item.id}-${itemIndex}`}>
                     <Label className="font-semibold">{item.name} (Fulfilled: {item.fulfilled_quantity || 0}/{item.quantity})</Label>
@@ -859,3 +882,4 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
+
