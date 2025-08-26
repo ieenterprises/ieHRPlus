@@ -43,6 +43,7 @@ type SettingsContextType = {
     customers: Customer[];
     sales: Sale[];
     reservations: Reservation[];
+    debts: Debt[];
     voidedLogs: VoidedLog[];
     openTickets: OpenTicket[];
     
@@ -97,6 +98,7 @@ type SettingsContextType = {
     setReservations: (value: React.SetStateAction<Reservation[]>) => Promise<void>;
     setOpenTickets: (value: React.SetStateAction<OpenTicket[]>) => Promise<void>;
     setVoidedLogs: (value: React.SetStateAction<VoidedLog[]>) => Promise<void>;
+    setDebts: (value: React.SetStateAction<Debt[]>) => Promise<void>;
     setRoles: (value: React.SetStateAction<Role[]>) => void;
     setUsers: (value: React.SetStateAction<User[]>) => void;
 
@@ -143,6 +145,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [customers, setCustomersState] = useState<Customer[]>([]);
     const [sales, setSalesState] = useState<Sale[]>([]);
     const [reservations, setReservationsState] = useState<Reservation[]>([]);
+    const [debts, setDebtsState] = useState<Debt[]>([]);
     const [voidedLogs, setVoidedLogsState] = useState<VoidedLog[]>([]);
     const [openTickets, setOpenTicketsState] = useState<OpenTicket[]>([]);
     const [currency, setCurrencyState] = useState<string>('$');
@@ -212,6 +215,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         reservations: setReservationsState,
                         open_tickets: setOpenTicketsState,
                         voided_logs: setVoidedLogsState,
+                        debts: setDebtsState,
                         stores: setStores,
                         pos_devices: setPosDevices,
                         printers: setPrinters,
@@ -245,7 +249,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setStores, setPosDevices, setPrinters, setTaxes, setPaymentTypes];
+                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setStores, setPosDevices, setPrinters, setTaxes, setPaymentTypes];
                 collections.forEach(setter => setter([]));
             }
         });
@@ -366,6 +370,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const setCustomers = createBatchSetter('customers', customers, setCustomersState);
     const setSales = createBatchSetter('sales', sales, setSalesState);
     const setReservations = createBatchSetter('reservations', reservations, setReservationsState);
+    const setDebts = createBatchSetter('debts', debts, setDebtsState);
     const setOpenTickets = createBatchSetter('open_tickets', openTickets, setOpenTicketsState);
     const setVoidedLogs = createBatchSetter('voided_logs', voidedLogs, setVoidedLogsState);
 
@@ -415,6 +420,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         customers, setCustomers,
         sales, setSales,
         reservations, setReservations,
+        debts, setDebts,
         voidedLogs, setVoidedLogs,
         openTickets, setOpenTickets,
         loggedInUser,

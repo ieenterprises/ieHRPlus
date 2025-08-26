@@ -1,4 +1,5 @@
 
+
 import type { AnyPermission } from "./permissions";
 
 export type Business = {
@@ -41,6 +42,17 @@ export type Reservation = Omit<Database['public']['Tables']['reservations']['Row
   id?: string;
   products: { name: string | null; price: number | null; } | null;
   sale_id: string | null;
+  businessId: string;
+};
+export type Debt = {
+  id: string;
+  sale_id: string;
+  customer_id: string | null;
+  amount: number;
+  status: 'Paid' | 'Unpaid';
+  created_at: string;
+  sales: Sale | null;
+  customers: Customer | null;
   businessId: string;
 };
 export type OpenTicket = Database['public']['Tables']['open_tickets']['Row'] & {

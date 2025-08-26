@@ -118,7 +118,7 @@ export default function CustomersPage() {
   };
 
   const handleDeleteCustomer = async (customerId: string) => {
-     if (debts.some(d => d.customer_id === customerId && d.status === 'Unpaid')) {
+     if (debts && debts.some(d => d.customer_id === customerId && d.status === 'Unpaid')) {
         toast({ title: "Cannot Delete Customer", description: "This customer has outstanding debts.", variant: "destructive" });
         return;
       }
