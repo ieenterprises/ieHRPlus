@@ -30,9 +30,20 @@ const ensureShiftPermissionForOwner = async (businessId: string) => {
         if (!rolesSnapshot.empty) {
             const ownerRoleDoc = rolesSnapshot.docs[0];
             const ownerRoleData = ownerRoleDoc.data();
-            if (ownerRoleData && !ownerRoleData.permissions.includes('VIEW_SHIFT_REPORT')) {
-                const updatedPermissions = [...ownerRoleData.permissions, 'VIEW_SHIFT_REPORT'];
-                await updateDoc(ownerRoleDoc.ref, { permissions: updatedPermissions });
+            const permissions: string[] = ownerRoleData.permissions || [];
+            
+            let needsUpdate = false;
+            const permissionsToAdd = ['VIEW_SHIFT_REPORT', 'MANAGE_SHIFTS'];
+
+            permissionsToAdd.forEach(p => {
+              if (!permissions.includes(p)) {
+                permissions.push(p);
+                needsUpdate = true;
+              }
+            });
+
+            if (needsUpdate) {
+                await updateDoc(ownerRoleDoc.ref, { permissions: permissions });
                 console.log("Applied one-time permission fix for Owner role.");
             }
         }
