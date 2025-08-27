@@ -22,6 +22,26 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch, getDoc } from "firebase/firestore";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 
+// One-time fix for existing roles missing the shift permission.
+const ensureShiftPermissionForOwner = async (businessId: string) => {
+    try {
+        const rolesQuery = query(collection(db, 'roles'), where('businessId', '==', businessId), where('name', '==', 'Owner'));
+        const rolesSnapshot = await getDocs(rolesQuery);
+        if (!rolesSnapshot.empty) {
+            const ownerRoleDoc = rolesSnapshot.docs[0];
+            const ownerRoleData = ownerRoleDoc.data();
+            if (ownerRoleData && !ownerRoleData.permissions.includes('VIEW_SHIFT_REPORT')) {
+                const updatedPermissions = [...ownerRoleData.permissions, 'VIEW_SHIFT_REPORT'];
+                await updateDoc(ownerRoleDoc.ref, { permissions: updatedPermissions });
+                console.log("Applied one-time permission fix for Owner role.");
+            }
+        }
+    } catch (error) {
+        console.error("Failed to apply one-time permission fix:", error);
+    }
+};
+
+
 export default function SignInPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -50,6 +70,11 @@ export default function SignInPage() {
       if (!businessId) {
         throw new Error("Business ID not found for this user.");
       }
+      
+      // ONE-TIME FIX: Ensure the owner role has the correct permissions
+      if (userProfile.role === 'Owner') {
+          await ensureShiftPermissionForOwner(businessId);
+      }
 
       // Start a new shift for the user
       const shiftsCollection = collection(db, 'shifts');
@@ -70,7 +95,7 @@ export default function SignInPage() {
         startTime: new Date().toISOString(),
         endTime: null,
         status: 'active',
-        businessId: businessId, // <--- THIS IS THE FIX
+        businessId: businessId, 
       });
       
       await batch.commit();
