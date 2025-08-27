@@ -17,8 +17,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch } from "firebase/firestore";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 
 export default function SignInPage() {
@@ -37,9 +38,32 @@ export default function SignInPage() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      // Start a new shift for the user
+      const shiftsCollection = collection(db, 'shifts');
+      const q = query(shiftsCollection, where('userId', '==', user.uid), where('status', '==', 'active'));
+      const querySnapshot = await getDocs(q);
+      
+      const batch = writeBatch(db);
+
+      // Close any previously active shifts for this user
+      querySnapshot.forEach((shiftDoc) => {
+        batch.update(doc(db, 'shifts', shiftDoc.id), { status: 'closed', endTime: new Date().toISOString() });
+      });
+
+      // Create new active shift
+      const shiftDocRef = doc(shiftsCollection);
+      batch.set(shiftDocRef, {
+        userId: user.uid,
+        startTime: new Date().toISOString(),
+        endTime: null,
+        status: 'active'
+      });
+      
+      await batch.commit();
+
       toast({
         title: "Signed In",
-        description: `Welcome!`,
+        description: `Welcome! Your shift has started.`,
       });
 
       // The useSettings hook will react to the auth state change

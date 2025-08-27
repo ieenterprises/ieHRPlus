@@ -18,6 +18,15 @@ export type StoreProduct = {
   businessId: string;
 };
 
+export type Shift = {
+  id: string;
+  userId: string;
+  businessId: string;
+  startTime: string;
+  endTime: string | null;
+  status: 'active' | 'closed';
+};
+
 export type Category = Database['public']['Tables']['categories']['Row'] & { businessId: string };
 export type Product = Omit<Database['public']['Tables']['products']['Row'], 'price' | 'stock'> & { 
   businessId: string;

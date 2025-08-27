@@ -36,6 +36,7 @@ export const backOfficePermissions = {
     MANAGE_DINING_OPTIONS: { label: "Manage dining options" },
     MANAGE_POS_DEVICES: { label: "Manage POS devices" },
     ACCESS_LIVE_CHAT_BO: { label: "Access to live chat support (Back Office)" },
+    SETTLE_PREVIOUS_SHIFT_DEBTS: { label: "Settle debts from previous shifts" },
 };
 
 export type PosPermission = keyof typeof posPermissions;

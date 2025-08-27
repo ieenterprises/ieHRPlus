@@ -5,7 +5,7 @@
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem } from '@/lib/types';
+import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
@@ -19,7 +19,7 @@ export type FeatureSettings = Record<string, boolean>;
 export const MOCK_INITIAL_ROLES: Role[] = [
   { id: "role_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
   { id: "role_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
-  { id: "role_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS"] },
+  { id: "role_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS", "SETTLE_PREVIOUS_SHIFT_DEBTS"] },
   { id: "role_cashier", name: "Cashier", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "MANAGE_CUSTOMERS", "VIEW_SALES_REPORTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
   { id: "role_waitress", name: "Waitress", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
   { id: "role_barman", name: "Bar Man", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
@@ -46,6 +46,7 @@ type SettingsContextType = {
     debts: Debt[];
     voidedLogs: VoidedLog[];
     openTickets: OpenTicket[];
+    shifts: Shift[];
     
     // Data setters (now write to DB)
     setFeatureSettings: (value: React.SetStateAction<FeatureSettings>) => void;
@@ -148,6 +149,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [debts, setDebtsState] = useState<Debt[]>([]);
     const [voidedLogs, setVoidedLogsState] = useState<VoidedLog[]>([]);
     const [openTickets, setOpenTicketsState] = useState<OpenTicket[]>([]);
+    const [shifts, setShiftsState] = useState<Shift[]>([]);
     const [currency, setCurrencyState] = useState<string>('$');
     
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
@@ -221,6 +223,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         printers: setPrinters,
                         taxes: setTaxes,
                         payment_types: setPaymentTypes,
+                        shifts: setShiftsState,
                     };
 
                     Object.entries(collections).forEach(([name, setter]) => {
@@ -249,7 +252,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setStores, setPosDevices, setPrinters, setTaxes, setPaymentTypes];
+                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setStores, setPosDevices, setPrinters, setTaxes, setPaymentTypes, setShiftsState];
                 collections.forEach(setter => setter([]));
             }
         });
@@ -262,6 +265,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     
 
     const logout = async () => {
+        if (loggedInUser) {
+            const shiftsCollection = collection(db, 'shifts');
+            const q = query(shiftsCollection, where('userId', '==', loggedInUser.id), where('status', '==', 'active'));
+            const querySnapshot = await getDocs(q);
+            const batch = writeBatch(db);
+            querySnapshot.forEach((shiftDoc) => {
+                batch.update(doc(db, 'shifts', shiftDoc.id), { status: 'closed', endTime: new Date().toISOString() });
+            });
+            await batch.commit();
+        }
+
         await auth.signOut();
         setLoggedInUser(null);
         setSelectedStore(null);
@@ -423,6 +437,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         debts, setDebts,
         voidedLogs, setVoidedLogs,
         openTickets, setOpenTickets,
+        shifts,
         loggedInUser,
         loadingUser,
         logout,

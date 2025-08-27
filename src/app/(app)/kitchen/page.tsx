@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { format } from "date-fns";
+import { format, isBefore } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
 import { PageHeader } from "@/components/page-header";
@@ -22,7 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type Sale, type OpenTicket, type SaleItem, UserRole } from "@/lib/types";
+import { type Sale, type OpenTicket, type SaleItem, UserRole, Shift } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -88,7 +88,7 @@ const generateUniqueOrderNumber = () => {
 };
 
 export default function KitchenPage() {
-  const { sales, setSales, products, categories, users, loggedInUser, setPrintableData, currency, isPrintModalOpen, setIsPrintModalOpen, voidSale } = useSettings();
+  const { sales, setSales, products, categories, users, loggedInUser, setPrintableData, currency, isPrintModalOpen, setIsPrintModalOpen, voidSale, shifts } = useSettings();
   const { openTickets, saveTicket, deleteTicket, setTicketToSettle, updateTicket } = usePos();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -118,6 +118,19 @@ export default function KitchenPage() {
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [primaryMergeId, setPrimaryMergeId] = useState<string | null>(null);
   const [canMerge, setCanMerge] = useState(true);
+  
+  const [currentShift, setCurrentShift] = useState<Shift | null>(null);
+
+  useEffect(() => {
+      if (loggedInUser && shifts.length > 0) {
+          const userShifts = shifts
+              .filter(s => s.userId === loggedInUser.id && s.status === 'active')
+              .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+          if (userShifts.length > 0) {
+              setCurrentShift(userShifts[0]);
+          }
+      }
+  }, [loggedInUser, shifts]);
 
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
     setPrintableData({ ...data, type });
@@ -531,12 +544,6 @@ export default function KitchenPage() {
     if (hasPermission('MANAGE_OPEN_TICKETS')) {
       return true;
     }
-    // If user has already selected one of their own items, they cannot select anyone else's
-    const selectedIds = activeTab === 'open_tickets' ? selectedTickets : selectedReceipts;
-    if (selectedIds.size > 0) {
-        return orderEmployeeId === loggedInUser.id;
-    }
-    // If no items are selected yet, they can only select their own
     return orderEmployeeId === loggedInUser.id;
   };
 
@@ -624,7 +631,7 @@ export default function KitchenPage() {
                       <Table>
                           <TableHeader>
                               <TableRow>
-                                  <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredTickets.map(t => t.id)); setSelectedTickets(checked ? allIds : new Set()); }} checked={selectedTickets.size > 0 && selectedTickets.size === filteredTickets.length} /></TableHead>
+                                  <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredTickets.filter(t => canSelectForMerge(t.employee_id)).map(t => t.id)); setSelectedTickets(checked ? allIds : new Set()); }} checked={selectedTickets.size > 0 && selectedTickets.size === filteredTickets.length} /></TableHead>
                                   <TableHead>Order #</TableHead>
                                   <TableHead>Employee</TableHead>
                                   <TableHead>Date</TableHead>
@@ -640,10 +647,7 @@ export default function KitchenPage() {
                               ) : filteredTickets.length > 0 ? (
                                   filteredTickets.map(ticket => {
                                       const hasActionPermission = canPerformAction(ticket.employee_id);
-                                      const isCheckboxDisabled = !hasPermission('MANAGE_OPEN_TICKETS') && (
-                                          (selectedTickets.size > 0 && !selectedTickets.has(ticket.id)) ||
-                                          (ticket.employee_id !== loggedInUser?.id)
-                                      );
+                                      const isCheckboxDisabled = !canSelectForMerge(ticket.employee_id);
                                       return (
                                           <TableRow key={ticket.id}>
                                               <TableCell><Checkbox checked={selectedTickets.has(ticket.id)} onCheckedChange={(checked) => handleMergeSelection(ticket.id, checked as boolean, 'ticket')} disabled={isCheckboxDisabled} /></TableCell>
@@ -657,9 +661,9 @@ export default function KitchenPage() {
                                               </TableCell>
                                               <TableCell>
                                                 <div className="flex justify-end gap-2">
-                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(ticket, 'ticket')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Permission denied. You can only preview your own orders.</p></TooltipContent></Tooltip>
-                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => handleLoadTicket(ticket as OpenTicket)} disabled={!hasActionPermission}><LogIn className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Permission denied. You can only load your own tickets.</p></TooltipContent></Tooltip>
-                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(ticket, 'ticket')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Permission denied. You can only print your own orders.</p></TooltipContent></Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(ticket, 'ticket')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger>{!hasActionPermission && <TooltipContent><p>Permission denied. You can only preview your own orders.</p></TooltipContent>}</Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => handleLoadTicket(ticket as OpenTicket)} disabled={!hasActionPermission}><LogIn className="h-4 w-4" /></Button></TooltipTrigger>{!hasActionPermission && <TooltipContent><p>Permission denied. You can only load your own tickets.</p></TooltipContent>}</Tooltip>
+                                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(ticket, 'ticket')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger>{!hasActionPermission && <TooltipContent><p>Permission denied. You can only print your own orders.</p></TooltipContent>}</Tooltip>
                                                 </div>
                                               </TableCell>
                                           </TableRow>
@@ -775,7 +779,7 @@ export default function KitchenPage() {
                   <Table>
                       <TableHeader>
                       <TableRow>
-                          <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredReceipts.map(r => r.id)); setSelectedReceipts(checked ? allIds : new Set()); }} checked={selectedReceipts.size > 0 && selectedReceipts.size === filteredReceipts.length} /></TableHead>
+                          <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredReceipts.filter(r => canSelectForMerge(r.employee_id)).map(r => r.id)); setSelectedReceipts(checked ? allIds : new Set()); }} checked={selectedReceipts.size > 0 && selectedReceipts.size === filteredReceipts.length} /></TableHead>
                           <TableHead>Order #</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead className="hidden sm:table-cell">Customer</TableHead>
@@ -796,10 +800,9 @@ export default function KitchenPage() {
                           const categoriesForDisplay = getItemCategoryNames(sale.displayItems);
                           const isCreditSale = sale.payment_methods.includes('Credit');
                           const hasActionPermission = canPerformAction(sale.employee_id);
-                          const isCheckboxDisabled = !hasPermission('MANAGE_OPEN_TICKETS') && (
-                                (selectedReceipts.size > 0 && !selectedReceipts.has(sale.id)) ||
-                                (sale.employee_id !== loggedInUser?.id)
-                            );
+                          const isCheckboxDisabled = !canSelectForMerge(sale.employee_id);
+                          const isFromPreviousShift = currentShift && sale.created_at ? isBefore(new Date(sale.created_at), new Date(currentShift.startTime)) : false;
+                          const canSettleDebt = hasActionPermission && (!isFromPreviousShift || hasPermission('SETTLE_PREVIOUS_SHIFT_DEBTS'));
           
                           return (
                           <TableRow key={sale.id}>
@@ -833,20 +836,22 @@ export default function KitchenPage() {
                               </TableCell>
                               <TableCell>
                                   <div className="flex items-center justify-end gap-2">
-                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(sale, 'receipt')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Permission denied. You can only preview your own orders.</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(sale, 'receipt')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger>{!hasActionPermission && <TooltipContent><p>Permission denied. You can only preview your own orders.</p></TooltipContent>}</Tooltip>
                                     {isCreditSale && (
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                         <div className="inline-block">
-                                            <Button variant="outline" size="icon" onClick={() => handleSettleDebtFromReceipts(sale)} disabled={!isOnline || !hasActionPermission}>
+                                            <Button variant="outline" size="icon" onClick={() => handleSettleDebtFromReceipts(sale)} disabled={!isOnline || !canSettleDebt}>
                                                 <Coins className="h-4 w-4" />
                                             </Button>
                                         </div>
                                         </TooltipTrigger>
-                                        {!isOnline ? <TooltipContent><p>Connect to the internet to settle debts.</p></TooltipContent> : <TooltipContent><p>Permission denied. You can only settle your own debts.</p></TooltipContent>}
+                                        {!isOnline && <TooltipContent><p>Connect to the internet to settle debts.</p></TooltipContent>}
+                                        {!canSettleDebt && hasActionPermission && <TooltipContent><p>Debt is from a previous shift. Manager approval required.</p></TooltipContent>}
+                                        {!canSettleDebt && !hasActionPermission && <TooltipContent><p>Permission denied.</p></TooltipContent>}
                                     </Tooltip>
                                     )}
-                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Permission denied. You can only print your own receipts.</p></TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger>{!hasActionPermission && <TooltipContent><p>Permission denied. You can only print your own receipts.</p></TooltipContent>}</Tooltip>
                                     {hasPermission('CANCEL_RECEIPTS') && (
                                         <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" onClick={() => handleMoveToVoid(sale)}><Trash2 className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Move to Void</p></TooltipContent></Tooltip>
                                     )}

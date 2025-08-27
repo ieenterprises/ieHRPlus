@@ -51,7 +51,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permission: "VIEW_SALES_REPORTS" },
   { href: "/sales", icon: ShoppingCart, label: "Sales", permission: "ACCEPT_PAYMENTS" },
-  { href: "/kitchen", icon: ClipboardList, label: "Orders", permission: "VIEW_ALL_RECEIPTS" },
+  { href: "/kitchen", icon: ClipboardList, label: "Orders", permission: "MANAGE_OPEN_TICKETS" },
   { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"], offlineDisabled: true },
   { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "ACCEPT_PAYMENTS", featureFlag: "reservations" },
   { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS" },
