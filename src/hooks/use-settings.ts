@@ -106,6 +106,7 @@ type SettingsContextType = {
     // Voiding and ticket logic
     voidSale: (saleId: string, voidedByEmployeeId: string) => Promise<void>;
     reactivateShift: (shiftId: string, userId: string) => Promise<void>;
+    closeShift: (shiftId: string) => Promise<void>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -425,12 +426,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         const batch = writeBatch(db);
         
-        // 1. Close any other currently active shifts for this user
+        // 1. Close any other currently active or temp-active shifts for this user
         const activeShiftsQuery = query(
             collection(db, 'shifts'),
             where('businessId', '==', loggedInUser.businessId),
             where('userId', '==', userId),
-            where('status', '==', 'active')
+            where('status', 'in', ['active', 'temp-active'])
         );
         const activeShiftsSnapshot = await getDocs(activeShiftsQuery);
         activeShiftsSnapshot.forEach(shiftDoc => {
@@ -439,9 +440,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         // 2. Reactivate the selected shift
         const shiftToReactivateRef = doc(db, 'shifts', shiftId);
-        batch.update(shiftToReactivateRef, { status: 'active', endTime: null });
+        batch.update(shiftToReactivateRef, { status: 'temp-active', endTime: null });
 
         await batch.commit();
+    };
+
+    const closeShift = async (shiftId: string) => {
+        const shiftRef = doc(db, 'shifts', shiftId);
+        await updateDoc(shiftRef, {
+            status: 'closed',
+            endTime: new Date().toISOString()
+        });
     };
 
     const value: SettingsContextType = {
@@ -476,6 +485,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         isPrintModalOpen, setIsPrintModalOpen,
         voidSale,
         reactivateShift,
+        closeShift,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);

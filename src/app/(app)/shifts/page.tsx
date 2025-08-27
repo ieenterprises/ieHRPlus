@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Download, RefreshCw } from "lucide-react";
+import { Calendar as CalendarIcon, Download, RefreshCw, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -50,7 +50,7 @@ type EnrichedShift = Shift & {
 };
 
 export default function ShiftsPage() {
-  const { shifts, users, loggedInUser, reactivateShift } = useSettings();
+  const { shifts, users, loggedInUser, reactivateShift, closeShift } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -102,12 +102,29 @@ export default function ShiftsPage() {
       await reactivateShift(shift.id, shift.userId);
       toast({
         title: "Shift Reactivated",
-        description: `${shift.user.name}'s shift from ${format(parseISO(shift.startTime), "PP")} is now active.`,
+        description: `${shift.user.name}'s shift from ${format(parseISO(shift.startTime), "PP")} is now temporarily active.`,
       });
     } catch (error: any) {
       toast({
         title: "Error",
         description: `Failed to reactivate shift: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCloseShift = async (shift: Shift) => {
+    if (!shift.user) return;
+    try {
+      await closeShift(shift.id);
+      toast({
+        title: "Shift Closed",
+        description: `${shift.user.name}'s temporary shift access has been closed.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to close shift: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -142,6 +159,19 @@ export default function ShiftsPage() {
     document.body.removeChild(link);
     toast({ title: "Export Complete", description: "Shifts report has been downloaded." });
   };
+
+  const getStatusBadgeVariant = (status: Shift['status']) => {
+    switch (status) {
+      case 'active':
+        return 'default';
+      case 'temp-active':
+        return 'secondary';
+      case 'closed':
+        return 'outline';
+      default:
+        return 'outline';
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -233,20 +263,37 @@ export default function ShiftsPage() {
                           <TableCell>{shift.endTime ? format(parseISO(shift.endTime), "PPpp") : 'N/A'}</TableCell>
                           <TableCell>{shift.duration}</TableCell>
                           <TableCell>
-                            <Badge variant={shift.status === 'active' ? 'default' : 'outline'} className={cn(shift.status === 'active' && 'bg-green-100 text-green-800')}>
-                                {shift.status.charAt(0).toUpperCase() + shift.status.slice(1)}
+                            <Badge variant={getStatusBadgeVariant(shift.status)} className={cn(
+                                shift.status === 'active' && 'bg-green-100 text-green-800',
+                                shift.status === 'temp-active' && 'bg-yellow-100 text-yellow-800'
+                                )}>
+                                {shift.status === 'temp-active' ? 'Temp-Active' : (shift.status.charAt(0).toUpperCase() + shift.status.slice(1))}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                              {hasManagePermission && shift.status === 'closed' && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleReactivateShift(shift)}
-                                >
-                                  <RefreshCw className="mr-2 h-4 w-4" />
-                                  Reactivate
-                                </Button>
+                              {hasManagePermission && (
+                                <>
+                                  {shift.status === 'closed' && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleReactivateShift(shift)}
+                                    >
+                                      <RefreshCw className="mr-2 h-4 w-4" />
+                                      Reactivate
+                                    </Button>
+                                  )}
+                                  {shift.status === 'temp-active' && (
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => handleCloseShift(shift)}
+                                    >
+                                      <XCircle className="mr-2 h-4 w-4" />
+                                      Close
+                                    </Button>
+                                  )}
+                                </>
                               )}
                           </TableCell>
                       </TableRow>

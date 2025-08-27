@@ -24,7 +24,7 @@ export type Shift = {
   businessId: string;
   startTime: string;
   endTime: string | null;
-  status: 'active' | 'closed';
+  status: 'active' | 'closed' | 'temp-active';
   user?: User | null;
 };
 
