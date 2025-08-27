@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { PosProvider } from "@/hooks/use-pos";
@@ -11,6 +11,7 @@ import { SettingsProvider, useSettings } from "@/hooks/use-settings";
 function AppLayoutContent({ children }: { children: React.ReactNode }) {
   const { loggedInUser, loadingUser } = useSettings();
   const router = useRouter();
+  const pathname = usePathname();
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -22,6 +23,11 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
       router.push("/sign-in");
     }
   }, [loggedInUser, loadingUser, router, isClient]);
+  
+  // Conditionally render layout for pdf-viewer
+  if (pathname === '/pdf-viewer') {
+    return <>{children}</>;
+  }
 
   if (loadingUser || !isClient) {
     return (
