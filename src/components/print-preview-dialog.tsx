@@ -2,23 +2,31 @@
 "use client";
 
 import { useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSettings } from '@/hooks/use-settings';
+import { useOnlineStatus } from '@/hooks/use-online-status';
 import { PrintableReceipt } from '@/components/printable-receipt';
 import { PrintableA4Receipt } from '@/components/printable-a4-receipt';
 import { Button } from '@/components/ui/button';
-import { Printer, Loader2, FileUp } from 'lucide-react';
+import { Printer, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from './ui/scroll-area';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { app } from '@/lib/firebase';
+
+const storage = getStorage(app);
 
 export function PrintPreviewDialog() {
-    const { printableData, setPrintableData, isPrintModalOpen, setIsPrintModalOpen } = useSettings();
+    const { printableData, setPrintableData, isPrintModalOpen, setIsPrintModalOpen, loggedInUser } = useSettings();
     const [printFormat, setPrintFormat] = useState<'thermal' | 'a4'>('thermal');
     const [isGenerating, setIsGenerating] = useState(false);
     
     const printRef = useRef<HTMLDivElement>(null);
+    const router = useRouter();
+    const isOnline = useOnlineStatus();
 
     if (!isPrintModalOpen || !printableData) {
         return null;
@@ -51,14 +59,25 @@ export function PrintPreviewDialog() {
             }
             
             const pdfBlob = pdf.output('blob');
-            const pdfUrl = URL.createObjectURL(pdfBlob);
 
-            // Open the local Blob URL in a new tab.
-            // This works offline and triggers the browser/device's default PDF handling.
-            window.open(pdfUrl, '_blank');
-            
-            // Clean up the object URL after a short delay
-            setTimeout(() => URL.revokeObjectURL(pdfUrl), 1000);
+            if (isOnline && loggedInUser?.businessId) {
+                // Online: Upload to Firebase Storage and redirect
+                const fileName = `receipt-${printableData.order_number}-${Date.now()}.pdf`;
+                const filePath = `${loggedInUser.businessId}/receipts/${fileName}`;
+                const fileRef = storageRef(storage, filePath);
+                
+                await uploadBytes(fileRef, pdfBlob);
+                const downloadURL = await getDownloadURL(fileRef);
+                
+                sessionStorage.setItem('pdfUrl', downloadURL);
+                router.push('/pdf-viewer');
+            } else {
+                // Offline: Open Blob URL directly
+                const pdfUrl = URL.createObjectURL(pdfBlob);
+                window.open(pdfUrl, '_blank');
+                 // Clean up the object URL after a short delay
+                setTimeout(() => URL.revokeObjectURL(pdfUrl), 1000);
+            }
 
             handleClose();
 
