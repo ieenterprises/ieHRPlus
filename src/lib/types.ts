@@ -25,6 +25,7 @@ export type Shift = {
   startTime: string;
   endTime: string | null;
   status: 'active' | 'closed';
+  user?: User | null;
 };
 
 export type Category = Database['public']['Tables']['categories']['Row'] & { businessId: string };

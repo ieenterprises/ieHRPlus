@@ -27,6 +27,7 @@ export const backOfficePermissions = {
     VIEW_CUSTOMERS: { label: "View customer list" },
     MANAGE_CUSTOMERS: { label: "Manage customers" },
     MANAGE_EMPLOYEES: { label: "Manage employees" },
+    MANAGE_SHIFTS: { label: "Manage shifts" },
     MANAGE_FEATURE_SETTINGS: { label: "Manage feature settings" },
     MANAGE_BILLING: { label: "Manage billing" },
     MANAGE_PAYMENT_TYPES: { label: "Manage payment types" },

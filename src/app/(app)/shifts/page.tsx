@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Download } from "lucide-react";
+import { Calendar as CalendarIcon, Download, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -50,7 +50,7 @@ type EnrichedShift = Shift & {
 };
 
 export default function ShiftsPage() {
-  const { shifts, users, loggedInUser } = useSettings();
+  const { shifts, users, loggedInUser, reactivateShift } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -58,6 +58,8 @@ export default function ShiftsPage() {
     employeeId: "all",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  const hasManagePermission = useMemo(() => loggedInUser?.permissions.includes('MANAGE_SHIFTS'), [loggedInUser]);
 
   const enrichedAndFilteredShifts = useMemo((): EnrichedShift[] => {
     return shifts
@@ -92,6 +94,23 @@ export default function ShiftsPage() {
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const handleReactivateShift = async (shift: Shift) => {
+    if (!shift.user) return;
+    try {
+      await reactivateShift(shift.id, shift.userId);
+      toast({
+        title: "Shift Reactivated",
+        description: `${shift.user.name}'s shift from ${format(parseISO(shift.startTime), "PP")} is now active.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to reactivate shift: ${error.message}`,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleExport = () => {
@@ -200,11 +219,12 @@ export default function ShiftsPage() {
                     <TableHead>Clock Out</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Status</TableHead>
+                    {hasManagePermission && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
               {loading ? (
-                  <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={hasManagePermission ? 6 : 5} className="h-24 text-center">Loading...</TableCell></TableRow>
               ) : enrichedAndFilteredShifts.length > 0 ? (
                   enrichedAndFilteredShifts.map((shift) => (
                       <TableRow key={shift.id}>
@@ -217,11 +237,21 @@ export default function ShiftsPage() {
                                 {shift.status.charAt(0).toUpperCase() + shift.status.slice(1)}
                             </Badge>
                           </TableCell>
+                          {hasManagePermission && (
+                            <TableCell className="text-right">
+                              {shift.status === 'closed' && (
+                                <Button variant="outline" size="sm" onClick={() => handleReactivateShift(shift)}>
+                                  <RefreshCw className="mr-2 h-4 w-4" />
+                                  Reactivate
+                                </Button>
+                              )}
+                            </TableCell>
+                          )}
                       </TableRow>
                   ))
               ) : (
                   <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
+                      <TableCell colSpan={hasManagePermission ? 6 : 5} className="text-center text-muted-foreground h-24">
                           No shifts found for the selected filters.
                       </TableCell>
                   </TableRow>

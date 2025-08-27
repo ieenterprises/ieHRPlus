@@ -119,16 +119,14 @@ export default function KitchenPage() {
   const [primaryMergeId, setPrimaryMergeId] = useState<string | null>(null);
   const [canMerge, setCanMerge] = useState(true);
   
-  const [currentShift, setCurrentShift] = useState<Shift | null>(null);
+  const [activeShifts, setActiveShifts] = useState<Shift[]>([]);
 
   useEffect(() => {
       if (loggedInUser && shifts.length > 0) {
-          const userShifts = shifts
+          const userActiveShifts = shifts
               .filter(s => s.userId === loggedInUser.id && s.status === 'active')
               .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
-          if (userShifts.length > 0) {
-              setCurrentShift(userShifts[0]);
-          }
+          setActiveShifts(userActiveShifts);
       }
   }, [loggedInUser, shifts]);
 
@@ -801,7 +799,9 @@ export default function KitchenPage() {
                           const isCreditSale = sale.payment_methods.includes('Credit');
                           const hasActionPermission = canPerformAction(sale.employee_id);
                           const isCheckboxDisabled = !canSelectForMerge(sale.employee_id);
-                          const isFromPreviousShift = currentShift && sale.created_at ? isBefore(new Date(sale.created_at), new Date(currentShift.startTime)) : false;
+                          
+                          const saleDate = new Date(sale.created_at!);
+                          const isFromPreviousShift = activeShifts.length > 0 && activeShifts.every(shift => isBefore(saleDate, new Date(shift.startTime)));
                           const canSettleDebt = hasActionPermission && (!isFromPreviousShift || hasPermission('SETTLE_PREVIOUS_SHIFT_DEBTS'));
           
                           return (

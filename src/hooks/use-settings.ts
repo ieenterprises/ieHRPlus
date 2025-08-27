@@ -19,7 +19,7 @@ export type FeatureSettings = Record<string, boolean>;
 export const MOCK_INITIAL_ROLES: Role[] = [
   { id: "role_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
   { id: "role_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
-  { id: "role_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS", "SETTLE_PREVIOUS_SHIFT_DEBTS"] },
+  { id: "role_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS", "SETTLE_PREVIOUS_SHIFT_DEBTS", "MANAGE_SHIFTS"] },
   { id: "role_cashier", name: "Cashier", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "MANAGE_CUSTOMERS", "VIEW_SALES_REPORTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS", "MANAGE_OPEN_TICKETS"] },
   { id: "role_waitress", name: "Waitress", permissions: ["ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
   { id: "role_barman", name: "Bar Man", permissions: ["ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
@@ -105,6 +105,7 @@ type SettingsContextType = {
 
     // Voiding and ticket logic
     voidSale: (saleId: string, voidedByEmployeeId: string) => Promise<void>;
+    reactivateShift: (shiftId: string, userId: string) => Promise<void>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -418,6 +419,30 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         await batch.commit();
     };
+    
+    const reactivateShift = async (shiftId: string, userId: string) => {
+        if (!loggedInUser?.businessId) throw new Error("Not logged in or no business ID found.");
+
+        const batch = writeBatch(db);
+        
+        // 1. Close any other currently active shifts for this user
+        const activeShiftsQuery = query(
+            collection(db, 'shifts'),
+            where('businessId', '==', loggedInUser.businessId),
+            where('userId', '==', userId),
+            where('status', '==', 'active')
+        );
+        const activeShiftsSnapshot = await getDocs(activeShiftsQuery);
+        activeShiftsSnapshot.forEach(shiftDoc => {
+            batch.update(shiftDoc.ref, { status: 'closed', endTime: new Date().toISOString() });
+        });
+
+        // 2. Reactivate the selected shift
+        const shiftToReactivateRef = doc(db, 'shifts', shiftId);
+        batch.update(shiftToReactivateRef, { status: 'active', endTime: null });
+
+        await batch.commit();
+    };
 
     const value: SettingsContextType = {
         featureSettings, setFeatureSettings,
@@ -450,6 +475,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         printableData, setPrintableData,
         isPrintModalOpen, setIsPrintModalOpen,
         voidSale,
+        reactivateShift,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);
