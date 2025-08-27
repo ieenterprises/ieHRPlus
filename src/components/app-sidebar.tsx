@@ -28,6 +28,7 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
+  Clock,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
@@ -55,6 +56,7 @@ const navItems: NavItem[] = [
   { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"], offlineDisabled: true },
   { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "ACCEPT_PAYMENTS", featureFlag: "reservations" },
   { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS" },
+  { href: "/shifts", icon: Clock, label: "Shifts", permission: "VIEW_SHIFT_REPORT" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES", offlineDisabled: true },
   { href: "/customers", icon: BookUser, label: "Customers", permission: ["MANAGE_CUSTOMERS", "VIEW_CUSTOMERS"] },
   { href: "/voided", icon: Trash2, label: "Voided", permission: "VIEW_SALES_REPORTS" },
