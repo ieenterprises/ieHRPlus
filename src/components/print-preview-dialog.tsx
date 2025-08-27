@@ -12,8 +12,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from './ui/scroll-area';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { app } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 
 export function PrintPreviewDialog() {
@@ -23,7 +21,6 @@ export function PrintPreviewDialog() {
     
     const printRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
-    const storage = getStorage(app);
 
     if (!isPrintModalOpen || !printableData) {
         return null;
@@ -56,20 +53,19 @@ export function PrintPreviewDialog() {
             }
             
             const pdfBlob = pdf.output('blob');
-            const fileName = `receipt-${printableData.order_number}-${Date.now()}.pdf`;
-            const fileRef = storageRef(storage, `receipts/${fileName}`);
+            const pdfUrl = URL.createObjectURL(pdfBlob);
 
-            await uploadBytes(fileRef, pdfBlob);
-            const downloadURL = await getDownloadURL(fileRef);
-
-            // Store URL in session storage to be picked up by the viewer page
-            sessionStorage.setItem('pdfUrl', downloadURL);
+            // Open the local Blob URL in a new tab.
+            // This works offline and triggers the browser/device's default PDF handling.
+            window.open(pdfUrl, '_blank');
+            
+            // Clean up the object URL after a short delay
+            setTimeout(() => URL.revokeObjectURL(pdfUrl), 1000);
 
             handleClose();
-            router.push('/pdf-viewer');
 
         } catch (error) {
-            console.error("Error generating or uploading PDF:", error);
+            console.error("Error generating PDF:", error);
         } finally {
             setIsGenerating(false);
         }
@@ -122,7 +118,7 @@ export function PrintPreviewDialog() {
                                 </>
                             ) : (
                                 <>
-                                    <FileUp className="mr-2 h-4 w-4" />
+                                    <Printer className="mr-2 h-4 w-4" />
                                     Generate PDF
                                 </>
                             )}
