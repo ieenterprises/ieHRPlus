@@ -117,6 +117,7 @@ export default function KitchenPage() {
   const [selectedReceipts, setSelectedReceipts] = useState<Set<string>>(new Set());
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [primaryMergeId, setPrimaryMergeId] = useState<string | null>(null);
+  const [canMerge, setCanMerge] = useState(true);
 
   const onPrint = (data: any, type: 'receipt' | 'ticket') => {
     setPrintableData({ ...data, type });
@@ -418,6 +419,37 @@ export default function KitchenPage() {
     });
   };
 
+  useEffect(() => {
+    const checkMergePermissions = () => {
+        if (!loggedInUser) {
+            setCanMerge(false);
+            return;
+        }
+
+        if (hasPermission('MANAGE_OPEN_TICKETS')) {
+            setCanMerge(true);
+            return;
+        }
+
+        const selectedIds = activeTab === 'open_tickets' ? selectedTickets : selectedReceipts;
+        if (selectedIds.size === 0) {
+            setCanMerge(true);
+            return;
+        }
+
+        const sourceList = activeTab === 'open_tickets' ? openTickets : sales;
+        const selectedOrders = sourceList.filter(order => selectedIds.has(order.id));
+
+        const firstEmployeeId = selectedOrders[0]?.employee_id;
+        const allOwnedByUser = selectedOrders.every(order => order.employee_id === loggedInUser.id);
+        const allSameEmployee = selectedOrders.every(order => order.employee_id === firstEmployeeId);
+
+        setCanMerge(allOwnedByUser && allSameEmployee);
+    };
+
+    checkMergePermissions();
+  }, [selectedTickets, selectedReceipts, activeTab, openTickets, sales, loggedInUser]);
+
   const handleMerge = async () => {
     if (!primaryMergeId || !loggedInUser?.id) return;
 
@@ -491,11 +523,9 @@ export default function KitchenPage() {
 
   const canPerformAction = (orderEmployeeId: string | null): boolean => {
     if (!loggedInUser) return false;
-    // Users with permission can perform actions on any order
     if (hasPermission('MANAGE_OPEN_TICKETS')) {
       return true;
     }
-    // Users can perform actions on their own orders
     return loggedInUser.id === orderEmployeeId;
   };
 
@@ -517,7 +547,7 @@ export default function KitchenPage() {
                                 onClick={() => setIsMergeDialogOpen(true)} 
                                 variant="outline" 
                                 size="sm"
-                                disabled={((activeTab === 'open_tickets' && selectedTickets.size < 2) || (activeTab === 'receipts' && selectedReceipts.size < 2)) || !isOnline}
+                                disabled={((activeTab === 'open_tickets' && selectedTickets.size < 2) || (activeTab === 'receipts' && selectedReceipts.size < 2)) || !isOnline || !canMerge}
                             >
                                 <GitMerge className="mr-2 h-4 w-4" />
                                 Merge
@@ -525,6 +555,7 @@ export default function KitchenPage() {
                         </div>
                     </TooltipTrigger>
                     {!isOnline && <TooltipContent><p>Internet connection required</p></TooltipContent>}
+                    {!canMerge && <TooltipContent><p>You can only merge your own orders.</p></TooltipContent>}
                 </Tooltip>
                 <Button onClick={handleExport} variant="outline" size="sm">
                     <Download className="mr-2 h-4 w-4" />
@@ -599,9 +630,10 @@ export default function KitchenPage() {
                                   filteredTickets.map(ticket => {
                                       const canLoadTicket = loggedInUser?.id === ticket.employee_id || hasPermission('MANAGE_OPEN_TICKETS');
                                       const hasActionPermission = canPerformAction(ticket.employee_id);
+                                      const isCheckboxDisabled = !canMerge && selectedTickets.size > 0 && !selectedTickets.has(ticket.id);
                                       return (
                                           <TableRow key={ticket.id}>
-                                              <TableCell><Checkbox checked={selectedTickets.has(ticket.id)} onCheckedChange={(checked) => handleMergeSelection(ticket.id, checked as boolean, 'ticket')} /></TableCell>
+                                              <TableCell><Checkbox checked={selectedTickets.has(ticket.id)} onCheckedChange={(checked) => handleMergeSelection(ticket.id, checked as boolean, 'ticket')} disabled={isCheckboxDisabled} /></TableCell>
                                               <TableCell className="font-medium">#{ticket.order_number}</TableCell>
                                               <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
                                               <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
@@ -751,10 +783,11 @@ export default function KitchenPage() {
                           const categoriesForDisplay = getItemCategoryNames(sale.displayItems);
                           const isCreditSale = sale.payment_methods.includes('Credit');
                           const hasActionPermission = canPerformAction(sale.employee_id);
+                          const isCheckboxDisabled = !canMerge && selectedReceipts.size > 0 && !selectedReceipts.has(sale.id);
           
                           return (
                           <TableRow key={sale.id}>
-                              <TableCell><Checkbox checked={selectedReceipts.has(sale.id)} onCheckedChange={(checked) => handleMergeSelection(sale.id, checked as boolean, 'receipt')} /></TableCell>
+                              <TableCell><Checkbox checked={selectedReceipts.has(sale.id)} onCheckedChange={(checked) => handleMergeSelection(sale.id, checked as boolean, 'receipt')} disabled={isCheckboxDisabled} /></TableCell>
                               <TableCell className="font-medium">#{sale.order_number}</TableCell>
                               <TableCell>{format(new Date(sale.created_at!), "LLL dd, y HH:mm")}</TableCell>
                               <TableCell className="hidden sm:table-cell">{sale.customers?.name ?? 'Walk-in'}</TableCell>
@@ -784,7 +817,7 @@ export default function KitchenPage() {
                               </TableCell>
                               <TableCell>
                                   <div className="flex items-center justify-end gap-2">
-                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(sale, 'receipt')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Preview Order</p> : <p>Permission denied.</p>}</TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => openPreviewModal(sale, 'receipt')} disabled={!hasActionPermission}><Eye className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Preview Order</p> : <p>Permission denied. You can only preview your own orders.</p>}</TooltipContent></Tooltip>
                                     {isCreditSale && (
                                     <Tooltip>
                                         <TooltipTrigger asChild>
@@ -794,10 +827,10 @@ export default function KitchenPage() {
                                             </Button>
                                         </div>
                                         </TooltipTrigger>
-                                        {!isOnline ? <TooltipContent><p>Connect to the internet to settle debts.</p></TooltipContent> : <TooltipContent>{hasActionPermission ? <p>Settle Debt</p> : <p>Permission denied.</p>}</TooltipContent>}
+                                        {!isOnline ? <TooltipContent><p>Connect to the internet to settle debts.</p></TooltipContent> : <TooltipContent>{hasActionPermission ? <p>Settle Debt</p> : <p>Permission denied. You can only settle your own debts.</p>}</TooltipContent>}
                                     </Tooltip>
                                     )}
-                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Print</p> : <p>Permission denied.</p>}</TooltipContent></Tooltip>
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{hasActionPermission ? <p>Print</p> : <p>Permission denied. You can only print your own receipts.</p>}</TooltipContent></Tooltip>
                                     {hasPermission('CANCEL_RECEIPTS') && (
                                         <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" onClick={() => handleMoveToVoid(sale)}><Trash2 className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Move to Void</p></TooltipContent></Tooltip>
                                     )}
@@ -917,7 +950,3 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
-
-    
-
-    
