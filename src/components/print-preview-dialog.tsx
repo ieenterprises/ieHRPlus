@@ -58,9 +58,10 @@ export function PrintPreviewDialog() {
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
             }
             
-            const isMedian = window.median?.android || window.median?.ios;
+            // More robust check for Median.co native share function
+            const isMedianShareAvailable = typeof window.median?.file?.share === 'function';
 
-            if (isMedian) {
+            if (isMedianShareAvailable) {
                 // Use Median.co native file sharing
                 const pdfBase64 = pdf.output('datauristring').split(',')[1];
                 window.median.file.share({
