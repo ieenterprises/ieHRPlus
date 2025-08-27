@@ -238,7 +238,16 @@ export default function ShiftsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                              {/* Action buttons will go here */}
+                              {hasManagePermission && shift.status === 'closed' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleReactivateShift(shift)}
+                                >
+                                  <RefreshCw className="mr-2 h-4 w-4" />
+                                  Reactivate
+                                </Button>
+                              )}
                           </TableCell>
                       </TableRow>
                   ))
