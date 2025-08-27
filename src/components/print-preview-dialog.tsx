@@ -13,6 +13,13 @@ import { ScrollArea } from './ui/scroll-area';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
+// Declare the median object for TypeScript
+declare global {
+  interface Window {
+    median: any;
+  }
+}
+
 export function PrintPreviewDialog() {
     const { printableData, setPrintableData, isPrintModalOpen, setIsPrintModalOpen } = useSettings();
     const [printFormat, setPrintFormat] = useState<'thermal' | 'a4'>('thermal');
@@ -51,10 +58,22 @@ export function PrintPreviewDialog() {
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
             }
             
-            // Open PDF in a new tab
-            const pdfBlob = pdf.output('blob');
-            const pdfUrl = URL.createObjectURL(pdfBlob);
-            window.open(pdfUrl, '_blank');
+            const isMedian = window.median?.android || window.median?.ios;
+
+            if (isMedian) {
+                // Use Median.co native file sharing
+                const pdfBase64 = pdf.output('datauristring').split(',')[1];
+                window.median.file.share({
+                    data: pdfBase64,
+                    filename: `receipt-${printableData.order_number}.pdf`,
+                    dataType: 'base64'
+                });
+            } else {
+                // Standard web browser behavior
+                const pdfBlob = pdf.output('blob');
+                const pdfUrl = URL.createObjectURL(pdfBlob);
+                window.open(pdfUrl, '_blank');
+            }
 
         } catch (error) {
             console.error("Error generating PDF:", error);
