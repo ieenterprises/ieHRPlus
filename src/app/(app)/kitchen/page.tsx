@@ -524,6 +524,22 @@ export default function KitchenPage() {
     ? openTickets.filter(t => selectedTickets.has(t.id))
     : sales.filter(s => selectedReceipts.has(s.id));
 
+  const areAllSelectedOrdersFulfilled = useMemo(() => {
+    if (activeTab === 'open_tickets') {
+        if (selectedTickets.size === 0) return true;
+        return openTickets
+            .filter(t => selectedTickets.has(t.id))
+            .every(t => t.fulfillment_status === 'Fulfilled');
+    }
+    if (activeTab === 'receipts') {
+        if (selectedReceipts.size === 0) return true;
+        return sales
+            .filter(s => selectedReceipts.has(s.id))
+            .every(s => s.fulfillment_status === 'Fulfilled');
+    }
+    return true;
+  }, [selectedTickets, selectedReceipts, activeTab, openTickets, sales]);
+
   const previewOrderCategories = useMemo(() => {
     if (!previewItems) return [];
     return getItemCategoryNames(previewItems);
@@ -584,7 +600,7 @@ export default function KitchenPage() {
                                 onClick={() => setIsMergeDialogOpen(true)} 
                                 variant="outline" 
                                 size="sm"
-                                disabled={((activeTab === 'open_tickets' && selectedTickets.size < 2) || (activeTab === 'receipts' && selectedReceipts.size < 2)) || !isOnline || !canMerge}
+                                disabled={((activeTab === 'open_tickets' && selectedTickets.size < 2) || (activeTab === 'receipts' && selectedReceipts.size < 2)) || !isOnline || !canMerge || !areAllSelectedOrdersFulfilled}
                             >
                                 <GitMerge className="mr-2 h-4 w-4" />
                                 Merge
@@ -593,6 +609,7 @@ export default function KitchenPage() {
                     </TooltipTrigger>
                     {!isOnline && <TooltipContent><p>Internet connection required</p></TooltipContent>}
                     {!canMerge && <TooltipContent><p>You can only merge your own orders.</p></TooltipContent>}
+                    {!areAllSelectedOrdersFulfilled && <TooltipContent><p>Only fulfilled orders can be merged.</p></TooltipContent>}
                 </Tooltip>
                 <Button onClick={handleExport} variant="outline" size="sm">
                     <Download className="mr-2 h-4 w-4" />
