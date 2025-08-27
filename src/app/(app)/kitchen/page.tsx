@@ -542,6 +542,14 @@ export default function KitchenPage() {
     if (hasPermission('MANAGE_OPEN_TICKETS')) {
       return true;
     }
+    
+    if (selectedTickets.size > 0 && ![...selectedTickets].every(id => openTickets.find(t => t.id === id)?.employee_id === loggedInUser.id)) {
+        return false;
+    }
+    if (selectedReceipts.size > 0 && ![...selectedReceipts].every(id => sales.find(s => s.id === id)?.employee_id === loggedInUser.id)) {
+        return false;
+    }
+
     return orderEmployeeId === loggedInUser.id;
   };
 
@@ -629,7 +637,7 @@ export default function KitchenPage() {
                       <Table>
                           <TableHeader>
                               <TableRow>
-                                  <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredTickets.filter(t => canSelectForMerge(t.employee_id)).map(t => t.id)); setSelectedTickets(checked ? allIds : new Set()); }} checked={selectedTickets.size > 0 && selectedTickets.size === filteredTickets.length} /></TableHead>
+                                  <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredTickets.filter(t => canSelectForMerge(t.employee_id)).map(t => t.id)); setSelectedTickets(checked ? allIds : new Set()); }} checked={selectedTickets.size > 0 && selectedTickets.size === filteredTickets.filter(t => canSelectForMerge(t.employee_id)).length} /></TableHead>
                                   <TableHead>Order #</TableHead>
                                   <TableHead>Employee</TableHead>
                                   <TableHead>Date</TableHead>
@@ -777,7 +785,7 @@ export default function KitchenPage() {
                   <Table>
                       <TableHeader>
                       <TableRow>
-                          <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredReceipts.filter(r => canSelectForMerge(r.employee_id)).map(r => r.id)); setSelectedReceipts(checked ? allIds : new Set()); }} checked={selectedReceipts.size > 0 && selectedReceipts.size === filteredReceipts.length} /></TableHead>
+                          <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredReceipts.filter(r => canSelectForMerge(r.employee_id)).map(r => r.id)); setSelectedReceipts(checked ? allIds : new Set()); }} checked={selectedReceipts.size > 0 && selectedReceipts.size === filteredReceipts.filter(r => canSelectForMerge(r.employee_id)).length} /></TableHead>
                           <TableHead>Order #</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead className="hidden sm:table-cell">Customer</TableHead>
@@ -802,8 +810,10 @@ export default function KitchenPage() {
                           
                           const saleDate = new Date(sale.created_at!);
                           const isFromPreviousShift = activeShifts.length > 0 && activeShifts.every(shift => isBefore(saleDate, new Date(shift.startTime)));
-                          const canSettleDebt = hasActionPermission && (!isFromPreviousShift || hasPermission('SETTLE_PREVIOUS_SHIFT_DEBTS'));
-          
+                          const canPerformPreviousShiftActions = !isFromPreviousShift || hasPermission('SETTLE_PREVIOUS_SHIFT_DEBTS');
+                          const canSettleDebt = hasActionPermission && canPerformPreviousShiftActions;
+                          const canPrint = hasActionPermission && canPerformPreviousShiftActions;
+
                           return (
                           <TableRow key={sale.id}>
                               <TableCell><Checkbox checked={selectedReceipts.has(sale.id)} onCheckedChange={(checked) => handleMergeSelection(sale.id, checked as boolean, 'receipt')} disabled={isCheckboxDisabled} /></TableCell>
@@ -851,7 +861,17 @@ export default function KitchenPage() {
                                         {!canSettleDebt && !hasActionPermission && <TooltipContent><p>Permission denied.</p></TooltipContent>}
                                     </Tooltip>
                                     )}
-                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')} disabled={!hasActionPermission}><Printer className="h-4 w-4" /></Button></TooltipTrigger>{!hasActionPermission && <TooltipContent><p>Permission denied. You can only print your own receipts.</p></TooltipContent>}</Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <div className="inline-block">
+                                                <Button variant="outline" size="icon" onClick={() => onPrint(sale, 'receipt')} disabled={!canPrint}>
+                                                    <Printer className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </TooltipTrigger>
+                                        {!canPrint && hasActionPermission && <TooltipContent><p>Receipt is from a previous shift. Manager approval required.</p></TooltipContent>}
+                                        {!canPrint && !hasActionPermission && <TooltipContent><p>Permission denied.</p></TooltipContent>}
+                                    </Tooltip>
                                     {hasPermission('CANCEL_RECEIPTS') && (
                                         <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" onClick={() => handleMoveToVoid(sale)}><Trash2 className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Move to Void</p></TooltipContent></Tooltip>
                                     )}
@@ -971,3 +991,5 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
+
+    
