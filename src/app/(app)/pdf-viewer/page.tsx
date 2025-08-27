@@ -18,19 +18,24 @@ export default function PdfViewerPage() {
     const { toast } = useToast();
 
     useEffect(() => {
+        // This effect runs only once on the client when the component mounts.
         const url = sessionStorage.getItem('pdfUrl');
         if (url) {
             setPdfUrl(url);
-            // Clean up immediately after reading to prevent re-use
+            // Clean up immediately after reading to prevent re-use on refresh.
             sessionStorage.removeItem('pdfUrl');
-        } else if (!pdfUrl) {
-            // If there's no URL in storage and we haven't set one in state yet,
-            // it means the page was likely accessed directly.
-            // Redirect to a safe place.
-            router.push('/kitchen');
         }
         setIsLoading(false);
-    }, [router, pdfUrl]); // Depend on pdfUrl to prevent re-running the check unnecessarily
+    }, []); // Empty dependency array ensures this runs only once.
+
+    useEffect(() => {
+        // This effect handles redirection logic after the initial loading is complete.
+        if (!isLoading && !pdfUrl) {
+            // If loading is finished and there's still no PDF URL,
+            // it means the page was accessed directly. Redirect to a safe place.
+            router.push('/kitchen');
+        }
+    }, [isLoading, pdfUrl, router]);
 
     const handleCopy = () => {
         if (pdfUrl) {
