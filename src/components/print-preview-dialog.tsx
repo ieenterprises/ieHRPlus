@@ -12,7 +12,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from './ui/scroll-area';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { useRouter } from 'next/navigation';
 
 export function PrintPreviewDialog() {
     const { printableData, setPrintableData, isPrintModalOpen, setIsPrintModalOpen } = useSettings();
@@ -20,7 +19,6 @@ export function PrintPreviewDialog() {
     const [isGenerating, setIsGenerating] = useState(false);
     
     const printRef = useRef<HTMLDivElement>(null);
-    const router = useRouter();
 
     if (!isPrintModalOpen || !printableData) {
         return null;
