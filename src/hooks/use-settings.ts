@@ -265,9 +265,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     
 
     const logout = async () => {
-        if (loggedInUser) {
+        if (loggedInUser && loggedInUser.businessId) {
             const shiftsCollection = collection(db, 'shifts');
-            const q = query(shiftsCollection, where('userId', '==', loggedInUser.id), where('status', '==', 'active'));
+            const q = query(shiftsCollection, where('userId', '==', loggedInUser.id), where('status', '==', 'active'), where('businessId', '==', loggedInUser.businessId));
             const querySnapshot = await getDocs(q);
             const batch = writeBatch(db);
             querySnapshot.forEach((shiftDoc) => {

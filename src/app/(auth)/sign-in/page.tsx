@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { auth, db } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch, getDoc } from "firebase/firestore";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 
 export default function SignInPage() {
@@ -38,6 +38,19 @@ export default function SignInPage() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      // Fetch the user's profile to get their businessId
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (!userDoc.exists()) {
+        throw new Error("User profile not found.");
+      }
+      const userProfile = userDoc.data();
+      const businessId = userProfile.businessId;
+
+      if (!businessId) {
+        throw new Error("Business ID not found for this user.");
+      }
+
       // Start a new shift for the user
       const shiftsCollection = collection(db, 'shifts');
       const q = query(shiftsCollection, where('userId', '==', user.uid), where('status', '==', 'active'));
@@ -50,13 +63,14 @@ export default function SignInPage() {
         batch.update(doc(db, 'shifts', shiftDoc.id), { status: 'closed', endTime: new Date().toISOString() });
       });
 
-      // Create new active shift
+      // Create new active shift with businessId
       const shiftDocRef = doc(shiftsCollection);
       batch.set(shiftDocRef, {
         userId: user.uid,
         startTime: new Date().toISOString(),
         endTime: null,
-        status: 'active'
+        status: 'active',
+        businessId: businessId, // <--- THIS IS THE FIX
       });
       
       await batch.commit();
