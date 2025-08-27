@@ -105,6 +105,10 @@ export default function InventoryPage() {
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [editValue, setEditValue] = useState<string | number>('');
   const editInputRef = useRef<HTMLInputElement>(null);
+  
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [editingImageProductId, setEditingImageProductId] = useState<string | null>(null);
+
 
   const canManageInventory = useMemo(() => loggedInUser?.permissions.includes('MANAGE_ITEMS_BO') ?? false, [loggedInUser]);
 
@@ -249,6 +253,44 @@ export default function InventoryPage() {
         handleCancelEdit();
     }
   };
+
+  const handleImageClick = (productId: string) => {
+    if (!canManageInventory) return;
+    setEditingImageProductId(productId);
+    imageInputRef.current?.click();
+  };
+
+  const handleQuickImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !editingImageProductId) return;
+
+    setIsProcessing(true);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const newImageUrl = reader.result as string;
+      const productIdToUpdate = editingImageProductId;
+
+      try {
+        await setProducts(prevProducts =>
+          prevProducts.map(p =>
+            p.id === productIdToUpdate ? { ...p, image_url: newImageUrl } : p
+          )
+        );
+        toast({ title: "Image Updated", description: `The image for the product has been updated.` });
+      } catch (error: any) {
+        toast({ title: "Image Update Failed", description: error.message, variant: "destructive" });
+      } finally {
+        setIsProcessing(false);
+        setEditingImageProductId(null);
+        // Reset file input value to allow re-uploading the same file
+        if (event.target) {
+            event.target.value = '';
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
 
   // Product Handlers
   const handleEditProduct = (product: Product) => {
@@ -563,6 +605,13 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-8">
+        <input
+            type="file"
+            ref={imageInputRef}
+            onChange={handleQuickImageChange}
+            className="hidden"
+            accept="image/*"
+        />
         <PageHeader
           title="Inventory Management"
           description="Manage your products and categories across all stores."
@@ -646,14 +695,19 @@ export default function InventoryPage() {
                                         filteredProducts.map((product) => (
                                             <TableRow key={product.id}>
                                                 <TableCell className="hidden sm:table-cell">
-                                                    <Image
-                                                        src={product.image_url || 'https://placehold.co/80x80.png'}
-                                                        alt={product.name}
-                                                        width={40}
-                                                        height={40}
-                                                        className="rounded-md object-cover"
-                                                        data-ai-hint="product image"
-                                                    />
+                                                    <div
+                                                        className="cursor-pointer"
+                                                        onClick={() => handleImageClick(product.id)}
+                                                    >
+                                                        <Image
+                                                            src={product.image_url || 'https://placehold.co/80x80.png'}
+                                                            alt={product.name}
+                                                            width={40}
+                                                            height={40}
+                                                            className="rounded-md object-cover"
+                                                            data-ai-hint="product image"
+                                                        />
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="font-medium" onDoubleClick={() => handleDoubleClick(product, 'name')}>
                                                     {editingCell?.productId === product.id && editingCell?.field === 'name' ? (
