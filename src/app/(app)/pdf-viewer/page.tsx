@@ -13,6 +13,7 @@ import Link from 'next/link';
 
 export default function PdfViewerPage() {
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
     const router = useRouter();
     const { toast } = useToast();
 
@@ -20,14 +21,16 @@ export default function PdfViewerPage() {
         const url = sessionStorage.getItem('pdfUrl');
         if (url) {
             setPdfUrl(url);
-            // Clean up immediately after reading
+            // Clean up immediately after reading to prevent re-use
             sessionStorage.removeItem('pdfUrl');
-        } else {
-            // If there's no URL, maybe the user refreshed the page.
-            // Send them back to a safe place.
+        } else if (!pdfUrl) {
+            // If there's no URL in storage and we haven't set one in state yet,
+            // it means the page was likely accessed directly.
+            // Redirect to a safe place.
             router.push('/kitchen');
         }
-    }, [router]);
+        setIsLoading(false);
+    }, [router, pdfUrl]); // Depend on pdfUrl to prevent re-running the check unnecessarily
 
     const handleCopy = () => {
         if (pdfUrl) {
@@ -39,7 +42,7 @@ export default function PdfViewerPage() {
         }
     };
 
-    if (!pdfUrl) {
+    if (isLoading || !pdfUrl) {
         return (
             <div className="flex items-center justify-center h-screen">
                 <p>Loading PDF link...</p>
