@@ -426,19 +426,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         const batch = writeBatch(db);
         
-        // 1. Close any other currently active or temp-active shifts for this user
-        const activeShiftsQuery = query(
-            collection(db, 'shifts'),
-            where('businessId', '==', loggedInUser.businessId),
-            where('userId', '==', userId),
-            where('status', 'in', ['active', 'temp-active'])
-        );
-        const activeShiftsSnapshot = await getDocs(activeShiftsQuery);
-        activeShiftsSnapshot.forEach(shiftDoc => {
-            batch.update(shiftDoc.ref, { status: 'closed', endTime: new Date().toISOString() });
-        });
-
-        // 2. Reactivate the selected shift
+        // Reactivate the selected shift to 'temp-active'
         const shiftToReactivateRef = doc(db, 'shifts', shiftId);
         batch.update(shiftToReactivateRef, { status: 'temp-active', endTime: null });
 
@@ -498,5 +486,7 @@ export function useSettings() {
     }
     return context;
 }
+
+    
 
     

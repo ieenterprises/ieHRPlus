@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { format, isBefore } from "date-fns";
+import { format, isWithinInterval } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import Papa from "papaparse";
 import { PageHeader } from "@/components/page-header";
@@ -124,7 +124,7 @@ export default function KitchenPage() {
   useEffect(() => {
       if (loggedInUser && shifts.length > 0) {
           const userActiveShifts = shifts
-              .filter(s => s.userId === loggedInUser.id && s.status === 'active')
+              .filter(s => s.userId === loggedInUser.id && (s.status === 'active' || s.status === 'temp-active'))
               .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
           setActiveShifts(userActiveShifts);
       }
@@ -553,6 +553,19 @@ export default function KitchenPage() {
     return orderEmployeeId === loggedInUser.id;
   };
 
+  const isSaleFromActiveShift = (saleDate: Date): boolean => {
+    if (activeShifts.length === 0) {
+      return false;
+    }
+    // Check if the sale date falls within any of the user's active or temp-active shifts
+    return activeShifts.some(shift => 
+        isWithinInterval(saleDate, {
+            start: new Date(shift.startTime),
+            end: shift.endTime ? new Date(shift.endTime) : new Date(), // Use now if shift is still open
+        })
+    );
+  };
+
 
   return (
     <TooltipProvider>
@@ -809,10 +822,10 @@ export default function KitchenPage() {
                           const isCheckboxDisabled = !canSelectForMerge(sale.employee_id);
                           
                           const saleDate = new Date(sale.created_at!);
-                          const isFromPreviousShift = activeShifts.length > 0 && activeShifts.every(shift => isBefore(saleDate, new Date(shift.startTime)));
-                          const canPerformPreviousShiftActions = !isFromPreviousShift || hasPermission('SETTLE_PREVIOUS_SHIFT_DEBTS');
-                          const canSettleDebt = hasActionPermission && canPerformPreviousShiftActions;
-                          const canPrint = hasActionPermission && canPerformPreviousShiftActions;
+                          const isFromActiveShift = isSaleFromActiveShift(saleDate);
+                          const canPerformShiftActions = isFromActiveShift || hasPermission('SETTLE_PREVIOUS_SHIFT_DEBTS');
+                          const canSettleDebt = hasActionPermission && canPerformShiftActions;
+                          const canPrint = hasActionPermission && canPerformShiftActions;
 
                           return (
                           <TableRow key={sale.id}>
@@ -991,5 +1004,7 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
+
+    
 
     
