@@ -219,12 +219,12 @@ export default function ShiftsPage() {
                     <TableHead>Clock Out</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Status</TableHead>
-                    {hasManagePermission && <TableHead className="text-right">Actions</TableHead>}
+                    <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
               {loading ? (
-                  <TableRow><TableCell colSpan={hasManagePermission ? 6 : 5} className="h-24 text-center">Loading...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
               ) : enrichedAndFilteredShifts.length > 0 ? (
                   enrichedAndFilteredShifts.map((shift) => (
                       <TableRow key={shift.id}>
@@ -237,21 +237,14 @@ export default function ShiftsPage() {
                                 {shift.status.charAt(0).toUpperCase() + shift.status.slice(1)}
                             </Badge>
                           </TableCell>
-                          {hasManagePermission && (
-                            <TableCell className="text-right">
-                              {shift.status === 'closed' && (
-                                <Button variant="outline" size="sm" onClick={() => handleReactivateShift(shift)}>
-                                  <RefreshCw className="mr-2 h-4 w-4" />
-                                  Reactivate
-                                </Button>
-                              )}
-                            </TableCell>
-                          )}
+                          <TableCell className="text-right">
+                              {/* Action buttons will go here */}
+                          </TableCell>
                       </TableRow>
                   ))
               ) : (
                   <TableRow>
-                      <TableCell colSpan={hasManagePermission ? 6 : 5} className="text-center text-muted-foreground h-24">
+                      <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
                           No shifts found for the selected filters.
                       </TableCell>
                   </TableRow>
