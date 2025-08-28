@@ -72,11 +72,10 @@ export function PrintPreviewDialog() {
                 sessionStorage.setItem('pdfUrl', downloadURL);
                 router.push('/pdf-viewer');
             } else {
-                // Offline: Open Blob URL directly
+                // Offline: Create a blob URL and redirect to the viewer page
                 const pdfUrl = URL.createObjectURL(pdfBlob);
-                window.open(pdfUrl, '_blank');
-                 // Clean up the object URL after a short delay
-                setTimeout(() => URL.revokeObjectURL(pdfUrl), 1000);
+                sessionStorage.setItem('pdfUrl', pdfUrl);
+                router.push('/pdf-viewer');
             }
 
             handleClose();
