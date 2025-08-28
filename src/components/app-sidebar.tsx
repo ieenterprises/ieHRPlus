@@ -29,6 +29,8 @@ import {
   CloudOff,
   RefreshCw,
   Clock,
+  Store,
+  HardDrive,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
@@ -39,6 +41,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/t
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useRef, useState } from "react";
 import { IELogo } from "./ie-logo";
+import { Separator } from "./ui/separator";
 
 type NavItem = {
   href: string;
@@ -64,7 +67,7 @@ const navItems: NavItem[] = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { loggedInUser, logout, featureSettings } = useSettings();
+  const { loggedInUser, logout, featureSettings, selectedStore, selectedDevice } = useSettings();
   const isOnline = useOnlineStatus();
   const { toast } = useToast();
   const wasOffline = useRef(!isOnline);
@@ -115,6 +118,8 @@ export function AppSidebar() {
     if (!featureFlag) return true; // No feature flag means it's always enabled
     return featureSettings[featureFlag] === true;
   };
+  
+  const shouldShowPosInfo = loggedInUser && ['Cashier', 'Waitress', 'Bar Man'].includes(loggedInUser.role);
 
   const visibleNavItems = navItems.filter(item => hasPermission(item.permission) && isFeatureEnabled(item.featureFlag));
 
@@ -199,46 +204,67 @@ export function AppSidebar() {
             </SidebarMenuItem>
           )}
           <SidebarMenuItem>
-            <div className="flex items-center justify-between w-full p-2">
-                <div className="flex items-center gap-2 truncate">
-                    <Avatar className="h-8 w-8">
-                        <AvatarImage src={loggedInUser?.avatar_url || "https://placehold.co/100x100.png"} alt={loggedInUser?.name || "User"} data-ai-hint="person portrait" />
-                        <AvatarFallback>
-                          {loggedInUser?.name?.charAt(0) || 'U'}
-                        </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col text-sm truncate">
-                        <span className="font-semibold truncate">{loggedInUser?.name}</span>
-                        <span className="text-muted-foreground truncate">{loggedInUser?.email}</span>
+             <div className="flex flex-col w-full p-2 gap-2">
+                <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2 truncate">
+                        <Avatar className="h-8 w-8">
+                            <AvatarImage src={loggedInUser?.avatar_url || "https://placehold.co/100x100.png"} alt={loggedInUser?.name || "User"} data-ai-hint="person portrait" />
+                            <AvatarFallback>
+                            {loggedInUser?.name?.charAt(0) || 'U'}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col text-sm truncate">
+                            <span className="font-semibold truncate">{loggedInUser?.name}</span>
+                            <span className="text-muted-foreground truncate">{loggedInUser?.email}</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="group-data-[collapsible=icon]:hidden">
+                            {isOnline ? (
+                                <Cloud className="h-5 w-5 text-green-500" />
+                            ) : (
+                                <CloudOff className="h-5 w-5 text-muted-foreground" />
+                            )}
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="center">
+                            {isOnline ? "Online" : "Offline Mode"}
+                        </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="inline-block group-data-[collapsible=icon]:hidden">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout} disabled={!isOnline}>
+                                    <LogOut className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </TooltipTrigger>
+                        {!isOnline && <TooltipContent side="top" align="center"><p>Internet connection required to log out</p></TooltipContent>}
+                        </Tooltip>
                     </div>
                 </div>
-                 <div className="flex items-center gap-2">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="group-data-[collapsible=icon]:hidden">
-                          {isOnline ? (
-                            <Cloud className="h-5 w-5 text-green-500" />
-                          ) : (
-                            <CloudOff className="h-5 w-5 text-muted-foreground" />
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" align="center">
-                        {isOnline ? "Online" : "Offline Mode"}
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="inline-block group-data-[collapsible=icon]:hidden">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout} disabled={!isOnline}>
-                                <LogOut className="h-4 w-4" />
-                            </Button>
-                        </div>
-                      </TooltipTrigger>
-                      {!isOnline && <TooltipContent side="top" align="center"><p>Internet connection required to log out</p></TooltipContent>}
-                    </Tooltip>
-                 </div>
-            </div>
+                {shouldShowPosInfo && (selectedStore || selectedDevice) && (
+                  <>
+                    <Separator className="group-data-[collapsible=icon]:hidden" />
+                    <div className="space-y-1 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+                        {selectedStore && (
+                           <div className="flex items-center gap-2">
+                                <Store className="h-3 w-3" />
+                                <span className="truncate">Store: {selectedStore.name}</span>
+                           </div>
+                        )}
+                        {selectedDevice && (
+                           <div className="flex items-center gap-2">
+                                <HardDrive className="h-3 w-3" />
+                                <span className="truncate">Device: {selectedDevice.name}</span>
+                           </div>
+                        )}
+                    </div>
+                  </>
+                )}
+             </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
