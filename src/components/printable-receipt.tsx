@@ -48,8 +48,8 @@ export const PrintableReceipt = React.forwardRef<HTMLDivElement, PrintableReceip
     const tax = total - subtotal;
     
     return (
-      <div ref={ref} className="bg-white text-black font-mono text-xs w-[302px] p-2">
-        <div className="text-center space-y-1">
+      <div ref={ref} className="bg-white text-black font-mono text-xs w-[302px] p-2 flex flex-col">
+        <div className="text-center space-y-1 w-full">
           {currentReceiptSettings.printedLogo && (
             <div className="flex justify-center mb-2">
               <Image
@@ -70,7 +70,7 @@ export const PrintableReceipt = React.forwardRef<HTMLDivElement, PrintableReceip
 
         <div className="my-2 border-t border-dashed border-black"></div>
         
-        <div className="text-center">
+        <div className="text-center w-full">
           {isSale(data) ? (
             <>
               <p className="font-bold">RECEIPT #{data.order_number}</p>
@@ -92,19 +92,19 @@ export const PrintableReceipt = React.forwardRef<HTMLDivElement, PrintableReceip
         <table className="w-full">
           <thead>
             <tr>
-              <th className="text-left">ITEM</th>
-              <th className="text-center">QTY</th>
-              <th className="text-right">PRICE</th>
-              <th className="text-right">TOTAL</th>
+              <th className="text-left w-[45%]">ITEM</th>
+              <th className="text-center w-[15%]">QTY</th>
+              <th className="text-right w-[20%]">PRICE</th>
+              <th className="text-right w-[20%]">TOTAL</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td className="text-left w-2/4 pr-1">{item.name}</td>
-                <td className="text-center">{item.quantity}</td>
-                <td className="text-right">{currency}{item.price.toFixed(2)}</td>
-                <td className="text-right">{currency}{(item.price * item.quantity).toFixed(2)}</td>
+            {items.map((item, index) => (
+              <tr key={`${item.id}-${index}`}>
+                <td className="text-left pr-1 break-words">{item.name}</td>
+                <td className="text-center align-top">{item.quantity}</td>
+                <td className="text-right align-top">{currency}{item.price.toFixed(2)}</td>
+                <td className="text-right align-top">{currency}{(item.price * item.quantity).toFixed(2)}</td>
               </tr>
             ))}
           </tbody>
@@ -112,7 +112,7 @@ export const PrintableReceipt = React.forwardRef<HTMLDivElement, PrintableReceip
 
         <div className="my-2 border-t border-dashed border-black"></div>
 
-        <div className="space-y-1">
+        <div className="space-y-1 w-full">
           <div className="flex justify-between">
             <span>SUBTOTAL:</span>
             <span>{currency}{subtotal.toFixed(2)}</span>
@@ -130,7 +130,7 @@ export const PrintableReceipt = React.forwardRef<HTMLDivElement, PrintableReceip
         {isSale(data) && (
           <>
               <div className="my-2 border-t border-dashed border-black"></div>
-              <div className="space-y-1">
+              <div className="space-y-1 w-full">
                   {(data.payment_methods as string[]).map(method => (
                       <div className="flex justify-between" key={method}>
                           <span>{method.toUpperCase()}:</span>
@@ -144,7 +144,7 @@ export const PrintableReceipt = React.forwardRef<HTMLDivElement, PrintableReceip
 
         <div className="my-2 border-t border-dashed border-black"></div>
         
-        <div className="text-center space-y-1">
+        <div className="text-center space-y-1 w-full">
           <p>{currentReceiptSettings.footer}</p>
         </div>
       </div>
