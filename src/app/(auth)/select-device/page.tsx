@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -10,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { useSettings } from '@/hooks/use-settings';
 import type { StoreType, PosDeviceType } from '@/hooks/use-settings';
-import { HardDrive, Store, KeyRound } from 'lucide-react';
+import { HardDrive, Store, KeyRound, ArrowLeft } from 'lucide-react';
 import { collection, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +26,7 @@ export default function SelectDevicePage() {
         loggedInUser,
         loadingUser,
         dailyPin,
+        logout,
     } = useSettings();
     const [currentStoreId, setCurrentStoreId] = useState<string>('');
     const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
@@ -111,66 +113,72 @@ export default function SelectDevicePage() {
     }
 
     return (
-        <Card className="w-full max-w-md">
-            <CardHeader>
-                <CardTitle className="text-2xl">Welcome, {loggedInUser.name}!</CardTitle>
-                <CardDescription>
-                    Please enter the daily PIN and select your store and POS device to start your session.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-6">
-                <div className="grid gap-2">
-                    <Label htmlFor="pin" className='flex items-center gap-2'><KeyRound className='h-4 w-4' /> Daily Access PIN</Label>
-                    <Input 
-                        id="pin" 
-                        type="password" 
-                        maxLength={4} 
-                        value={enteredPin}
-                        onChange={(e) => setEnteredPin(e.target.value)}
-                        placeholder="••••"
-                        className="font-mono tracking-widest text-lg text-center"
-                    />
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="store" className='flex items-center gap-2'><Store className='h-4 w-4' /> Select Store</Label>
-                    <Select value={currentStoreId} onValueChange={setCurrentStoreId} disabled={!isPinCorrect}>
-                        <SelectTrigger id="store">
-                            <SelectValue placeholder="Choose a store..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {stores.map((store: StoreType) => (
-                                <SelectItem key={store.id} value={store.id}>
-                                    {store.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="device" className='flex items-center gap-2'><HardDrive className='h-4 w-4' /> Select POS Device</Label>
-                    <Select value={currentDeviceId} onValueChange={setCurrentDeviceId} disabled={!currentStoreId || !isPinCorrect}>
-                        <SelectTrigger id="device">
-                            <SelectValue placeholder="Choose a device..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {availableDevices.map((device: PosDeviceType) => (
-                                <SelectItem key={device.id} value={device.id}>
-                                    {device.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </CardContent>
-            <CardFooter>
-                <Button 
-                    className="w-full" 
-                    onClick={handleConfirm} 
-                    disabled={!currentStoreId || !currentDeviceId || !isPinCorrect}
-                >
-                    Start Selling
-                </Button>
-            </CardFooter>
-        </Card>
+        <div className="relative">
+            <Button variant="ghost" size="sm" className="absolute -top-16 -left-4" onClick={() => logout()}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Sign Out
+            </Button>
+            <Card className="w-full max-w-md">
+                <CardHeader>
+                    <CardTitle className="text-2xl">Welcome, {loggedInUser.name}!</CardTitle>
+                    <CardDescription>
+                        Please enter the daily PIN and select your store and POS device to start your session.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-6">
+                    <div className="grid gap-2">
+                        <Label htmlFor="pin" className='flex items-center gap-2'><KeyRound className='h-4 w-4' /> Daily Access PIN</Label>
+                        <Input 
+                            id="pin" 
+                            type="password" 
+                            maxLength={4} 
+                            value={enteredPin}
+                            onChange={(e) => setEnteredPin(e.target.value)}
+                            placeholder="••••"
+                            className="font-mono tracking-widest text-lg text-center"
+                        />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="store" className='flex items-center gap-2'><Store className='h-4 w-4' /> Select Store</Label>
+                        <Select value={currentStoreId} onValueChange={setCurrentStoreId} disabled={!isPinCorrect}>
+                            <SelectTrigger id="store">
+                                <SelectValue placeholder="Choose a store..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {stores.map((store: StoreType) => (
+                                    <SelectItem key={store.id} value={store.id}>
+                                        {store.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="device" className='flex items-center gap-2'><HardDrive className='h-4 w-4' /> Select POS Device</Label>
+                        <Select value={currentDeviceId} onValueChange={setCurrentDeviceId} disabled={!currentStoreId || !isPinCorrect}>
+                            <SelectTrigger id="device">
+                                <SelectValue placeholder="Choose a device..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {availableDevices.map((device: PosDeviceType) => (
+                                    <SelectItem key={device.id} value={device.id}>
+                                        {device.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </CardContent>
+                <CardFooter>
+                    <Button 
+                        className="w-full" 
+                        onClick={handleConfirm} 
+                        disabled={!currentStoreId || !currentDeviceId || !isPinCorrect}
+                    >
+                        Start Selling
+                    </Button>
+                </CardFooter>
+            </Card>
+        </div>
     );
 }
