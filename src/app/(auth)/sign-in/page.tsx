@@ -79,7 +79,7 @@ export default function SignInPage() {
       }
       const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
       
-      const { uid: userId, businessId, role } = userProfile;
+      const { id: userId, businessId, role } = userProfile;
       if (!businessId) throw new Error("Business ID not found for this user.");
       if (role === 'Owner') await ensureShiftPermissionForOwner(businessId);
 
