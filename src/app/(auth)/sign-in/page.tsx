@@ -14,16 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
@@ -70,72 +60,6 @@ export default function SignInPage() {
   const { loggedInUser } = useSettings();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
-  const [showActiveSessionDialog, setShowActiveSessionDialog] = useState(false);
-  const [sessionData, setSessionData] = useState<{ authUser: FirebaseAuthUser, userProfile: User } | null>(null);
-
-
-  const proceedWithSignIn = async (authUser: FirebaseAuthUser, userProfile: User, forceClose: boolean = false) => {
-    setIsLoading(true);
-    try {
-        const { uid: userId, email } = authUser;
-        const { businessId, role } = userProfile;
-
-        if (!businessId) throw new Error("Business ID not found for this user.");
-        if (role === 'Owner') await ensureShiftPermissionForOwner(businessId);
-
-        const shiftsCollection = collection(db, 'shifts');
-        // Query for any active or temp-active shifts for this user.
-        const q = query(shiftsCollection, where('userId', '==', userId), where('status', 'in', ['active', 'temp-active']));
-        const activeOrTempShiftsSnapshot = await getDocs(q);
-
-        if (!activeOrTempShiftsSnapshot.empty && !forceClose) {
-            setSessionData({ authUser, userProfile });
-            setShowActiveSessionDialog(true);
-            setIsLoading(false);
-            return;
-        }
-
-        const batch = writeBatch(db);
-
-        // If forcing, close ONLY the 'active' shifts, not 'temp-active' ones.
-        if (forceClose) {
-            const activeShiftsQuery = query(shiftsCollection, where('userId', '==', userId), where('status', '==', 'active'));
-            const activeShiftsSnapshot = await getDocs(activeShiftsQuery);
-            activeShiftsSnapshot.forEach((shiftDoc) => {
-                batch.update(doc(db, 'shifts', shiftDoc.id), { status: 'closed', endTime: new Date().toISOString() });
-            });
-        }
-        
-        // Create new active shift
-        const shiftDocRef = doc(shiftsCollection);
-        batch.set(shiftDocRef, {
-            userId: userId,
-            startTime: new Date().toISOString(),
-            endTime: null,
-            status: 'active',
-            businessId: businessId, 
-        });
-      
-        await batch.commit();
-
-        toast({
-            title: "Signed In",
-            description: `Welcome! Your shift has started.`,
-        });
-
-        // The useSettings hook will react to the auth state change
-    } catch (error: any) {
-        toast({
-            title: "Sign-in Error",
-            description: error.message,
-            variant: "destructive",
-        });
-    } finally {
-        setIsLoading(false);
-        setShowActiveSessionDialog(false);
-    }
-  };
 
   const handlePasswordSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -155,24 +79,52 @@ export default function SignInPage() {
       }
       const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
       
-      await proceedWithSignIn(authUser, userProfile);
+      const { uid: userId, businessId, role } = userProfile;
+      if (!businessId) throw new Error("Business ID not found for this user.");
+      if (role === 'Owner') await ensureShiftPermissionForOwner(businessId);
+
+      const shiftsCollection = collection(db, 'shifts');
+      
+      // Query for any 'active' shifts for this user.
+      const q = query(shiftsCollection, where('userId', '==', userId), where('status', '==', 'active'));
+      const activeShiftsSnapshot = await getDocs(q);
+
+      const batch = writeBatch(db);
+
+      // Close any previously active shifts for this user.
+      if (!activeShiftsSnapshot.empty) {
+          activeShiftsSnapshot.forEach((shiftDoc) => {
+              batch.update(doc(db, 'shifts', shiftDoc.id), { status: 'closed', endTime: new Date().toISOString() });
+          });
+      }
+      
+      // Create a new active shift for the current login session.
+      const shiftDocRef = doc(shiftsCollection);
+      batch.set(shiftDocRef, {
+          userId: userId,
+          startTime: new Date().toISOString(),
+          endTime: null,
+          status: 'active',
+          businessId: businessId, 
+      });
+    
+      await batch.commit();
+
+      toast({
+          title: "Signed In",
+          description: `Welcome! Your shift has started.`,
+      });
 
     } catch (error: any) {
       toast({
-        title: "Invalid Credentials",
+        title: "Sign-in Error",
         description: error.message,
         variant: "destructive",
       });
-      setIsLoading(false);
+    } finally {
+        setIsLoading(false);
     }
   };
-
-  const handleForceSignIn = () => {
-    if (sessionData) {
-        proceedWithSignIn(sessionData.authUser, sessionData.userProfile, true);
-    }
-  };
-
 
   // This effect handles the redirection after the user is set in the context
   useEffect(() => {
@@ -188,21 +140,6 @@ export default function SignInPage() {
 
   return (
     <>
-      <AlertDialog open={showActiveSessionDialog} onOpenChange={setShowActiveSessionDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Active Session Found</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have an active or temporarily active session. Signing in here will end your previous normal session and start a new one. Do you want to continue?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleForceSignIn}>Continue & Sign In</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <div className="relative">
         <Button variant="outline" size="sm" className="absolute -top-16 left-0" asChild>
           <Link href="/">
