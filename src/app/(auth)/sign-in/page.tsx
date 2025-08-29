@@ -85,10 +85,11 @@ export default function SignInPage() {
         if (role === 'Owner') await ensureShiftPermissionForOwner(businessId);
 
         const shiftsCollection = collection(db, 'shifts');
-        const q = query(shiftsCollection, where('userId', '==', userId), where('status', '==', 'active'));
-        const activeShiftsSnapshot = await getDocs(q);
+        // Query for any active or temp-active shifts for this user.
+        const q = query(shiftsCollection, where('userId', '==', userId), where('status', 'in', ['active', 'temp-active']));
+        const activeOrTempShiftsSnapshot = await getDocs(q);
 
-        if (!activeShiftsSnapshot.empty && !forceClose) {
+        if (!activeOrTempShiftsSnapshot.empty && !forceClose) {
             setSessionData({ authUser, userProfile });
             setShowActiveSessionDialog(true);
             setIsLoading(false);
@@ -97,8 +98,10 @@ export default function SignInPage() {
 
         const batch = writeBatch(db);
 
-        // Close any previously active shifts for this user if forcing
+        // If forcing, close ONLY the 'active' shifts, not 'temp-active' ones.
         if (forceClose) {
+            const activeShiftsQuery = query(shiftsCollection, where('userId', '==', userId), where('status', '==', 'active'));
+            const activeShiftsSnapshot = await getDocs(activeShiftsQuery);
             activeShiftsSnapshot.forEach((shiftDoc) => {
                 batch.update(doc(db, 'shifts', shiftDoc.id), { status: 'closed', endTime: new Date().toISOString() });
             });
@@ -190,7 +193,7 @@ export default function SignInPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Active Session Found</AlertDialogTitle>
             <AlertDialogDescription>
-              You are already signed in on another device or browser. Signing in here will end your other session. Do you want to continue?
+              You have an active or temporarily active session. Signing in here will end your previous normal session and start a new one. Do you want to continue?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
