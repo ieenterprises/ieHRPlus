@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Download, RefreshCw, XCircle } from "lucide-react";
+import { Calendar as CalendarIcon, Download, RefreshCw, XCircle, Store, HardDrive } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -42,15 +42,17 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
-import type { Shift, User } from "@/lib/types";
+import type { Shift, User, StoreType, PosDeviceType } from "@/lib/types";
 
 type EnrichedShift = Shift & {
   user: User | null;
+  store: StoreType | null;
+  device: PosDeviceType | null;
   duration: string;
 };
 
 export default function ShiftsPage() {
-  const { shifts, users, loggedInUser, reactivateShift, closeShift } = useSettings();
+  const { shifts, users, loggedInUser, reactivateShift, closeShift, stores, posDevices } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -65,6 +67,8 @@ export default function ShiftsPage() {
     return shifts
       .map(shift => {
         const user = users.find(u => u.id === shift.userId) || null;
+        const store = stores.find(s => s.id === shift.storeId) || null;
+        const device = posDevices.find(d => d.id === shift.posDeviceId) || null;
         let duration = "Active";
         if (shift.endTime) {
           try {
@@ -73,7 +77,7 @@ export default function ShiftsPage() {
             duration = "Invalid date";
           }
         }
-        return { ...shift, user, duration };
+        return { ...shift, user, store, device, duration };
       })
       .filter(shift => {
         const employeeMatch = filters.employeeId === 'all' || shift.userId === filters.employeeId;
@@ -86,7 +90,7 @@ export default function ShiftsPage() {
         return employeeMatch && dateMatch;
       })
       .sort((a, b) => parseISO(b.startTime).getTime() - parseISO(a.startTime).getTime());
-  }, [shifts, users, filters, dateRange]);
+  }, [shifts, users, filters, dateRange, stores, posDevices]);
 
   useEffect(() => {
     setLoading(false);
@@ -142,6 +146,8 @@ export default function ShiftsPage() {
 
     const dataToExport = enrichedAndFilteredShifts.map(shift => ({
       "Employee": shift.user?.name || 'Unknown',
+      "Store": shift.store?.name || 'N/A',
+      "POS Device": shift.device?.name || 'N/A',
       "Clock In": format(parseISO(shift.startTime), "yyyy-MM-dd HH:mm:ss"),
       "Clock Out": shift.endTime ? format(parseISO(shift.endTime), "yyyy-MM-dd HH:mm:ss") : 'N/A',
       "Duration": shift.duration,
@@ -245,6 +251,7 @@ export default function ShiftsPage() {
               <TableHeader>
                 <TableRow>
                     <TableHead>Employee</TableHead>
+                    <TableHead>Location</TableHead>
                     <TableHead>Clock In</TableHead>
                     <TableHead>Clock Out</TableHead>
                     <TableHead>Duration</TableHead>
@@ -254,11 +261,27 @@ export default function ShiftsPage() {
               </TableHeader>
               <TableBody>
               {loading ? (
-                  <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="h-24 text-center">Loading...</TableCell></TableRow>
               ) : enrichedAndFilteredShifts.length > 0 ? (
                   enrichedAndFilteredShifts.map((shift) => (
                       <TableRow key={shift.id}>
                           <TableCell className="font-medium">{shift.user?.name || 'Unknown User'}</TableCell>
+                          <TableCell>
+                            {shift.store || shift.device ? (
+                              <div className="flex flex-col text-xs">
+                                <div className="flex items-center gap-1.5">
+                                  <Store className="h-3 w-3 text-muted-foreground" />
+                                  <span>{shift.store?.name || 'N/A'}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <HardDrive className="h-3 w-3 text-muted-foreground" />
+                                  <span>{shift.device?.name || 'N/A'}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">N/A</span>
+                            )}
+                          </TableCell>
                           <TableCell>{format(parseISO(shift.startTime), "PPpp")}</TableCell>
                           <TableCell>{shift.endTime ? format(parseISO(shift.endTime), "PPpp") : 'N/A'}</TableCell>
                           <TableCell>{shift.duration}</TableCell>
@@ -300,7 +323,7 @@ export default function ShiftsPage() {
                   ))
               ) : (
                   <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
                           No shifts found for the selected filters.
                       </TableCell>
                   </TableRow>

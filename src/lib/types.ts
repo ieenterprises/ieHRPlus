@@ -1,5 +1,4 @@
 
-
 import type { AnyPermission } from "./permissions";
 
 export type Business = {
@@ -26,6 +25,8 @@ export type Shift = {
   endTime: string | null;
   status: 'active' | 'closed' | 'temp-active';
   user?: User | null;
+  storeId?: string | null;
+  posDeviceId?: string | null;
 };
 
 export type Category = Database['public']['Tables']['categories']['Row'] & { businessId: string };

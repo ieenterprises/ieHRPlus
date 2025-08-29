@@ -10,13 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useSettings } from '@/hooks/use-settings';
 import type { StoreType, PosDeviceType } from '@/hooks/use-settings';
 import { HardDrive, Store } from 'lucide-react';
+import { collection, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SelectDevicePage() {
     const router = useRouter();
     const { 
         stores, 
         posDevices, 
-        selectedStore,
         setSelectedStore,
         setSelectedDevice,
         loggedInUser,
@@ -25,6 +27,7 @@ export default function SelectDevicePage() {
     const [currentStoreId, setCurrentStoreId] = useState<string>('');
     const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
     const [availableDevices, setAvailableDevices] = useState<PosDeviceType[]>([]);
+    const { toast } = useToast();
 
     useEffect(() => {
         if (!loadingUser && !loggedInUser) {
@@ -44,12 +47,39 @@ export default function SelectDevicePage() {
         }
     }, [currentStoreId, posDevices]);
 
-    const handleConfirm = () => {
-        if (currentStoreId && currentDeviceId) {
+    const handleConfirm = async () => {
+        if (currentStoreId && currentDeviceId && loggedInUser) {
             const store = stores.find(s => s.id === currentStoreId);
             const device = posDevices.find(d => d.id === currentDeviceId);
             if(store) setSelectedStore(store);
             if(device) setSelectedDevice(device);
+
+            // Update the active shift with store and device info
+            try {
+                const shiftsRef = collection(db, 'shifts');
+                const q = query(shiftsRef, 
+                    where('userId', '==', loggedInUser.id),
+                    where('status', '==', 'active')
+                );
+                const activeShiftSnapshot = await getDocs(q);
+
+                if (!activeShiftSnapshot.empty) {
+                    const shiftDoc = activeShiftSnapshot.docs[0]; // Assuming only one active shift
+                    await writeBatch(db).update(doc(db, 'shifts', shiftDoc.id), {
+                        storeId: currentStoreId,
+                        posDeviceId: currentDeviceId,
+                    }).commit();
+                }
+            } catch (error) {
+                console.error("Failed to update shift with device info:", error);
+                toast({
+                    title: "Session Error",
+                    description: "Could not save session details. Please try again.",
+                    variant: "destructive"
+                });
+                return;
+            }
+
             router.push('/sales');
         }
     };
