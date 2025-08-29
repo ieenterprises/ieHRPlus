@@ -30,6 +30,15 @@ export type Shift = {
   posDeviceId?: string | null;
 };
 
+export type AccessCode = {
+  id: string;
+  code: string;
+  status: 'valid' | 'used' | 'expired';
+  createdAt: string;
+  expiresAt: string;
+  businessId: string;
+};
+
 export type Category = Database['public']['Tables']['categories']['Row'] & { businessId: string };
 export type Product = Omit<Database['public']['Tables']['products']['Row'], 'price' | 'stock'> & { 
   businessId: string;
@@ -101,8 +110,7 @@ export type BusinessSettings = {
     featureSettings: FeatureSettings;
     receiptSettings: Record<string, ReceiptSettings>;
     currency: string;
-    dailyPin: string;
-}
+};
 
 export type Tax = {
     id: string;
@@ -490,7 +498,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string | null
-          email?: string
+          email: string
           id?: string
           name?: string
           permissions?: Json | null
@@ -605,3 +613,6 @@ export type Enums<
 
     
 
+
+
+    

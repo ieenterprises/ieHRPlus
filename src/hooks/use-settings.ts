@@ -5,7 +5,7 @@
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift } from '@/lib/types';
+import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
@@ -47,7 +47,7 @@ type SettingsContextType = {
     voidedLogs: VoidedLog[];
     openTickets: OpenTicket[];
     shifts: Shift[];
-    dailyPin: string;
+    accessCodes: AccessCode[];
     
     // Data setters (now write to DB)
     setFeatureSettings: (value: React.SetStateAction<FeatureSettings>) => void;
@@ -67,7 +67,8 @@ type SettingsContextType = {
     addTax: (tax: Omit<Tax, 'id'>) => Promise<void>;
     updateTax: (id: string, tax: Partial<Tax>) => Promise<void>;
     deleteTax: (id: string) => Promise<void>;
-    generateNewDailyPin: () => void;
+    generateAccessCode: () => Promise<AccessCode | null>;
+    validateAndUseAccessCode: (code: string) => Promise<boolean>;
     
     // Auth and session state
     loggedInUser: User | null;
@@ -155,7 +156,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [openTickets, setOpenTicketsState] = useState<OpenTicket[]>([]);
     const [shifts, setShiftsState] = useState<Shift[]>([]);
     const [currency, setCurrencyState] = useState<string>('$');
-    const [dailyPin, setDailyPin] = useState<string>('0000');
+    const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
     
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
@@ -229,6 +230,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         taxes: setTaxes,
                         payment_types: setPaymentTypes,
                         shifts: setShiftsState,
+                        access_codes: setAccessCodes,
                     };
 
                     Object.entries(collections).forEach(([name, setter]) => {
@@ -249,7 +251,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                             setFeatureSettingsState(settingsData.featureSettings || {});
                             setReceiptSettingsState(settingsData.receiptSettings || {});
                             setCurrencyState(settingsData.currency || '$');
-                            setDailyPin(settingsData.dailyPin || '0000');
                         }
                     });
                     subscriptions.push(settingsUnsub);
@@ -258,7 +259,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setStores, setPosDevices, setPrinters, setTaxes, setPaymentTypes, setShiftsState];
+                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setStores, setPosDevices, setPrinters, setTaxes, setPaymentTypes, setShiftsState, setAccessCodes];
                 collections.forEach(setter => setter([]));
             }
         });
@@ -322,10 +323,39 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const setReceiptSettings = createSetterWithDbSync(receiptSettings, setReceiptSettingsState, 'receiptSettings');
     const setCurrency = createSetterWithDbSync(currency, setCurrencyState, 'currency');
     
-    const generateNewDailyPin = () => {
-        const newPin = Math.floor(1000 + Math.random() * 9000).toString();
-        setDailyPin(newPin);
-        setSettingsDoc({ dailyPin: newPin });
+    const generateAccessCode = async (): Promise<AccessCode | null> => {
+        if (!loggedInUser?.businessId) return null;
+        const now = new Date();
+        const expires = new Date(now.getTime() + 5 * 60 * 1000); // 5-minute validity
+
+        const newCode: Omit<AccessCode, 'id'> = {
+            code: Math.floor(1000 + Math.random() * 9000).toString(),
+            status: 'valid',
+            createdAt: now.toISOString(),
+            expiresAt: expires.toISOString(),
+            businessId: loggedInUser.businessId,
+        };
+
+        const docRef = await addDoc(collection(db, 'access_codes'), newCode);
+        return { ...newCode, id: docRef.id };
+    };
+
+    const validateAndUseAccessCode = async (code: string): Promise<boolean> => {
+        if (!loggedInUser?.businessId) return false;
+
+        const now = new Date();
+        const validCode = accessCodes.find(ac => 
+            ac.code === code && 
+            ac.status === 'valid' &&
+            new Date(ac.expiresAt) > now
+        );
+
+        if (validCode && validCode.id) {
+            await updateDoc(doc(db, 'access_codes', validCode.id), { status: 'used' });
+            return true;
+        }
+
+        return false;
     };
 
     const addDocFactory = (collectionName: string) => async (data: any) => { 
@@ -470,7 +500,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         voidedLogs, setVoidedLogs,
         openTickets, setOpenTickets,
         shifts,
-        dailyPin, generateNewDailyPin,
+        accessCodes,
+        generateAccessCode,
+        validateAndUseAccessCode,
         loggedInUser,
         loadingUser,
         logout,
@@ -499,5 +531,8 @@ export function useSettings() {
 }
 
     
+
+    
+
 
     
