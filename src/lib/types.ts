@@ -1,4 +1,5 @@
 
+
 import type { AnyPermission } from "./permissions";
 
 export type Business = {
@@ -95,6 +96,13 @@ export type ReceiptSettings = {
   showComments: boolean;
   language: string;
 };
+
+export type BusinessSettings = {
+    featureSettings: FeatureSettings;
+    receiptSettings: Record<string, ReceiptSettings>;
+    currency: string;
+    dailyPin: string;
+}
 
 export type Tax = {
     id: string;
@@ -596,3 +604,4 @@ export type Enums<
   : never
 
     
+

@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { useSettings } from '@/hooks/use-settings';
 import type { StoreType, PosDeviceType } from '@/hooks/use-settings';
-import { HardDrive, Store } from 'lucide-react';
+import { HardDrive, Store, KeyRound } from 'lucide-react';
 import { collection, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -22,10 +23,13 @@ export default function SelectDevicePage() {
         setSelectedStore,
         setSelectedDevice,
         loggedInUser,
-        loadingUser 
+        loadingUser,
+        dailyPin,
     } = useSettings();
     const [currentStoreId, setCurrentStoreId] = useState<string>('');
     const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
+    const [enteredPin, setEnteredPin] = useState('');
+    const [isPinCorrect, setIsPinCorrect] = useState(false);
     const [availableDevices, setAvailableDevices] = useState<PosDeviceType[]>([]);
     const { toast } = useToast();
 
@@ -46,9 +50,23 @@ export default function SelectDevicePage() {
             setAvailableDevices([]);
         }
     }, [currentStoreId, posDevices]);
+    
+    useEffect(() => {
+        if (enteredPin.length === 4) {
+            if (enteredPin === dailyPin) {
+                setIsPinCorrect(true);
+                toast({ title: "PIN Accepted", description: "You can now select your device." });
+            } else {
+                setIsPinCorrect(false);
+                toast({ title: "Invalid PIN", description: "The PIN you entered is incorrect.", variant: "destructive" });
+            }
+        } else {
+            setIsPinCorrect(false);
+        }
+    }, [enteredPin, dailyPin, toast]);
 
     const handleConfirm = async () => {
-        if (currentStoreId && currentDeviceId && loggedInUser) {
+        if (currentStoreId && currentDeviceId && loggedInUser && isPinCorrect) {
             const store = stores.find(s => s.id === currentStoreId);
             const device = posDevices.find(d => d.id === currentDeviceId);
             if(store) setSelectedStore(store);
@@ -97,13 +115,25 @@ export default function SelectDevicePage() {
             <CardHeader>
                 <CardTitle className="text-2xl">Welcome, {loggedInUser.name}!</CardTitle>
                 <CardDescription>
-                    Please select your store and POS device to start your session.
+                    Please enter the daily PIN and select your store and POS device to start your session.
                 </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6">
                 <div className="grid gap-2">
+                    <Label htmlFor="pin" className='flex items-center gap-2'><KeyRound className='h-4 w-4' /> Daily Access PIN</Label>
+                    <Input 
+                        id="pin" 
+                        type="password" 
+                        maxLength={4} 
+                        value={enteredPin}
+                        onChange={(e) => setEnteredPin(e.target.value)}
+                        placeholder="••••"
+                        className="font-mono tracking-widest text-lg text-center"
+                    />
+                </div>
+                <div className="grid gap-2">
                     <Label htmlFor="store" className='flex items-center gap-2'><Store className='h-4 w-4' /> Select Store</Label>
-                    <Select value={currentStoreId} onValueChange={setCurrentStoreId}>
+                    <Select value={currentStoreId} onValueChange={setCurrentStoreId} disabled={!isPinCorrect}>
                         <SelectTrigger id="store">
                             <SelectValue placeholder="Choose a store..." />
                         </SelectTrigger>
@@ -118,7 +148,7 @@ export default function SelectDevicePage() {
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="device" className='flex items-center gap-2'><HardDrive className='h-4 w-4' /> Select POS Device</Label>
-                    <Select value={currentDeviceId} onValueChange={setCurrentDeviceId} disabled={!currentStoreId}>
+                    <Select value={currentDeviceId} onValueChange={setCurrentDeviceId} disabled={!currentStoreId || !isPinCorrect}>
                         <SelectTrigger id="device">
                             <SelectValue placeholder="Choose a device..." />
                         </SelectTrigger>
@@ -136,7 +166,7 @@ export default function SelectDevicePage() {
                 <Button 
                     className="w-full" 
                     onClick={handleConfirm} 
-                    disabled={!currentStoreId || !currentDeviceId}
+                    disabled={!currentStoreId || !currentDeviceId || !isPinCorrect}
                 >
                     Start Selling
                 </Button>

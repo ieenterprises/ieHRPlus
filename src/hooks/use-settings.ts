@@ -47,6 +47,7 @@ type SettingsContextType = {
     voidedLogs: VoidedLog[];
     openTickets: OpenTicket[];
     shifts: Shift[];
+    dailyPin: string;
     
     // Data setters (now write to DB)
     setFeatureSettings: (value: React.SetStateAction<FeatureSettings>) => void;
@@ -66,6 +67,7 @@ type SettingsContextType = {
     addTax: (tax: Omit<Tax, 'id'>) => Promise<void>;
     updateTax: (id: string, tax: Partial<Tax>) => Promise<void>;
     deleteTax: (id: string) => Promise<void>;
+    generateNewDailyPin: () => void;
     
     // Auth and session state
     loggedInUser: User | null;
@@ -153,6 +155,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [openTickets, setOpenTicketsState] = useState<OpenTicket[]>([]);
     const [shifts, setShiftsState] = useState<Shift[]>([]);
     const [currency, setCurrencyState] = useState<string>('$');
+    const [dailyPin, setDailyPin] = useState<string>('0000');
     
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
@@ -246,6 +249,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                             setFeatureSettingsState(settingsData.featureSettings || {});
                             setReceiptSettingsState(settingsData.receiptSettings || {});
                             setCurrencyState(settingsData.currency || '$');
+                            setDailyPin(settingsData.dailyPin || '0000');
                         }
                     });
                     subscriptions.push(settingsUnsub);
@@ -318,6 +322,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const setReceiptSettings = createSetterWithDbSync(receiptSettings, setReceiptSettingsState, 'receiptSettings');
     const setCurrency = createSetterWithDbSync(currency, setCurrencyState, 'currency');
     
+    const generateNewDailyPin = () => {
+        const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+        setDailyPin(newPin);
+        setSettingsDoc({ dailyPin: newPin });
+    };
+
     const addDocFactory = (collectionName: string) => async (data: any) => { 
         if (!loggedInUser?.businessId) return;
         await addDoc(collection(db, collectionName), { ...data, businessId: loggedInUser.businessId }); 
@@ -460,6 +470,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         voidedLogs, setVoidedLogs,
         openTickets, setOpenTickets,
         shifts,
+        dailyPin, generateNewDailyPin,
         loggedInUser,
         loadingUser,
         logout,
