@@ -1,9 +1,8 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -11,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { useSettings } from '@/hooks/use-settings';
 import type { StoreType, PosDeviceType } from '@/hooks/use-settings';
-import { HardDrive, Store, KeyRound, ArrowLeft } from 'lucide-react';
+import { HardDrive, Store, KeyRound, ArrowLeft, Loader2 } from 'lucide-react';
 import { collection, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -25,13 +24,14 @@ export default function SelectDevicePage() {
         setSelectedDevice,
         loggedInUser,
         loadingUser,
-        dailyPin,
+        validateAndUseAccessCode,
         logout,
     } = useSettings();
     const [currentStoreId, setCurrentStoreId] = useState<string>('');
     const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
     const [enteredPin, setEnteredPin] = useState('');
     const [isPinCorrect, setIsPinCorrect] = useState(false);
+    const [isVerifying, setIsVerifying] = useState(false);
     const [availableDevices, setAvailableDevices] = useState<PosDeviceType[]>([]);
     const { toast } = useToast();
 
@@ -53,19 +53,33 @@ export default function SelectDevicePage() {
         }
     }, [currentStoreId, posDevices]);
     
+    const verifyPin = useCallback(async () => {
+      if (enteredPin.length !== 4) {
+        setIsPinCorrect(false);
+        return;
+      }
+
+      setIsVerifying(true);
+      const isValid = await validateAndUseAccessCode(enteredPin);
+      if (isValid) {
+        setIsPinCorrect(true);
+        toast({ title: "Code Accepted", description: "You can now select your device." });
+      } else {
+        setIsPinCorrect(false);
+        toast({ title: "Invalid Code", description: "The code you entered is incorrect, expired, or already used.", variant: "destructive" });
+      }
+      setIsVerifying(false);
+    }, [enteredPin, validateAndUseAccessCode, toast]);
+    
     useEffect(() => {
-        if (enteredPin.length === 4) {
-            if (enteredPin === dailyPin) {
-                setIsPinCorrect(true);
-                toast({ title: "PIN Accepted", description: "You can now select your device." });
-            } else {
-                setIsPinCorrect(false);
-                toast({ title: "Invalid PIN", description: "The PIN you entered is incorrect.", variant: "destructive" });
+        const timer = setTimeout(() => {
+            if (enteredPin.length === 4 && !isPinCorrect) {
+                verifyPin();
             }
-        } else {
-            setIsPinCorrect(false);
-        }
-    }, [enteredPin, dailyPin, toast]);
+        }, 500); // Debounce the verification call
+
+        return () => clearTimeout(timer);
+    }, [enteredPin, isPinCorrect, verifyPin]);
 
     const handleConfirm = async () => {
         if (currentStoreId && currentDeviceId && loggedInUser && isPinCorrect) {
@@ -122,21 +136,25 @@ export default function SelectDevicePage() {
                 <CardHeader>
                     <CardTitle className="text-2xl">Welcome, {loggedInUser.name}!</CardTitle>
                     <CardDescription>
-                        Please enter the daily PIN and select your store and POS device to start your session.
+                        Please enter the one-time access code from your manager and select your device to start.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-6">
                     <div className="grid gap-2">
-                        <Label htmlFor="pin" className='flex items-center gap-2'><KeyRound className='h-4 w-4' /> Daily Access PIN</Label>
-                        <Input 
-                            id="pin" 
-                            type="password" 
-                            maxLength={4} 
-                            value={enteredPin}
-                            onChange={(e) => setEnteredPin(e.target.value)}
-                            placeholder="••••"
-                            className="font-mono tracking-widest text-lg text-center"
-                        />
+                        <Label htmlFor="pin" className='flex items-center gap-2'><KeyRound className='h-4 w-4' /> One-Time Access Code</Label>
+                        <div className="relative">
+                            <Input 
+                                id="pin" 
+                                type="password" 
+                                maxLength={4} 
+                                value={enteredPin}
+                                onChange={(e) => setEnteredPin(e.target.value.trim())}
+                                placeholder="••••"
+                                className="font-mono tracking-widest text-lg text-center"
+                                disabled={isPinCorrect}
+                            />
+                            {isVerifying && <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin text-muted-foreground" />}
+                        </div>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="store" className='flex items-center gap-2'><Store className='h-4 w-4' /> Select Store</Label>

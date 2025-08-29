@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Percent, SlidersHorizontal, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, Receipt, CalendarCheck, CreditCard, KeyRound, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { Ticket, Clock, Printer, Utensils, MonitorPlay, Users, Percent, SlidersHorizontal, Store, HardDrive, PlusCircle, MoreHorizontal, Edit, Trash2, Receipt, CalendarCheck, CreditCard, KeyRound, RefreshCw, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { useSettings, type FeatureSettings, type StoreType, type PosDeviceType, type PrinterType, type ReceiptSettings, type PaymentType, type Tax } from "@/hooks/use-settings";
+import { useSettings, type FeatureSettings, type StoreType, type PosDeviceType, type PrinterType, type ReceiptSettings, type PaymentType, type Tax, type AccessCode } from "@/hooks/use-settings";
 
 
 const settingsNav = [
@@ -73,7 +73,7 @@ export default function SettingsPage() {
     taxes,
     currency,
     paymentTypes,
-    dailyPin,
+    generateAccessCode,
     setFeatureSettings,
     addStore,
     updateStore,
@@ -92,7 +92,6 @@ export default function SettingsPage() {
     addPaymentType,
     updatePaymentType,
     deletePaymentType,
-    generateNewDailyPin,
   } = useSettings();
   
   const [activeSection, setActiveSection] = useState("features");
@@ -116,7 +115,8 @@ export default function SettingsPage() {
 
   const [selectedStoreForReceipt, setSelectedStoreForReceipt] = useState<string>(stores[0]?.id || '');
   
-  const [pinVisible, setPinVisible] = useState(false);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState<AccessCode | null>(null);
 
   const emailedLogoInputRef = useRef<HTMLInputElement>(null);
   const printedLogoInputRef = useRef<HTMLInputElement>(null);
@@ -311,9 +311,15 @@ export default function SettingsPage() {
     setIsPaymentTypeDialogOpen(false);
   };
   
-  const handleGeneratePin = () => {
-    generateNewDailyPin();
-    toast({ title: "New PIN Generated", description: "The daily access PIN has been updated for all staff." });
+  const handleGenerateCode = async () => {
+    setIsGeneratingCode(true);
+    const newCode = await generateAccessCode();
+    if (newCode) {
+      setGeneratedCode(newCode);
+    } else {
+      toast({ title: "Error", description: "Could not generate access code.", variant: "destructive" });
+    }
+    setIsGeneratingCode(false);
   };
 
   const getStoreName = (storeId: string) => stores.find(s => s.id === storeId)?.name || 'N/A';
@@ -821,28 +827,33 @@ export default function SettingsPage() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <div className="space-y-2">
-                          <Label>Daily Access PIN</Label>
+                          <Label>One-Time Access Code</Label>
                            <p className="text-sm text-muted-foreground">
-                            Generate a 4-digit PIN that staff (Cashiers, Waiters, etc.) must enter to start their daily session.
+                            Generate a unique, 4-digit code that staff must enter to start their session. Each code is valid for 5 minutes and can only be used once.
                           </p>
                         </div>
                         <div className="flex flex-col sm:flex-row items-center gap-4 p-4 border rounded-md bg-muted/50">
                             <div className="flex-1 space-y-1">
-                                <p className="text-sm font-medium">Current PIN</p>
-                                <div className="flex items-center gap-2">
-                                     <Input 
-                                        readOnly 
-                                        value={pinVisible ? dailyPin : '••••'}
-                                        className="w-24 font-mono text-lg tracking-widest"
-                                     />
-                                     <Button type="button" variant="ghost" size="icon" onClick={() => setPinVisible(!pinVisible)}>
-                                        {pinVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                     </Button>
-                                </div>
+                                <p className="text-sm font-medium">New Access Code</p>
+                                {generatedCode ? (
+                                    <div className="flex items-center gap-2">
+                                        <Input 
+                                            readOnly 
+                                            value={generatedCode.code}
+                                            className="w-24 font-mono text-2xl tracking-widest text-center h-12"
+                                        />
+                                        <div className="text-xs text-muted-foreground">
+                                            <p>This code is valid for 5 minutes.</p>
+                                            <p>Provide it to the staff member to sign in.</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground h-12 flex items-center">Click the button to generate a new code.</p>
+                                )}
                             </div>
-                            <Button onClick={handleGeneratePin}>
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Generate New PIN
+                            <Button onClick={handleGenerateCode} disabled={isGeneratingCode}>
+                                {isGeneratingCode ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                                Generate New Code
                             </Button>
                         </div>
                     </CardContent>
