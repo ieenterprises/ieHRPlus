@@ -48,7 +48,7 @@ export const PrintableReceipt = React.forwardRef<HTMLDivElement, PrintableReceip
     const tax = total - subtotal;
     
     return (
-      <div ref={ref} className="bg-white text-black font-mono text-xs w-[302px] p-2 flex flex-col">
+      <div ref={ref} className="bg-white text-black font-sans text-xs w-[302px] p-2 flex flex-col">
         <div className="text-center space-y-1 w-full">
           {currentReceiptSettings.printedLogo && (
             <div className="flex justify-center mb-2">
