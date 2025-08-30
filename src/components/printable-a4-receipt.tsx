@@ -102,8 +102,8 @@ export const PrintableA4Receipt = React.forwardRef<HTMLDivElement, PrintableA4Re
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id}>
+              {items.map((item, index) => (
+                <TableRow key={`${item.id}-${index}`}>
                   <TableCell className="font-medium">{item.name}</TableCell>
                   <TableCell className="text-center">{item.quantity}</TableCell>
                   <TableCell className="text-right">{currency}{item.price.toFixed(2)}</TableCell>
