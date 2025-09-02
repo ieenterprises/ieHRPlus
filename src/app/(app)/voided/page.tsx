@@ -210,6 +210,7 @@ export default function VoidedPage() {
     
     toast({ title: "Receipt Restored", description: `Receipt #${saleToRestore.order_number} has been restored.` });
   
+    // Remove the log from the voided logs list
     await setVoidedLogs(prev => prev.filter(log => log.id !== logToRestore.id));
   };
 
