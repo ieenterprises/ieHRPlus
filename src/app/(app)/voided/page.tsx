@@ -190,10 +190,8 @@ export default function VoidedPage() {
         users: users.find(u => u.id === logToRestore.data.employee_id) || null,
     } as Sale;
     
-    // Atomically remove any existing sale and add the restored one.
     await setSales(prev => [...prev.filter(s => s.id !== saleToRestore.id), saleToRestore]);
     
-    // Check if the restored sale was a credit sale and restore the debt if so.
     if (saleToRestore.payment_methods.includes('Credit') && loggedInUser?.businessId) {
         const debtToRestore: Omit<Debt, 'id'> = {
             sale_id: saleToRestore.id,
@@ -210,8 +208,7 @@ export default function VoidedPage() {
     
     toast({ title: "Receipt Restored", description: `Receipt #${saleToRestore.order_number} has been restored.` });
   
-    // Remove the log from the voided logs list
-    await setVoidedLogs(prev => prev.filter(log => log.id !== logToRestore.id));
+    await deleteVoidedLog(logToRestore.id);
   };
 
 
