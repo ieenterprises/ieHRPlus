@@ -190,7 +190,13 @@ export default function VoidedPage() {
         users: users.find(u => u.id === logToRestore.data.employee_id) || null,
     } as Sale;
     
-    await setSales(prev => [...prev, saleToRestore]);
+    await setSales(prev => {
+        // Check if the sale already exists to prevent duplicates
+        if (prev.some(s => s.id === saleToRestore.id)) {
+            return prev;
+        }
+        return [...prev, saleToRestore];
+    });
     
     // Check if the restored sale was a credit sale and restore the debt if so.
     if (saleToRestore.payment_methods.includes('Credit') && loggedInUser?.businessId) {
