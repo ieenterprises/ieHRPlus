@@ -461,32 +461,7 @@ export default function KitchenPage() {
   const handleMerge = async () => {
     if (!primaryMergeId || !loggedInUser?.id) return;
 
-    if (activeTab === 'open_tickets') {
-        const ticketsToMerge = openTickets.filter(t => selectedTickets.has(t.id));
-        const primaryTicket = ticketsToMerge.find(t => t.id === primaryMergeId);
-        if (!primaryTicket) return;
-
-        const allItems = ticketsToMerge.flatMap(t => t.items);
-        const newTotal = ticketsToMerge.reduce((sum, ticket) => sum + ticket.total, 0);
-        
-        const newTicket: Partial<OpenTicket> = {
-            ...primaryTicket,
-            items: allItems,
-            total: newTotal,
-            created_at: new Date().toISOString(),
-        };
-        delete newTicket.id; // Create a new ticket
-
-        const savedTicket = await saveTicket(newTicket);
-        if (savedTicket) {
-            // Delete old tickets
-            for (const ticket of ticketsToMerge) {
-                await deleteTicket(ticket.id);
-            }
-        }
-        toast({ title: "Tickets Merged", description: `Created new ticket #${savedTicket?.order_number}`});
-
-    } else { // Receipts
+    if (activeTab === 'receipts') {
         const receiptsToMerge = sales.filter(s => selectedReceipts.has(s.id));
         const primaryReceipt = receiptsToMerge.find(s => s.id === primaryMergeId);
         if (!primaryReceipt) return;
@@ -593,24 +568,26 @@ export default function KitchenPage() {
             description="View open tickets and completed receipts."
           />
            <div className="flex items-center gap-2 self-end">
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <div className="inline-block">
-                             <Button 
-                                onClick={() => setIsMergeDialogOpen(true)} 
-                                variant="outline" 
-                                size="sm"
-                                disabled={((activeTab === 'open_tickets' && selectedTickets.size < 2) || (activeTab === 'receipts' && selectedReceipts.size < 2)) || !isOnline || !canMerge || !areAllSelectedOrdersFulfilled}
-                            >
-                                <GitMerge className="mr-2 h-4 w-4" />
-                                Merge
-                            </Button>
-                        </div>
-                    </TooltipTrigger>
-                    {!isOnline && <TooltipContent><p>Internet connection required</p></TooltipContent>}
-                    {!canMerge && <TooltipContent><p>You can only merge your own orders.</p></TooltipContent>}
-                    {!areAllSelectedOrdersFulfilled && <TooltipContent><p>Only fulfilled orders can be merged.</p></TooltipContent>}
-                </Tooltip>
+                {activeTab === 'receipts' && (
+                  <Tooltip>
+                      <TooltipTrigger asChild>
+                          <div className="inline-block">
+                              <Button 
+                                  onClick={() => setIsMergeDialogOpen(true)} 
+                                  variant="outline" 
+                                  size="sm"
+                                  disabled={selectedReceipts.size < 2 || !isOnline || !canMerge || !areAllSelectedOrdersFulfilled}
+                              >
+                                  <GitMerge className="mr-2 h-4 w-4" />
+                                  Merge
+                              </Button>
+                          </div>
+                      </TooltipTrigger>
+                      {!isOnline && <TooltipContent><p>Internet connection required</p></TooltipContent>}
+                      {!canMerge && <TooltipContent><p>You can only merge your own orders.</p></TooltipContent>}
+                      {!areAllSelectedOrdersFulfilled && <TooltipContent><p>Only fulfilled orders can be merged.</p></TooltipContent>}
+                  </Tooltip>
+                )}
                 <Button onClick={handleExport} variant="outline" size="sm">
                     <Download className="mr-2 h-4 w-4" />
                     Export
@@ -667,7 +644,6 @@ export default function KitchenPage() {
                       <Table>
                           <TableHeader>
                               <TableRow>
-                                  <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredTickets.filter(t => canSelectForMerge(t.employee_id)).map(t => t.id)); setSelectedTickets(checked ? allIds : new Set()); }} checked={selectedTickets.size > 0 && selectedTickets.size === filteredTickets.filter(t => canSelectForMerge(t.employee_id)).length} /></TableHead>
                                   <TableHead>Order #</TableHead>
                                   <TableHead>Employee</TableHead>
                                   <TableHead>Date</TableHead>
@@ -679,14 +655,12 @@ export default function KitchenPage() {
                           </TableHeader>
                           <TableBody>
                              {loading ? (
-                                  <TableRow><TableCell colSpan={8} className="h-24 text-center">Loading...</TableCell></TableRow>
+                                  <TableRow><TableCell colSpan={7} className="h-24 text-center">Loading...</TableCell></TableRow>
                               ) : filteredTickets.length > 0 ? (
                                   filteredTickets.map(ticket => {
                                       const hasActionPermission = canPerformAction(ticket.employee_id);
-                                      const isCheckboxDisabled = !canSelectForMerge(ticket.employee_id);
                                       return (
                                           <TableRow key={ticket.id}>
-                                              <TableCell><Checkbox checked={selectedTickets.has(ticket.id)} onCheckedChange={(checked) => handleMergeSelection(ticket.id, checked as boolean, 'ticket')} disabled={isCheckboxDisabled} /></TableCell>
                                               <TableCell className="font-medium">#{ticket.order_number}</TableCell>
                                               <TableCell>{ticket.users?.name ?? 'N/A'}</TableCell>
                                               <TableCell>{format(new Date(ticket.created_at!), 'LLL dd, y HH:mm')}</TableCell>
@@ -707,7 +681,7 @@ export default function KitchenPage() {
                                   })
                               ) : (
                                   <TableRow>
-                                      <TableCell colSpan={8} className="text-center h-24 text-muted-foreground">
+                                      <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
                                           No open tickets found for the selected filters.
                                       </TableCell>
                                   </TableRow>
