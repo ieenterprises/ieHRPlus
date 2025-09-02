@@ -55,8 +55,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { type VoidedLog, type SaleItem, Sale, OpenTicket, Reservation, Debt } from "@/lib/types";
-import { db } from "@/lib/firebase";
-import { doc, deleteDoc } from "firebase/firestore";
 
 const getPaymentBadgeVariant = (method: string) => {
     switch (method.toLowerCase()) {
@@ -73,7 +71,8 @@ const getPaymentBadgeVariant = (method: string) => {
 
 export default function VoidedPage() {
   const { 
-    voidedLogs, setVoidedLogs, 
+    voidedLogs,
+    deleteVoidedLog,
     currency, 
     users, 
     products, 
@@ -84,6 +83,7 @@ export default function VoidedPage() {
     setDebts,
     setReservations,
     setProducts,
+    setVoidedLogs,
   } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -164,7 +164,7 @@ export default function VoidedPage() {
 
   const handleDeleteVoidedLog = async (logId: string) => {
     try {
-      await deleteDoc(doc(db, "voided_logs", logId));
+      await deleteVoidedLog(logId);
       toast({
         title: "Log Deleted",
         description: "The voided log has been permanently removed.",
