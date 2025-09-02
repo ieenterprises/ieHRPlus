@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { useSettings } from '@/hooks/use-settings';
 import type { StoreType, PosDeviceType } from '@/hooks/use-settings';
 import { HardDrive, Store, KeyRound, ArrowLeft, Loader2 } from 'lucide-react';
-import { collection, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
@@ -46,7 +46,8 @@ export default function SelectDevicePage() {
 
     useEffect(() => {
         if (currentStoreId) {
-            setAvailableDevices(posDevices.filter(device => device.store_id === currentStoreId));
+            // Filter devices for the selected store that are not in use
+            setAvailableDevices(posDevices.filter(device => device.store_id === currentStoreId && !device.in_use_by_shift_id));
             setCurrentDeviceId(''); // Reset device selection when store changes
         } else {
             setAvailableDevices([]);
@@ -98,11 +99,20 @@ export default function SelectDevicePage() {
                 const activeShiftSnapshot = await getDocs(q);
 
                 if (!activeShiftSnapshot.empty) {
-                    const shiftDoc = activeShiftSnapshot.docs[0]; // Assuming only one active shift
-                    await writeBatch(db).update(doc(db, 'shifts', shiftDoc.id), {
+                    const shiftDoc = activeShiftSnapshot.docs[0];
+                    const batch = writeBatch(db);
+                    
+                    // Update shift with device info
+                    batch.update(doc(db, 'shifts', shiftDoc.id), {
                         storeId: currentStoreId,
                         posDeviceId: currentDeviceId,
-                    }).commit();
+                    });
+
+                    // Mark device as in-use
+                    const deviceRef = doc(db, 'pos_devices', currentDeviceId);
+                    batch.update(deviceRef, { in_use_by_shift_id: shiftDoc.id });
+
+                    await batch.commit();
                 }
             } catch (error) {
                 console.error("Failed to update shift with device info:", error);
@@ -200,5 +210,3 @@ export default function SelectDevicePage() {
         </div>
     );
 }
-
-    

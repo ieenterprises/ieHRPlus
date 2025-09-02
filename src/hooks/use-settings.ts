@@ -19,7 +19,7 @@ export type FeatureSettings = Record<string, boolean>;
 export const MOCK_INITIAL_ROLES: Role[] = [
   { id: "role_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
   { id: "role_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
-  { id: "role_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS", "SETTLE_PREVIOUS_SHIFT_DEBTS", "MANAGE_SHIFTS"] },
+  { id: "role_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS", "SETTLE_PREVIOUS_SHIFT_DEBTS", "MANAGE_SHIFTS", "REPRINT_ANY_RECEIPT", "FULFILL_ANY_ORDER"] },
   { id: "role_cashier", name: "Cashier", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "MANAGE_CUSTOMERS", "VIEW_SALES_REPORTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS", "MANAGE_OPEN_TICKETS"] },
   { id: "role_waitress", name: "Waitress", permissions: ["ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
   { id: "role_barman", name: "Bar Man", permissions: ["ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS", "REPRINT_ANY_RECEIPT", "FULFILL_ANY_ORDER"] },
@@ -54,7 +54,7 @@ type SettingsContextType = {
     addStore: (store: Omit<StoreType, 'id'>) => Promise<void>;
     updateStore: (id: string, store: Partial<StoreType>) => Promise<void>;
     deleteStore: (id: string) => Promise<void>;
-    addPosDevice: (device: Omit<PosDeviceType, 'id'>) => Promise<void>;
+    addPosDevice: (device: Omit<PosDeviceType, 'id' | 'in_use_by_shift_id'>) => Promise<void>;
     updatePosDevice: (id: string, device: Partial<PosDeviceType>) => Promise<void>;
     deletePosDevice: (id: string) => Promise<void>;
     addPrinter: (printer: Omit<PrinterType, 'id'>) => Promise<void>;
@@ -273,13 +273,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     const logout = async () => {
         if (loggedInUser && loggedInUser.businessId) {
+            const batch = writeBatch(db);
             const shiftsCollection = collection(db, 'shifts');
             const q = query(shiftsCollection, where('userId', '==', loggedInUser.id), where('status', '==', 'active'), where('businessId', '==', loggedInUser.businessId));
             const querySnapshot = await getDocs(q);
-            const batch = writeBatch(db);
-            querySnapshot.forEach((shiftDoc) => {
-                batch.update(doc(db, 'shifts', shiftDoc.id), { status: 'closed', endTime: new Date().toISOString() });
-            });
+            
+            if (!querySnapshot.empty) {
+                const activeShift = querySnapshot.docs[0];
+                const activeShiftData = activeShift.data();
+                
+                // Close the active shift
+                batch.update(doc(db, 'shifts', activeShift.id), { status: 'closed', endTime: new Date().toISOString() });
+                
+                // Release the device used in that shift
+                if (activeShiftData.posDeviceId) {
+                    const deviceRef = doc(db, 'pos_devices', activeShiftData.posDeviceId);
+                    batch.update(deviceRef, { in_use_by_shift_id: null });
+                }
+            }
             await batch.commit();
         }
 
@@ -368,7 +379,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const addStore = addDocFactory('stores');
     const updateStore = updateDocFactory('stores');
     const deleteStore = deleteDocFactory('stores');
-    const addPosDevice = addDocFactory('pos_devices');
+    const addPosDevice = async (device: Omit<PosDeviceType, 'id' | 'in_use_by_shift_id'>) => {
+      if (!loggedInUser?.businessId) return;
+      await addDoc(collection(db, 'pos_devices'), { ...device, in_use_by_shift_id: null, businessId: loggedInUser.businessId });
+    };
     const updatePosDevice = updateDocFactory('pos_devices');
     const deletePosDevice = deleteDocFactory('pos_devices');
     const addPrinter = addDocFactory('printers');
@@ -529,10 +543,3 @@ export function useSettings() {
     }
     return context;
 }
-
-    
-
-    
-
-
-    

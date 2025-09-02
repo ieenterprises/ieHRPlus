@@ -58,7 +58,7 @@ const currencies = [
 ];
 
 const EMPTY_STORE: Partial<StoreType> = { name: '', address: '' };
-const EMPTY_POS_DEVICE: Partial<PosDeviceType> = { name: '', store_id: '' };
+const EMPTY_POS_DEVICE: Partial<PosDeviceType> = { name: '', store_id: '', in_use_by_shift_id: null };
 const EMPTY_PRINTER: Partial<PrinterType> = { name: '', connection_type: 'Network', pos_device_id: ''};
 const EMPTY_TAX: Partial<Tax> = { name: '', rate: 0, type: 'Added', is_default: false };
 const EMPTY_PAYMENT_TYPE: Partial<PaymentType> = { name: '', type: 'Other' };
@@ -456,6 +456,7 @@ export default function SettingsPage() {
                                 <TableRow>
                                     <TableHead>Device Name</TableHead>
                                     <TableHead>Store</TableHead>
+                                    <TableHead>Status</TableHead>
                                     <TableHead><span className="sr-only">Actions</span></TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -464,6 +465,11 @@ export default function SettingsPage() {
                                     <TableRow key={device.id}>
                                         <TableCell className="font-medium">{device.name}</TableCell>
                                         <TableCell>{getStoreName(device.store_id)}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={device.in_use_by_shift_id ? "destructive" : "secondary"}>
+                                                {device.in_use_by_shift_id ? 'In Use' : 'Available'}
+                                            </Badge>
+                                        </TableCell>
                                         <TableCell className="text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>

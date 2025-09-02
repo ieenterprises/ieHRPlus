@@ -83,7 +83,10 @@ export type OpenTicket = Database['public']['Tables']['open_tickets']['Row'] & {
   fulfillment_status?: 'Unfulfilled' | 'Pending' | 'Fulfilled';
 };
 export type StoreType = Database['public']['Tables']['stores']['Row'] & { businessId: string };
-export type PosDeviceType = Database['public']['Tables']['pos_devices']['Row'] & { businessId: string };
+export type PosDeviceType = Database['public']['Tables']['pos_devices']['Row'] & { 
+  businessId: string;
+  in_use_by_shift_id: string | null;
+};
 export type PaymentType = Database['public']['Tables']['payment_types']['Row'] & { businessId: string };
 
 export type PrinterType = {
@@ -284,16 +287,19 @@ export type Database = {
           id: string
           name: string
           store_id: string
+          in_use_by_shift_id: string | null
         }
         Insert: {
           id: string
           name: string
           store_id: string
+          in_use_by_shift_id: string | null
         }
         Update: {
           id?: string
           name?: string
           store_id?: string
+          in_use_by_shift_id?: string | null
         }
         Relationships: [
           {
@@ -609,11 +615,3 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
-
-    
-
-
-
-    
-
-    
