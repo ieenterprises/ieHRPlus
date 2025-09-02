@@ -832,7 +832,7 @@ export default function KitchenPage() {
                       {loading ? (
                           <TableRow><TableCell colSpan={11} className="h-24 text-center">Loading...</TableCell></TableRow>
                       ) : filteredReceipts.length > 0 ? (
-                          filteredReceipts.map((sale) => {
+                          filteredReceipts.map((sale, index) => {
                           const categoriesForDisplay = getItemCategoryNames(sale.displayItems);
                           const isCreditSale = sale.payment_methods.includes('Credit');
                           const hasActionPermission = canPerformAction(sale.employee_id);
@@ -845,7 +845,7 @@ export default function KitchenPage() {
                           const canPrint = (hasActionPermission && canPerformShiftActions) || hasPermission('REPRINT_ANY_RECEIPT');
 
                           return (
-                          <TableRow key={sale.id}>
+                          <TableRow key={`${sale.id}-${index}`}>
                               <TableCell><Checkbox checked={selectedReceipts.has(sale.id)} onCheckedChange={(checked) => handleMergeSelection(sale.id, checked as boolean, 'receipt')} disabled={isCheckboxDisabled} /></TableCell>
                               <TableCell className="font-medium">#{sale.order_number}</TableCell>
                               <TableCell>{format(new Date(sale.created_at!), "LLL dd, y HH:mm")}</TableCell>
