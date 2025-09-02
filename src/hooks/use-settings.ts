@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
@@ -400,29 +399,31 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (!loggedInUser?.businessId) return;
         
         const newItems = typeof value === 'function' ? value(localState) : value;
-        localSetter(newItems); // Optimistic UI update
+        
+        // This setter is now only for local state changes that will be pushed to Firestore.
+        // It should NOT be called directly with data from a Firestore snapshot, as that
+        // would create a sync loop and potential data loss.
+        localSetter(newItems);
 
-        const oldIds = new Set(localState.map(item => item.id).filter(Boolean));
-        const newIds = new Set(newItems.map(item => item.id).filter(Boolean));
-        const batch = writeBatch(db);
-
-        newItems.forEach(item => {
-            const docId = item.id;
-            if (!docId) return; // Should not happen if items are created with an ID
-            
-            const ref = doc(db, collectionName, docId);
-            const oldItem = localState.find(i => i.id === item.id);
-            
-            // Set (create or overwrite) if it's a new item or a changed item
-            if (!oldIds.has(docId) || JSON.stringify(oldItem) !== JSON.stringify(item)) {
-                const itemWithBusinessId = { ...item, businessId: loggedInUser.businessId };
-                batch.set(ref, itemWithBusinessId, { merge: true });
-            }
+        // From the UI, we only get additive changes or updates to existing items.
+        // We will no longer calculate deletions here to prevent offline sync issues.
+        const itemsToSync = newItems.filter(newItem => {
+            const oldItem = localState.find(old => old.id === newItem.id);
+            // Sync if it's a new item (no oldItem) or if the item has changed.
+            return !oldItem || JSON.stringify(oldItem) !== JSON.stringify(newItem);
         });
 
-        localState.forEach(item => {
-            if (item.id && !newIds.has(item.id)) {
-                batch.delete(doc(db, collectionName, item.id));
+        if (itemsToSync.length === 0) {
+            return; // No changes to sync.
+        }
+
+        const batch = writeBatch(db);
+
+        itemsToSync.forEach(item => {
+            if (item.id) { // Should always have an ID for updates.
+                const ref = doc(db, collectionName, item.id);
+                const itemWithBusinessId = { ...item, businessId: loggedInUser.businessId };
+                batch.set(ref, itemWithBusinessId, { merge: true });
             }
         });
         
@@ -430,7 +431,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             await batch.commit();
         } catch (error) {
             console.error(`Error during batch write to ${collectionName}:`, error);
-            // Optionally, revert the optimistic UI update
+            // Revert optimistic update on failure to prevent inconsistent state
             localSetter(localState);
         }
     };
