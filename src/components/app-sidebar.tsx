@@ -42,6 +42,17 @@ import { useToast } from "@/hooks/use-toast";
 import { useEffect, useRef, useState } from "react";
 import { IELogo } from "./ie-logo";
 import { Separator } from "./ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type NavItem = {
   href: string;
@@ -233,16 +244,32 @@ export function AppSidebar() {
                             {isOnline ? "Online" : "Offline Mode"}
                         </TooltipContent>
                         </Tooltip>
-                        <Tooltip>
-                        <TooltipTrigger asChild>
-                            <div className="inline-block group-data-[collapsible=icon]:hidden">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout} disabled={!isOnline}>
-                                    <LogOut className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </TooltipTrigger>
-                        {!isOnline && <TooltipContent side="top" align="center"><p>Internet connection required to log out</p></TooltipContent>}
-                        </Tooltip>
+                        <AlertDialog>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="inline-block group-data-[collapsible=icon]:hidden">
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!isOnline}>
+                                            <LogOut className="h-4 w-4" />
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                </div>
+                            </TooltipTrigger>
+                            {!isOnline && <TooltipContent side="top" align="center"><p>Internet connection required to log out</p></TooltipContent>}
+                          </Tooltip>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure you want to log out?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will end your current shift and you will be returned to the sign-in screen.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={handleLogout}>Confirm Logout</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                     </div>
                 </div>
                 {shouldShowPosInfo && (selectedStore || selectedDevice) && (
