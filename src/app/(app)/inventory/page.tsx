@@ -53,6 +53,8 @@ import { useSettings } from "@/hooks/use-settings";
 import Papa from "papaparse";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { db } from "@/lib/firebase";
+import { doc, deleteDoc } from "firebase/firestore";
 
 
 const EMPTY_PRODUCT: Partial<Product> = {
@@ -308,10 +310,11 @@ export default function InventoryPage() {
   const handleDeleteProduct = async (productId: string) => {
     setIsProcessing(true);
     try {
-      await setProducts(products.filter(p => p.id !== productId));
+      await deleteDoc(doc(db, "products", productId));
+      // The local state will update automatically via the Firestore listener.
       toast({ title: "Product Deleted", description: "The product has been removed from inventory." });
     } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Error", description: `Failed to delete product: ${error.message}`, variant: "destructive" });
     } finally {
       setIsProcessing(false);
     }
