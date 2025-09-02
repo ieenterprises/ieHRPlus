@@ -55,6 +55,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { type VoidedLog, type SaleItem, Sale, OpenTicket, Reservation, Debt } from "@/lib/types";
+import { db } from "@/lib/firebase";
+import { doc, deleteDoc } from "firebase/firestore";
 
 const getPaymentBadgeVariant = (method: string) => {
     switch (method.toLowerCase()) {
@@ -160,14 +162,23 @@ export default function VoidedPage() {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
-  const handleDeleteVoidedLog = (logId: string) => {
-    setVoidedLogs(prev => prev.filter(log => log.id !== logId));
-    toast({
-      title: "Log Deleted",
-      description: "The voided log has been permanently removed.",
-      variant: "destructive"
-    });
-    setLogToDelete(null);
+  const handleDeleteVoidedLog = async (logId: string) => {
+    try {
+      await deleteDoc(doc(db, "voided_logs", logId));
+      toast({
+        title: "Log Deleted",
+        description: "The voided log has been permanently removed.",
+        variant: "destructive"
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to delete log: ${error.message}`,
+        variant: "destructive"
+      });
+    } finally {
+      setLogToDelete(null);
+    }
   };
 
   const handleRestoreLog = async (logToRestore: VoidedLog) => {
