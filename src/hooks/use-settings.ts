@@ -4,7 +4,7 @@
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode } from '@/lib/types';
+import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode, OfflineAction } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
@@ -109,6 +109,8 @@ type SettingsContextType = {
     voidSale: (saleId: string, voidedByEmployeeId: string) => Promise<void>;
     reactivateShift: (shiftId: string, userId: string) => Promise<void>;
     closeShift: (shiftId: string) => Promise<void>;
+    deleteProduct: (productId: string) => Promise<void>;
+    deleteVoidedLog: (logId: string) => Promise<void>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -165,6 +167,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [selectedDevice, setSelectedDevice] = useLocalStorage<PosDeviceType | null>('selectedDevice', null);
     const [ownerSelectedStore, setOwnerSelectedStore] = useLocalStorage<StoreType | null>('ownerSelectedStore', null);
     const [debtToSettle, setDebtToSettle] = useLocalStorage<Sale | null>('debtToSettle', null);
+    const [pendingActions, setPendingActions] = useLocalStorage<OfflineAction[]>('pendingActions', []);
     
     // Note: printableData is NOT persisted to localStorage, it's just for passing data to the new tab.
     const [printableData, setPrintableData] = useState<any | null>(null);
@@ -199,6 +202,31 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             return null;
         }
     }, []);
+
+    // Effect to process pending actions when coming online
+    useEffect(() => {
+        const processQueue = async () => {
+            if (isOnline && pendingActions.length > 0) {
+                console.log(`Processing ${pendingActions.length} pending offline actions...`);
+                const batch = writeBatch(db);
+                pendingActions.forEach(action => {
+                    const docRef = doc(db, action.collection, action.id);
+                    if (action.type === 'delete') {
+                        batch.delete(docRef);
+                    }
+                });
+
+                try {
+                    await batch.commit();
+                    console.log("Successfully synced pending deletions.");
+                    setPendingActions([]); // Clear the queue
+                } catch (error) {
+                    console.error("Error processing pending actions:", error);
+                }
+            }
+        };
+        processQueue();
+    }, [isOnline, pendingActions, setPendingActions]);
 
     useEffect(() => {
         const subscriptions: Unsubscribe[] = [];
@@ -394,56 +422,62 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const updateTax = updateDocFactory('taxes');
     const deleteTax = deleteDocFactory('taxes');
 
-    const createBatchSetter = <T extends {id?: string}>(collectionName: string, localState: T[], localSetter: React.Dispatch<React.SetStateAction<T[]>>) => 
+    const createBatchSetter = <T extends {id?: string}>(collectionName: string, localSetter: React.Dispatch<React.SetStateAction<T[]>>) => 
         async (value: React.SetStateAction<T[]>) => {
         if (!loggedInUser?.businessId) return;
         
-        const newItems = typeof value === 'function' ? value(localState) : value;
-        
-        // This setter is now only for local state changes that will be pushed to Firestore.
-        // It should NOT be called directly with data from a Firestore snapshot, as that
-        // would create a sync loop and potential data loss.
-        localSetter(newItems);
-
-        // From the UI, we only get additive changes or updates to existing items.
-        // We will no longer calculate deletions here to prevent offline sync issues.
-        const itemsToSync = newItems.filter(newItem => {
-            const oldItem = localState.find(old => old.id === newItem.id);
-            // Sync if it's a new item (no oldItem) or if the item has changed.
-            return !oldItem || JSON.stringify(oldItem) !== JSON.stringify(newItem);
+        let newItems: T[];
+        localSetter(prevState => {
+            newItems = typeof value === 'function' ? value(prevState) : value;
+            return newItems;
         });
 
-        if (itemsToSync.length === 0) {
-            return; // No changes to sync.
-        }
-
+        // This function now only handles creations and updates. Deletions are separate.
+        // It's still useful for batching updates from complex pages like Sales.
         const batch = writeBatch(db);
-
-        itemsToSync.forEach(item => {
-            if (item.id) { // Should always have an ID for updates.
-                const ref = doc(db, collectionName, item.id);
-                const itemWithBusinessId = { ...item, businessId: loggedInUser.businessId };
-                batch.set(ref, itemWithBusinessId, { merge: true });
+        newItems!.forEach(item => {
+            if (item.id) {
+                 const ref = doc(db, collectionName, item.id);
+                 batch.set(ref, { ...item, businessId: loggedInUser.businessId }, { merge: true });
             }
         });
         
         try {
-            await batch.commit();
+            if (isOnline) await batch.commit();
         } catch (error) {
             console.error(`Error during batch write to ${collectionName}:`, error);
-            // Revert optimistic update on failure to prevent inconsistent state
-            localSetter(localState);
         }
     };
 
-    const setProducts = createBatchSetter('products', products, setProductsState);
-    const setCategories = createBatchSetter('categories', categories, setCategoriesState);
-    const setCustomers = createBatchSetter('customers', customers, setCustomersState);
-    const setSales = createBatchSetter('sales', sales, setSalesState);
-    const setReservations = createBatchSetter('reservations', reservations, setReservationsState);
-    const setDebts = createBatchSetter('debts', debts, setDebtsState);
-    const setOpenTickets = createBatchSetter('open_tickets', openTickets, setOpenTicketsState);
-    const setVoidedLogs = createBatchSetter('voided_logs', voidedLogs, setVoidedLogsState);
+    const setProducts = createBatchSetter('products', setProductsState);
+    const setCategories = createBatchSetter('categories', setCategoriesState);
+    const setCustomers = createBatchSetter('customers', setCustomersState);
+    const setSales = createBatchSetter('sales', setSalesState);
+    const setReservations = createBatchSetter('reservations', setReservationsState);
+    const setDebts = createBatchSetter('debts', setDebtsState);
+    const setOpenTickets = createBatchSetter('open_tickets', setOpenTicketsState);
+    const setVoidedLogs = createBatchSetter('voided_logs', setVoidedLogsState);
+
+     const createOfflineDeleter = (collectionName: string, localSetter: React.Dispatch<React.SetStateAction<any[]>>) => 
+        async (id: string) => {
+        
+        localSetter(prevState => prevState.filter(item => item.id !== id));
+        
+        if (isOnline) {
+            await deleteDoc(doc(db, collectionName, id));
+        } else {
+            const action: OfflineAction = {
+                id,
+                collection: collectionName,
+                type: 'delete',
+                timestamp: new Date().toISOString(),
+            };
+            setPendingActions(prev => [...prev, action]);
+        }
+    };
+
+    const deleteProduct = createOfflineDeleter('products', setProductsState);
+    const deleteVoidedLog = createOfflineDeleter('voided_logs', setVoidedLogsState);
 
     const voidSale = async (saleId: string, voidedByEmployeeId: string) => {
         if (!loggedInUser?.businessId) return;
@@ -532,6 +566,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         voidSale,
         reactivateShift,
         closeShift,
+        deleteProduct,
+        deleteVoidedLog,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);
