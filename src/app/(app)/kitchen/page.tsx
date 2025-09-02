@@ -842,7 +842,7 @@ export default function KitchenPage() {
                           const isFromActiveShift = isSaleFromActiveShift(saleDate);
                           const canPerformShiftActions = isFromActiveShift || hasPermission('SETTLE_PREVIOUS_SHIFT_DEBTS');
                           const canSettleDebt = hasActionPermission && canPerformShiftActions;
-                          const canPrint = hasActionPermission && canPerformShiftActions;
+                          const canPrint = (hasActionPermission && canPerformShiftActions) || hasPermission('REPRINT_ANY_RECEIPT');
 
                           return (
                           <TableRow key={sale.id}>
@@ -899,8 +899,8 @@ export default function KitchenPage() {
                                                 </Button>
                                             </div>
                                         </TooltipTrigger>
-                                        {!canPrint && hasActionPermission && <TooltipContent><p>Receipt is from a previous shift. Manager approval required.</p></TooltipContent>}
-                                        {!canPrint && !hasActionPermission && <TooltipContent><p>Permission denied.</p></TooltipContent>}
+                                        {!canPrint && hasActionPermission && !hasPermission('REPRINT_ANY_RECEIPT') && <TooltipContent><p>Receipt is from a previous shift. Manager approval required.</p></TooltipContent>}
+                                        {!canPrint && !hasActionPermission && !hasPermission('REPRINT_ANY_RECEIPT') && <TooltipContent><p>Permission denied.</p></TooltipContent>}
                                     </Tooltip>
                                     {hasPermission('CANCEL_RECEIPTS') && (
                                         <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" onClick={() => handleMoveToVoid(sale)}><Trash2 className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Move to Void</p></TooltipContent></Tooltip>
@@ -1021,7 +1021,3 @@ export default function KitchenPage() {
     </TooltipProvider>
   );
 }
-
-    
-
-    

@@ -38,6 +38,7 @@ export const backOfficePermissions = {
     MANAGE_POS_DEVICES: { label: "Manage POS devices" },
     ACCESS_LIVE_CHAT_BO: { label: "Access to live chat support (Back Office)" },
     SETTLE_PREVIOUS_SHIFT_DEBTS: { label: "Settle debts from previous shifts" },
+    REPRINT_ANY_RECEIPT: { label: "Reprint any receipt regardless of owner or shift" },
 };
 
 export type PosPermission = keyof typeof posPermissions;
