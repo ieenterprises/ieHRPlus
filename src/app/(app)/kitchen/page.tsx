@@ -547,7 +547,7 @@ export default function KitchenPage() {
 
   const canPerformAction = (orderEmployeeId: string | null): boolean => {
     if (!loggedInUser) return false;
-    if (hasPermission('MANAGE_OPEN_TICKETS')) {
+    if (hasPermission('MANAGE_OPEN_TICKETS') || hasPermission('FULFILL_ANY_ORDER')) {
       return true;
     }
     return loggedInUser.id === orderEmployeeId;

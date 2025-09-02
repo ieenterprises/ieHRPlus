@@ -39,6 +39,7 @@ export const backOfficePermissions = {
     ACCESS_LIVE_CHAT_BO: { label: "Access to live chat support (Back Office)" },
     SETTLE_PREVIOUS_SHIFT_DEBTS: { label: "Settle debts from previous shifts" },
     REPRINT_ANY_RECEIPT: { label: "Reprint any receipt regardless of owner or shift" },
+    FULFILL_ANY_ORDER: { label: "Fulfill items for any order" },
 };
 
 export type PosPermission = keyof typeof posPermissions;
