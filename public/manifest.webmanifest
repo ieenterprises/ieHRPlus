@@ -1,21 +1,28 @@
 {
-  "name": "ieOrderFlow",
-  "short_name": "ieOrderFlow",
-  "description": "A modern Point of Sale system.",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#FF9500",
+  "name": "OrderFlow",
+  "short_name": "OrderFlow",
+  "description": "A modern Point of Sale system for seamless sales and inventory management.",
   "icons": [
     {
-      "src": "/icon-192x192.png",
+      "src": "/icons/icon-192x192.png",
       "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-384x384.png",
+      "sizes": "384x384",
       "type": "image/png"
     },
     {
-      "src": "/icon-512x512.png",
+      "src": "/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "theme_color": "#FF9500",
+  "background_color": "#FAF0E6",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait"
 }

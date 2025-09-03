@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permission: "VIEW_SALES_REPORTS" },
   { href: "/sales", icon: ShoppingCart, label: "Sales", permission: "ACCEPT_PAYMENTS" },
   { href: "/kitchen", icon: ClipboardList, label: "Orders", permission: "ACCEPT_PAYMENTS" },
-  { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"], offlineDisabled: true },
+  { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"] },
   { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "ACCEPT_PAYMENTS", featureFlag: "reservations" },
   { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS" },
   { href: "/shifts", icon: Clock, label: "Shifts", permission: "VIEW_SHIFT_REPORT" },
@@ -88,7 +88,7 @@ export function AppSidebar() {
     if (wasOffline.current && isOnline) {
        toast({
         title: "Back Online",
-        description: "Syncing changes to the server...",
+        description: "Your data has been synced with the server.",
       });
     }
     wasOffline.current = !isOnline;
@@ -216,6 +216,12 @@ export function AppSidebar() {
           )}
           <SidebarMenuItem>
              <div className="flex flex-col w-full p-2 gap-2">
+                {!isOnline && (
+                  <div className="group-data-[collapsible=icon]:hidden p-2 text-xs text-center bg-yellow-100 text-yellow-800 rounded-md flex items-center justify-center gap-2">
+                    <CloudOff className="h-4 w-4" />
+                    <span>You’re offline—actions will sync automatically.</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2 truncate">
                         <Avatar className="h-8 w-8">
