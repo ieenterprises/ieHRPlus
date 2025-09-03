@@ -126,11 +126,6 @@ export default function KitchenPage() {
   
   const [activeShifts, setActiveShifts] = useState<Shift[]>([]);
 
-  const isAdmin = useMemo(() => {
-    if (!loggedInUser) return false;
-    return ['Owner', 'Administrator', 'Manager'].includes(loggedInUser.role);
-  }, [loggedInUser]);
-
   const availableDevices = useMemo(() => {
     if (filters.storeId === 'all') return posDevices;
     return posDevices.filter(d => d.store_id === filters.storeId);
@@ -300,8 +295,6 @@ export default function KitchenPage() {
       const amountMatch =
         (isNaN(minAmount) || ticket.total >= minAmount) &&
         (isNaN(maxAmount) || ticket.total <= maxAmount);
-
-      // Admin filters are not applied to open tickets as they are not tied to a device/store yet
 
       return searchMatch && categoryMatch && employeeMatch && dateMatch && amountMatch;
     });
@@ -768,24 +761,20 @@ export default function KitchenPage() {
                               {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
                           </SelectContent>
                       </Select>
-                      {isAdmin && (
-                        <>
-                           <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
-                                <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by Store"/></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Stores</SelectItem>
-                                    {stores.map(store => <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                            <Select value={filters.posDeviceId} onValueChange={(v) => handleFilterChange('posDeviceId', v)} disabled={filters.storeId === 'all' && availableDevices.length === 0}>
-                                <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by Device"/></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Devices</SelectItem>
-                                    {availableDevices.map(device => <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </>
-                      )}
+                      <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
+                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by Store"/></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Stores</SelectItem>
+                                {stores.map(store => <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <Select value={filters.posDeviceId} onValueChange={(v) => handleFilterChange('posDeviceId', v)} disabled={filters.storeId === 'all' && availableDevices.length === 0}>
+                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by Device"/></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Devices</SelectItem>
+                                {availableDevices.map(device => <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                       <Input
                       placeholder="Min Amount"
                       type="number"
@@ -842,7 +831,7 @@ export default function KitchenPage() {
                           <TableHead className="w-10"><Checkbox onCheckedChange={(checked) => { const allIds = new Set(filteredReceipts.filter(r => canSelectForMerge(r.employee_id)).map(r => r.id)); setSelectedReceipts(checked ? allIds : new Set()); }} checked={selectedReceipts.size > 0 && selectedReceipts.size === filteredReceipts.filter(r => canSelectForMerge(r.employee_id)).length} /></TableHead>
                           <TableHead>Order #</TableHead>
                           <TableHead>Date</TableHead>
-                          {isAdmin && <TableHead>Location</TableHead>}
+                          <TableHead>Location</TableHead>
                           <TableHead className="hidden sm:table-cell">Customer</TableHead>
                           <TableHead className="hidden md:table-cell">Employee</TableHead>
                           <TableHead>Items</TableHead>
@@ -855,7 +844,7 @@ export default function KitchenPage() {
                       </TableHeader>
                       <TableBody>
                       {loading ? (
-                          <TableRow><TableCell colSpan={isAdmin ? 12 : 11} className="h-24 text-center">Loading...</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={12} className="h-24 text-center">Loading...</TableCell></TableRow>
                       ) : filteredReceipts.length > 0 ? (
                           filteredReceipts.map((sale, index) => {
                           const categoriesForDisplay = getItemCategoryNames(sale.displayItems);
@@ -877,14 +866,12 @@ export default function KitchenPage() {
                               <TableCell><Checkbox checked={selectedReceipts.has(sale.id)} onCheckedChange={(checked) => handleMergeSelection(sale.id, checked as boolean, 'receipt')} disabled={isCheckboxDisabled} /></TableCell>
                               <TableCell className="font-medium">#{sale.order_number}</TableCell>
                               <TableCell>{format(new Date(sale.created_at!), "LLL dd, y HH:mm")}</TableCell>
-                              {isAdmin && (
-                                <TableCell>
-                                    <div className="flex flex-col text-xs">
-                                        <div className="flex items-center gap-1.5"><Store className="h-3 w-3 text-muted-foreground" /><span>{store?.name || 'N/A'}</span></div>
-                                        <div className="flex items-center gap-1.5"><HardDrive className="h-3 w-3 text-muted-foreground" /><span>{device?.name || 'N/A'}</span></div>
-                                    </div>
-                                </TableCell>
-                              )}
+                              <TableCell>
+                                  <div className="flex flex-col text-xs">
+                                      <div className="flex items-center gap-1.5"><Store className="h-3 w-3 text-muted-foreground" /><span>{store?.name || 'N/A'}</span></div>
+                                      <div className="flex items-center gap-1.5"><HardDrive className="h-3 w-3 text-muted-foreground" /><span>{device?.name || 'N/A'}</span></div>
+                                  </div>
+                              </TableCell>
                               <TableCell className="hidden sm:table-cell">{sale.customers?.name ?? 'Walk-in'}</TableCell>
                               <TableCell className="hidden md:table-cell">{sale.users?.name}</TableCell>
                               <TableCell>
@@ -947,7 +934,7 @@ export default function KitchenPage() {
                           )})
                       ) : (
                           <TableRow>
-                              <TableCell colSpan={isAdmin ? 12 : 11} className="text-center text-muted-foreground h-24">
+                              <TableCell colSpan={12} className="text-center text-muted-foreground h-24">
                                   No receipts found for the selected filters.
                               </TableCell>
                           </TableRow>

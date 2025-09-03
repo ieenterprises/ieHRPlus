@@ -98,10 +98,6 @@ export default function VoidedPage() {
 
   const hasDeletePermission = useMemo(() => loggedInUser?.permissions.includes('PERMANENTLY_DELETE_VOIDS') ?? false, [loggedInUser]);
   const hasRestorePermission = useMemo(() => loggedInUser?.permissions.includes('RESTORE_VOIDED_ITEMS') ?? false, [loggedInUser]);
-  const isAdmin = useMemo(() => {
-    if (!loggedInUser) return false;
-    return ['Owner', 'Administrator', 'Manager'].includes(loggedInUser.role);
-  }, [loggedInUser]);
 
   const availableDevices = useMemo(() => {
     if (filters.storeId === 'all') return posDevices;
@@ -314,24 +310,20 @@ export default function VoidedPage() {
                     {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
                 </SelectContent>
             </Select>
-             {isAdmin && (
-                <>
-                    <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
-                        <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by Store"/></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Stores</SelectItem>
-                            {stores.map(store => <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filters.posDeviceId} onValueChange={(v) => handleFilterChange('posDeviceId', v)} disabled={filters.storeId === 'all' && availableDevices.length === 0}>
-                        <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by Device"/></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Devices</SelectItem>
-                            {availableDevices.map(device => <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </>
-            )}
+             <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
+                <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by Store"/></SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Stores</SelectItem>
+                    {stores.map(store => <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
+            <Select value={filters.posDeviceId} onValueChange={(v) => handleFilterChange('posDeviceId', v)} disabled={filters.storeId === 'all' && availableDevices.length === 0}>
+                <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by Device"/></SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Devices</SelectItem>
+                    {availableDevices.map(device => <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
             <Popover>
                 <PopoverTrigger asChild>
                     <Button
@@ -374,7 +366,7 @@ export default function VoidedPage() {
                 <TableRow>
                     <TableHead>Order #</TableHead>
                     <TableHead className="hidden md:table-cell">Date</TableHead>
-                    {isAdmin && <TableHead>Location</TableHead>}
+                    <TableHead>Location</TableHead>
                     <TableHead className="hidden sm:table-cell">Customer</TableHead>
                     <TableHead>Employees</TableHead>
                     <TableHead>Items</TableHead>
@@ -386,7 +378,7 @@ export default function VoidedPage() {
               </TableHeader>
               <TableBody>
               {loading ? (
-                  <TableRow><TableCell colSpan={isAdmin ? 10 : 9} className="h-24 text-center">Loading...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="h-24 text-center">Loading...</TableCell></TableRow>
               ) : filteredVoidedReceipts.length > 0 ? (
                   filteredVoidedReceipts.map((log) => {
                     const saleData = log.data;
@@ -397,14 +389,12 @@ export default function VoidedPage() {
                       <TableRow key={log.id}>
                           <TableCell className="font-medium">#{saleData.order_number}</TableCell>
                           <TableCell className="hidden md:table-cell">{format(new Date(saleData.created_at!), "LLL dd, y HH:mm")}</TableCell>
-                          {isAdmin && (
-                            <TableCell>
-                                <div className="flex flex-col text-xs">
-                                    <div className="flex items-center gap-1.5"><Store className="h-3 w-3 text-muted-foreground" /><span>{store?.name || 'N/A'}</span></div>
-                                    <div className="flex items-center gap-1.5"><HardDrive className="h-3 w-3 text-muted-foreground" /><span>{device?.name || 'N/A'}</span></div>
-                                </div>
-                            </TableCell>
-                          )}
+                          <TableCell>
+                              <div className="flex flex-col text-xs">
+                                  <div className="flex items-center gap-1.5"><Store className="h-3 w-3 text-muted-foreground" /><span>{store?.name || 'N/A'}</span></div>
+                                  <div className="flex items-center gap-1.5"><HardDrive className="h-3 w-3 text-muted-foreground" /><span>{device?.name || 'N/A'}</span></div>
+                              </div>
+                          </TableCell>
                           <TableCell className="hidden sm:table-cell">{saleData.customers?.name ?? 'Walk-in'}</TableCell>
                           <TableCell>
                             <div className="flex flex-col text-xs">
@@ -447,7 +437,7 @@ export default function VoidedPage() {
                   })
               ) : (
                   <TableRow>
-                      <TableCell colSpan={isAdmin ? 10 : 9} className="text-center text-muted-foreground h-24">
+                      <TableCell colSpan={10} className="text-center text-muted-foreground h-24">
                           No voided receipts found for the selected filters.
                       </TableCell>
                   </TableRow>
