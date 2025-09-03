@@ -138,6 +138,7 @@ export default function SalesPage() {
     ownerSelectedStore,
     setOwnerSelectedStore,
     stores,
+    posDevices,
     currency,
     products,
     setProducts,
@@ -511,7 +512,18 @@ export default function SalesPage() {
 
     (async () => {
         try {
-            const currentPosDeviceId = isAdmin ? null : selectedDevice?.id || null;
+            let currentPosDeviceId: string | null = null;
+            let currentStoreId: string | null = null;
+
+            if (isAdmin) {
+                currentStoreId = ownerSelectedStore?.id || null;
+                // For admins, assign to the first available device in the selected store for data consistency
+                const deviceForStore = posDevices.find(d => d.store_id === currentStoreId);
+                currentPosDeviceId = deviceForStore?.id || null;
+            } else {
+                currentPosDeviceId = selectedDevice?.id || null;
+                currentStoreId = selectedDevice?.store_id || null;
+            }
             
             const saleItems: SaleItem[] = orderItems.map(item => ({
                 id: item.product.id,
@@ -551,7 +563,7 @@ export default function SalesPage() {
                   fulfillment_status: 'Unfulfilled' as const,
                   customers: customers.find(c => c.id === (creditInfo ? creditInfo.customerId : selectedCustomerId)) || null,
                   users: { name: loggedInUser?.name || null },
-                  pos_devices: selectedDevice ? { store_id: selectedDevice.store_id } : null,
+                  pos_devices: currentStoreId ? { store_id: currentStoreId } : null,
                   businessId: loggedInUser?.businessId || '',
               };
               await setSales(prev => [...prev, newSale!]);
@@ -606,7 +618,7 @@ export default function SalesPage() {
                 .filter(item => getCategoryName(item.product.category_id) !== 'Room')
                 .map(item => ({ id: item.product.id, quantity: item.quantity }));
             
-            const updateStoreId = isAdmin ? ownerSelectedStore?.id : selectedDevice?.store_id;
+            const updateStoreId = currentStoreId;
 
             if(stockUpdates.length > 0 && updateStoreId) {
                 await setProducts(prevProducts =>
