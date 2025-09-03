@@ -8,6 +8,13 @@ export type Business = {
     created_at: string;
 }
 
+export type OfflineAction = {
+    id: string;
+    collection: string;
+    type: 'delete'; // Can be expanded to 'create', 'update'
+    timestamp: string;
+};
+
 export type StoreProduct = {
   id: string;
   store_id: string;
@@ -615,3 +622,5 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
+
+      
