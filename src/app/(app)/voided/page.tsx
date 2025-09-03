@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -73,6 +74,7 @@ export default function VoidedPage() {
   const { 
     voidedLogs,
     deleteVoidedLog,
+    restoreVoidedLog,
     currency, 
     users, 
     products, 
@@ -182,33 +184,16 @@ export default function VoidedPage() {
   };
 
   const handleRestoreLog = async (logToRestore: VoidedLog) => {
-    if (!logToRestore || logToRestore.type !== 'receipt') return;
-  
-    const saleToRestore = {
-        ...logToRestore.data,
-        customers: users.find(c => c.id === logToRestore.data.customer_id) || null,
-        users: users.find(u => u.id === logToRestore.data.employee_id) || null,
-    } as Sale;
-    
-    await setSales(prev => [...prev.filter(s => s.id !== saleToRestore.id), saleToRestore]);
-    
-    if (saleToRestore.payment_methods.includes('Credit') && loggedInUser?.businessId) {
-        const debtToRestore: Omit<Debt, 'id'> = {
-            sale_id: saleToRestore.id,
-            customer_id: saleToRestore.customer_id,
-            amount: saleToRestore.total,
-            status: 'Unpaid' as const,
-            created_at: saleToRestore.created_at!,
-            sales: saleToRestore, 
-            customers: saleToRestore.customers,
-            businessId: loggedInUser.businessId,
-        };
-        await setDebts(prev => [...prev, {id: `debt_${new Date().getTime()}`, ...debtToRestore} as Debt]);
+    try {
+        await restoreVoidedLog(logToRestore);
+        toast({ title: "Receipt Restored", description: `Receipt #${logToRestore.data.order_number} has been restored.` });
+    } catch (error: any) {
+        toast({
+            title: "Error Restoring Log",
+            description: `Failed to restore log: ${error.message}`,
+            variant: "destructive"
+        });
     }
-    
-    toast({ title: "Receipt Restored", description: `Receipt #${saleToRestore.order_number} has been restored.` });
-  
-    await deleteVoidedLog(logToRestore.id);
   };
 
 
@@ -428,3 +413,5 @@ export default function VoidedPage() {
     </div>
   );
 }
+
+    

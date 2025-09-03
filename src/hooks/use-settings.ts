@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
@@ -111,6 +112,7 @@ type SettingsContextType = {
     closeShift: (shiftId: string) => Promise<void>;
     deleteProduct: (productId: string) => Promise<void>;
     deleteVoidedLog: (logId: string) => Promise<void>;
+    restoreVoidedLog: (log: VoidedLog) => Promise<void>;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -213,12 +215,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                     const docRef = doc(db, action.collection, action.id);
                     if (action.type === 'delete') {
                         batch.delete(docRef);
+                    } else if (action.type === 'restore' && action.collection === 'voided_logs') {
+                        const restoredSale = action.payload as Sale;
+                        batch.set(doc(db, 'sales', restoredSale.id), restoredSale);
+                        batch.delete(doc(db, 'voided_logs', action.id));
                     }
                 });
 
                 try {
                     await batch.commit();
-                    console.log("Successfully synced pending deletions.");
+                    console.log("Successfully synced pending actions.");
                     setPendingActions([]); // Clear the queue
                 } catch (error) {
                     console.error("Error processing pending actions:", error);
@@ -443,7 +449,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         });
         
         try {
-            if (isOnline) await batch.commit();
+            // REMOVED: if (isOnline) 
+            await batch.commit();
         } catch (error) {
             console.error(`Error during batch write to ${collectionName}:`, error);
         }
@@ -509,6 +516,33 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         await batch.commit();
     };
+
+    const restoreVoidedLog = async (logToRestore: VoidedLog) => {
+        if (!logToRestore || logToRestore.type !== 'receipt') return;
+        const saleToRestore = logToRestore.data as Sale;
+    
+        // 1. Optimistic UI update
+        setVoidedLogsState(prev => prev.filter(log => log.id !== logToRestore.id));
+        setSalesState(prev => [...prev.filter(s => s.id !== saleToRestore.id), saleToRestore]);
+    
+        if (isOnline) {
+            // 2. If online, perform DB operations immediately
+            const batch = writeBatch(db);
+            batch.set(doc(db, 'sales', saleToRestore.id), saleToRestore);
+            batch.delete(doc(db, 'voided_logs', logToRestore.id));
+            await batch.commit();
+        } else {
+            // 3. If offline, queue the action
+            const action: OfflineAction = {
+                id: logToRestore.id,
+                collection: 'voided_logs',
+                type: 'restore',
+                timestamp: new Date().toISOString(),
+                payload: saleToRestore,
+            };
+            setPendingActions(prev => [...prev, action]);
+        }
+    };
     
     const reactivateShift = async (shiftId: string, userId: string) => {
         if (!loggedInUser?.businessId) throw new Error("Not logged in or no business ID found.");
@@ -568,6 +602,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         closeShift,
         deleteProduct,
         deleteVoidedLog,
+        restoreVoidedLog,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);
@@ -582,3 +617,5 @@ export function useSettings() {
 }
 
       
+
+    

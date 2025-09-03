@@ -1,4 +1,5 @@
 
+
 import type { AnyPermission } from "./permissions";
 
 export type Business = {
@@ -9,10 +10,11 @@ export type Business = {
 }
 
 export type OfflineAction = {
-    id: string;
+    id: string; // Document ID to act upon
     collection: string;
-    type: 'delete'; // Can be expanded to 'create', 'update'
+    type: 'delete' | 'restore'; // Can be expanded to 'create', 'update'
     timestamp: string;
+    payload?: any; // To hold data for complex actions like restore
 };
 
 export type StoreProduct = {
@@ -624,3 +626,5 @@ export type Enums<
   : never
 
       
+
+    
