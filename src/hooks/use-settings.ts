@@ -521,9 +521,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (!logToRestore || logToRestore.type !== 'receipt') return;
         const saleToRestore = logToRestore.data as Sale;
     
-        // 1. Optimistic UI update
-        setVoidedLogsState(prev => prev.filter(log => log.id !== logToRestore.id));
+        // 1. Optimistic UI update to prevent duplicates
         setSalesState(prev => [...prev.filter(s => s.id !== saleToRestore.id), saleToRestore]);
+        setVoidedLogsState(prev => prev.filter(log => log.id !== logToRestore.id));
     
         if (isOnline) {
             // 2. If online, perform DB operations immediately
@@ -532,7 +532,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             batch.delete(doc(db, 'voided_logs', logToRestore.id));
             await batch.commit();
         } else {
-            // 3. If offline, queue the action
+            // 3. If offline, queue the action for restore
             const action: OfflineAction = {
                 id: logToRestore.id,
                 collection: 'voided_logs',
