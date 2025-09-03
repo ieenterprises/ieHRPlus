@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Download, Trash2, RotateCcw } from "lucide-react";
+import { Calendar as CalendarIcon, Download, Trash2, RotateCcw, Store, HardDrive } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -80,12 +80,8 @@ export default function VoidedPage() {
     products, 
     categories, 
     loggedInUser,
-    setSales,
-    setOpenTickets,
-    setDebts,
-    setReservations,
-    setProducts,
-    setVoidedLogs,
+    stores,
+    posDevices,
   } = useSettings();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -94,13 +90,28 @@ export default function VoidedPage() {
     searchTerm: "",
     employee: "all",
     category: "all",
+    storeId: "all",
+    posDeviceId: "all",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [activeTab, setActiveTab] = useState("receipts");
   const [logToDelete, setLogToDelete] = useState<string | null>(null);
 
   const hasDeletePermission = useMemo(() => loggedInUser?.permissions.includes('PERMANENTLY_DELETE_VOIDS') ?? false, [loggedInUser]);
   const hasRestorePermission = useMemo(() => loggedInUser?.permissions.includes('RESTORE_VOIDED_ITEMS') ?? false, [loggedInUser]);
+  const isAdmin = useMemo(() => {
+    if (!loggedInUser) return false;
+    return ['Owner', 'Administrator', 'Manager'].includes(loggedInUser.role);
+  }, [loggedInUser]);
+
+  const availableDevices = useMemo(() => {
+    if (filters.storeId === 'all') return posDevices;
+    return posDevices.filter(d => d.store_id === filters.storeId);
+  }, [filters.storeId, posDevices]);
+
+  useEffect(() => {
+      setFilters(prev => ({ ...prev, posDeviceId: 'all' }));
+  }, [filters.storeId]);
+
 
   const enrichedLogs = useMemo(() => {
     return voidedLogs.map(log => {
@@ -148,17 +159,18 @@ export default function VoidedPage() {
           (new Date(log.created_at!) >= dateRange.from &&
             (!dateRange.to || new Date(log.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
 
-        return searchMatch && employeeMatch && dateMatch && categoryMatch;
+        const device = posDevices.find(d => d.id === log.data.pos_device_id);
+        const storeMatch = filters.storeId === 'all' || device?.store_id === filters.storeId;
+        const deviceMatch = filters.posDeviceId === 'all' || log.data.pos_device_id === filters.posDeviceId;
+
+        return searchMatch && employeeMatch && dateMatch && categoryMatch && storeMatch && deviceMatch;
     });
-  }, [enrichedLogs, filters, dateRange, products, categories]);
+  }, [enrichedLogs, filters, dateRange, products, categories, posDevices]);
 
 
   useEffect(() => {
     setLoading(false);
-    // Reset filters when tab changes
-    setFilters({ searchTerm: "", employee: "all", category: "all" });
-    setDateRange(undefined);
-  }, [activeTab]);
+  }, []);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -201,17 +213,23 @@ export default function VoidedPage() {
     let dataToExport: any[] = [];
     let reportName = "voided_receipts";
     
-    dataToExport = filteredVoidedReceipts.map(log => ({
-      "Order #": log.data.order_number,
-      "Original Date": format(new Date(log.data.created_at!), "yyyy-MM-dd HH:mm"),
-      "Voided Date": format(new Date(log.created_at), "yyyy-MM-dd HH:mm"),
-      "Customer": log.data.customers?.name ?? 'Walk-in',
-      "Original Employee": log.data.users?.name || "N/A",
-      "Voided By": log.users?.name || "N/A",
-      "Total": log.data.total.toFixed(2),
-      "Payment Methods": log.data.payment_methods.join(", "),
-      "Items": log.data.items.map((item: SaleItem) => `${item.name} (x${item.quantity})`).join("; "),
-    }));
+    dataToExport = filteredVoidedReceipts.map(log => {
+      const device = posDevices.find(d => d.id === log.data.pos_device_id);
+      const store = stores.find(s => s.id === device?.store_id);
+      return {
+        "Order #": log.data.order_number,
+        "Original Date": format(new Date(log.data.created_at!), "yyyy-MM-dd HH:mm"),
+        "Voided Date": format(new Date(log.created_at), "yyyy-MM-dd HH:mm"),
+        "Store": store?.name || 'N/A',
+        "Device": device?.name || 'N/A',
+        "Customer": log.data.customers?.name ?? 'Walk-in',
+        "Original Employee": log.data.users?.name || "N/A",
+        "Voided By": log.users?.name || "N/A",
+        "Total": log.data.total.toFixed(2),
+        "Payment Methods": log.data.payment_methods.join(", "),
+        "Items": log.data.items.map((item: SaleItem) => `${item.name} (x${item.quantity})`).join("; "),
+      }
+    });
 
     if (dataToExport.length === 0) {
       toast({
@@ -296,6 +314,24 @@ export default function VoidedPage() {
                     {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
                 </SelectContent>
             </Select>
+             {isAdmin && (
+                <>
+                    <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
+                        <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by Store"/></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Stores</SelectItem>
+                            {stores.map(store => <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Select value={filters.posDeviceId} onValueChange={(v) => handleFilterChange('posDeviceId', v)} disabled={filters.storeId === 'all' && availableDevices.length === 0}>
+                        <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by Device"/></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Devices</SelectItem>
+                            {availableDevices.map(device => <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </>
+            )}
             <Popover>
                 <PopoverTrigger asChild>
                     <Button
@@ -338,6 +374,7 @@ export default function VoidedPage() {
                 <TableRow>
                     <TableHead>Order #</TableHead>
                     <TableHead className="hidden md:table-cell">Date</TableHead>
+                    {isAdmin && <TableHead>Location</TableHead>}
                     <TableHead className="hidden sm:table-cell">Customer</TableHead>
                     <TableHead>Employees</TableHead>
                     <TableHead>Items</TableHead>
@@ -349,15 +386,25 @@ export default function VoidedPage() {
               </TableHeader>
               <TableBody>
               {loading ? (
-                  <TableRow><TableCell colSpan={9} className="h-24 text-center">Loading...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={isAdmin ? 10 : 9} className="h-24 text-center">Loading...</TableCell></TableRow>
               ) : filteredVoidedReceipts.length > 0 ? (
                   filteredVoidedReceipts.map((log) => {
                     const saleData = log.data;
                     const categoriesForDisplay = getSaleCategoryNames(saleData.items as SaleItem[]);
+                    const device = posDevices.find(d => d.id === saleData.pos_device_id);
+                    const store = stores.find(s => s.id === device?.store_id);
                     return (
                       <TableRow key={log.id}>
                           <TableCell className="font-medium">#{saleData.order_number}</TableCell>
                           <TableCell className="hidden md:table-cell">{format(new Date(saleData.created_at!), "LLL dd, y HH:mm")}</TableCell>
+                          {isAdmin && (
+                            <TableCell>
+                                <div className="flex flex-col text-xs">
+                                    <div className="flex items-center gap-1.5"><Store className="h-3 w-3 text-muted-foreground" /><span>{store?.name || 'N/A'}</span></div>
+                                    <div className="flex items-center gap-1.5"><HardDrive className="h-3 w-3 text-muted-foreground" /><span>{device?.name || 'N/A'}</span></div>
+                                </div>
+                            </TableCell>
+                          )}
                           <TableCell className="hidden sm:table-cell">{saleData.customers?.name ?? 'Walk-in'}</TableCell>
                           <TableCell>
                             <div className="flex flex-col text-xs">
@@ -400,7 +447,7 @@ export default function VoidedPage() {
                   })
               ) : (
                   <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
+                      <TableCell colSpan={isAdmin ? 10 : 9} className="text-center text-muted-foreground h-24">
                           No voided receipts found for the selected filters.
                       </TableCell>
                   </TableRow>
@@ -413,5 +460,3 @@ export default function VoidedPage() {
     </div>
   );
 }
-
-    
