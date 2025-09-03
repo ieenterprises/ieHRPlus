@@ -43,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import type { Shift, User, StoreType, PosDeviceType } from "@/lib/types";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type EnrichedShift = Shift & {
   user: User | null;
@@ -60,6 +61,7 @@ export default function ShiftsPage() {
     employeeId: "all",
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [selectedShifts, setSelectedShifts] = useState<Set<string>>(new Set());
 
   const hasManagePermission = useMemo(() => loggedInUser?.permissions.includes('MANAGE_SHIFTS'), [loggedInUser]);
 
@@ -96,6 +98,10 @@ export default function ShiftsPage() {
     setLoading(false);
   }, []);
 
+  const closableShifts = useMemo(() => {
+    return enrichedAndFilteredShifts.filter(s => s.status !== 'closed');
+  }, [enrichedAndFilteredShifts]);
+
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
@@ -129,6 +135,27 @@ export default function ShiftsPage() {
       toast({
         title: "Error",
         description: `Failed to close shift: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+   const handleCloseSelectedShifts = async () => {
+    if (!hasManagePermission || selectedShifts.size === 0) return;
+
+    try {
+      const closePromises = Array.from(selectedShifts).map(shiftId => closeShift(shiftId));
+      await Promise.all(closePromises);
+      
+      toast({
+        title: "Shifts Closed",
+        description: `${selectedShifts.size} selected shift(s) have been closed.`,
+      });
+      setSelectedShifts(new Set()); // Clear selection after closing
+    } catch (error: any) {
+      toast({
+        title: "Error Closing Shifts",
+        description: `An error occurred: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -186,10 +213,18 @@ export default function ShiftsPage() {
           title="Shift Management"
           description="Review employee clock-in and clock-out records."
         />
-        <Button onClick={handleExport} variant="outline" size="sm" className="self-end sm:self-center">
-          <Download className="mr-2 h-4 w-4" />
-          Export to CSV
-        </Button>
+        <div className="flex items-center gap-2 self-end sm:self-center">
+            {hasManagePermission && (
+              <Button onClick={handleCloseSelectedShifts} variant="destructive" size="sm" disabled={selectedShifts.size === 0}>
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Close Selected ({selectedShifts.size})
+              </Button>
+            )}
+            <Button onClick={handleExport} variant="outline" size="sm">
+              <Download className="mr-2 h-4 w-4" />
+              Export to CSV
+            </Button>
+        </div>
       </div>
 
       <Card>
@@ -250,6 +285,16 @@ export default function ShiftsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={closableShifts.length > 0 && selectedShifts.size === closableShifts.length}
+                        onCheckedChange={(checked) => {
+                          const allClosableIds = new Set(closableShifts.map(s => s.id));
+                          setSelectedShifts(checked ? allClosableIds : new Set());
+                        }}
+                        disabled={closableShifts.length === 0}
+                      />
+                    </TableHead>
                     <TableHead>Employee</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Clock In</TableHead>
@@ -261,10 +306,27 @@ export default function ShiftsPage() {
               </TableHeader>
               <TableBody>
               {loading ? (
-                  <TableRow><TableCell colSpan={7} className="h-24 text-center">Loading...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="h-24 text-center">Loading...</TableCell></TableRow>
               ) : enrichedAndFilteredShifts.length > 0 ? (
                   enrichedAndFilteredShifts.map((shift) => (
                       <TableRow key={shift.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedShifts.has(shift.id)}
+                              onCheckedChange={(checked) => {
+                                setSelectedShifts(prev => {
+                                  const newSet = new Set(prev);
+                                  if (checked) {
+                                    newSet.add(shift.id);
+                                  } else {
+                                    newSet.delete(shift.id);
+                                  }
+                                  return newSet;
+                                });
+                              }}
+                              disabled={shift.status === 'closed'}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium">{shift.user?.name || 'Unknown User'}</TableCell>
                           <TableCell>
                             {shift.store || shift.device ? (
@@ -323,7 +385,7 @@ export default function ShiftsPage() {
                   ))
               ) : (
                   <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
                           No shifts found for the selected filters.
                       </TableCell>
                   </TableRow>
@@ -336,5 +398,3 @@ export default function ShiftsPage() {
     </div>
   );
 }
-
-    
