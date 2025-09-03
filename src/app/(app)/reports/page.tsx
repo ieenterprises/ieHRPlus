@@ -34,7 +34,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Download, ListFilter } from "lucide-react";
+import { Calendar as CalendarIcon, Download, ListFilter, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -53,6 +53,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { DateRange } from "react-day-picker";
 import { useState, useEffect, useMemo } from "react";
 import { subDays, format, startOfDay, endOfDay } from "date-fns";
@@ -218,6 +219,7 @@ export default function ReportsPage() {
       deviceId: 'all',
       employeeId: 'all',
       paymentTypeId: 'all',
+      searchTerm: '',
   });
 
   const [visibleColumns, setVisibleColumns] = useState<VisibleColumns>({
@@ -444,16 +446,43 @@ export default function ReportsPage() {
     setVisibleColumns(prev => ({...prev, [column]: checked }));
   };
 
+  const filteredData = useMemo(() => {
+    const term = filters.searchTerm.toLowerCase();
+    if (!term) {
+        return {
+            item: salesByItem,
+            category: salesByCategory,
+            employee: salesByEmployee,
+            payment: salesByPayment,
+            transaction: salesByTransaction,
+        };
+    }
+
+    return {
+        item: salesByItem.filter(d => d.name.toLowerCase().includes(term) || d.category?.toLowerCase().includes(term)),
+        category: salesByCategory.filter(d => d.name.toLowerCase().includes(term)),
+        employee: salesByEmployee.filter(d => d.name.toLowerCase().includes(term)),
+        payment: salesByPayment.filter(d => d.name.toLowerCase().includes(term)),
+        transaction: salesByTransaction.filter(d => 
+            d.orderNumber.toString().includes(term) ||
+            d.employee.toLowerCase().includes(term) ||
+            d.customer.toLowerCase().includes(term) ||
+            d.items.toLowerCase().includes(term) ||
+            d.categories.toLowerCase().includes(term)
+        ),
+    };
+  }, [filters.searchTerm, salesByItem, salesByCategory, salesByEmployee, salesByPayment, salesByTransaction]);
+
   const handleExport = () => {
     let dataToExport: any[] = [];
     let reportName = activeTab;
 
     switch(activeTab) {
-      case 'item': dataToExport = salesByItem; break;
-      case 'category': dataToExport = salesByCategory; break;
-      case 'employee': dataToExport = salesByEmployee; break;
-      case 'payment': dataToExport = salesByPayment; break;
-      case 'transaction': dataToExport = salesByTransaction; break;
+      case 'item': dataToExport = filteredData.item; break;
+      case 'category': dataToExport = filteredData.category; break;
+      case 'employee': dataToExport = filteredData.employee; break;
+      case 'payment': dataToExport = filteredData.payment; break;
+      case 'transaction': dataToExport = filteredData.transaction; break;
     }
 
     const csvData = dataToExport.map(d => {
@@ -515,68 +544,79 @@ export default function ReportsPage() {
         <CardHeader>
             <CardTitle>Filters</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
-                <SelectTrigger><SelectValue placeholder="Filter by Store"/></SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Stores</SelectItem>
-                    {stores.map(store => <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>)}
-                </SelectContent>
-            </Select>
-            <Select value={filters.deviceId} onValueChange={(v) => handleFilterChange('deviceId', v)} disabled={filters.storeId === 'all' && availableDevices.length === 0}>
-                <SelectTrigger><SelectValue placeholder="Filter by Device"/></SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Devices</SelectItem>
-                    {availableDevices.map(device => <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>)}
-                </SelectContent>
-            </Select>
-            <Select value={filters.employeeId} onValueChange={(v) => handleFilterChange('employeeId', v)}>
-                <SelectTrigger><SelectValue placeholder="Filter by Employee"/></SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Employees</SelectItem>
-                    {users.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
-                </SelectContent>
-            </Select>
-            <Select value={filters.paymentTypeId} onValueChange={(v) => handleFilterChange('paymentTypeId', v)}>
-                <SelectTrigger><SelectValue placeholder="Filter by Payment Type"/></SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Payment Types</SelectItem>
-                    {paymentTypes.map(pt => <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>)}
-                </SelectContent>
-            </Select>
-             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full">
-                        <ListFilter className="mr-2 h-4 w-4" />
-                        Display Columns
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[220px]">
-                    <DropdownMenuLabel>Toggle Metric Columns</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuCheckboxItem checked={visibleColumns.netSales} onCheckedChange={(c) => handleColumnVisibilityChange('netSales', c)}>Net Sales</DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem checked={visibleColumns.tax} onCheckedChange={(c) => handleColumnVisibilityChange('tax', c)}>Tax</DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem checked={visibleColumns.netPayment} onCheckedChange={(c) => handleColumnVisibilityChange('netPayment', c)}>Net Payment</DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem checked={visibleColumns.itemsSold} onCheckedChange={(c) => handleColumnVisibilityChange('itemsSold', c)}>Items Sold</DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem checked={visibleColumns.transactions} onCheckedChange={(c) => handleColumnVisibilityChange('transactions', c)}>Transactions</DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem checked={visibleColumns.category} onCheckedChange={(c) => handleColumnVisibilityChange('category', c)}>Category</DropdownMenuCheckboxItem>
+        <CardContent className="space-y-4">
+            <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Search all reports..."
+                    className="pl-9"
+                    value={filters.searchTerm}
+                    onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
+                />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
+                    <SelectTrigger><SelectValue placeholder="Filter by Store"/></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Stores</SelectItem>
+                        {stores.map(store => <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <Select value={filters.deviceId} onValueChange={(v) => handleFilterChange('deviceId', v)} disabled={filters.storeId === 'all' && availableDevices.length === 0}>
+                    <SelectTrigger><SelectValue placeholder="Filter by Device"/></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Devices</SelectItem>
+                        {availableDevices.map(device => <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <Select value={filters.employeeId} onValueChange={(v) => handleFilterChange('employeeId', v)}>
+                    <SelectTrigger><SelectValue placeholder="Filter by Employee"/></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Employees</SelectItem>
+                        {users.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <Select value={filters.paymentTypeId} onValueChange={(v) => handleFilterChange('paymentTypeId', v)}>
+                    <SelectTrigger><SelectValue placeholder="Filter by Payment Type"/></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Payment Types</SelectItem>
+                        {paymentTypes.map(pt => <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full">
+                            <ListFilter className="mr-2 h-4 w-4" />
+                            Display Columns
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[220px]">
+                        <DropdownMenuLabel>Toggle Metric Columns</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem checked={visibleColumns.netSales} onCheckedChange={(c) => handleColumnVisibilityChange('netSales', c)}>Net Sales</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={visibleColumns.tax} onCheckedChange={(c) => handleColumnVisibilityChange('tax', c)}>Tax</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={visibleColumns.netPayment} onCheckedChange={(c) => handleColumnVisibilityChange('netPayment', c)}>Net Payment</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={visibleColumns.itemsSold} onCheckedChange={(c) => handleColumnVisibilityChange('itemsSold', c)}>Items Sold</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={visibleColumns.transactions} onCheckedChange={(c) => handleColumnVisibilityChange('transactions', c)}>Transactions</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={visibleColumns.category} onCheckedChange={(c) => handleColumnVisibilityChange('category', c)}>Category</DropdownMenuCheckboxItem>
 
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Payment Sales</DropdownMenuLabel>
-                    {paymentTypes.map(pt => (
-                      <DropdownMenuCheckboxItem key={pt.id} checked={visibleColumns[`${pt.name} Sales`]} onCheckedChange={(c) => handleColumnVisibilityChange(`${pt.name} Sales`, c)}>
-                        {pt.name} Sales
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                     <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Items Sold by Payment</DropdownMenuLabel>
-                     {paymentTypes.map(pt => (
-                      <DropdownMenuCheckboxItem key={`${pt.id}-items`} checked={visibleColumns[`Items Sold (${pt.name})`]} onCheckedChange={(c) => handleColumnVisibilityChange(`Items Sold (${pt.name})`, c)}>
-                        Items Sold ({pt.name})
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Payment Sales</DropdownMenuLabel>
+                        {paymentTypes.map(pt => (
+                        <DropdownMenuCheckboxItem key={pt.id} checked={visibleColumns[`${pt.name} Sales`]} onCheckedChange={(c) => handleColumnVisibilityChange(`${pt.name} Sales`, c)}>
+                            {pt.name} Sales
+                        </DropdownMenuCheckboxItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Items Sold by Payment</DropdownMenuLabel>
+                        {paymentTypes.map(pt => (
+                        <DropdownMenuCheckboxItem key={`${pt.id}-items`} checked={visibleColumns[`Items Sold (${pt.name})`]} onCheckedChange={(c) => handleColumnVisibilityChange(`Items Sold (${pt.name})`, c)}>
+                            Items Sold ({pt.name})
+                        </DropdownMenuCheckboxItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
         </CardContent>
     </Card>
 
@@ -592,32 +632,32 @@ export default function ReportsPage() {
         <TabsContent value="item" className="pt-4 space-y-4">
             {loading ? <p>Loading report...</p> : (
                 <>
-                    <ReportChart data={salesByItem} title="Sales by Item" currency={currency} />
-                    <ReportTable data={salesByItem} dataKeyLabel="Item" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
+                    <ReportChart data={filteredData.item} title="Sales by Item" currency={currency} />
+                    <ReportTable data={filteredData.item} dataKeyLabel="Item" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
                 </>
             )}
         </TabsContent>
         <TabsContent value="category" className="pt-4 space-y-4">
             {loading ? <p>Loading report...</p> : (
                 <>
-                    <ReportChart data={salesByCategory} title="Sales by Category" currency={currency} />
-                    <ReportTable data={salesByCategory} dataKeyLabel="Category" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
+                    <ReportChart data={filteredData.category} title="Sales by Category" currency={currency} />
+                    <ReportTable data={filteredData.category} dataKeyLabel="Category" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
                 </>
             )}
         </TabsContent>
         <TabsContent value="employee" className="pt-4 space-y-4">
             {loading ? <p>Loading report...</p> : (
                  <>
-                    <ReportChart data={salesByEmployee} title="Sales by Employee" currency={currency} />
-                    <ReportTable data={salesByEmployee} dataKeyLabel="Employee" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
+                    <ReportChart data={filteredData.employee} title="Sales by Employee" currency={currency} />
+                    <ReportTable data={filteredData.employee} dataKeyLabel="Employee" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
                 </>
             )}
         </TabsContent>
          <TabsContent value="payment" className="pt-4 space-y-4">
             {loading ? <p>Loading report...</p> : (
                  <>
-                    <ReportChart data={salesByPayment} title="Sales by Payment Type" currency={currency} />
-                    <ReportTable data={salesByPayment} dataKeyLabel="Payment Type" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
+                    <ReportChart data={filteredData.payment} title="Sales by Payment Type" currency={currency} />
+                    <ReportTable data={filteredData.payment} dataKeyLabel="Payment Type" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
                 </>
             )}
         </TabsContent>
@@ -640,7 +680,7 @@ export default function ReportsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {salesByTransaction.map(tx => (
+                                {filteredData.transaction.map(tx => (
                                     <TableRow key={tx.id}>
                                         <TableCell>#{tx.orderNumber}</TableCell>
                                         <TableCell>{tx.date}</TableCell>
@@ -666,4 +706,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
