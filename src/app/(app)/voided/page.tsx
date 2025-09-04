@@ -155,13 +155,13 @@ export default function VoidedPage() {
           (new Date(log.created_at!) >= dateRange.from &&
             (!dateRange.to || new Date(log.created_at!) <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))));
 
-        const device = posDevices.find(d => d.id === log.data.pos_device_id);
-        const storeMatch = filters.storeId === 'all' || device?.store_id === filters.storeId;
-        const deviceMatch = filters.posDeviceId === 'all' || log.data.pos_device_id === filters.posDeviceId;
+        const storeMatch = filters.storeId === 'all' || log.data.storeName === stores.find(s => s.id === filters.storeId)?.name;
+        const deviceMatch = filters.posDeviceId === 'all' || log.data.deviceName === posDevices.find(d => d.id === filters.posDeviceId)?.name;
+
 
         return searchMatch && employeeMatch && dateMatch && categoryMatch && storeMatch && deviceMatch;
     });
-  }, [enrichedLogs, filters, dateRange, products, categories, posDevices]);
+  }, [enrichedLogs, filters, dateRange, products, categories, stores, posDevices]);
 
 
   useEffect(() => {
@@ -210,14 +210,12 @@ export default function VoidedPage() {
     let reportName = "voided_receipts";
     
     dataToExport = filteredVoidedReceipts.map(log => {
-      const device = posDevices.find(d => d.id === log.data.pos_device_id);
-      const store = stores.find(s => s.id === device?.store_id);
       return {
         "Order #": log.data.order_number,
         "Original Date": format(new Date(log.data.created_at!), "yyyy-MM-dd HH:mm"),
         "Voided Date": format(new Date(log.created_at), "yyyy-MM-dd HH:mm"),
-        "Store": store?.name || 'N/A',
-        "Device": device?.name || 'N/A',
+        "Store": log.data.storeName || 'N/A',
+        "Device": log.data.deviceName || 'N/A',
         "Customer": log.data.customers?.name ?? 'Walk-in',
         "Original Employee": log.data.users?.name || "N/A",
         "Voided By": log.users?.name || "N/A",
@@ -383,16 +381,14 @@ export default function VoidedPage() {
                   filteredVoidedReceipts.map((log) => {
                     const saleData = log.data;
                     const categoriesForDisplay = getSaleCategoryNames(saleData.items as SaleItem[]);
-                    const device = posDevices.find(d => d.id === saleData.pos_device_id);
-                    const store = stores.find(s => s.id === device?.store_id);
                     return (
                       <TableRow key={log.id}>
                           <TableCell className="font-medium">#{saleData.order_number}</TableCell>
                           <TableCell className="hidden md:table-cell">{format(new Date(saleData.created_at!), "LLL dd, y HH:mm")}</TableCell>
                           <TableCell>
                               <div className="flex flex-col text-xs">
-                                  <div className="flex items-center gap-1.5"><Store className="h-3 w-3 text-muted-foreground" /><span>{store?.name || 'N/A'}</span></div>
-                                  <div className="flex items-center gap-1.5"><HardDrive className="h-3 w-3 text-muted-foreground" /><span>{device?.name || 'N/A'}</span></div>
+                                  <div className="flex items-center gap-1.5"><Store className="h-3 w-3 text-muted-foreground" /><span>{saleData.storeName || 'N/A'}</span></div>
+                                  <div className="flex items-center gap-1.5"><HardDrive className="h-3 w-3 text-muted-foreground" /><span>{saleData.deviceName || 'N/A'}</span></div>
                               </div>
                           </TableCell>
                           <TableCell className="hidden sm:table-cell">{saleData.customers?.name ?? 'Walk-in'}</TableCell>

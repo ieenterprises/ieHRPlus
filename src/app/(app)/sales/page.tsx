@@ -514,15 +514,20 @@ export default function SalesPage() {
         try {
             let currentPosDeviceId: string | null = null;
             let currentStoreId: string | null = null;
+            let currentStoreName: string | null = null;
+            let currentDeviceName: string | null = null;
 
             if (isAdmin) {
                 currentStoreId = ownerSelectedStore?.id || null;
-                // For admins, assign to the first available device in the selected store for data consistency
+                currentStoreName = ownerSelectedStore?.name || null;
                 const deviceForStore = posDevices.find(d => d.store_id === currentStoreId);
                 currentPosDeviceId = deviceForStore?.id || null;
+                currentDeviceName = deviceForStore?.name || null;
             } else {
                 currentPosDeviceId = selectedDevice?.id || null;
+                currentDeviceName = selectedDevice?.name || null;
                 currentStoreId = selectedDevice?.store_id || null;
+                currentStoreName = stores.find(s => s.id === currentStoreId)?.name || null;
             }
             
             const saleItems: SaleItem[] = orderItems.map(item => ({
@@ -565,6 +570,8 @@ export default function SalesPage() {
                   users: { name: loggedInUser?.name || null },
                   pos_devices: currentStoreId ? { store_id: currentStoreId } : null,
                   businessId: loggedInUser?.businessId || '',
+                  storeName: currentStoreName,
+                  deviceName: currentDeviceName,
               };
               await setSales(prev => [...prev, newSale!]);
             

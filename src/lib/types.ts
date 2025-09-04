@@ -66,6 +66,8 @@ export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 
   pos_devices: { store_id: string } | null;
   businessId: string;
   fulfillment_status?: 'Unfulfilled' | 'Pending' | 'Fulfilled';
+  storeName?: string;
+  deviceName?: string;
 };
 export type Reservation = Omit<Database['public']['Tables']['reservations']['Row'], 'id'> & {
   id?: string;
@@ -165,6 +167,8 @@ export type VoidedLog = {
     order_number?: number;
     receipt_total?: number;
     reservation_check_out?: string;
+    storeName?: string;
+    deviceName?: string;
   }>;
   users: { name: string | null } | null;
   businessId: string;

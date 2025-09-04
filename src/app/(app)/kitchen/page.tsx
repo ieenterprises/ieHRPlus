@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -241,9 +242,8 @@ export default function KitchenPage() {
         (isNaN(minAmount) || totalForAmountCheck >= minAmount) &&
         (isNaN(maxAmount) || totalForAmountCheck <= maxAmount);
 
-      const device = posDevices.find(d => d.id === sale.pos_device_id);
-      const storeMatch = filters.storeId === 'all' || device?.store_id === filters.storeId;
-      const deviceMatch = filters.posDeviceId === 'all' || sale.pos_device_id === filters.posDeviceId;
+      const storeMatch = filters.storeId === 'all' || sale.storeName === stores.find(s => s.id === filters.storeId)?.name;
+      const deviceMatch = filters.posDeviceId === 'all' || sale.deviceName === posDevices.find(d => d.id === filters.posDeviceId)?.name;
 
       return searchMatch && categoryMatch && paymentMatch && dateMatch && amountMatch && employeeMatch && storeMatch && deviceMatch;
     }).map(sale => {
@@ -266,7 +266,7 @@ export default function KitchenPage() {
           displayTotal,
       };
     });
-  }, [sales, filters, dateRange, products, categories, posDevices]);
+  }, [sales, filters, dateRange, products, categories, stores, posDevices]);
 
   const filteredTickets = useMemo(() => {
     return openTickets.filter((ticket) => {
@@ -332,13 +332,11 @@ export default function KitchenPage() {
     if (activeTab === 'receipts') {
       fileName = `receipts_${new Date().toISOString().split('T')[0]}.csv`;
       dataToExport = filteredReceipts.map(sale => {
-        const device = posDevices.find(d => d.id === sale.pos_device_id);
-        const store = stores.find(s => s.id === device?.store_id);
         return {
             "Order #": sale.order_number,
             "Date": format(new Date(sale.created_at!), "yyyy-MM-dd HH:mm"),
-            "Store": store?.name || 'N/A',
-            "Device": device?.name || 'N/A',
+            "Store": sale.storeName || 'N/A',
+            "Device": sale.deviceName || 'N/A',
             "Customer": sale.customers?.name ?? 'Walk-in',
             "Employee": sale.users?.name,
             "Items": sale.items.map(item => `${item.name} (x${item.quantity})`).join(', '),
@@ -858,9 +856,6 @@ export default function KitchenPage() {
                           const canSettleDebt = hasActionPermission && canPerformShiftActions;
                           const canPrint = (hasActionPermission && canPerformShiftActions) || hasPermission('REPRINT_ANY_RECEIPT');
                           
-                          const device = posDevices.find(d => d.id === sale.pos_device_id);
-                          const store = stores.find(s => s.id === device?.store_id);
-
                           return (
                           <TableRow key={`${sale.id}-${index}`}>
                               <TableCell><Checkbox checked={selectedReceipts.has(sale.id)} onCheckedChange={(checked) => handleMergeSelection(sale.id, checked as boolean, 'receipt')} disabled={isCheckboxDisabled} /></TableCell>
@@ -868,8 +863,8 @@ export default function KitchenPage() {
                               <TableCell>{format(new Date(sale.created_at!), "LLL dd, y HH:mm")}</TableCell>
                               <TableCell>
                                   <div className="flex flex-col text-xs">
-                                      <div className="flex items-center gap-1.5"><Store className="h-3 w-3 text-muted-foreground" /><span>{store?.name || 'N/A'}</span></div>
-                                      <div className="flex items-center gap-1.5"><HardDrive className="h-3 w-3 text-muted-foreground" /><span>{device?.name || 'N/A'}</span></div>
+                                      <div className="flex items-center gap-1.5"><Store className="h-3 w-3 text-muted-foreground" /><span>{sale.storeName || 'N/A'}</span></div>
+                                      <div className="flex items-center gap-1.5"><HardDrive className="h-3 w-3 text-muted-foreground" /><span>{sale.deviceName || 'N/A'}</span></div>
                                   </div>
                               </TableCell>
                               <TableCell className="hidden sm:table-cell">{sale.customers?.name ?? 'Walk-in'}</TableCell>
