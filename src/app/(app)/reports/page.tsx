@@ -74,7 +74,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 
 type ReportDataPoint = {
@@ -1070,18 +1070,18 @@ export default function ReportsPage() {
       </AlertDialog>
 
       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-        <CardContent>
-            <CardHeader>
-                <CardTitle>Import New Stock</CardTitle>
-                <CardDescription>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Import New Stock</DialogTitle>
+                <DialogDescription>
                     Upload a CSV file with "Item Name" and "New Stock Added" columns to bulk update additions.
-                </CardDescription>
-            </CardHeader>
+                </DialogDescription>
+            </DialogHeader>
             <div className="py-4 space-y-4">
                 <Input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportAdditions} disabled={isProcessingImport} />
                 {isProcessingImport && <p className="text-sm text-muted-foreground mt-2 flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing file...</p>}
             </div>
-        </CardContent>
+        </DialogContent>
       </Dialog>
     </div>
   );
