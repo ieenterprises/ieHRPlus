@@ -1,0 +1,21 @@
+{
+  "name": "ieOrderFlow",
+  "short_name": "ieOrderFlow",
+  "description": "A modern Point of Sale system.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#FF9500",
+  "icons": [
+    {
+      "src": "https://i.im.ge/2025/06/09/vewzUc.Company-Logo-3-1.th.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.im.ge/2025/06/09/vewzUc.Company-Logo-3-1.th.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

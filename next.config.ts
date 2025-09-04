@@ -12,6 +12,8 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   reloadOnOnline: true,
   swcMinify: true,
+  register: true,
+  skipWaiting: true,
 });
 
 const nextConfig: NextConfig = {
