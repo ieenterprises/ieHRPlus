@@ -201,12 +201,18 @@ export function PrintPreviewDialog() {
             handleClose();
 
         } catch (error: any) {
-            console.error("Bluetooth printing error:", error);
-            toast({
-                title: "Bluetooth Print Error",
-                description: error.message || "An unknown error occurred.",
-                variant: "destructive"
-            });
+            // "NotAllowedError" is the specific error when a user cancels the device picker.
+            // We don't want to show an error toast for this expected user action.
+            if (error.name === 'NotAllowedError') {
+                console.log("Bluetooth device selection cancelled by user.");
+            } else {
+                console.error("Bluetooth printing error:", error);
+                toast({
+                    title: "Bluetooth Print Error",
+                    description: error.message || "An unknown error occurred.",
+                    variant: "destructive"
+                });
+            }
         } finally {
             setIsBluetoothPrinting(false);
         }
