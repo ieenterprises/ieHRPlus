@@ -201,9 +201,9 @@ export function PrintPreviewDialog() {
             handleClose();
 
         } catch (error: any) {
-            // "NotAllowedError" is the specific error when a user cancels the device picker.
-            // We don't want to show an error toast for this expected user action.
-            if (error.name === 'NotAllowedError') {
+            if (error.name === 'NotFoundError' || error.message.includes('User cancelled')) {
+                // This is the specific error when a user cancels the device picker.
+                // We don't want to show an error toast for this expected user action.
                 console.log("Bluetooth device selection cancelled by user.");
             } else {
                 console.error("Bluetooth printing error:", error);
