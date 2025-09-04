@@ -120,6 +120,8 @@ export default function SettingsPage() {
 
   const emailedLogoInputRef = useRef<HTMLInputElement>(null);
   const printedLogoInputRef = useRef<HTMLInputElement>(null);
+  const [currentPrinterConnectionType, setCurrentPrinterConnectionType] = useState<'Network' | 'Bluetooth' | 'Cable'>('Network');
+
 
   useEffect(() => {
     if (!selectedStoreForReceipt && stores.length > 0) {
@@ -200,6 +202,7 @@ export default function SettingsPage() {
   // Printer Handlers
   const handleOpenPrinterDialog = (printer: Partial<PrinterType> | null) => {
       setEditingPrinter(printer ? { ...printer } : EMPTY_PRINTER);
+      setCurrentPrinterConnectionType(printer?.connection_type || 'Network');
       setIsPrinterDialogOpen(true);
   }
 
@@ -935,7 +938,12 @@ export default function SettingsPage() {
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="connection_type">Connection Type</Label>
-                        <Select name="connection_type" required defaultValue={editingPrinter?.connection_type}>
+                        <Select 
+                            name="connection_type" 
+                            required 
+                            defaultValue={editingPrinter?.connection_type}
+                            onValueChange={(value) => setCurrentPrinterConnectionType(value as 'Network' | 'Bluetooth' | 'Cable')}
+                        >
                             <SelectTrigger><SelectValue/></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="Network">Network (IP)</SelectItem>
@@ -944,7 +952,7 @@ export default function SettingsPage() {
                             </SelectContent>
                         </Select>
                     </div>
-                    {editingPrinter?.connection_type === 'Network' && (
+                    {currentPrinterConnectionType === 'Network' && (
                          <div className="space-y-2">
                             <Label htmlFor="ip_address">IP Address</Label>
                             <Input id="ip_address" name="ip_address" defaultValue={editingPrinter?.ip_address || ''} placeholder="e.g., 192.168.1.100" />

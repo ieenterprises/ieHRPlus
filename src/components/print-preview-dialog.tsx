@@ -8,7 +8,7 @@ import { useOnlineStatus } from '@/hooks/use-online-status';
 import { PrintableReceipt } from '@/components/printable-receipt';
 import { PrintableA4Receipt } from '@/components/printable-a4-receipt';
 import { Button } from '@/components/ui/button';
-import { Printer, Loader2 } from 'lucide-react';
+import { Printer, Loader2, Bluetooth } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from './ui/scroll-area';
@@ -16,17 +16,72 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { app } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 const storage = getStorage(app);
 
+// Function to format receipt data as plain text for thermal printers
+const formatTextForBluetoothPrinter = (data: any, type: 'receipt' | 'ticket', currency: string, store: any) => {
+    let text = '';
+    const isSale = type === 'receipt';
+    
+    const center = (str: string) => str.padStart((48 - str.length) / 2 + str.length, ' ').padEnd(48, ' ');
+    const line = '-'.repeat(48) + '\n';
+    const twoCols = (left: string, right: string) => left.padEnd(48 - right.length, ' ') + right + '\n';
+    
+    text += center(store?.name || 'ieOrderFlow POS') + '\n';
+    text += center(store?.address || '') + '\n';
+    text += center(new Date(data.created_at).toLocaleString()) + '\n\n';
+    
+    text += center(isSale ? `RECEIPT #${data.order_number}` : `TICKET #${data.order_number}`) + '\n';
+    text += twoCols('Cashier:', data.users?.name || 'N/A') + '\n';
+    if(data.customers?.name) text += twoCols('Customer:', data.customers.name) + '\n';
+    text += line;
+    
+    text += 'ITEM'.padEnd(24) + 'QTY'.padStart(8) + 'TOTAL'.padStart(16) + '\n';
+    text += line;
+
+    data.items.forEach((item: any) => {
+        const total = (item.quantity * item.price).toFixed(2);
+        text += item.name.substring(0, 24).padEnd(24);
+        text += item.quantity.toString().padStart(8);
+        text += (currency + total).padStart(16);
+        text += '\n';
+    });
+
+    text += line;
+    
+    const subtotal = data.items.reduce((acc: number, item: any) => acc + item.price * item.quantity, 0);
+    const tax = data.total - subtotal;
+    
+    text += twoCols('Subtotal:', currency + subtotal.toFixed(2));
+    text += twoCols('Tax:', currency + tax.toFixed(2));
+    text += twoCols(isSale ? 'TOTAL:' : 'AMOUNT DUE:', currency + data.total.toFixed(2));
+    
+    if (isSale) {
+        text += line;
+        (data.payment_methods as string[]).forEach(method => {
+            text += twoCols(`${method.toUpperCase()}:`, data.payment_methods.length === 1 ? currency + data.total.toFixed(2) : '');
+        });
+    }
+
+    text += '\n' + center('Thank you!') + '\n\n\n';
+    
+    return text;
+};
+
+
 export function PrintPreviewDialog() {
-    const { printableData, setPrintableData, isPrintModalOpen, setIsPrintModalOpen, loggedInUser } = useSettings();
+    const { printableData, setPrintableData, isPrintModalOpen, setIsPrintModalOpen, loggedInUser, currency, stores } = useSettings();
     const [printFormat, setPrintFormat] = useState<'thermal' | 'a4'>('thermal');
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isBluetoothPrinting, setIsBluetoothPrinting] = useState(false);
     
     const printRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
     const isOnline = useOnlineStatus();
+    const { toast } = useToast();
+
 
     if (!isPrintModalOpen || !printableData) {
         return null;
@@ -86,6 +141,76 @@ export function PrintPreviewDialog() {
             setIsGenerating(false);
         }
     };
+    
+    const handleBluetoothPrint = async () => {
+        if (!("bluetooth" in navigator)) {
+            toast({
+                title: "Web Bluetooth Not Supported",
+                description: "Your browser does not support the Web Bluetooth API. Please use a browser like Chrome.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsBluetoothPrinting(true);
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'] // Serial Port Profile
+            });
+
+            if (!device.gatt) {
+                throw new Error("Could not connect to the device's GATT server.");
+            }
+
+            const server = await device.gatt.connect();
+            toast({ title: "Connected", description: `Connected to ${device.name}.`});
+            
+            const services = await server.getPrimaryServices();
+            const service = services[0];
+            
+            if (!service) {
+                throw new Error("No primary service found on the device.");
+            }
+
+            const characteristics = await service.getCharacteristics();
+            const characteristic = characteristics[0];
+
+            if (!characteristic) {
+                throw new Error("No characteristic found for the service.");
+            }
+            
+            const store = stores.find(s => s.id === (printableData.pos_devices?.store_id || stores[0]?.id));
+            const receiptText = formatTextForBluetoothPrinter(printableData, printableData.type, currency, store);
+            
+            const encoder = new TextEncoder();
+            const data = encoder.encode(receiptText);
+            
+            // Writing data in chunks to avoid size limits
+            const chunkSize = 100;
+            for (let i = 0; i < data.length; i += chunkSize) {
+                const chunk = data.slice(i, i + chunkSize);
+                await characteristic.writeValue(chunk);
+            }
+            
+            toast({ title: "Print Successful", description: "Receipt sent to printer." });
+            
+            if (device.gatt.connected) {
+              device.gatt.disconnect();
+            }
+            handleClose();
+
+        } catch (error: any) {
+            console.error("Bluetooth printing error:", error);
+            toast({
+                title: "Bluetooth Print Error",
+                description: error.message || "An unknown error occurred.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsBluetoothPrinting(false);
+        }
+    };
 
     const handleClose = () => {
         setIsPrintModalOpen(false);
@@ -125,6 +250,14 @@ export function PrintPreviewDialog() {
                     <div className="flex items-center gap-2">
                        <Button variant="outline" onClick={handleClose}>
                             Close
+                        </Button>
+                        <Button onClick={handleBluetoothPrint} disabled={isBluetoothPrinting} variant="secondary">
+                            {isBluetoothPrinting ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Bluetooth className="mr-2 h-4 w-4" />
+                            )}
+                            Connect & Print
                         </Button>
                         <Button onClick={handleGeneratePdf} disabled={isGenerating}>
                             {isGenerating ? (
