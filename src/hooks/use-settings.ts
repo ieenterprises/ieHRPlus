@@ -143,10 +143,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [featureSettings, setFeatureSettingsState] = useState<FeatureSettings>({ open_tickets: true, reservations: true, shifts: true, time_management: false, kitchen_printers: true, dining_options: true, customer_displays: false });
     const [stores, setStores] = useState<StoreType[]>([]);
     const [posDevices, setPosDevices] = useState<PosDeviceType[]>([]);
-    const [printers, setPrinters] = useState<PrinterType[]>([]);
+    const [printers, setPrintersState] = useState<PrinterType[]>([]);
     const [receiptSettings, setReceiptSettingsState] = useState<Record<string, ReceiptSettings>>({});
-    const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>([]);
-    const [taxes, setTaxes] = useState<Tax[]>([]);
+    const [paymentTypes, setPaymentTypesState] = useState<PaymentType[]>([]);
+    const [taxes, setTaxesState] = useState<Tax[]>([]);
     const [users, setUsersState] = useState<User[]>([]);
     const [roles, setRolesState] = useState<Role[]>([]);
     const [products, setProductsState] = useState<Product[]>([]);
@@ -259,9 +259,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         debts: setDebtsState,
                         stores: setStores,
                         pos_devices: setPosDevices,
-                        printers: setPrinters,
-                        taxes: setTaxes,
-                        payment_types: setPaymentTypes,
+                        printers: setPrintersState,
+                        taxes: setTaxesState,
+                        payment_types: setPaymentTypesState,
                         shifts: setShiftsState,
                         access_codes: setAccessCodes,
                     };
@@ -292,7 +292,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setStores, setPosDevices, setPrinters, setTaxes, setPaymentTypes, setShiftsState, setAccessCodes];
+                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setStores, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes];
                 collections.forEach(setter => setter([]));
             }
         });

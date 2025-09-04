@@ -1,5 +1,4 @@
 
-
 import type { AnyPermission } from "./permissions";
 
 export type Business = {
@@ -628,7 +627,6 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
-
       
 
     
