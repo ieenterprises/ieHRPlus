@@ -201,7 +201,7 @@ export function PrintPreviewDialog() {
             handleClose();
 
         } catch (error: any) {
-            if (error.name === 'NotFoundError' || error.message.includes('User cancelled')) {
+            if (error.name === 'NotFoundError') {
                 // This is the specific error when a user cancels the device picker.
                 // We don't want to show an error toast for this expected user action.
                 console.log("Bluetooth device selection cancelled by user.");
