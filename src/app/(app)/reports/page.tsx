@@ -220,6 +220,7 @@ export default function ReportsPage() {
       employeeId: 'all',
       paymentTypeId: 'all',
       searchTerm: '',
+      itemSortOrder: 'top-sellers',
   });
 
   const [visibleColumns, setVisibleColumns] = useState<VisibleColumns>({
@@ -367,7 +368,21 @@ export default function ReportsPage() {
         });
         return acc;
       }, {} as Record<string, ReportDataPoint>);
-      setSalesByItem(Object.values(itemSales).sort((a, b) => b.sales - a.sales));
+      
+      let itemSalesArray = Object.values(itemSales);
+      if (filters.itemSortOrder === 'inventory') {
+          const productOrder = products.map(p => p.name);
+          itemSalesArray.sort((a, b) => {
+              const indexA = productOrder.indexOf(a.name);
+              const indexB = productOrder.indexOf(b.name);
+              if (indexA === -1) return 1;
+              if (indexB === -1) return -1;
+              return indexA - indexB;
+          });
+      } else {
+          itemSalesArray.sort((a, b) => b.sales - a.sales);
+      }
+      setSalesByItem(itemSalesArray);
       
       const categorySales = filteredSales.reduce((acc, sale) => {
         (sale.items as any[]).forEach(item => {
@@ -554,7 +569,7 @@ export default function ReportsPage() {
                     onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
                 />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
                     <SelectTrigger><SelectValue placeholder="Filter by Store"/></SelectTrigger>
                     <SelectContent>
@@ -581,6 +596,13 @@ export default function ReportsPage() {
                     <SelectContent>
                         <SelectItem value="all">All Payment Types</SelectItem>
                         {paymentTypes.map(pt => <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <Select value={filters.itemSortOrder} onValueChange={(v) => handleFilterChange('itemSortOrder', v)}>
+                    <SelectTrigger><SelectValue placeholder="Sort by..."/></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="top-sellers">Top Sellers</SelectItem>
+                        <SelectItem value="inventory">Inventory Order</SelectItem>
                     </SelectContent>
                 </Select>
                 <DropdownMenu>
