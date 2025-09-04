@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  CardFooter,
 } from "@/components/ui/card";
 import {
   Tabs,
@@ -34,7 +35,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Download, ListFilter, Search } from "lucide-react";
+import { Calendar as CalendarIcon, Download, ListFilter, Search, ArrowRight, Calculator, Check, AlertTriangle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -62,6 +63,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
 import type { Sale, Product, Category, User, StoreType, PosDeviceType, PaymentType } from "@/lib/types";
 import Papa from "papaparse";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 
 type ReportDataPoint = {
     name: string;
@@ -91,6 +104,14 @@ type VisibleColumns = {
   [key: string]: boolean;
 };
 
+type InventoryCalculatorItem = {
+    productId: string;
+    name: string;
+    originalStock: number;
+    sold: number | null;
+    remaining: number | null;
+};
+
 function ReportChart({ data, title, currency }: { data: ReportDataPoint[], title: string, currency: string }) {
   return (
     <Card>
@@ -115,7 +136,7 @@ function ReportChart({ data, title, currency }: { data: ReportDataPoint[], title
   );
 }
 
-function ReportTable({ data, dataKeyLabel, currency, visibleColumns, paymentTypes }: { data: ReportDataPoint[], dataKeyLabel: string, currency: string, visibleColumns: VisibleColumns, paymentTypes: PaymentType[] }) {
+function ReportTable({ data, dataKeyLabel, currency, visibleColumns, paymentTypes, onCopySoldItems, isInventorySort }: { data: ReportDataPoint[], dataKeyLabel: string, currency: string, visibleColumns: VisibleColumns, paymentTypes: PaymentType[], onCopySoldItems: () => void, isInventorySort: boolean }) {
     const totalSales = useMemo(() => data.reduce((acc, item) => acc + item.sales, 0), [data]);
     const totalTax = useMemo(() => data.reduce((acc, item) => acc + item.tax, 0), [data]);
     const totalNetPayment = useMemo(() => data.reduce((acc, item) => acc + item.netPayment, 0), [data]);
@@ -140,8 +161,15 @@ function ReportTable({ data, dataKeyLabel, currency, visibleColumns, paymentType
     
     return (
         <Card>
-            <CardHeader>
-                <CardTitle>Detailed Report</CardTitle>
+            <CardHeader className="flex flex-row justify-between items-start">
+                <div>
+                    <CardTitle>Detailed Report</CardTitle>
+                </div>
+                 {isInventorySort && (
+                    <Button onClick={onCopySoldItems}>
+                        <ArrowRight className="mr-2 h-4 w-4" /> Copy Sold Items to Calculator
+                    </Button>
+                 )}
             </CardHeader>
             <CardContent>
                  <div className="overflow-x-auto">
@@ -212,7 +240,7 @@ export default function ReportsPage() {
     to: new Date(),
   });
   
-  const { stores, posDevices, paymentTypes, users, currency, sales, products, categories, taxes: allTaxes } = useSettings();
+  const { stores, posDevices, paymentTypes, users, currency, sales, products, setProducts, categories, taxes: allTaxes } = useSettings();
 
   const [filters, setFilters] = useState({
       storeId: 'all',
@@ -238,6 +266,8 @@ export default function ReportsPage() {
   const [salesByEmployee, setSalesByEmployee] = useState<ReportDataPoint[]>([]);
   const [salesByPayment, setSalesByPayment] = useState<ReportDataPoint[]>([]);
   const [salesByTransaction, setSalesByTransaction] = useState<TransactionDataPoint[]>([]);
+  const [inventoryCalcData, setInventoryCalcData] = useState<InventoryCalculatorItem[]>([]);
+  const [isUpdateConfirmOpen, setIsUpdateConfirmOpen] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -452,6 +482,26 @@ export default function ReportsPage() {
 
       setLoading(false);
   }, [date, filters, sales, products, categories, users, posDevices, paymentTypes, allTaxes]);
+  
+    useEffect(() => {
+    // Populate the calculator with all products when the page loads or products change
+    const storeId = filters.storeId; // Use the selected store filter
+    const initialCalcData = products.map(product => {
+        const storeProduct = product.store_products.find(sp => storeId === 'all' ? true : sp.store_id === storeId);
+        // If 'all' stores, we might need a better way to aggregate stock, for now just use first available
+        const mainStoreProduct = product.store_products[0];
+        
+        return {
+            productId: product.id,
+            name: product.name,
+            originalStock: storeProduct?.stock ?? mainStoreProduct?.stock ?? 0,
+            sold: null,
+            remaining: null,
+        }
+    });
+    setInventoryCalcData(initialCalcData);
+  }, [products, filters.storeId]);
+
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -530,7 +580,76 @@ export default function ReportsPage() {
     document.body.removeChild(link);
     toast({ title: "Export Complete", description: "Report has been downloaded." });
   }
+  
+  const handleCopySoldItemsToCalc = () => {
+    const salesReportMap = new Map(filteredData.item.map(item => [item.name, item.quantity]));
+    
+    setInventoryCalcData(prevData =>
+        prevData.map(calcItem => ({
+            ...calcItem,
+            sold: salesReportMap.get(calcItem.name) || 0,
+            remaining: null, // Reset remaining when new sold data is copied
+        }))
+    );
+    toast({ title: "Data Copied", description: "Items sold have been populated in the calculator." });
+  };
 
+  const handleCalculateRemaining = () => {
+    setInventoryCalcData(prevData =>
+        prevData.map(item => {
+            if (item.sold !== null) {
+                return { ...item, remaining: item.originalStock - item.sold };
+            }
+            return item;
+        })
+    );
+     toast({ title: "Calculation Complete", description: "Remaining stock has been calculated." });
+  };
+  
+  const handleUpdateInventory = async () => {
+    try {
+        const storeIdToUpdate = filters.storeId;
+        if (storeIdToUpdate === 'all') {
+            toast({
+                title: "Store Selection Required",
+                description: "Please select a specific store from the filters to update inventory.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        const updatedProducts = products.map(p => {
+            const calcItem = inventoryCalcData.find(item => item.productId === p.id && item.remaining !== null);
+            if (!calcItem) return p;
+
+            const newStoreProducts = p.store_products.map(sp => {
+                if (sp.store_id === storeIdToUpdate) {
+                    return { ...sp, stock: calcItem.remaining! };
+                }
+                return sp;
+            });
+            return { ...p, store_products: newStoreProducts };
+        });
+
+        await setProducts(updatedProducts);
+        
+        // Refresh original stock in calculator after update
+        setInventoryCalcData(prevData =>
+            prevData.map(item => ({
+                ...item,
+                originalStock: item.remaining !== null ? item.remaining : item.originalStock,
+                sold: null,
+                remaining: null,
+            }))
+        );
+        
+        toast({ title: "Inventory Updated", description: "Stock levels have been successfully updated." });
+    } catch (error: any) {
+        toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+    } finally {
+        setIsUpdateConfirmOpen(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -655,7 +774,57 @@ export default function ReportsPage() {
             {loading ? <p>Loading report...</p> : (
                 <>
                     <ReportChart data={filteredData.item} title="Sales by Item" currency={currency} />
-                    <ReportTable data={filteredData.item} dataKeyLabel="Item" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
+                    <ReportTable 
+                        data={filteredData.item} 
+                        dataKeyLabel="Item" 
+                        currency={currency} 
+                        visibleColumns={visibleColumns} 
+                        paymentTypes={paymentTypes}
+                        onCopySoldItems={handleCopySoldItemsToCalc}
+                        isInventorySort={filters.itemSortOrder === 'inventory'}
+                    />
+                    
+                    {/* Inventory Calculator Table */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Inventory Calculator</CardTitle>
+                            <CardDescription>
+                                Use this tool to compare sales against inventory and update stock levels.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ScrollArea className="h-96">
+                                <Table>
+                                    <TableHeader className="sticky top-0 bg-background">
+                                        <TableRow>
+                                            <TableHead>Item Name</TableHead>
+                                            <TableHead className="text-right">Original Stock</TableHead>
+                                            <TableHead className="text-right">Items Sold (from report)</TableHead>
+                                            <TableHead className="text-right">Calculated Remaining Stock</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {inventoryCalcData.map(item => (
+                                            <TableRow key={item.productId}>
+                                                <TableCell className="font-medium">{item.name}</TableCell>
+                                                <TableCell className="text-right">{item.originalStock}</TableCell>
+                                                <TableCell className="text-right font-semibold text-blue-600">{item.sold ?? '-'}</TableCell>
+                                                <TableCell className="text-right font-bold text-green-600">{item.remaining ?? '-'}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </ScrollArea>
+                        </CardContent>
+                        <CardFooter className="justify-end gap-2">
+                             <Button variant="outline" onClick={handleCalculateRemaining}>
+                                <Calculator className="mr-2 h-4 w-4" /> Calculate Remaining Stock
+                             </Button>
+                             <Button onClick={() => setIsUpdateConfirmOpen(true)}>
+                                <Check className="mr-2 h-4 w-4" /> Update Inventory Stock
+                             </Button>
+                        </CardFooter>
+                    </Card>
                 </>
             )}
         </TabsContent>
@@ -663,7 +832,7 @@ export default function ReportsPage() {
             {loading ? <p>Loading report...</p> : (
                 <>
                     <ReportChart data={filteredData.category} title="Sales by Category" currency={currency} />
-                    <ReportTable data={filteredData.category} dataKeyLabel="Category" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
+                    <ReportTable data={filteredData.category} dataKeyLabel="Category" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} onCopySoldItems={() => {}} isInventorySort={false}/>
                 </>
             )}
         </TabsContent>
@@ -671,7 +840,7 @@ export default function ReportsPage() {
             {loading ? <p>Loading report...</p> : (
                  <>
                     <ReportChart data={filteredData.employee} title="Sales by Employee" currency={currency} />
-                    <ReportTable data={filteredData.employee} dataKeyLabel="Employee" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
+                    <ReportTable data={filteredData.employee} dataKeyLabel="Employee" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} onCopySoldItems={() => {}} isInventorySort={false}/>
                 </>
             )}
         </TabsContent>
@@ -679,7 +848,7 @@ export default function ReportsPage() {
             {loading ? <p>Loading report...</p> : (
                  <>
                     <ReportChart data={filteredData.payment} title="Sales by Payment Type" currency={currency} />
-                    <ReportTable data={filteredData.payment} dataKeyLabel="Payment Type" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} />
+                    <ReportTable data={filteredData.payment} dataKeyLabel="Payment Type" currency={currency} visibleColumns={visibleColumns} paymentTypes={paymentTypes} onCopySoldItems={() => {}} isInventorySort={false}/>
                 </>
             )}
         </TabsContent>
@@ -725,6 +894,30 @@ export default function ReportsPage() {
             )}
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={isUpdateConfirmOpen} onOpenChange={setIsUpdateConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Inventory Update</AlertDialogTitle>
+            <AlertDialogDescription>
+              <div className="flex items-start gap-3 bg-yellow-50 text-yellow-900 p-3 rounded-md border border-yellow-200 my-2">
+                <AlertTriangle className="h-5 w-5 mt-0.5" />
+                <div>
+                    <p className="font-semibold">This action cannot be undone.</p>
+                    <p>
+                        This will permanently overwrite the current stock levels in your inventory with the new calculated values.
+                        Please ensure the calculations are correct before proceeding.
+                    </p>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUpdateInventory}>Confirm and Update</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
