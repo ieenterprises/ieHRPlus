@@ -35,7 +35,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Download, ListFilter, Search, ArrowRight, Calculator, Check, AlertTriangle } from "lucide-react";
+import { Calendar as CalendarIcon, Download, ListFilter, Search, ArrowRight, Calculator, Check, AlertTriangle, Upload, Loader2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -56,7 +56,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DateRange } from "react-day-picker";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { subDays, format, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -74,6 +74,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog } from "@/components/ui/dialog";
 
 
 type ReportDataPoint = {
@@ -109,6 +110,7 @@ type InventoryCalculatorItem = {
     name: string;
     originalStock: number;
     sold: number | null;
+    addedStock: number | null;
     remaining: number | null;
 };
 
@@ -266,8 +268,16 @@ export default function ReportsPage() {
   const [salesByEmployee, setSalesByEmployee] = useState<ReportDataPoint[]>([]);
   const [salesByPayment, setSalesByPayment] = useState<ReportDataPoint[]>([]);
   const [salesByTransaction, setSalesByTransaction] = useState<TransactionDataPoint[]>([]);
+  
+  // Inventory Calculator State
   const [inventoryCalcData, setInventoryCalcData] = useState<InventoryCalculatorItem[]>([]);
   const [isUpdateConfirmOpen, setIsUpdateConfirmOpen] = useState(false);
+  const [editingCell, setEditingCell] = useState<{ productId: string; field: 'addedStock' } | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+  const editInputRef = useRef<HTMLInputElement>(null);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isProcessingImport, setIsProcessingImport] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -496,6 +506,7 @@ export default function ReportsPage() {
             name: product.name,
             originalStock: storeProduct?.stock ?? mainStoreProduct?.stock ?? 0,
             sold: null,
+            addedStock: null,
             remaining: null,
         }
     });
@@ -581,6 +592,56 @@ export default function ReportsPage() {
     toast({ title: "Export Complete", description: "Report has been downloaded." });
   }
   
+  // --- Inventory Calculator Functions ---
+
+  useEffect(() => {
+    if (editingCell && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingCell]);
+  
+  const handleDoubleClick = (productId: string, field: 'addedStock') => {
+    const currentItem = inventoryCalcData.find(item => item.productId === productId);
+    if (!currentItem) return;
+    setEditingCell({ productId, field });
+    setEditValue((currentItem[field] || '').toString());
+  };
+
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditValue(e.target.value);
+  };
+  
+  const handleCancelEdit = () => {
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingCell) return;
+    const { productId, field } = editingCell;
+    const value = parseInt(editValue, 10);
+
+    setInventoryCalcData(prevData =>
+      prevData.map(item =>
+        item.productId === productId
+          ? { ...item, [field]: isNaN(value) ? null : value, remaining: null } // Reset remaining on edit
+          : item
+      )
+    );
+    handleCancelEdit();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSaveEdit();
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCancelEdit();
+    }
+  };
+
   const handleCopySoldItemsToCalc = () => {
     const salesReportMap = new Map(filteredData.item.map(item => [item.name, item.quantity]));
     
@@ -598,7 +659,8 @@ export default function ReportsPage() {
     setInventoryCalcData(prevData =>
         prevData.map(item => {
             if (item.sold !== null) {
-                return { ...item, remaining: item.originalStock - item.sold };
+                const added = item.addedStock || 0;
+                return { ...item, remaining: item.originalStock - item.sold + added };
             }
             return item;
         })
@@ -639,6 +701,7 @@ export default function ReportsPage() {
                 ...item,
                 originalStock: item.remaining !== null ? item.remaining : item.originalStock,
                 sold: null,
+                addedStock: null,
                 remaining: null,
             }))
         );
@@ -649,6 +712,71 @@ export default function ReportsPage() {
     } finally {
         setIsUpdateConfirmOpen(false);
     }
+  };
+
+  const handleExportTemplate = () => {
+    const headers = ["Item Name", "New Stock Added"];
+    const csv = Papa.unparse({
+      fields: headers,
+      data: inventoryCalcData.map(item => ({
+        "Item Name": item.name,
+        "New Stock Added": "", // Export with an empty column
+      })),
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `inventory_addition_template_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Template Downloaded" });
+  };
+
+  const handleImportAdditions = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessingImport(true);
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+            try {
+                const importedData = results.data as any[];
+                const additionsMap = new Map(
+                    importedData.map(row => [
+                        row["Item Name"], 
+                        parseInt(row["New Stock Added"], 10) || 0
+                    ])
+                );
+
+                setInventoryCalcData(prevData =>
+                    prevData.map(item => {
+                        const added = additionsMap.get(item.name);
+                        return {
+                            ...item,
+                            addedStock: added !== undefined ? added : item.addedStock,
+                            remaining: null, // Reset remaining
+                        };
+                    })
+                );
+                toast({ title: "Import Successful", description: "New stock additions have been imported." });
+            } catch (error: any) {
+                toast({ title: "Import Error", description: error.message, variant: "destructive" });
+            } finally {
+                setIsProcessingImport(false);
+                setIsImportDialogOpen(false);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+            }
+        },
+        error: (error: any) => {
+            toast({ title: "Import Error", description: error.message, variant: "destructive" });
+            setIsProcessingImport(false);
+        }
+    });
   };
 
   return (
@@ -786,11 +914,17 @@ export default function ReportsPage() {
                     
                     {/* Inventory Calculator Table */}
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Inventory Calculator</CardTitle>
-                            <CardDescription>
-                                Use this tool to compare sales against inventory and update stock levels.
-                            </CardDescription>
+                        <CardHeader className="flex flex-row justify-between items-start">
+                            <div>
+                                <CardTitle>Inventory Calculator</CardTitle>
+                                <CardDescription>
+                                    Use this tool to compare sales against inventory and update stock levels. Double-click a cell in 'New Stock Added' to edit.
+                                </CardDescription>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Import</Button>
+                                <Button variant="outline" onClick={handleExportTemplate}><Download className="mr-2 h-4 w-4" /> Export</Button>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <ScrollArea className="h-96">
@@ -800,6 +934,7 @@ export default function ReportsPage() {
                                             <TableHead>Item Name</TableHead>
                                             <TableHead className="text-right">Original Stock</TableHead>
                                             <TableHead className="text-right">Items Sold (from report)</TableHead>
+                                            <TableHead className="text-right">New Stock Added</TableHead>
                                             <TableHead className="text-right">Calculated Remaining Stock</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -809,6 +944,21 @@ export default function ReportsPage() {
                                                 <TableCell className="font-medium">{item.name}</TableCell>
                                                 <TableCell className="text-right">{item.originalStock}</TableCell>
                                                 <TableCell className="text-right font-semibold text-blue-600">{item.sold ?? '-'}</TableCell>
+                                                <TableCell className="text-right" onDoubleClick={() => handleDoubleClick(item.productId, 'addedStock')}>
+                                                    {editingCell?.productId === item.productId && editingCell?.field === 'addedStock' ? (
+                                                        <Input
+                                                            ref={editInputRef}
+                                                            type="number"
+                                                            value={editValue}
+                                                            onChange={handleEditChange}
+                                                            onKeyDown={handleKeyDown}
+                                                            onBlur={handleSaveEdit}
+                                                            className="h-8 w-24 ml-auto"
+                                                        />
+                                                    ) : (
+                                                        <span className="font-semibold text-orange-600">{item.addedStock ?? '-'}</span>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell className="text-right font-bold text-green-600">{item.remaining ?? '-'}</TableCell>
                                             </TableRow>
                                         ))}
@@ -918,6 +1068,21 @@ export default function ReportsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <CardContent>
+            <CardHeader>
+                <CardTitle>Import New Stock</CardTitle>
+                <CardDescription>
+                    Upload a CSV file with "Item Name" and "New Stock Added" columns to bulk update additions.
+                </CardDescription>
+            </CardHeader>
+            <div className="py-4 space-y-4">
+                <Input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportAdditions} disabled={isProcessingImport} />
+                {isProcessingImport && <p className="text-sm text-muted-foreground mt-2 flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing file...</p>}
+            </div>
+        </CardContent>
+      </Dialog>
     </div>
   );
 }
