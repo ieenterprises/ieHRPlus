@@ -156,7 +156,6 @@ export function PrintPreviewDialog() {
         try {
             const device = await navigator.bluetooth.requestDevice({
                 acceptAllDevices: true,
-                optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'] // Serial Port Profile
             });
 
             if (!device.gatt) {
@@ -166,11 +165,11 @@ export function PrintPreviewDialog() {
             const server = await device.gatt.connect();
             toast({ title: "Connected", description: `Connected to ${device.name}.`});
             
-            const services = await server.getPrimaryServices();
-            const service = services[0];
+            // Get the Serial Port Profile service after connecting
+            const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
             
             if (!service) {
-                throw new Error("No primary service found on the device.");
+                throw new Error("Serial Port Profile service not found on the device.");
             }
 
             const characteristics = await service.getCharacteristics();
@@ -203,13 +202,12 @@ export function PrintPreviewDialog() {
         } catch (error: any) {
             if (error.name === 'NotFoundError') {
                 // This is the specific error when a user cancels the device picker.
-                // We don't want to show an error toast for this expected user action.
                 console.log("Bluetooth device selection cancelled by user.");
             } else {
                 console.error("Bluetooth printing error:", error);
                 toast({
                     title: "Bluetooth Print Error",
-                    description: error.message || "An unknown error occurred.",
+                    description: error.message || "An unknown error occurred. Ensure the device is a compatible serial printer.",
                     variant: "destructive"
                 });
             }
