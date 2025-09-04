@@ -21,15 +21,15 @@ export const PrintableA4Receipt = React.forwardRef<HTMLDivElement, PrintableA4Re
     const isSale = (d: any): d is Sale => type === 'receipt' && 'order_number' in d;
 
     const getStoreIdFromSale = (sale: Sale) => {
-      if (!sale.pos_device_id) {
-          const mainBranch = stores.find(s => s.name === 'Main Branch');
-          return mainBranch?.id || stores[0]?.id || null;
-      }
-      const device = posDevices.find(d => d.id === sale.pos_device_id);
-      return device?.store_id || null;
+        const device = posDevices.find(d => d.id === sale.pos_device_id);
+        if (device) return device.store_id;
+
+        // Fallback for older sales or admin sales without a specific device
+        const mainBranch = stores.find(s => s.name.toLowerCase() === 'main branch');
+        return mainBranch?.id || stores[0]?.id || null;
     }
     
-    const storeId = isSale(data) ? getStoreIdFromSale(data) : (stores.find(s => s.name === 'Main Branch')?.id || stores[0]?.id);
+    const storeId = isSale(data) ? getStoreIdFromSale(data) : (stores.find(s => s.name.toLowerCase() === 'main branch')?.id || stores[0]?.id);
     const currentStore = stores.find(s => s.id === storeId);
 
     const defaultSettings = {
