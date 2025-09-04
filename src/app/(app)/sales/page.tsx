@@ -621,26 +621,6 @@ export default function SalesPage() {
               toast({ title: "Sale Completed", description: toastDescription });
             }
             
-            const stockUpdates = orderItems
-                .filter(item => getCategoryName(item.product.category_id) !== 'Room')
-                .map(item => ({ id: item.product.id, quantity: item.quantity }));
-            
-            const updateStoreId = currentStoreId;
-
-            if(stockUpdates.length > 0 && updateStoreId) {
-                await setProducts(prevProducts =>
-                    prevProducts.map(p => {
-                        const update = stockUpdates.find(u => u.id === p.id);
-                        if (!update) return p;
-
-                        const newStoreProducts = p.store_products.map(sp => 
-                            sp.store_id === updateStoreId ? { ...sp, stock: sp.stock - update.quantity } : sp
-                        );
-                        return { ...p, store_products: newStoreProducts };
-                    })
-                );
-            }
-            
             if (activeTicket?.id) {
               await deleteTicket(activeTicket.id);
             }
