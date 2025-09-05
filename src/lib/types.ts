@@ -63,12 +63,13 @@ export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 
   items: SaleItem[];
   payment_methods: string[];
   customers: Customer | null;
-  users: Pick<User, 'name'> | null;
+  users: User | null;
   pos_devices: { store_id: string } | null;
   businessId: string;
   fulfillment_status?: 'Unfulfilled' | 'Pending' | 'Fulfilled';
   storeName?: string;
   deviceName?: string;
+  employeeName?: string | null;
 };
 export type Reservation = Omit<Database['public']['Tables']['reservations']['Row'], 'id'> & {
   id?: string;

@@ -202,7 +202,7 @@ export default function KitchenPage() {
         filters.searchTerm === "" ||
         sale.order_number.toString().includes(searchTermLower) ||
         (sale.customers?.name ?? 'Walk-in').toLowerCase().includes(searchTermLower) ||
-        (sale.users?.name ?? '').toLowerCase().includes(searchTermLower) ||
+        (sale.employeeName ?? '').toLowerCase().includes(searchTermLower) ||
         sale.items.some((item) => item.name.toLowerCase().includes(searchTermLower)) ||
         sale.id.includes(filters.searchTerm); // Search by sale ID for debt settlement
       
@@ -213,7 +213,7 @@ export default function KitchenPage() {
         filters.paymentMethod === "all" ||
         sale.payment_methods.some(pm => pm === filters.paymentMethod);
 
-      const employeeMatch = filters.employee === "all" || sale.users?.name === filters.employee;
+      const employeeMatch = filters.employee === "all" || sale.employeeName === users.find(u => u.id === filters.employee)?.name;
       
       const dateMatch =
         !dateRange?.from ||
@@ -266,7 +266,7 @@ export default function KitchenPage() {
           displayTotal,
       };
     });
-  }, [sales, filters, dateRange, products, categories, stores, posDevices]);
+  }, [sales, filters, dateRange, products, categories, stores, posDevices, users]);
 
   const filteredTickets = useMemo(() => {
     return openTickets.filter((ticket) => {
@@ -282,7 +282,7 @@ export default function KitchenPage() {
       const ticketCategories = getItemCategoryNames(ticket.items as any[]);
       const categoryMatch = filters.category === "all" || ticketCategories.includes(filters.category);
       
-      const employeeMatch = filters.employee === "all" || ticket.users?.name === filters.employee;
+      const employeeMatch = filters.employee === "all" || ticket.users?.name === users.find(u => u.id === filters.employee)?.name;
       
       const dateMatch =
         !dateRange?.from ||
@@ -298,7 +298,7 @@ export default function KitchenPage() {
 
       return searchMatch && categoryMatch && employeeMatch && dateMatch && amountMatch;
     });
-  }, [openTickets, filters, dateRange, products, categories]);
+  }, [openTickets, filters, dateRange, products, categories, users]);
   
   const hasPermission = (permission: any) => loggedInUser?.permissions.includes(permission);
   
@@ -338,7 +338,7 @@ export default function KitchenPage() {
             "Store": sale.storeName || 'N/A',
             "Device": sale.deviceName || 'N/A',
             "Customer": sale.customers?.name ?? 'Walk-in',
-            "Employee": sale.users?.name,
+            "Employee": sale.employeeName,
             "Items": sale.items.map(item => `${item.name} (x${item.quantity})`).join(', '),
             "Total": sale.total.toFixed(2),
             "Payment Methods": sale.payment_methods.join(', '),
@@ -649,7 +649,7 @@ export default function KitchenPage() {
                               <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter by employee" /></SelectTrigger>
                               <SelectContent>
                                   <SelectItem value="all">All Employees</SelectItem>
-                                  {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
+                                  {users.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
                               </SelectContent>
                           </Select>
                           <Input placeholder="Min Amount" type="number" value={filters.minAmount} onChange={(e) => handleFilterChange("minAmount", e.target.value)} className="w-32" />
@@ -756,7 +756,7 @@ export default function KitchenPage() {
                           </SelectTrigger>
                           <SelectContent>
                               <SelectItem value="all">All Employees</SelectItem>
-                              {users.map(user => <SelectItem key={user.id} value={user.name}>{user.name}</SelectItem>)}
+                              {users.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
                           </SelectContent>
                       </Select>
                       <Select value={filters.storeId} onValueChange={(v) => handleFilterChange('storeId', v)}>
@@ -868,7 +868,7 @@ export default function KitchenPage() {
                                   </div>
                               </TableCell>
                               <TableCell className="hidden sm:table-cell">{sale.customers?.name ?? 'Walk-in'}</TableCell>
-                              <TableCell className="hidden md:table-cell">{sale.users?.name}</TableCell>
+                              <TableCell className="hidden md:table-cell">{sale.employeeName}</TableCell>
                               <TableCell>
                                   {sale.displayItems.map(item => `${item.name} (x${item.quantity})`).join(', ')}
                               </TableCell>

@@ -567,11 +567,12 @@ export default function SalesPage() {
                   status: 'Fulfilled' as const,
                   fulfillment_status: 'Unfulfilled' as const,
                   customers: customers.find(c => c.id === (creditInfo ? creditInfo.customerId : selectedCustomerId)) || null,
-                  users: { name: loggedInUser?.name || null },
+                  users: users.find(u => u.id === loggedInUser?.id) || null,
                   pos_devices: currentStoreId ? { store_id: currentStoreId } : null,
                   businessId: loggedInUser?.businessId || '',
                   storeName: currentStoreName,
                   deviceName: currentDeviceName,
+                  employeeName: loggedInUser?.name || null,
               };
               await setSales(prev => [...prev, newSale!]);
             
