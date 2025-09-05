@@ -1,6 +1,5 @@
 
 
-
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
@@ -310,17 +309,27 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (loggedInUser && loggedInUser.businessId) {
             const batch = writeBatch(db);
             const shiftsCollection = collection(db, 'shifts');
-            const q = query(shiftsCollection, where('userId', '==', loggedInUser.id), where('status', '==', 'active'), where('businessId', '==', loggedInUser.businessId));
+            
+            // Find the active or temp-active shift for the user
+            const q = query(
+                shiftsCollection, 
+                where('userId', '==', loggedInUser.id), 
+                where('status', 'in', ['active', 'temp-active']), 
+                where('businessId', '==', loggedInUser.businessId)
+            );
             const querySnapshot = await getDocs(q);
             
             if (!querySnapshot.empty) {
-                const activeShift = querySnapshot.docs[0];
-                const activeShiftData = activeShift.data();
+                const activeShiftDoc = querySnapshot.docs[0];
+                const activeShiftData = activeShiftDoc.data();
                 
                 // Close the active shift
-                batch.update(doc(db, 'shifts', activeShift.id), { status: 'closed', endTime: new Date().toISOString() });
+                batch.update(doc(db, 'shifts', activeShiftDoc.id), { 
+                    status: 'closed', 
+                    endTime: new Date().toISOString() 
+                });
                 
-                // Release the device used in that shift
+                // Release the device used in that shift, if any
                 if (activeShiftData.posDeviceId) {
                     const deviceRef = doc(db, 'pos_devices', activeShiftData.posDeviceId);
                     batch.update(deviceRef, { in_use_by_shift_id: null });
@@ -631,4 +640,5 @@ export function useSettings() {
       
 
     
+
 
