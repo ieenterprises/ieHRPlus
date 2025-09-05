@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -61,15 +62,16 @@ type NavItem = {
   permission?: AnyPermission | AnyPermission[];
   featureFlag?: string;
   offlineDisabled?: boolean;
+  tempAccessAware?: boolean;
 };
 
 const navItems: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permission: "VIEW_SALES_REPORTS" },
   { href: "/sales", icon: ShoppingCart, label: "Sales", permission: "ACCEPT_PAYMENTS" },
   { href: "/kitchen", icon: ClipboardList, label: "Orders", permission: "ACCEPT_PAYMENTS" },
-  { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"] },
+  { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"], tempAccessAware: true },
   { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "ACCEPT_PAYMENTS", featureFlag: "reservations" },
-  { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS" },
+  { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS", tempAccessAware: true },
   { href: "/shifts", icon: Clock, label: "Shifts", permission: "VIEW_SHIFT_REPORT" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES", offlineDisabled: true },
   { href: "/customers", icon: BookUser, label: "Customers", permission: ["MANAGE_CUSTOMERS", "VIEW_CUSTOMERS"] },
@@ -114,15 +116,21 @@ export function AppSidebar() {
     window.location.reload();
   };
 
-  const hasPermission = (permission?: AnyPermission | AnyPermission[]) => {
-    if (!permission) return true;
+  const hasPermission = (item: NavItem) => {
     if (!loggedInUser) return false;
 
-    const userPermissions = new Set(loggedInUser.permissions);
-    if (Array.isArray(permission)) {
-      return permission.some(p => userPermissions.has(p));
+    // Grant access if temporary access flag is set for aware items
+    if (item.tempAccessAware && loggedInUser.temp_access_given) {
+        return true;
     }
-    return userPermissions.has(permission);
+    
+    if (!item.permission) return true;
+
+    const userPermissions = new Set(loggedInUser.permissions);
+    if (Array.isArray(item.permission)) {
+      return item.permission.some(p => userPermissions.has(p));
+    }
+    return userPermissions.has(item.permission);
   };
 
   const isFeatureEnabled = (featureFlag?: string) => {
@@ -132,7 +140,7 @@ export function AppSidebar() {
   
   const shouldShowPosInfo = loggedInUser && ['Cashier', 'Waitress', 'Bar Man'].includes(loggedInUser.role);
 
-  const visibleNavItems = navItems.filter(item => hasPermission(item.permission) && isFeatureEnabled(item.featureFlag));
+  const visibleNavItems = navItems.filter(item => hasPermission(item) && isFeatureEnabled(item.featureFlag));
 
   return (
     <Sidebar collapsible="icon">
@@ -197,7 +205,7 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {(hasPermission("MANAGE_FEATURE_SETTINGS")) && (
+          {(hasPermission({ permission: "MANAGE_FEATURE_SETTINGS" } as NavItem)) && (
              <SidebarMenuItem>
                 <Tooltip>
                   <TooltipTrigger asChild>

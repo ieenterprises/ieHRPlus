@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -68,6 +69,7 @@ const EMPTY_USER: Partial<User> = {
   password: "",
   avatar_url: "https://placehold.co/100x100.png",
   permissions: [],
+  temp_access_given: false,
 };
 
 const EMPTY_ROLE: Partial<Role> = {
@@ -155,6 +157,7 @@ export default function TeamPage() {
         permissions: getPermissionsForRole(roleName),
         avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
         businessId: loggedInUser.businessId,
+        temp_access_given: editingUser.temp_access_given || false,
     };
 
     try {

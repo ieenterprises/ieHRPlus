@@ -1,7 +1,8 @@
 
+
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { useSettings, type FeatureSettings, type StoreType, type PosDeviceType, type PrinterType, type ReceiptSettings, type PaymentType, type Tax, type AccessCode } from "@/hooks/use-settings";
+import { useSettings, type FeatureSettings, type StoreType, type PosDeviceType, type PrinterType, type ReceiptSettings, type PaymentType, type Tax, type AccessCode, User } from "@/hooks/use-settings";
 
 
 const settingsNav = [
@@ -73,7 +74,9 @@ export default function SettingsPage() {
     taxes,
     currency,
     paymentTypes,
+    users,
     generateAccessCode,
+    updateUserTempAccess,
     setFeatureSettings,
     addStore,
     updateStore,
@@ -121,6 +124,11 @@ export default function SettingsPage() {
   const emailedLogoInputRef = useRef<HTMLInputElement>(null);
   const printedLogoInputRef = useRef<HTMLInputElement>(null);
   const [currentPrinterConnectionType, setCurrentPrinterConnectionType] = useState<'Network' | 'Bluetooth' | 'Cable'>('Network');
+
+  const eligibleUsersForTempAccess = useMemo(() => {
+    const eligibleRoles = ["Cashier", "Bar Man", "Waitress"];
+    return users.filter(user => eligibleRoles.includes(user.role));
+  }, [users]);
 
 
   useEffect(() => {
@@ -829,44 +837,86 @@ export default function SettingsPage() {
             )}
             
             {activeSection === 'security' && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Security</CardTitle>
-                        <CardDescription>Manage security settings for your staff.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                        <div className="space-y-2">
-                          <Label>One-Time Access Code</Label>
-                           <p className="text-sm text-muted-foreground">
-                            Generate a unique, 4-digit code that staff must enter to start their session. Each code is valid for 5 minutes and can only be used once.
-                          </p>
-                        </div>
-                        <div className="flex flex-col sm:flex-row items-center gap-4 p-4 border rounded-md bg-muted/50">
-                            <div className="flex-1 space-y-1">
-                                <p className="text-sm font-medium">New Access Code</p>
-                                {generatedCode ? (
-                                    <div className="flex items-center gap-2">
-                                        <Input 
-                                            readOnly 
-                                            value={generatedCode.code}
-                                            className="w-24 font-mono text-2xl tracking-widest text-center h-12"
-                                        />
-                                        <div className="text-xs text-muted-foreground">
-                                            <p>This code is valid for 5 minutes.</p>
-                                            <p>Provide it to the staff member to sign in.</p>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground h-12 flex items-center">Click the button to generate a new code.</p>
-                                )}
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Security</CardTitle>
+                            <CardDescription>Manage security settings for your staff.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="space-y-2">
+                            <Label>One-Time Access Code</Label>
+                            <p className="text-sm text-muted-foreground">
+                                Generate a unique, 4-digit code that staff must enter to start their session. Each code is valid for 5 minutes and can only be used once.
+                            </p>
                             </div>
-                            <Button onClick={handleGenerateCode} disabled={isGeneratingCode}>
-                                {isGeneratingCode ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                                Generate New Code
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                            <div className="flex flex-col sm:flex-row items-center gap-4 p-4 border rounded-md bg-muted/50">
+                                <div className="flex-1 space-y-1">
+                                    <p className="text-sm font-medium">New Access Code</p>
+                                    {generatedCode ? (
+                                        <div className="flex items-center gap-2">
+                                            <Input 
+                                                readOnly 
+                                                value={generatedCode.code}
+                                                className="w-24 font-mono text-2xl tracking-widest text-center h-12"
+                                            />
+                                            <div className="text-xs text-muted-foreground">
+                                                <p>This code is valid for 5 minutes.</p>
+                                                <p>Provide it to the staff member to sign in.</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground h-12 flex items-center">Click the button to generate a new code.</p>
+                                    )}
+                                </div>
+                                <Button onClick={handleGenerateCode} disabled={isGeneratingCode}>
+                                    {isGeneratingCode ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                                    Generate New Code
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Temporary Access Control</CardTitle>
+                            <CardDescription>
+                                Grant temporary access to Inventory and Reports for specific employees. Access is revoked when the user signs out.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Employee Name</TableHead>
+                                        <TableHead>Role</TableHead>
+                                        <TableHead className="text-right w-[150px]">Grant Access</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {eligibleUsersForTempAccess.map(user => (
+                                        <TableRow key={user.id}>
+                                            <TableCell className="font-medium">{user.name}</TableCell>
+                                            <TableCell><Badge variant="outline">{user.role}</Badge></TableCell>
+                                            <TableCell className="text-right">
+                                                <Switch
+                                                    checked={!!user.temp_access_given}
+                                                    onCheckedChange={(checked) => updateUserTempAccess(user.id, checked)}
+                                                />
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {eligibleUsersForTempAccess.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                                                No eligible employees found (Cashier, Bar Man, Waitress).
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
             )}
         </main>
       </div>

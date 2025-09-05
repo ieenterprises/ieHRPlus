@@ -1,5 +1,6 @@
 
 
+
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
@@ -69,6 +70,7 @@ type SettingsContextType = {
     deleteTax: (id: string) => Promise<void>;
     generateAccessCode: () => Promise<AccessCode | null>;
     validateAndUseAccessCode: (code: string) => Promise<boolean>;
+    updateUserTempAccess: (userId: string, hasAccess: boolean) => Promise<void>;
     
     // Auth and session state
     loggedInUser: User | null;
@@ -324,6 +326,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                     batch.update(deviceRef, { in_use_by_shift_id: null });
                 }
             }
+            // Revoke temporary access on logout
+            if (loggedInUser.temp_access_given) {
+                batch.update(doc(db, 'users', loggedInUser.id), { temp_access_given: false });
+            }
             await batch.commit();
         }
 
@@ -400,6 +406,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         }
 
         return false;
+    };
+
+    const updateUserTempAccess = async (userId: string, hasAccess: boolean) => {
+        const userRef = doc(db, 'users', userId);
+        await updateDoc(userRef, { temp_access_given: hasAccess });
     };
 
     const addDocFactory = (collectionName: string) => async (data: any) => { 
@@ -586,6 +597,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         accessCodes,
         generateAccessCode,
         validateAndUseAccessCode,
+        updateUserTempAccess,
         loggedInUser,
         loadingUser,
         logout,
@@ -619,3 +631,4 @@ export function useSettings() {
       
 
     
+

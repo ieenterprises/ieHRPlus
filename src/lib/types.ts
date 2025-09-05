@@ -1,4 +1,5 @@
 
+
 import type { AnyPermission } from "./permissions";
 
 export type Business = {
@@ -55,6 +56,7 @@ export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissio
     permissions: AnyPermission[];
     password?: string;
     businessId: string;
+    temp_access_given?: boolean;
 }
 export type Customer = Database['public']['Tables']['customers']['Row'] & { businessId: string };
 export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 'payment_methods'> & {
@@ -500,7 +502,8 @@ export type Database = {
           name: string
           permissions: Json | null
           role: string
-          password?: string | null
+          password?: string | null,
+          temp_access_given?: boolean | null,
         }
         Insert: {
           avatar_url?: string | null
@@ -510,7 +513,8 @@ export type Database = {
           name: string
           permissions?: Json | null
           role: string
-          password?: string | null
+          password?: string | null,
+          temp_access_given?: boolean | null,
         }
         Update: {
           avatar_url?: string | null
@@ -520,7 +524,8 @@ export type Database = {
           name?: string
           permissions?: Json | null
           role?: string
-          password?: string | null
+          password?: string | null,
+          temp_access_given?: boolean | null,
         }
         Relationships: [
           {
