@@ -577,11 +577,28 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
 
     const closeShift = async (shiftId: string) => {
+        const shiftToClose = shifts.find(s => s.id === shiftId);
+        if (!shiftToClose) {
+            console.error("Shift to close not found in local state.");
+            return;
+        }
+
+        const batch = writeBatch(db);
         const shiftRef = doc(db, 'shifts', shiftId);
-        await updateDoc(shiftRef, {
+
+        // Update shift status
+        batch.update(shiftRef, {
             status: 'closed',
             endTime: new Date().toISOString()
         });
+
+        // Release the device if it's associated with this shift
+        if (shiftToClose.posDeviceId) {
+            const deviceRef = doc(db, 'pos_devices', shiftToClose.posDeviceId);
+            batch.update(deviceRef, { in_use_by_shift_id: null });
+        }
+
+        await batch.commit();
     };
 
     const value: SettingsContextType = {
@@ -640,5 +657,6 @@ export function useSettings() {
       
 
     
+
 
 
