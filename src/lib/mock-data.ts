@@ -62,12 +62,7 @@ const generateInitialBusinessData = (ownerId: string, businessName: string, bran
   };
 
   return {
-    sales: [],
-    debts: [],
-    reservations: [],
     settings,
-    openTickets: [],
-    voidedLogs: []
   };
 };
 
