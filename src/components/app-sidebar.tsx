@@ -67,17 +67,8 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", permission: "VIEW_SALES_REPORTS" },
-  { href: "/sales", icon: ShoppingCart, label: "Sales", permission: "ACCEPT_PAYMENTS" },
-  { href: "/kitchen", icon: ClipboardList, label: "Orders", permission: "ACCEPT_PAYMENTS" },
-  { href: "/inventory", icon: Package, label: "Inventory", permission: ["MANAGE_ITEMS_BO", "VIEW_SALES_REPORTS"], tempAccessAware: true },
-  { href: "/reservations", icon: CalendarCheck, label: "Reservations", permission: "ACCEPT_PAYMENTS", featureFlag: "reservations" },
-  { href: "/reports", icon: BarChart3, label: "Reports", permission: "VIEW_SALES_REPORTS", tempAccessAware: true },
-  { href: "/shifts", icon: Clock, label: "Shifts", permission: "VIEW_SHIFT_REPORT" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES", offlineDisabled: true },
-  { href: "/customers", icon: BookUser, label: "Customers", permission: ["MANAGE_CUSTOMERS", "VIEW_CUSTOMERS"] },
   { href: "/file-manager", icon: Folder, label: "File Manager" },
-  { href: "/voided", icon: Trash2, label: "Voided", permission: "VIEW_SALES_REPORTS" },
 ];
 
 export function AppSidebar() {
