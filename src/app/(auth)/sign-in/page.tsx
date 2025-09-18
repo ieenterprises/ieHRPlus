@@ -59,7 +59,7 @@ export default function SignInPage() {
   // This effect handles the redirection after the user is set in the context
   useEffect(() => {
     if (loggedInUser) {
-        router.push("/file-manager");
+        router.push("/dashboard");
     }
   }, [loggedInUser, router]);
 
