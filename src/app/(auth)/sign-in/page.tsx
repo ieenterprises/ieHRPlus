@@ -76,8 +76,8 @@ export default function SignInPage() {
   };
 
   useEffect(() => {
-    // This effect now only handles the case where a user is ALREADY logged in
-    // and visits the sign-in page.
+    // If a user is already logged in and somehow lands here, redirect them.
+    // The main app layout handles this, but this is a fallback.
     if (loggedInUser) {
         router.push("/dashboard");
     }
@@ -134,4 +134,3 @@ export default function SignInPage() {
     </>
   );
 }
-
