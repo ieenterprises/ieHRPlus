@@ -76,7 +76,7 @@ const navItems: NavItem[] = [
   { href: "/shifts", icon: Clock, label: "Shifts", permission: "VIEW_SHIFT_REPORT" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES", offlineDisabled: true },
   { href: "/customers", icon: BookUser, label: "Customers", permission: ["MANAGE_CUSTOMERS", "VIEW_CUSTOMERS"] },
-  { href: "/file-manager", icon: Folder, label: "File Manager", permission: "MANAGE_ITEMS_BO" },
+  { href: "/file-manager", icon: Folder, label: "File Manager" },
   { href: "/voided", icon: Trash2, label: "Voided", permission: "VIEW_SALES_REPORTS" },
 ];
 
@@ -314,5 +314,3 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
-
-    
