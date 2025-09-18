@@ -21,7 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 const storage = getStorage(app);
 
 // Function to format receipt data as plain text for thermal printers
-const formatTextForBluetoothPrinter = (data: any, type: 'receipt' | 'ticket', currency: string, store: any) => {
+const formatTextForBluetoothPrinter = (data: any, type: 'receipt' | 'ticket', currency: string, branch: any) => {
     let text = '';
     const isSale = type === 'receipt';
     
@@ -29,8 +29,8 @@ const formatTextForBluetoothPrinter = (data: any, type: 'receipt' | 'ticket', cu
     const line = '-'.repeat(48) + '\n';
     const twoCols = (left: string, right: string) => left.padEnd(48 - right.length, ' ') + right + '\n';
     
-    text += center(store?.name || 'ieOrderFlow POS') + '\n';
-    text += center(store?.address || '') + '\n';
+    text += center(branch?.name || 'ieOrderFlow POS') + '\n';
+    text += center(branch?.address || '') + '\n';
     text += center(new Date(data.created_at).toLocaleString()) + '\n\n';
     
     text += center(isSale ? `RECEIPT #${data.order_number}` : `TICKET #${data.order_number}`) + '\n';
@@ -72,7 +72,7 @@ const formatTextForBluetoothPrinter = (data: any, type: 'receipt' | 'ticket', cu
 
 
 export function PrintPreviewDialog() {
-    const { printableData, setPrintableData, isPrintModalOpen, setIsPrintModalOpen, loggedInUser, currency, stores } = useSettings();
+    const { printableData, setPrintableData, isPrintModalOpen, setIsPrintModalOpen, loggedInUser, currency, branches } = useSettings();
     const [printFormat, setPrintFormat] = useState<'thermal' | 'a4'>('thermal');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isBluetoothPrinting, setIsBluetoothPrinting] = useState(false);
@@ -179,8 +179,8 @@ export function PrintPreviewDialog() {
                 throw new Error("No characteristic found for the service.");
             }
             
-            const store = stores.find(s => s.id === (printableData.pos_devices?.store_id || stores[0]?.id));
-            const receiptText = formatTextForBluetoothPrinter(printableData, printableData.type, currency, store);
+            const branch = branches.find(s => s.id === (printableData.pos_devices?.branch_id || branches[0]?.id));
+            const receiptText = formatTextForBluetoothPrinter(printableData, printableData.type, currency, branch);
             
             const encoder = new TextEncoder();
             const data = encoder.encode(receiptText);

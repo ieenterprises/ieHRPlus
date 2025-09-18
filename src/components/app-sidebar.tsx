@@ -73,7 +73,7 @@ const navItems: NavItem[] = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { loggedInUser, logout, featureSettings, selectedStore, selectedDevice } = useSettings();
+  const { loggedInUser, logout, featureSettings, selectedBranch, selectedDevice } = useSettings();
   const isOnline = useOnlineStatus();
   const { toast } = useToast();
   const wasOffline = useRef(!isOnline);
@@ -279,14 +279,14 @@ export function AppSidebar() {
                         </AlertDialog>
                     </div>
                 </div>
-                {shouldShowPosInfo && (selectedStore || selectedDevice) && (
+                {shouldShowPosInfo && (selectedBranch || selectedDevice) && (
                   <>
                     <Separator className="group-data-[collapsible=icon]:hidden" />
                     <div className="space-y-1 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-                        {selectedStore && (
+                        {selectedBranch && (
                            <div className="flex items-center gap-2">
                                 <Store className="h-3 w-3" />
-                                <span className="truncate">Store: {selectedStore.name}</span>
+                                <span className="truncate">Branch: {selectedBranch.name}</span>
                            </div>
                         )}
                         {selectedDevice && (

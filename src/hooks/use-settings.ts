@@ -5,14 +5,14 @@
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, StoreType, PosDeviceType, PaymentType, Department, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserDepartment, SaleItem, Shift, AccessCode, OfflineAction } from '@/lib/types';
+import type { User, BranchType, PosDeviceType, Department, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserDepartment, SaleItem, Shift, AccessCode, OfflineAction } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, Unsubscribe } from "firebase/auth";
 import { useOnlineStatus } from './use-online-status';
 
-export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Department, UserDepartment } from '@/lib/types';
+export type { FeatureSettings, BranchType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Department, UserDepartment } from '@/lib/types';
 
 export type FeatureSettings = Record<string, boolean>;
 
@@ -27,7 +27,7 @@ export const MOCK_INITIAL_DEPARTMENTS: Department[] = [
 type SettingsContextType = {
     // Data states
     featureSettings: FeatureSettings;
-    stores: StoreType[];
+    branches: BranchType[];
     posDevices: PosDeviceType[];
     printers: PrinterType[];
     receiptSettings: Record<string, ReceiptSettings>;
@@ -48,9 +48,9 @@ type SettingsContextType = {
     
     // Data setters (now write to DB)
     setFeatureSettings: (value: React.SetStateAction<FeatureSettings>) => void;
-    addStore: (store: Omit<StoreType, 'id'>) => Promise<void>;
-    updateStore: (id: string, store: Partial<StoreType>) => Promise<void>;
-    deleteStore: (id: string) => Promise<void>;
+    addBranch: (branch: Omit<BranchType, 'id'>) => Promise<void>;
+    updateBranch: (id: string, branch: Partial<BranchType>) => Promise<void>;
+    deleteBranch: (id: string) => Promise<void>;
     addPosDevice: (device: Omit<PosDeviceType, 'id' | 'in_use_by_shift_id'>) => Promise<void>;
     updatePosDevice: (id: string, device: Partial<PosDeviceType>) => Promise<void>;
     deletePosDevice: (id: string) => Promise<void>;
@@ -73,12 +73,12 @@ type SettingsContextType = {
     loadingUser: boolean;
     logout: () => void;
     
-    selectedStore: StoreType | null;
-    setSelectedStore: React.Dispatch<React.SetStateAction<StoreType | null>>;
+    selectedBranch: BranchType | null;
+    setSelectedBranch: React.Dispatch<React.SetStateAction<BranchType | null>>;
     selectedDevice: PosDeviceType | null;
     setSelectedDevice: React.Dispatch<React.SetStateAction<PosDeviceType | null>>;
-    ownerSelectedStore: StoreType | null;
-    setOwnerSelectedStore: React.Dispatch<React.SetStateAction<StoreType | null>>;
+    ownerSelectedBranch: BranchType | null;
+    setOwnerSelectedBranch: React.Dispatch<React.SetStateAction<BranchType | null>>;
     currency: string;
     setCurrency: (value: React.SetStateAction<string>) => void;
     getPermissionsForDepartment: (department: UserDepartment) => AnyPermission[];
@@ -139,7 +139,7 @@ const useLocalStorage = <T,>(key: string, defaultValue: T): [T, React.Dispatch<R
 export function SettingsProvider({ children }: { children: ReactNode }) {
     // States for data fetched from Firestore
     const [featureSettings, setFeatureSettingsState] = useState<FeatureSettings>({ open_tickets: true, reservations: true, shifts: true, time_management: false, kitchen_printers: true, dining_options: true, customer_displays: false });
-    const [stores, setStores] = useState<StoreType[]>([]);
+    const [branches, setBranches] = useState<BranchType[]>([]);
     const [posDevices, setPosDevices] = useState<PosDeviceType[]>([]);
     const [printers, setPrintersState] = useState<PrinterType[]>([]);
     const [receiptSettings, setReceiptSettingsState] = useState<Record<string, ReceiptSettings>>({});
@@ -163,9 +163,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [loadingUser, setLoadingUser] = useState(true);
     
     // Local session state
-    const [selectedStore, setSelectedStore] = useLocalStorage<StoreType | null>('selectedStore', null);
+    const [selectedBranch, setSelectedBranch] = useLocalStorage<BranchType | null>('selectedBranch', null);
     const [selectedDevice, setSelectedDevice] = useLocalStorage<PosDeviceType | null>('selectedDevice', null);
-    const [ownerSelectedStore, setOwnerSelectedStore] = useLocalStorage<StoreType | null>('ownerSelectedStore', null);
+    const [ownerSelectedBranch, setOwnerSelectedBranch] = useLocalStorage<BranchType | null>('ownerSelectedBranch', null);
     const [debtToSettle, setDebtToSettle] = useLocalStorage<Sale | null>('debtToSettle', null);
     const [pendingActions, setPendingActions] = useLocalStorage<OfflineAction[]>('pendingActions', []);
     
@@ -255,7 +255,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         open_tickets: setOpenTicketsState,
                         voided_logs: setVoidedLogsState,
                         debts: setDebtsState,
-                        stores: setStores,
+                        branches: setBranches,
                         pos_devices: setPosDevices,
                         printers: setPrintersState,
                         taxes: setTaxesState,
@@ -290,7 +290,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setDepartmentsState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setStores, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes];
+                const collections = [setUsersState, setDepartmentsState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setBranches, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes];
                 collections.forEach(setter => setter([]));
             }
         });
@@ -341,12 +341,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         await auth.signOut();
         setLoggedInUser(null);
-        setSelectedStore(null);
+        setSelectedBranch(null);
         setSelectedDevice(null);
-        setOwnerSelectedStore(null);
-        window.localStorage.removeItem('selectedStore');
+        setOwnerSelectedBranch(null);
+        window.localStorage.removeItem('selectedBranch');
         window.localStorage.removeItem('selectedDevice');
-        window.localStorage.removeItem('ownerSelectedStore');
+        window.localStorage.removeItem('ownerSelectedBranch');
         router.push('/sign-in');
     };
 
@@ -426,9 +426,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const updateDocFactory = (collectionName: string) => async (id: string, data: any) => { await updateDoc(doc(db, collectionName, id), data); };
     const deleteDocFactory = (collectionName: string) => async (id: string) => { await deleteDoc(doc(db, collectionName, id)); };
 
-    const addStore = addDocFactory('stores');
-    const updateStore = updateDocFactory('stores');
-    const deleteStore = deleteDocFactory('stores');
+    const addBranch = addDocFactory('branches');
+    const updateBranch = updateDocFactory('branches');
+    const deleteBranch = deleteDocFactory('branches');
     const addPosDevice = async (device: Omit<PosDeviceType, 'id' | 'in_use_by_shift_id'>) => {
       if (!loggedInUser?.businessId) return;
       await addDoc(collection(db, 'pos_devices'), { ...device, in_use_by_shift_id: null, businessId: loggedInUser.businessId });
@@ -600,7 +600,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     const value: SettingsContextType = {
         featureSettings, setFeatureSettings,
-        stores, addStore, updateStore, deleteStore,
+        branches, addBranch, updateBranch, deleteBranch,
         posDevices, addPosDevice, updatePosDevice, deletePosDevice,
         printers, addPrinter, updatePrinter, deletePrinter,
         receiptSettings, setReceiptSettings,
@@ -624,9 +624,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         loggedInUser,
         loadingUser,
         logout,
-        selectedStore, setSelectedStore,
+        selectedBranch, setSelectedBranch,
         selectedDevice, setSelectedDevice,
-        ownerSelectedStore, setOwnerSelectedStore,
+        ownerSelectedBranch, setOwnerSelectedBranch,
         currency, setCurrency,
         getPermissionsForDepartment,
         debtToSettle, setDebtToSettle,
@@ -650,14 +650,3 @@ export function useSettings() {
     }
     return context;
 }
-
-      
-
-    
-
-
-
-
-
-
-    

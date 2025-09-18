@@ -14,24 +14,24 @@ type PrintableReceiptProps = {
 
 export const PrintableReceipt = React.forwardRef<HTMLDivElement, PrintableReceiptProps>(
   ({ data, type }, ref) => {
-    const { stores, posDevices, receiptSettings, currency, loggedInUser } = useSettings();
+    const { branches, posDevices, receiptSettings, currency, loggedInUser } = useSettings();
     
     const isSale = (d: any): d is Sale => type === 'receipt' && 'order_number' in d;
 
-    const getStoreIdFromSale = (sale: Sale) => {
+    const getBranchIdFromSale = (sale: Sale) => {
         const device = posDevices.find(d => d.id === sale.pos_device_id);
-        if (device) return device.store_id;
+        if (device) return device.branch_id;
 
         // Fallback for older sales or admin sales without a specific device
-        const mainBranch = stores.find(s => s.name.toLowerCase() === 'main branch');
-        return mainBranch?.id || stores[0]?.id || null;
+        const mainBranch = branches.find(s => s.name.toLowerCase() === 'main branch');
+        return mainBranch?.id || branches[0]?.id || null;
     }
     
-    const storeId = isSale(data) ? getStoreIdFromSale(data) : (stores.find(s => s.name.toLowerCase() === 'main branch')?.id || stores[0]?.id);
-    const currentStore = stores.find(s => s.id === storeId);
+    const branchId = isSale(data) ? getBranchIdFromSale(data) : (branches.find(s => s.name.toLowerCase() === 'main branch')?.id || branches[0]?.id);
+    const currentBranch = branches.find(s => s.id === branchId);
 
     const defaultSettings = {
-      header: `Welcome to ${currentStore?.name || 'our store'}!`,
+      header: `Welcome to ${currentBranch?.name || 'our branch'}!`,
       footer: "Thank you for your purchase!",
       printedLogo: null,
       showCustomerInfo: true,
@@ -39,7 +39,7 @@ export const PrintableReceipt = React.forwardRef<HTMLDivElement, PrintableReceip
       language: 'en',
     };
 
-    const currentReceiptSettings = (storeId && receiptSettings[storeId]) || defaultSettings;
+    const currentReceiptSettings = (branchId && receiptSettings[branchId]) || defaultSettings;
 
     const items = data.items as SaleItem[];
     const total = data.total;
@@ -53,15 +53,15 @@ export const PrintableReceipt = React.forwardRef<HTMLDivElement, PrintableReceip
             <div className="flex justify-center mb-2">
               <Image
                 src={currentReceiptSettings.printedLogo}
-                alt={`${currentStore?.name || 'Store'} Logo`}
+                alt={`${currentBranch?.name || 'Branch'} Logo`}
                 width={80}
                 height={80}
                 className="object-contain"
               />
             </div>
           )}
-          <h1 className="text-sm font-bold">{currentStore?.name || "ieOrderFlow POS"}</h1>
-          <p>{currentStore?.address}</p>
+          <h1 className="text-sm font-bold">{currentBranch?.name || "ieOrderFlow POS"}</h1>
+          <p>{currentBranch?.address}</p>
           <p>{format(new Date(data.created_at!), "LLL dd, y HH:mm")}</p>
           
           {currentReceiptSettings.header && <p className="pt-1">{currentReceiptSettings.header}</p>}

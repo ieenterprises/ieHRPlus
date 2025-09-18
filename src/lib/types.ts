@@ -1,6 +1,5 @@
 
 
-
 import type { AnyPermission } from "./permissions";
 
 export type Business = {
@@ -29,9 +28,9 @@ export interface FileItem {
   };
 }
 
-export type StoreProduct = {
+export type BranchProduct = {
   id: string;
-  store_id: string;
+  branch_id: string;
   product_id: string;
   price: number;
   stock: number;
@@ -46,7 +45,7 @@ export type Shift = {
   endTime: string | null;
   status: 'active' | 'closed' | 'temp-active';
   user?: User | null;
-  storeId?: string | null;
+  branchId?: string | null;
   posDeviceId?: string | null;
 };
 
@@ -62,9 +61,9 @@ export type AccessCode = {
 export type Category = Database['public']['Tables']['categories']['Row'] & { businessId: string };
 export type Product = Omit<Database['public']['Tables']['products']['Row'], 'price' | 'stock'> & { 
   businessId: string;
-  store_products: StoreProduct[];
+  branch_products: BranchProduct[];
 };
-export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions' | 'role'> & {
+export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions' | 'department'> & {
     permissions: AnyPermission[];
     department: string;
     password?: string;
@@ -77,10 +76,10 @@ export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 
   payment_methods: string[];
   customers: Customer | null;
   users: User | null;
-  pos_devices: { store_id: string } | null;
+  pos_devices: { branch_id: string } | null;
   businessId: string;
   fulfillment_status?: 'Unfulfilled' | 'Pending' | 'Fulfilled';
-  storeName?: string;
+  branchName?: string;
   deviceName?: string;
   employeeName?: string | null;
   pdf_url?: string | null;
@@ -109,7 +108,7 @@ export type OpenTicket = Database['public']['Tables']['open_tickets']['Row'] & {
   businessId: string;
   fulfillment_status?: 'Unfulfilled' | 'Pending' | 'Fulfilled';
 };
-export type StoreType = Database['public']['Tables']['stores']['Row'] & { businessId: string };
+export type BranchType = Database['public']['Tables']['branches']['Row'] & { businessId: string };
 export type PosDeviceType = Database['public']['Tables']['pos_devices']['Row'] & { 
   businessId: string;
   in_use_by_shift_id: string | null;
@@ -165,7 +164,7 @@ export type Department = {
   businessId: string;
 };
 
-export type UserDepartment = "Owner" | "Administrator" | "Manager" | "Cashier" | "Waitress" | "Bar Man";
+export type UserDepartment = "Owner" | "Administrator" | "Manager";
 
 export type VoidedLog = {
   id: string;
@@ -183,7 +182,7 @@ export type VoidedLog = {
     order_number?: number;
     receipt_total?: number;
     reservation_check_out?: string;
-    storeName?: string;
+    branchName?: string;
     deviceName?: string;
   }>;
   users: { name: string | null } | null;
@@ -315,27 +314,27 @@ export type Database = {
         Row: {
           id: string
           name: string
-          store_id: string
+          branch_id: string
           in_use_by_shift_id: string | null
         }
         Insert: {
           id: string
           name: string
-          store_id: string
+          branch_id: string
           in_use_by_shift_id: string | null
         }
         Update: {
           id?: string
           name?: string
-          store_id?: string
+          branch_id?: string
           in_use_by_shift_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "pos_devices_store_id_fkey"
-            columns: ["store_id"]
+            foreignKeyName: "pos_devices_branch_id_fkey"
+            columns: ["branch_id"]
             isOneToOne: false
-            referencedRelation: "stores"
+            referencedRelation: "branches"
             referencedColumns: ["id"]
           },
         ]
@@ -490,7 +489,7 @@ export type Database = {
           }
         ]
       }
-      stores: {
+      branches: {
         Row: {
           id: string
           name: string
@@ -516,7 +515,7 @@ export type Database = {
           id: string
           name: string
           permissions: Json | null
-          role: string
+          department: string
           password?: string | null,
           temp_access_given?: boolean | null,
         }
@@ -527,7 +526,7 @@ export type Database = {
           id: string
           name: string
           permissions?: Json | null
-          role: string
+          department: string
           password?: string | null,
           temp_access_given?: boolean | null,
         }
@@ -538,7 +537,7 @@ export type Database = {
           id?: string
           name?: string
           permissions?: Json | null
-          role?: string
+          department?: string
           password?: string | null,
           temp_access_given?: boolean | null,
         }
@@ -647,8 +646,3 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
-      
-
-    
-
-    

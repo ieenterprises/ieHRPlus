@@ -19,11 +19,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { useSettings, type StoreType, type PaymentType, type Tax, type AccessCode, User } from "@/hooks/use-settings";
+import { useSettings, type BranchType, type PaymentType, type Tax, type AccessCode, User } from "@/hooks/use-settings";
 
 
 const settingsNav = [
-  { id: "stores", label: "Stores", icon: Store },
+  { id: "branches", label: "Branches", icon: Store },
   { id: "taxes", label: "Taxes & Currency", icon: Percent },
   { id: "payment_types", label: "Payment Types", icon: CreditCard },
   { id: "security", label: "Security", icon: KeyRound },
@@ -43,22 +43,22 @@ const currencies = [
     { value: '₦', label: 'NGN (₦) - Nigerian Naira' },
 ];
 
-const EMPTY_STORE: Partial<StoreType> = { name: '', address: '' };
+const EMPTY_BRANCH: Partial<BranchType> = { name: '', address: '' };
 const EMPTY_TAX: Partial<Tax> = { name: '', rate: 0, type: 'Added', is_default: false };
 const EMPTY_PAYMENT_TYPE: Partial<PaymentType> = { name: '', type: 'Other' };
 
 export default function SettingsPage() {
   const { 
-    stores,
+    branches,
     taxes,
     currency,
     paymentTypes,
     users,
     generateAccessCode,
     updateUserTempAccess,
-    addStore,
-    updateStore,
-    deleteStore,
+    addBranch,
+    updateBranch,
+    deleteBranch,
     addTax,
     updateTax,
     deleteTax,
@@ -68,12 +68,12 @@ export default function SettingsPage() {
     deletePaymentType,
   } = useSettings();
   
-  const [activeSection, setActiveSection] = useState("stores");
+  const [activeSection, setActiveSection] = useState("branches");
   
   const { toast } = useToast();
 
-  const [isStoreDialogOpen, setIsStoreDialogOpen] = useState(false);
-  const [editingStore, setEditingStore] = useState<Partial<StoreType> | null>(null);
+  const [isBranchDialogOpen, setIsBranchDialogOpen] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<Partial<BranchType> | null>(null);
   
   const [isTaxDialogOpen, setIsTaxDialogOpen] = useState(false);
   const [editingTax, setEditingTax] = useState<Partial<Tax> | null>(null);
@@ -89,33 +89,33 @@ export default function SettingsPage() {
     return users.filter(user => eligibleDepartments.includes(user.department));
   }, [users]);
   
-  // Store Handlers
-  const handleOpenStoreDialog = (store: Partial<StoreType> | null) => {
-      setEditingStore(store ? { ...store } : EMPTY_STORE);
-      setIsStoreDialogOpen(true);
+  // Branch Handlers
+  const handleOpenBranchDialog = (branch: Partial<BranchType> | null) => {
+      setEditingBranch(branch ? { ...branch } : EMPTY_BRANCH);
+      setIsBranchDialogOpen(true);
   }
 
-  const handleDeleteStore = (storeId: string) => {
-      deleteStore(storeId);
-      toast({ title: "Store Deleted" });
+  const handleDeleteBranch = (branchId: string) => {
+      deleteBranch(branchId);
+      toast({ title: "Branch Deleted" });
   }
 
-  const handleStoreFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleBranchFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       const formData = new FormData(e.currentTarget);
-      const storeData = {
+      const branchData = {
           name: formData.get('name') as string,
           address: formData.get('address') as string,
       };
 
-      if (editingStore?.id) {
-          updateStore(editingStore.id, storeData);
-          toast({ title: "Store Updated" });
+      if (editingBranch?.id) {
+          updateBranch(editingBranch.id, branchData);
+          toast({ title: "Branch Updated" });
       } else {
-          addStore(storeData);
-          toast({ title: "Store Added" });
+          addBranch(branchData);
+          toast({ title: "Branch Added" });
       }
-      setIsStoreDialogOpen(false);
+      setIsBranchDialogOpen(false);
   }
 
   // Tax Handlers
@@ -219,31 +219,31 @@ export default function SettingsPage() {
         </aside>
 
         <main className="md:col-span-3">
-            {activeSection === 'stores' && (
+            {activeSection === 'branches' && (
                 <Card>
                     <CardHeader className="flex flex-row items-start justify-between">
                         <div>
-                            <CardTitle>Stores</CardTitle>
-                            <CardDescription>Manage your physical store locations.</CardDescription>
+                            <CardTitle>Branches</CardTitle>
+                            <CardDescription>Manage your physical branch locations.</CardDescription>
                         </div>
-                        <Button onClick={() => handleOpenStoreDialog(null)}>
-                            <PlusCircle className="mr-2 h-4 w-4"/> Add Store
+                        <Button onClick={() => handleOpenBranchDialog(null)}>
+                            <PlusCircle className="mr-2 h-4 w-4"/> Add Branch
                         </Button>
                     </CardHeader>
                     <CardContent>
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Store Name</TableHead>
+                                    <TableHead>Branch Name</TableHead>
                                     <TableHead>Address</TableHead>
                                     <TableHead><span className="sr-only">Actions</span></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {stores.map(store => (
-                                    <TableRow key={store.id}>
-                                        <TableCell className="font-medium">{store.name}</TableCell>
-                                        <TableCell>{store.address}</TableCell>
+                                {branches.map(branch => (
+                                    <TableRow key={branch.id}>
+                                        <TableCell className="font-medium">{branch.name}</TableCell>
+                                        <TableCell>{branch.address}</TableCell>
                                         <TableCell className="text-right">
                                              <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -253,10 +253,10 @@ export default function SettingsPage() {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                    <DropdownMenuItem onClick={() => handleOpenStoreDialog(store)}>
+                                                    <DropdownMenuItem onClick={() => handleOpenBranchDialog(branch)}>
                                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteStore(store.id)}>
+                                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteBranch(branch.id)}>
                                                         <Trash2 className="mr-2 h-4 w-4" /> Delete
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -485,21 +485,21 @@ export default function SettingsPage() {
       </div>
 
       {/* Dialogs */}
-      <Dialog open={isStoreDialogOpen} onOpenChange={setIsStoreDialogOpen}>
+      <Dialog open={isBranchDialogOpen} onOpenChange={setIsBranchDialogOpen}>
         <DialogContent>
-            <form onSubmit={handleStoreFormSubmit}>
+            <form onSubmit={handleBranchFormSubmit}>
                 <DialogHeader>
-                    <DialogTitle>{editingStore?.id ? 'Edit Store' : 'Add Store'}</DialogTitle>
-                    <DialogDescription>Enter the details for the store.</DialogDescription>
+                    <DialogTitle>{editingBranch?.id ? 'Edit Branch' : 'Add Branch'}</DialogTitle>
+                    <DialogDescription>Enter the details for the branch.</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 grid gap-4">
                     <div className="space-y-2">
-                        <Label htmlFor="name">Store Name</Label>
-                        <Input id="name" name="name" defaultValue={editingStore?.name} required />
+                        <Label htmlFor="name">Branch Name</Label>
+                        <Input id="name" name="name" defaultValue={editingBranch?.name} required />
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="address">Address</Label>
-                        <Input id="address" name="address" defaultValue={editingStore?.address} required />
+                        <Input id="address" name="address" defaultValue={editingBranch?.address} required />
                     </div>
                 </div>
                 <DialogFooter><Button type="submit">Save</Button></DialogFooter>
@@ -522,7 +522,7 @@ export default function SettingsPage() {
                         <Label htmlFor="rate">Rate (%)</Label>
                         <Input id="rate" name="rate" type="number" step="0.01" defaultValue={editingTax?.rate} required />
                     </div>
-                     <div className="space-y-2">
+                     <div className="spacey-2">
                         <Label htmlFor="type">Tax Type</Label>
                         <Select name="type" required defaultValue={editingTax?.type}>
                             <SelectTrigger><SelectValue /></SelectTrigger>

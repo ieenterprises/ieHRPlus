@@ -16,30 +16,30 @@ type PrintableA4ReceiptProps = {
 
 export const PrintableA4Receipt = React.forwardRef<HTMLDivElement, PrintableA4ReceiptProps>(
   ({ data, type }, ref) => {
-    const { stores, posDevices, receiptSettings, currency } = useSettings();
+    const { branches, posDevices, receiptSettings, currency } = useSettings();
     
     const isSale = (d: any): d is Sale => type === 'receipt' && 'order_number' in d;
 
-    const getStoreIdFromSale = (sale: Sale) => {
+    const getBranchIdFromSale = (sale: Sale) => {
         const device = posDevices.find(d => d.id === sale.pos_device_id);
-        if (device) return device.store_id;
+        if (device) return device.branch_id;
 
         // Fallback for older sales or admin sales without a specific device
-        const mainBranch = stores.find(s => s.name.toLowerCase() === 'main branch');
-        return mainBranch?.id || stores[0]?.id || null;
+        const mainBranch = branches.find(s => s.name.toLowerCase() === 'main branch');
+        return mainBranch?.id || branches[0]?.id || null;
     }
     
-    const storeId = isSale(data) ? getStoreIdFromSale(data) : (stores.find(s => s.name.toLowerCase() === 'main branch')?.id || stores[0]?.id);
-    const currentStore = stores.find(s => s.id === storeId);
+    const branchId = isSale(data) ? getBranchIdFromSale(data) : (branches.find(s => s.name.toLowerCase() === 'main branch')?.id || branches[0]?.id);
+    const currentBranch = branches.find(s => s.id === branchId);
 
     const defaultSettings = {
-      header: `Welcome to ${currentStore?.name || 'our store'}!`,
+      header: `Welcome to ${currentBranch?.name || 'our branch'}!`,
       footer: "Thank you for your purchase!",
       emailedLogo: null,
       showCustomerInfo: true,
     };
 
-    const currentReceiptSettings = (storeId && receiptSettings[storeId]) || defaultSettings;
+    const currentReceiptSettings = (branchId && receiptSettings[branchId]) || defaultSettings;
 
     const items = data.items as SaleItem[];
     const total = data.total;
@@ -56,15 +56,15 @@ export const PrintableA4Receipt = React.forwardRef<HTMLDivElement, PrintableA4Re
             {currentReceiptSettings.emailedLogo && (
               <Image
                 src={currentReceiptSettings.emailedLogo}
-                alt={`${currentStore?.name || 'Store'} Logo`}
+                alt={`${currentBranch?.name || 'Branch'} Logo`}
                 width={96}
                 height={96}
                 className="object-contain"
               />
             )}
             <div>
-              <h1 className="text-2xl font-bold">{currentStore?.name || "ieOrderFlow POS"}</h1>
-              <p className="text-sm text-gray-600">{currentStore?.address}</p>
+              <h1 className="text-2xl font-bold">{currentBranch?.name || "ieOrderFlow POS"}</h1>
+              <p className="text-sm text-gray-600">{currentBranch?.address}</p>
             </div>
           </div>
           <div className="text-right">

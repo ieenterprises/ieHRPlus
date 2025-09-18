@@ -24,12 +24,12 @@ const MOCK_CUSTOMERS = [
   { name: "Walk-in Customer", email: "walkin@example.com", phone: null },
 ];
 
-const MOCK_STORES = [
+const MOCK_BRANCHES = [
     { name: "Main Branch", address: "123 Main St, Anytown, USA" },
 ];
 
 const MOCK_POS_DEVICES = [
-    { name: "Front Desk POS" }, // store_id will be linked dynamically
+    { name: "Front Desk POS" }, // branch_id will be linked dynamically
 ];
 
 const MOCK_PRINTERS: any[] = [
@@ -47,7 +47,7 @@ const MOCK_PAYMENT_TYPES = [
 ];
 
 // 2. This function now generates an empty state, not mock data
-const generateInitialBusinessData = (ownerId: string, businessName: string, storeId: string) => {
+const generateInitialBusinessData = (ownerId: string, businessName: string, branchId: string) => {
   const settings = {
     featureSettings: {
       open_tickets: true,
@@ -59,7 +59,7 @@ const generateInitialBusinessData = (ownerId: string, businessName: string, stor
       customer_displays: true,
     },
     receiptSettings: {
-      [storeId]: {
+      [branchId]: {
         header: `Welcome to ${businessName}!`,
         footer: "Thank you for your business!",
         emailedLogo: null,
@@ -95,18 +95,18 @@ export const seedDatabaseWithMockData = (batch: WriteBatch, businessId: string, 
   initialMockDepartments.forEach(item => addWithBusinessId("departments", { name: item.name, permissions: item.permissions }));
   MOCK_CUSTOMERS.forEach(item => addWithBusinessId("customers", item));
   
-  // Create store and get its unique ID
-  const newStore = addWithBusinessId("stores", MOCK_STORES[0]);
-  const newStoreId = newStore.id;
+  // Create branch and get its unique ID
+  const newBranch = addWithBusinessId("branches", MOCK_BRANCHES[0]);
+  const newBranchId = newBranch.id;
 
-  // Create POS device and link it to the new store's unique ID
-  MOCK_POS_DEVICES.forEach(item => addWithBusinessId("pos_devices", { ...item, store_id: newStoreId }));
+  // Create POS device and link it to the new branch's unique ID
+  MOCK_POS_DEVICES.forEach(item => addWithBusinessId("pos_devices", { ...item, branch_id: newBranchId }));
 
   MOCK_TAXES.forEach(item => addWithBusinessId("taxes", item));
   MOCK_PAYMENT_TYPES.forEach(item => addWithBusinessId("payment_types", item));
 
-  // --- Add settings document, linked to the unique store ID ---
-  const { settings } = generateInitialBusinessData(ownerId, "Your Business", newStoreId);
+  // --- Add settings document, linked to the unique branch ID ---
+  const { settings } = generateInitialBusinessData(ownerId, "Your Business", newBranchId);
 
   batch.set(doc(db, "settings", businessId), settings);
 };

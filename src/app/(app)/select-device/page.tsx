@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useSettings } from '@/hooks/use-settings';
-import type { StoreType, PosDeviceType } from '@/hooks/use-settings';
+import type { BranchType, PosDeviceType } from '@/hooks/use-settings';
 import { HardDrive, Store, KeyRound, ArrowLeft, Loader2 } from 'lucide-react';
 import { collection, query, where, getDocs, writeBatch, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -19,16 +19,16 @@ import { useToast } from '@/hooks/use-toast';
 export default function SelectDevicePage() {
     const router = useRouter();
     const { 
-        stores, 
+        branches, 
         posDevices, 
-        setSelectedStore,
+        setSelectedBranch,
         setSelectedDevice,
         loggedInUser,
         loadingUser,
         validateAndUseAccessCode,
         logout,
     } = useSettings();
-    const [currentStoreId, setCurrentStoreId] = useState<string>('');
+    const [currentBranchId, setCurrentBranchId] = useState<string>('');
     const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
     const [enteredPin, setEnteredPin] = useState('');
     const [isPinCorrect, setIsPinCorrect] = useState(false);
@@ -46,14 +46,14 @@ export default function SelectDevicePage() {
     }, [loggedInUser, loadingUser, router]);
 
     useEffect(() => {
-        if (currentStoreId) {
-            // Filter devices for the selected store that are not in use
-            setAvailableDevices(posDevices.filter(device => device.store_id === currentStoreId && !device.in_use_by_shift_id));
-            setCurrentDeviceId(''); // Reset device selection when store changes
+        if (currentBranchId) {
+            // Filter devices for the selected branch that are not in use
+            setAvailableDevices(posDevices.filter(device => device.branch_id === currentBranchId && !device.in_use_by_shift_id));
+            setCurrentDeviceId(''); // Reset device selection when branch changes
         } else {
             setAvailableDevices([]);
         }
-    }, [currentStoreId, posDevices]);
+    }, [currentBranchId, posDevices]);
     
     const verifyPin = useCallback(async () => {
       if (enteredPin.length !== 4) {
@@ -84,13 +84,13 @@ export default function SelectDevicePage() {
     }, [enteredPin, isPinCorrect, verifyPin]);
 
     const handleConfirm = async () => {
-        if (currentStoreId && currentDeviceId && loggedInUser && isPinCorrect) {
-            const store = stores.find(s => s.id === currentStoreId);
+        if (currentBranchId && currentDeviceId && loggedInUser && isPinCorrect) {
+            const branch = branches.find(s => s.id === currentBranchId);
             const device = posDevices.find(d => d.id === currentDeviceId);
-            if(store) setSelectedStore(store);
+            if(branch) setSelectedBranch(branch);
             if(device) setSelectedDevice(device);
 
-            // Update the active shift with store and device info
+            // Update the active shift with branch and device info
             try {
                 const shiftsRef = collection(db, 'shifts');
                 const q = query(shiftsRef, 
@@ -105,7 +105,7 @@ export default function SelectDevicePage() {
                     
                     // Update shift with device info
                     batch.update(doc(db, 'shifts', shiftDoc.id), {
-                        storeId: currentStoreId,
+                        branchId: currentBranchId,
                         posDeviceId: currentDeviceId,
                     });
 
@@ -168,15 +168,15 @@ export default function SelectDevicePage() {
                         </div>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="store" className='flex items-center gap-2'><Store className='h-4 w-4' /> Select Store</Label>
-                        <Select value={currentStoreId} onValueChange={setCurrentStoreId} disabled={!isPinCorrect}>
-                            <SelectTrigger id="store">
-                                <SelectValue placeholder="Choose a store..." />
+                        <Label htmlFor="branch" className='flex items-center gap-2'><Store className='h-4 w-4' /> Select Branch</Label>
+                        <Select value={currentBranchId} onValueChange={setCurrentBranchId} disabled={!isPinCorrect}>
+                            <SelectTrigger id="branch">
+                                <SelectValue placeholder="Choose a branch..." />
                             </SelectTrigger>
                             <SelectContent>
-                                {stores.map((store: StoreType) => (
-                                    <SelectItem key={store.id} value={store.id}>
-                                        {store.name}
+                                {branches.map((branch: BranchType) => (
+                                    <SelectItem key={branch.id} value={branch.id}>
+                                        {branch.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -184,7 +184,7 @@ export default function SelectDevicePage() {
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="device" className='flex items-center gap-2'><HardDrive className='h-4 w-4' /> Select POS Device</Label>
-                        <Select value={currentDeviceId} onValueChange={setCurrentDeviceId} disabled={!currentStoreId || !isPinCorrect}>
+                        <Select value={currentDeviceId} onValueChange={setCurrentDeviceId} disabled={!currentBranchId || !isPinCorrect}>
                             <SelectTrigger id="device">
                                 <SelectValue placeholder="Choose a device..." />
                             </SelectTrigger>
@@ -202,7 +202,7 @@ export default function SelectDevicePage() {
                     <Button 
                         className="w-full" 
                         onClick={handleConfirm} 
-                        disabled={!currentStoreId || !currentDeviceId || !isPinCorrect}
+                        disabled={!currentBranchId || !currentDeviceId || !isPinCorrect}
                     >
                         Start Selling
                     </Button>
@@ -211,6 +211,3 @@ export default function SelectDevicePage() {
         </div>
     );
 }
-
-
-    
