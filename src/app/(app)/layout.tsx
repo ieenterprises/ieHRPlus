@@ -19,6 +19,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // If we're on the client, not loading, and there's no user, redirect to sign-in.
     if (isClient && !loadingUser && !loggedInUser) {
       router.push("/sign-in");
     }
