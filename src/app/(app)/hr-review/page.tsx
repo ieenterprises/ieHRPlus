@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -22,17 +21,20 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useSettings } from "@/hooks/use-settings";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
 import { format } from "date-fns";
 import { Video } from "lucide-react";
-import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
+import { getStorage, ref, deleteObject } from "firebase/storage";
 
 export default function HrReviewPage() {
   const { loggedInUser } = useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const storage = getStorage();
 
   useEffect(() => {
     if (!loggedInUser?.businessId) {
@@ -53,6 +55,52 @@ export default function HrReviewPage() {
 
     return () => unsubscribe();
   }, [loggedInUser?.businessId]);
+
+  const handleApprove = async (recordId: string) => {
+    const recordRef = doc(db, 'timeRecords', recordId);
+    try {
+        await updateDoc(recordRef, { status: 'approved' });
+        toast({ title: "Record Approved", description: "The user's clock-in has been approved." });
+    } catch (error) {
+        console.error("Error approving record:", error);
+        toast({ title: "Error", description: "Could not approve the record.", variant: "destructive" });
+    }
+  };
+
+  const handleReject = async (record: TimeRecord) => {
+    try {
+        // Delete the record from Firestore
+        await deleteDoc(doc(db, 'timeRecords', record.id));
+
+        // If there's a video, delete it from Storage
+        if (record.videoUrl) {
+            // Extract the storage path from the URL
+            const videoPath = decodeURIComponent(record.videoUrl.split('/o/')[1].split('?')[0]);
+            const videoRef = ref(storage, videoPath);
+            await deleteObject(videoRef);
+        }
+        
+        toast({ title: "Record Rejected", description: "The record and associated video have been deleted.", variant: "destructive" });
+
+    } catch (error) {
+        console.error("Error rejecting record:", error);
+        toast({ title: "Error", description: "Could not reject the record.", variant: "destructive" });
+    }
+  };
+  
+  const getBadgeVariant = (status: TimeRecord['status']) => {
+    switch (status) {
+      case 'pending':
+        return 'secondary';
+      case 'approved':
+        return 'default';
+      case 'rejected':
+        return 'destructive';
+      default:
+        return 'outline';
+    }
+  };
+
 
   return (
     <div className="space-y-8">
@@ -110,14 +158,14 @@ export default function HrReviewPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={record.status === 'pending' ? 'secondary' : 'default'}>
+                        <Badge variant={getBadgeVariant(record.status)}>
                           {record.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm">Approve</Button>
-                            <Button variant="destructive" size="sm">Reject</Button>
+                            <Button variant="outline" size="sm" onClick={() => handleApprove(record.id)} disabled={record.status !== 'pending'}>Approve</Button>
+                            <Button variant="destructive" size="sm" onClick={() => handleReject(record)}>Reject</Button>
                         </div>
                       </TableCell>
                     </TableRow>
