@@ -3,9 +3,9 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
-import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc, limit, orderBy } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, BranchType, PosDeviceType, Department, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserDepartment, SaleItem, Shift, AccessCode, OfflineAction } from '@/lib/types';
+import type { User, BranchType, PosDeviceType, Department, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserDepartment, SaleItem, Shift, AccessCode, OfflineAction, TimeRecord } from '@/lib/types';
 import { fileManagementPermissions, teamManagementPermissions, settingsPermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
@@ -305,6 +305,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const logout = async () => {
         if (loggedInUser && loggedInUser.businessId) {
             const batch = writeBatch(db);
+
+            // Find the user's latest "Clocked In" record to clock them out.
+            const timeRecordsQuery = query(
+                collection(db, 'timeRecords'),
+                where('userId', '==', loggedInUser.id),
+                where('status', '==', 'Clocked In'),
+                orderBy('clockInTime', 'desc'),
+                limit(1)
+            );
+            
+            const activeTimeRecords = await getDocs(timeRecordsQuery);
+
+            if (!activeTimeRecords.empty) {
+                const recordToClockOut = activeTimeRecords.docs[0];
+                batch.update(doc(db, 'timeRecords', recordToClockOut.id), {
+                    status: 'Clocked Out',
+                    clockOutTime: new Date().toISOString()
+                });
+            }
+
             // Revoke temporary access on logout
             if (loggedInUser.temp_access_given) {
                 batch.update(doc(db, 'users', loggedInUser.id), { temp_access_given: false });
@@ -625,3 +645,5 @@ export function useSettings() {
     }
     return context;
 }
+
+    
