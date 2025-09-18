@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "ieOrderFlow",
-  description: "A modern Point of Sale system.",
+  title: "ieWorkFlow",
+  description: "A modern platform for file management and business workflows.",
   manifest: "/manifest.json",
 };
 
