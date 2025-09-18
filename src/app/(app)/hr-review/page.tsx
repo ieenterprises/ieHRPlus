@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -59,7 +60,7 @@ export default function HrReviewPage() {
   const handleApprove = async (recordId: string) => {
     const recordRef = doc(db, 'timeRecords', recordId);
     try {
-        await updateDoc(recordRef, { status: 'approved' });
+        await updateDoc(recordRef, { status: 'Clocked In' });
         toast({ title: "Record Approved", description: "The user's clock-in has been approved." });
     } catch (error) {
         console.error("Error approving record:", error);
@@ -92,8 +93,10 @@ export default function HrReviewPage() {
     switch (status) {
       case 'pending':
         return 'secondary';
-      case 'approved':
+      case 'Clocked In':
         return 'default';
+      case 'Clocked Out':
+        return 'outline';
       case 'rejected':
         return 'destructive';
       default:

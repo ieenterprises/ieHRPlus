@@ -9,7 +9,7 @@ export type TimeRecord = {
   userEmail: string;
   clockInTime: string;
   clockOutTime: string | null;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'Clocked In' | 'Clocked Out' | 'rejected';
   businessId: string;
   videoUrl?: string | null;
 };
