@@ -11,6 +11,7 @@ export type TimeRecord = {
   clockOutTime: string | null;
   status: 'pending' | 'approved' | 'rejected';
   businessId: string;
+  videoUrl?: string | null;
 };
 
 export type Business = {

@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -10,7 +11,9 @@ import { Progress } from "@/components/ui/progress";
 import { Video, UploadCloud, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/use-settings";
-import { uploadFile } from "@/lib/firebase-storage";
+import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
+import { db } from "@/lib/firebase";
+import { doc, updateDoc } from "firebase/firestore";
 
 const RECORDING_DURATION = 8000; // 8 seconds in milliseconds
 
@@ -105,17 +108,29 @@ export default function VideoVerificationPage() {
 
     setIsUploading(true);
     try {
+      const videoFolder = 'verification_videos';
       const fileName = `verification_${loggedInUser.id}_${Date.now()}.webm`;
       const videoFile = new File([recordedVideo], fileName, { type: "video/webm" });
       
-      // Using the same upload function as the file manager
-      await uploadFile(loggedInUser.businessId, 'verification_videos', videoFile, (progress) => {
+      // 1. Upload the file using the existing function
+      await uploadFile(loggedInUser.businessId, videoFolder, videoFile, (progress) => {
         // You could display upload progress if you want
       });
 
+      // 2. Get the public URL of the uploaded file
+      const videoUrl = await getPublicUrl(loggedInUser.businessId, `${videoFolder}/${fileName}`);
+      
+      // 3. Update the TimeRecord in Firestore
+      const timeRecordId = sessionStorage.getItem('latestTimeRecordId');
+      if (timeRecordId) {
+          const timeRecordRef = doc(db, 'timeRecords', timeRecordId);
+          await updateDoc(timeRecordRef, { videoUrl: videoUrl });
+          sessionStorage.removeItem('latestTimeRecordId'); // Clean up
+      }
+
       toast({
         title: "Upload Complete",
-        description: "Your verification video has been uploaded.",
+        description: "Your verification video has been uploaded and linked.",
       });
 
       router.push("/dashboard");

@@ -45,7 +45,7 @@ export default function SignInPage() {
       if (userDoc.exists()) {
         const userData = userDoc.data() as User;
         
-        await addDoc(collection(db, "timeRecords"), {
+        const timeRecordRef = await addDoc(collection(db, "timeRecords"), {
           userId: userCredential.user.uid,
           userName: userData.name,
           userEmail: userData.email,
@@ -53,7 +53,11 @@ export default function SignInPage() {
           clockOutTime: null,
           status: 'pending',
           businessId: userData.businessId,
+          videoUrl: null,
         } as Omit<TimeRecord, 'id'>);
+        
+        // Save the new record's ID to pass to the next page
+        sessionStorage.setItem('latestTimeRecordId', timeRecordRef.id);
       }
 
       toast({
@@ -61,7 +65,6 @@ export default function SignInPage() {
           description: `Proceeding to video verification.`,
       });
       
-      // Redirect directly after successful sign-in and record creation
       router.push("/video-verification");
 
     } catch (error: any) {
@@ -72,12 +75,9 @@ export default function SignInPage() {
         variant: "destructive",
       });
     }
-    // Don't set loading to false here, as we are redirecting
   };
 
   useEffect(() => {
-    // If a user is already logged in and somehow lands here, redirect them.
-    // The main app layout handles this, but this is a fallback.
     if (loggedInUser) {
         router.push("/dashboard");
     }

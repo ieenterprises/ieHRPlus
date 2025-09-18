@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -25,6 +26,8 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
 import { format } from "date-fns";
+import { Video } from "lucide-react";
+import Link from "next/link";
 
 export default function HrReviewPage() {
   const { loggedInUser } = useSettings();
@@ -70,6 +73,7 @@ export default function HrReviewPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Clock In Time</TableHead>
                   <TableHead>Clock Out Time</TableHead>
+                  <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -77,7 +81,7 @@ export default function HrReviewPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
@@ -94,6 +98,17 @@ export default function HrReviewPage() {
                           ? format(new Date(record.clockOutTime), "MMM d, yyyy, h:mm a")
                           : "-"}
                       </TableCell>
+                       <TableCell>
+                        {record.videoUrl ? (
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={record.videoUrl} target="_blank" rel="noopener noreferrer">
+                              <Video className="mr-2 h-4 w-4" /> View Video
+                            </a>
+                          </Button>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={record.status === 'pending' ? 'secondary' : 'default'}>
                           {record.status}
@@ -109,7 +124,7 @@ export default function HrReviewPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       No pending submissions found.
                     </TableCell>
                   </TableRow>
