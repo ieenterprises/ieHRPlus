@@ -77,17 +77,7 @@ export default function SignUpPage() {
         const userDocRef = doc(db, "users", user.uid);
         batch.set(userDocRef, newUserProfile);
         
-        // 7. Create the very first shift for the owner, ensuring it has the businessId
-        const shiftDocRef = doc(collection(db, "shifts"));
-        batch.set(shiftDocRef, {
-            userId: user.uid,
-            startTime: new Date().toISOString(),
-            endTime: null,
-            status: 'active',
-            businessId: businessId, // Correctly associate the shift with the business
-        });
-
-        // 8. Commit all database writes at once
+        // 7. Commit all database writes at once
         await batch.commit();
         
         toast({
@@ -159,6 +149,3 @@ export default function SignUpPage() {
     </div>
   );
 }
-
-
-    

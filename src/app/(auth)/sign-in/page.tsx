@@ -23,37 +23,6 @@ import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch, 
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import type { User } from "@/lib/types";
 
-// One-time fix for existing departments missing the shift permission.
-const ensureShiftPermissionForOwner = async (businessId: string) => {
-    try {
-        const departmentsQuery = query(collection(db, 'departments'), where('businessId', '==', businessId), where('name', '==', 'Owner'));
-        const departmentsSnapshot = await getDocs(departmentsQuery);
-        if (!departmentsSnapshot.empty) {
-            const ownerDepartmentDoc = departmentsSnapshot.docs[0];
-            const ownerDepartmentData = ownerDepartmentDoc.data();
-            const permissions: string[] = ownerDepartmentData.permissions || [];
-            
-            let needsUpdate = false;
-            const permissionsToAdd = ['VIEW_SHIFT_REPORT', 'MANAGE_SHIFTS'];
-
-            permissionsToAdd.forEach(p => {
-              if (!permissions.includes(p)) {
-                permissions.push(p);
-                needsUpdate = true;
-              }
-            });
-
-            if (needsUpdate) {
-                await updateDoc(ownerDepartmentDoc.ref, { permissions: permissions });
-                console.log("Applied one-time permission fix for Owner department.");
-            }
-        }
-    } catch (error) {
-        console.error("Failed to apply one-time permission fix:", error);
-    }
-};
-
-
 export default function SignInPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -70,49 +39,10 @@ export default function SignInPage() {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const authUser = userCredential.user;
       
-      const userDocRef = doc(db, "users", authUser.uid);
-      const userDoc = await getDoc(userDocRef);
-      if (!userDoc.exists()) {
-        throw new Error("User profile not found in the database.");
-      }
-      const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
-      
-      const { id: userId, businessId, department } = userProfile;
-      if (!businessId) throw new Error("Business ID not found for this user.");
-      if (department === 'Owner') await ensureShiftPermissionForOwner(businessId);
-
-      const shiftsCollection = collection(db, 'shifts');
-      
-      // Query for any 'active' shifts for this user.
-      const q = query(shiftsCollection, where('userId', '==', userId), where('status', '==', 'active'));
-      const activeShiftsSnapshot = await getDocs(q);
-
-      const batch = writeBatch(db);
-
-      // Close any previously active shifts for this user.
-      if (!activeShiftsSnapshot.empty) {
-          activeShiftsSnapshot.forEach((shiftDoc) => {
-              batch.update(doc(db, 'shifts', shiftDoc.id), { status: 'closed', endTime: new Date().toISOString() });
-          });
-      }
-      
-      // Create a new active shift for the current login session.
-      const shiftDocRef = doc(shiftsCollection);
-      batch.set(shiftDocRef, {
-          userId: userId,
-          startTime: new Date().toISOString(),
-          endTime: null,
-          status: 'active',
-          businessId: businessId, 
-      });
-    
-      await batch.commit();
-
       toast({
           title: "Signed In",
-          description: `Welcome! Your shift has started.`,
+          description: `Welcome!`,
       });
 
     } catch (error: any) {
