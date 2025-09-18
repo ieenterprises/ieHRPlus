@@ -10,7 +10,7 @@ export function IELogo({ className }: IELogoProps) {
     <div className={cn("relative rounded-full overflow-hidden", className)} data-ai-logo-container>
       <Image
         src="https://i.im.ge/2025/06/09/vewzUc.Company-Logo-3-1.th.png"
-        alt="ieWorkFlow Logo"
+        alt="ieHRPlus Logo"
         fill
         style={{ objectFit: 'contain' }}
         data-ai-hint="company logo"

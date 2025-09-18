@@ -45,7 +45,7 @@ export default function LandingPage() {
         <div className="container flex h-14 items-center">
           <Link href="/" className="flex items-center gap-2 font-bold">
             <IELogo className="w-8 h-8" />
-            <span className="text-xl font-headline">ieWorkFlow</span>
+            <span className="text-xl font-headline">ieHRPlus</span>
           </Link>
           <nav className="ml-auto flex items-center gap-2">
             <Button variant="ghost" asChild>
@@ -72,7 +72,7 @@ export default function LandingPage() {
               Modernize Your Human Resource Management
             </h1>
             <p className="mt-6 max-w-2xl mx-auto text-lg text-muted-foreground">
-              ieWorkFlow is the all-in-one platform to manage payroll, time, leave, and employee performance. Empower your business with a smarter way to handle HR.
+              ieHRPlus is the all-in-one platform to manage payroll, time, leave, and employee performance. Empower your business with a smarter way to handle HR.
             </p>
             <div className="mt-8 flex justify-center gap-4">
               <Button size="lg" asChild>
@@ -116,7 +116,7 @@ export default function LandingPage() {
             <div className="order-2 md:order-1">
               <h2 className="text-3xl font-bold font-headline">Built for Efficient HR</h2>
               <p className="mt-4 text-muted-foreground">
-                From automating payroll to managing leave requests, ieWorkFlow provides the tools you need to operate smoothly. Keep your team happy and your business compliant with our intuitive platform.
+                From automating payroll to managing leave requests, ieHRPlus provides the tools you need to operate smoothly. Keep your team happy and your business compliant with our intuitive platform.
               </p>
               <div className="mt-6 space-y-4">
                   <div className="flex items-start gap-3">
@@ -149,7 +149,7 @@ export default function LandingPage() {
 
       <footer className="border-t">
         <div className="container py-6 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} ieWorkFlow. All rights reserved.
+          &copy; {new Date().getFullYear()} ieHRPlus. All rights reserved.
         </div>
       </footer>
     </div>

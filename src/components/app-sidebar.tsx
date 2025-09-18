@@ -132,7 +132,7 @@ export function AppSidebar() {
       <SidebarHeader>
         <div className="flex items-center gap-2">
           <IELogo className="w-8 h-8" />
-          <span className="text-xl font-bold font-headline">ieWorkFlow</span>
+          <span className="text-xl font-bold font-headline">ieHRPlus</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
