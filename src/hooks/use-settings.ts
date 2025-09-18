@@ -311,20 +311,23 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 const timeRecordsQuery = query(
                     collection(db, 'timeRecords'),
                     where('userId', '==', loggedInUser.id),
-                    where('status', '==', 'Clocked In'),
-                    orderBy('clockInTime', 'desc'),
-                    limit(1)
+                    where('status', '==', 'Clocked In')
                 );
                 
-                const activeTimeRecords = await getDocs(timeRecordsQuery);
+                const activeTimeRecordsSnapshot = await getDocs(timeRecordsQuery);
+                const activeTimeRecords = activeTimeRecordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
 
-                if (!activeTimeRecords.empty) {
-                    const recordToClockOut = activeTimeRecords.docs[0];
+                if (activeTimeRecords.length > 0) {
+                    // Sort locally to find the most recent one
+                    activeTimeRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+                    const recordToClockOut = activeTimeRecords[0];
+                    
                     batch.update(doc(db, 'timeRecords', recordToClockOut.id), {
                         status: 'Clocked Out',
                         clockOutTime: new Date().toISOString()
                     });
                 }
+
 
                 // Revoke temporary access on logout
                 if (loggedInUser.temp_access_given) {
@@ -654,3 +657,4 @@ export function useSettings() {
 }
 
     
+
