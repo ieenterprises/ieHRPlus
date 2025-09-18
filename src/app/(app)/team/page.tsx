@@ -23,7 +23,7 @@ import {
 import { type User, type UserDepartment, type Department } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Store, Download, Eye, EyeOff, Search } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Folder, Download, Eye, EyeOff, Search, Settings, Users as UsersIcon } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,7 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { posPermissions, backOfficePermissions, type AnyPermission } from "@/lib/permissions";
+import { fileManagementPermissions, teamManagementPermissions, settingsPermissions, type AnyPermission } from "@/lib/permissions";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -65,7 +65,7 @@ import { updateUserPassword } from './actions';
 const EMPTY_USER: Partial<User> = {
   name: "",
   email: "",
-  department: "Cashier",
+  department: "Manager",
   password: "",
   avatar_url: "https://placehold.co/100x100.png",
   permissions: [],
@@ -77,8 +77,10 @@ const EMPTY_DEPARTMENT: Partial<Department> = {
   permissions: [],
 };
 
-const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermissions)[];
-const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
+const allFileManagementPermissions = Object.keys(fileManagementPermissions) as (keyof typeof fileManagementPermissions)[];
+const allTeamManagementPermissions = Object.keys(teamManagementPermissions) as (keyof typeof teamManagementPermissions)[];
+const allSettingsPermissions = Object.keys(settingsPermissions) as (keyof typeof settingsPermissions)[];
+
 
 const systemDepartments = ["Owner"];
 
@@ -127,7 +129,7 @@ export default function TeamPage() {
   const handleOpenUserDialog = (user: Partial<User> | null) => {
     const targetUser = user ? { ...user } : { ...EMPTY_USER };
     if (!user) {
-        const defaultDepartment = departments.find(d => d.name === 'Cashier');
+        const defaultDepartment = departments.find(d => d.name === 'Manager');
         targetUser.permissions = defaultDepartment?.permissions || [];
     }
     setEditingUser(targetUser);
@@ -353,11 +355,11 @@ export default function TeamPage() {
     <ScrollArea className="h-72 p-4 border rounded-md">
         <div className="space-y-6">
             <div>
-                <h4 className="flex items-center gap-2 text-md font-semibold mb-2"><Store className="h-5 w-5" />Point of Sale</h4>
+                <h4 className="flex items-center gap-2 text-md font-semibold mb-2"><Folder className="h-5 w-5" />File Management</h4>
                 <div className="space-y-2">
-                    {allPosPermissions.map(p => (
+                    {allFileManagementPermissions.map(p => (
                         <div key={p} className="flex items-center justify-between">
-                            <Label htmlFor={p} className="font-normal text-sm">{posPermissions[p].label}</Label>
+                            <Label htmlFor={p} className="font-normal text-sm">{fileManagementPermissions[p].label}</Label>
                             <Switch id={p} checked={permissions.includes(p)} onCheckedChange={(c) => onToggle(p, c)} disabled={isLocked}/>
                         </div>
                     ))}
@@ -365,11 +367,23 @@ export default function TeamPage() {
             </div>
             <Separator />
             <div>
-                <h4 className="flex items-center gap-2 text-md font-semibold mb-2"><ShieldCheck className="h-5 w-5" />Back Office</h4>
+                <h4 className="flex items-center gap-2 text-md font-semibold mb-2"><UsersIcon className="h-5 w-5" />Team Management</h4>
                 <div className="space-y-2">
-                    {allBackOfficePermissions.map(p => (
+                    {allTeamManagementPermissions.map(p => (
                         <div key={p} className="flex items-center justify-between">
-                            <Label htmlFor={p} className="font-normal text-sm">{backOfficePermissions[p].label}</Label>
+                            <Label htmlFor={p} className="font-normal text-sm">{teamManagementPermissions[p].label}</Label>
+                            <Switch id={p} checked={permissions.includes(p)} onCheckedChange={(c) => onToggle(p, c)} disabled={isLocked}/>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <Separator />
+            <div>
+                <h4 className="flex items-center gap-2 text-md font-semibold mb-2"><Settings className="h-5 w-5" />Settings</h4>
+                <div className="space-y-2">
+                    {allSettingsPermissions.map(p => (
+                        <div key={p} className="flex items-center justify-between">
+                            <Label htmlFor={p} className="font-normal text-sm">{settingsPermissions[p].label}</Label>
                             <Switch id={p} checked={permissions.includes(p)} onCheckedChange={(c) => onToggle(p, c)} disabled={isLocked}/>
                         </div>
                     ))}

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Users, Percent, Store, PlusCircle, MoreHorizontal, Edit, Trash2, CreditCard, KeyRound, RefreshCw, Loader2 } from "lucide-react";
+import { Users, Percent, Store, PlusCircle, MoreHorizontal, Edit, Trash2, CreditCard, KeyRound, RefreshCw, Loader2, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -24,7 +24,7 @@ import { useSettings, type BranchType, type PaymentType, type Tax, type AccessCo
 
 const settingsNav = [
   { id: "branches", label: "Branches", icon: Store },
-  { id: "taxes", label: "Taxes & Currency", icon: Percent },
+  { id: "taxes_currency", label: "Taxes & Currency", icon: DollarSign },
   { id: "payment_types", label: "Payment Types", icon: CreditCard },
   { id: "security", label: "Security", icon: KeyRound },
 ];
@@ -188,7 +188,7 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between">
         <PageHeader
           title="Settings"
-          description="Configure the features and behavior of your POS system."
+          description="Configure the features and behavior of your system."
         />
       </div>
 
@@ -264,13 +264,13 @@ export default function SettingsPage() {
                 </Card>
             )}
 
-            {activeSection === 'taxes' && (
+            {activeSection === 'taxes_currency' && (
                  <div className="space-y-6">
                     <Card>
                         <CardHeader className="flex flex-row items-start justify-between">
                             <div>
                                 <CardTitle>Taxes</CardTitle>
-                                <CardDescription>Manage taxes applied to sales.</CardDescription>
+                                <CardDescription>Manage taxes applied to sales or transactions.</CardDescription>
                             </div>
                             <Button onClick={() => handleOpenTaxDialog(null)}>
                                 <PlusCircle className="mr-2 h-4 w-4"/> Add Tax
@@ -321,7 +321,7 @@ export default function SettingsPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Currency</CardTitle>
-                            <CardDescription>Set the default currency for your POS.</CardDescription>
+                            <CardDescription>Set the default currency for your system.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="max-w-xs space-y-2">
@@ -347,7 +347,7 @@ export default function SettingsPage() {
                     <CardHeader className="flex flex-row items-start justify-between">
                         <div>
                         <CardTitle>Payment Types</CardTitle>
-                        <CardDescription>Manage the payment methods available at checkout.</CardDescription>
+                        <CardDescription>Manage the payment methods available for transactions.</CardDescription>
                         </div>
                         <Button onClick={() => handleOpenPaymentTypeDialog(null)}>
                         <PlusCircle className="mr-2 h-4" /> Add Payment Type
@@ -400,38 +400,6 @@ export default function SettingsPage() {
                             <CardTitle>Security</CardTitle>
                             <CardDescription>Manage security settings for your staff.</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="space-y-2">
-                            <Label>One-Time Access Code</Label>
-                            <p className="text-sm text-muted-foreground">
-                                Generate a unique, 4-digit code that staff must enter to start their session. Each code is valid for 5 minutes and can only be used once.
-                            </p>
-                            </div>
-                            <div className="flex flex-col sm:flex-row items-center gap-4 p-4 border rounded-md bg-muted/50">
-                                <div className="flex-1 space-y-1">
-                                    <p className="text-sm font-medium">New Access Code</p>
-                                    {generatedCode ? (
-                                        <div className="flex items-center gap-2">
-                                            <Input 
-                                                readOnly 
-                                                value={generatedCode.code}
-                                                className="w-24 font-mono text-2xl tracking-widest text-center h-12"
-                                            />
-                                            <div className="text-xs text-muted-foreground">
-                                                <p>This code is valid for 5 minutes.</p>
-                                                <p>Provide it to the staff member to sign in.</p>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <p className="text-sm text-muted-foreground h-12 flex items-center">Click the button to generate a new code.</p>
-                                    )}
-                                </div>
-                                <Button onClick={handleGenerateCode} disabled={isGeneratingCode}>
-                                    {isGeneratingCode ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                                    Generate New Code
-                                </Button>
-                            </div>
-                        </CardContent>
                     </Card>
                 </div>
             )}

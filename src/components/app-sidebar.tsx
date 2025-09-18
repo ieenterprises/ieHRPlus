@@ -15,21 +15,12 @@ import {
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
-  ShoppingCart,
-  ClipboardList,
-  BarChart3,
   Users,
   Settings,
   LogOut,
-  ReceiptText,
-  CalendarCheck,
-  Package,
-  BookUser,
-  Trash2,
   Cloud,
   CloudOff,
   RefreshCw,
-  Clock,
   Store,
   HardDrive,
   Folder,
@@ -68,7 +59,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: "/file-manager", icon: Folder, label: "File Manager" },
-  { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES", offlineDisabled: true },
+  { href: "/team", icon: Users, label: "Team", permission: "MANAGE_USERS", offlineDisabled: true },
 ];
 
 export function AppSidebar() {
@@ -198,7 +189,7 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {(hasPermission({ permission: "MANAGE_FEATURE_SETTINGS" } as NavItem)) && (
+          {(hasPermission({ permission: "MANAGE_BRANCHES" } as NavItem) || hasPermission({ permission: "MANAGE_SECURITY" } as NavItem)) && (
              <SidebarMenuItem>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -268,7 +259,7 @@ export function AppSidebar() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Are you sure you want to log out?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This will end your current shift and you will be returned to the sign-in screen.
+                                This will end your current session and you will be returned to the sign-in screen.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>

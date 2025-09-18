@@ -21,7 +21,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, writeBatch, collection, getDocs, query, where, setDoc, addDoc } from "firebase/firestore";
-import { posPermissions, backOfficePermissions, AnyPermission } from "@/lib/permissions";
+import { fileManagementPermissions, teamManagementPermissions, settingsPermissions, AnyPermission } from "@/lib/permissions";
 import { MOCK_INITIAL_DEPARTMENTS } from "@/hooks/use-settings";
 import { seedDatabaseWithMockData } from "@/lib/mock-data";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
@@ -57,8 +57,9 @@ export default function SignUpPage() {
         
         // 4. Define all permissions for the Owner
         const ownerDepartmentPermissions: AnyPermission[] = [
-          ...Object.keys(posPermissions) as (keyof typeof posPermissions)[],
-          ...Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[]
+          ...Object.keys(fileManagementPermissions) as (keyof typeof fileManagementPermissions)[],
+          ...Object.keys(teamManagementPermissions) as (keyof typeof teamManagementPermissions)[],
+          ...Object.keys(settingsPermissions) as (keyof typeof settingsPermissions)[]
         ];
 
         // 5. Prepare user profile for Firestore
@@ -109,7 +110,7 @@ export default function SignUpPage() {
           <CardHeader>
             <CardTitle className="text-2xl">Register Your Business</CardTitle>
             <CardDescription>
-              Create your owner account to get started with the POS system.
+              Create your owner account to get started with the system.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">

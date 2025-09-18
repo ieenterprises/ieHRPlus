@@ -6,7 +6,7 @@ import { createContext, useContext, useState, ReactNode, createElement, useEffec
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
 import type { User, BranchType, PosDeviceType, Department, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserDepartment, SaleItem, Shift, AccessCode, OfflineAction } from '@/lib/types';
-import { posPermissions, backOfficePermissions } from '@/lib/permissions';
+import { fileManagementPermissions, teamManagementPermissions, settingsPermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, Unsubscribe } from "firebase/auth";
@@ -16,10 +16,10 @@ export type { FeatureSettings, BranchType, PosDeviceType, PrinterType, ReceiptSe
 
 export type FeatureSettings = Record<string, boolean>;
 
-export const MOCK_INITIAL_DEPARTMENTS: Department[] = [
-  { id: "dept_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[], businessId: '' },
-  { id: "dept_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[], businessId: '' },
-  { id: "dept_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS", "SETTLE_PREVIOUS_SHIFT_DEBTS", "MANAGE_SHIFTS", "REPRINT_ANY_RECEIPT", "FULFILL_ANY_ORDER"], businessId: '' },
+export const MOCK_INITIAL_DEPARTMENTS: Omit<Department, 'businessId'>[] = [
+  { id: "dept_owner", name: "Owner", permissions: [...Object.keys(fileManagementPermissions), ...Object.keys(teamManagementPermissions), ...Object.keys(settingsPermissions)] as AnyPermission[] },
+  { id: "dept_admin", name: "Administrator", permissions: [...Object.keys(fileManagementPermissions), ...Object.keys(teamManagementPermissions), ...Object.keys(settingsPermissions)] as AnyPermission[] },
+  { id: "dept_manager", name: "Manager", permissions: ["VIEW_FILES", "UPLOAD_FILES", "DOWNLOAD_FILES", "APPROVE_DOCUMENTS", "VIEW_USERS", "MANAGE_USERS"] },
 ];
 
 // --- Context and Provider ---
