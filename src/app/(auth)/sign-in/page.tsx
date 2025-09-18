@@ -30,6 +30,7 @@ export default function SignInPage() {
   const { loggedInUser } = useSettings();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [justSignedIn, setJustSignedIn] = useState(false);
 
   const handlePasswordSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -45,7 +46,6 @@ export default function SignInPage() {
       if (userDoc.exists()) {
         const userData = userDoc.data() as User;
         
-        // Create a time record
         await addDoc(collection(db, "timeRecords"), {
           userId: userCredential.user.uid,
           userName: userData.name,
@@ -58,9 +58,11 @@ export default function SignInPage() {
       }
 
       toast({
-          title: "Signed In",
-          description: `Welcome! Your clock-in has been recorded.`,
+          title: "Signed In Successfully",
+          description: `Proceeding to video verification.`,
       });
+      
+      setJustSignedIn(true);
 
     } catch (error: any) {
       toast({
@@ -73,12 +75,15 @@ export default function SignInPage() {
     }
   };
 
-  // This effect handles the redirection after the user is set in the context
   useEffect(() => {
-    if (loggedInUser) {
+    // Redirect only after a successful sign-in is complete and the context is updated.
+    if (loggedInUser && justSignedIn) {
+        router.push("/video-verification");
+    } else if (loggedInUser && !justSignedIn) {
+        // If user is already logged in and revisits sign-in page, go to dashboard
         router.push("/dashboard");
     }
-  }, [loggedInUser, router]);
+  }, [loggedInUser, router, justSignedIn]);
 
 
   return (
@@ -131,5 +136,3 @@ export default function SignInPage() {
     </>
   );
 }
-
-    

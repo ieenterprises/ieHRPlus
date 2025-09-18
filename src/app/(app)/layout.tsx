@@ -24,8 +24,8 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     }
   }, [loggedInUser, loadingUser, router, isClient]);
   
-  // Conditionally render layout for pdf-viewer
-  if (pathname === '/pdf-viewer') {
+  // Conditionally render layout for pdf-viewer or video-verification
+  if (pathname === '/pdf-viewer' || pathname === '/video-verification') {
     return <>{children}</>;
   }
 
