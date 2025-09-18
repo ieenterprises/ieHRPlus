@@ -67,8 +67,8 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES", offlineDisabled: true },
   { href: "/file-manager", icon: Folder, label: "File Manager" },
+  { href: "/team", icon: Users, label: "Team", permission: "MANAGE_EMPLOYEES", offlineDisabled: true },
 ];
 
 export function AppSidebar() {
