@@ -168,7 +168,7 @@ export default function HrReviewPage() {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                             <Button variant="outline" size="sm" onClick={() => handleApprove(record.id)} disabled={record.status !== 'pending'}>Approve</Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleReject(record)}>Reject</Button>
+                            <Button variant="destructive" size="sm" onClick={() => handleReject(record)} disabled={record.status !== 'pending'}>Reject</Button>
                         </div>
                       </TableCell>
                     </TableRow>
