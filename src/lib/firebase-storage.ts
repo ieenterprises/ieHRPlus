@@ -39,15 +39,19 @@ export async function listItems(businessId: string, path: string): Promise<FileI
         });
 
         const folderPromises = res.prefixes.map(async (folderRef) => {
-             const metadata = await getMetadata(folderRef);
+            // Folders are just prefixes, we can't reliably get metadata for them
+            // like we do for files. We'll construct a synthetic metadata object.
+            // A more robust solution might involve storing folder metadata in Firestore
+            // if more properties are needed in the future.
             return {
                 name: folderRef.name,
                 type: 'folder',
-                 metadata: { // Folders have partial metadata
+                 metadata: {
                     size: 0,
                     contentType: 'inode/directory',
-                    updated: metadata.updated,
-                    timeCreated: metadata.timeCreated,
+                    // We can't get updated/created time for a prefix, so use a placeholder
+                    updated: new Date().toISOString(),
+                    timeCreated: new Date().toISOString(),
                 }
             } as FileItem;
         });
