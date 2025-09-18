@@ -908,7 +908,7 @@ export default function SettingsPage() {
                                     {eligibleUsersForTempAccess.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                                                No eligible employees found (Cashier, Bar Man, Waitress).
+                                                No eligible employees found.
                                             </TableCell>
                                         </TableRow>
                                     )}
@@ -1091,3 +1091,6 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+
+    
