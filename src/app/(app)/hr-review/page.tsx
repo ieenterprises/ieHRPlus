@@ -20,13 +20,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
 import { format } from "date-fns";
-import { Video } from "lucide-react";
+import { Video, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 
@@ -34,6 +42,7 @@ export default function HrReviewPage() {
   const { loggedInUser } = useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -76,9 +85,13 @@ export default function HrReviewPage() {
         // If there's a video, delete it from Storage
         if (record.videoUrl) {
             // Extract the storage path from the URL
-            const videoPath = decodeURIComponent(record.videoUrl.split('/o/')[1].split('?')[0]);
-            const videoRef = ref(storage, videoPath);
-            await deleteObject(videoRef);
+            try {
+                const videoPath = decodeURIComponent(record.videoUrl.split('/o/')[1].split('?')[0]);
+                const videoRef = ref(storage, videoPath);
+                await deleteObject(videoRef);
+            } catch (storageError) {
+                console.warn("Could not delete video from storage, it might have already been removed or the URL is malformed:", storageError);
+            }
         }
         
         toast({ title: "Record Rejected", description: "The record and associated video have been deleted.", variant: "destructive" });
@@ -102,6 +115,19 @@ export default function HrReviewPage() {
       default:
         return 'outline';
     }
+  };
+
+  const handlePreview = (videoUrl: string) => {
+    setPreviewVideoUrl(videoUrl);
+  };
+  
+  const handleDownload = (url: string, userName: string) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `verification_${userName.replace(' ', '_')}_${new Date().toISOString()}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
 
@@ -151,10 +177,8 @@ export default function HrReviewPage() {
                       </TableCell>
                        <TableCell>
                         {record.videoUrl ? (
-                          <Button variant="outline" size="sm" asChild>
-                            <a href={record.videoUrl} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
                               <Video className="mr-2 h-4 w-4" /> View Video
-                            </a>
                           </Button>
                         ) : (
                           "-"
@@ -185,6 +209,28 @@ export default function HrReviewPage() {
           </div>
         </CardContent>
       </Card>
+      
+      <Dialog open={!!previewVideoUrl} onOpenChange={(open) => !open && setPreviewVideoUrl(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Verification Video</DialogTitle>
+             <DialogDescription>Review the employee's clock-in verification video.</DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            {previewVideoUrl && (
+              <video controls autoPlay src={previewVideoUrl} className="w-full rounded-md" />
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => handleDownload(previewVideoUrl!, 'verification')} variant="secondary">
+              <Download className="mr-2 h-4 w-4" />
+              Download
+            </Button>
+            <Button onClick={() => setPreviewVideoUrl(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
