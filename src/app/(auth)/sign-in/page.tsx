@@ -23,15 +23,15 @@ import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch, 
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import type { User } from "@/lib/types";
 
-// One-time fix for existing roles missing the shift permission.
+// One-time fix for existing departments missing the shift permission.
 const ensureShiftPermissionForOwner = async (businessId: string) => {
     try {
-        const rolesQuery = query(collection(db, 'roles'), where('businessId', '==', businessId), where('name', '==', 'Owner'));
-        const rolesSnapshot = await getDocs(rolesQuery);
-        if (!rolesSnapshot.empty) {
-            const ownerRoleDoc = rolesSnapshot.docs[0];
-            const ownerRoleData = ownerRoleDoc.data();
-            const permissions: string[] = ownerRoleData.permissions || [];
+        const departmentsQuery = query(collection(db, 'departments'), where('businessId', '==', businessId), where('name', '==', 'Owner'));
+        const departmentsSnapshot = await getDocs(departmentsQuery);
+        if (!departmentsSnapshot.empty) {
+            const ownerDepartmentDoc = departmentsSnapshot.docs[0];
+            const ownerDepartmentData = ownerDepartmentDoc.data();
+            const permissions: string[] = ownerDepartmentData.permissions || [];
             
             let needsUpdate = false;
             const permissionsToAdd = ['VIEW_SHIFT_REPORT', 'MANAGE_SHIFTS'];
@@ -44,8 +44,8 @@ const ensureShiftPermissionForOwner = async (businessId: string) => {
             });
 
             if (needsUpdate) {
-                await updateDoc(ownerRoleDoc.ref, { permissions: permissions });
-                console.log("Applied one-time permission fix for Owner role.");
+                await updateDoc(ownerDepartmentDoc.ref, { permissions: permissions });
+                console.log("Applied one-time permission fix for Owner department.");
             }
         }
     } catch (error) {
@@ -79,9 +79,9 @@ export default function SignInPage() {
       }
       const userProfile = { id: userDoc.id, ...userDoc.data() } as User;
       
-      const { id: userId, businessId, role } = userProfile;
+      const { id: userId, businessId, department } = userProfile;
       if (!businessId) throw new Error("Business ID not found for this user.");
-      if (role === 'Owner') await ensureShiftPermissionForOwner(businessId);
+      if (department === 'Owner') await ensureShiftPermissionForOwner(businessId);
 
       const shiftsCollection = collection(db, 'shifts');
       
@@ -129,11 +129,7 @@ export default function SignInPage() {
   // This effect handles the redirection after the user is set in the context
   useEffect(() => {
     if (loggedInUser) {
-        if (loggedInUser.role === 'Owner' || loggedInUser.role === 'Administrator' || loggedInUser.role === 'Manager') {
-            router.push("/dashboard");
-        } else {
-            router.push("/select-device");
-        }
+        router.push("/file-manager");
     }
   }, [loggedInUser, router]);
 
