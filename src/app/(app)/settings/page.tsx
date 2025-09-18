@@ -55,7 +55,6 @@ export default function SettingsPage() {
     paymentTypes,
     users,
     generateAccessCode,
-    updateUserTempAccess,
     addBranch,
     updateBranch,
     deleteBranch,
@@ -84,11 +83,6 @@ export default function SettingsPage() {
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [generatedCode, setGeneratedCode] = useState<AccessCode | null>(null);
 
-  const eligibleUsersForTempAccess = useMemo(() => {
-    const eligibleDepartments = ["Cashier", "Bar Man", "Waitress"];
-    return users.filter(user => eligibleDepartments.includes(user.department));
-  }, [users]);
-  
   // Branch Handlers
   const handleOpenBranchDialog = (branch: Partial<BranchType> | null) => {
       setEditingBranch(branch ? { ...branch } : EMPTY_BRANCH);
@@ -437,46 +431,6 @@ export default function SettingsPage() {
                                     Generate New Code
                                 </Button>
                             </div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Temporary Access Control</CardTitle>
-                            <CardDescription>
-                                Grant temporary access to Inventory and Reports for specific employees. Access is revoked when the user signs out.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Employee Name</TableHead>
-                                        <TableHead>Department</TableHead>
-                                        <TableHead className="text-right w-[150px]">Grant Access</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {eligibleUsersForTempAccess.map(user => (
-                                        <TableRow key={user.id}>
-                                            <TableCell className="font-medium">{user.name}</TableCell>
-                                            <TableCell><Badge variant="outline">{user.department}</Badge></TableCell>
-                                            <TableCell className="text-right">
-                                                <Switch
-                                                    checked={!!user.temp_access_given}
-                                                    onCheckedChange={(checked) => updateUserTempAccess(user.id, checked)}
-                                                />
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {eligibleUsersForTempAccess.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                                                No eligible employees found.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
                         </CardContent>
                     </Card>
                 </div>
