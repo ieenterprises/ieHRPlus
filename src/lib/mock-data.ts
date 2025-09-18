@@ -2,8 +2,6 @@
 
 import { WriteBatch, doc, collection } from "firebase/firestore";
 import { db } from "./firebase";
-import { addDays, subDays } from "date-fns";
-import { SaleItem, Department } from "./types";
 import { MOCK_INITIAL_DEPARTMENTS as initialMockDepartments } from "@/hooks/use-settings";
 
 // --- MOCK DATA GENERATION ---
@@ -49,15 +47,6 @@ const MOCK_PAYMENT_TYPES = [
 // 2. This function now generates an empty state, not mock data
 const generateInitialBusinessData = (ownerId: string, businessName: string, branchId: string) => {
   const settings = {
-    featureSettings: {
-      open_tickets: true,
-      reservations: true,
-      shifts: true,
-      time_management: true,
-      kitchen_printers: true,
-      dining_options: true,
-      customer_displays: true,
-    },
     receiptSettings: {
       [branchId]: {
         header: `Welcome to ${businessName}!`,

@@ -102,6 +102,7 @@ export function AppSidebar() {
 
   const hasPermission = (item: NavItem) => {
     if (!loggedInUser) return false;
+    if (loggedInUser.department === 'Owner') return true;
 
     // Grant access if temporary access flag is set for aware items
     if (item.tempAccessAware && loggedInUser.temp_access_given) {
@@ -276,7 +277,7 @@ export function AppSidebar() {
                     <div className="space-y-1 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
                         {selectedBranch && (
                            <div className="flex items-center gap-2">
-                                <Store className="h-3 w-3" />
+                                <Branch className="h-3 w-3" />
                                 <span className="truncate">Branch: {selectedBranch.name}</span>
                            </div>
                         )}

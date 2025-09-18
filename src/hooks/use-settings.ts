@@ -16,10 +16,10 @@ export type { FeatureSettings, BranchType, PosDeviceType, PrinterType, ReceiptSe
 
 export type FeatureSettings = Record<string, boolean>;
 
-export const MOCK_INITIAL_DEPARTMENTS: Omit<Department, 'businessId'>[] = [
-  { id: "dept_owner", name: "Owner", permissions: [...Object.keys(fileManagementPermissions), ...Object.keys(teamManagementPermissions), ...Object.keys(settingsPermissions)] as AnyPermission[] },
-  { id: "dept_admin", name: "Administrator", permissions: [...Object.keys(fileManagementPermissions), ...Object.keys(teamManagementPermissions), ...Object.keys(settingsPermissions)] as AnyPermission[] },
-  { id: "dept_manager", name: "Manager", permissions: ["VIEW_FILES", "UPLOAD_FILES", "DOWNLOAD_FILES", "APPROVE_DOCUMENTS", "VIEW_USERS", "MANAGE_USERS"] },
+export const MOCK_INITIAL_DEPARTMENTS: Omit<Department, 'businessId' | 'id'>[] = [
+    { name: "Owner", permissions: [...Object.keys(fileManagementPermissions), ...Object.keys(teamManagementPermissions), ...Object.keys(settingsPermissions)] as AnyPermission[] },
+    { name: "Administrator", permissions: [...Object.keys(fileManagementPermissions), ...Object.keys(teamManagementPermissions), ...Object.keys(settingsPermissions)] as AnyPermission[] },
+    { name: "Manager", permissions: ["VIEW_FILES", "UPLOAD_FILES", "DOWNLOAD_FILES", "APPROVE_DOCUMENTS", "VIEW_USERS", "MANAGE_USERS"] },
 ];
 
 // --- Context and Provider ---
@@ -48,20 +48,20 @@ type SettingsContextType = {
     
     // Data setters (now write to DB)
     setFeatureSettings: (value: React.SetStateAction<FeatureSettings>) => void;
-    addBranch: (branch: Omit<BranchType, 'id'>) => Promise<void>;
+    addBranch: (branch: Omit<BranchType, 'id' | 'businessId'>) => Promise<void>;
     updateBranch: (id: string, branch: Partial<BranchType>) => Promise<void>;
     deleteBranch: (id: string) => Promise<void>;
-    addPosDevice: (device: Omit<PosDeviceType, 'id' | 'in_use_by_shift_id'>) => Promise<void>;
+    addPosDevice: (device: Omit<PosDeviceType, 'id' | 'in_use_by_shift_id' | 'businessId'>) => Promise<void>;
     updatePosDevice: (id: string, device: Partial<PosDeviceType>) => Promise<void>;
     deletePosDevice: (id: string) => Promise<void>;
-    addPrinter: (printer: Omit<PrinterType, 'id'>) => Promise<void>;
+    addPrinter: (printer: Omit<PrinterType, 'id' | 'businessId'>) => Promise<void>;
     updatePrinter: (id: string, printer: Partial<PrinterType>) => Promise<void>;
     deletePrinter: (id: string) => Promise<void>;
     setReceiptSettings: (value: React.SetStateAction<Record<string, ReceiptSettings>>) => void;
-    addPaymentType: (pt: Omit<PaymentType, 'id'>) => Promise<void>;
+    addPaymentType: (pt: Omit<PaymentType, 'id' | 'businessId'>) => Promise<void>;
     updatePaymentType: (id: string, pt: Partial<PaymentType>) => Promise<void>;
     deletePaymentType: (id: string) => Promise<void>;
-    addTax: (tax: Omit<Tax, 'id'>) => Promise<void>;
+    addTax: (tax: Omit<Tax, 'id' | 'businessId'>) => Promise<void>;
     updateTax: (id: string, tax: Partial<Tax>) => Promise<void>;
     deleteTax: (id: string) => Promise<void>;
     generateAccessCode: () => Promise<AccessCode | null>;
@@ -81,7 +81,7 @@ type SettingsContextType = {
     setOwnerSelectedBranch: React.Dispatch<React.SetStateAction<BranchType | null>>;
     currency: string;
     setCurrency: (value: React.SetStateAction<string>) => void;
-    getPermissionsForDepartment: (department: UserDepartment) => AnyPermission[];
+    getPermissionsForDepartment: (department: string) => AnyPermission[];
 
     // Cross-page state
     debtToSettle: Sale | null;
@@ -101,7 +101,7 @@ type SettingsContextType = {
     setOpenTickets: (value: React.SetStateAction<OpenTicket[]>) => Promise<void>;
     setVoidedLogs: (value: React.SetStateAction<VoidedLog[]>) => Promise<void>;
     setDebts: (value: React.SetStateAction<Debt[]>) => Promise<void>;
-    setDepartments: (value: React.SetStateAction<Department[]>) => void;
+    setDepartments: (value: React.SetStateAction<Department[]>) => Promise<void>;
     setUsers: (value: React.SetStateAction<User[]>) => void;
 
     // Voiding and ticket logic
@@ -138,7 +138,7 @@ const useLocalStorage = <T,>(key: string, defaultValue: T): [T, React.Dispatch<R
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
     // States for data fetched from Firestore
-    const [featureSettings, setFeatureSettingsState] = useState<FeatureSettings>({ open_tickets: true, reservations: true, shifts: true, time_management: false, kitchen_printers: true, dining_options: true, customer_displays: false });
+    const [featureSettings, setFeatureSettingsState] = useState<FeatureSettings>({});
     const [branches, setBranches] = useState<BranchType[]>([]);
     const [posDevices, setPosDevices] = useState<PosDeviceType[]>([]);
     const [printers, setPrintersState] = useState<PrinterType[]>([]);
@@ -305,33 +305,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const logout = async () => {
         if (loggedInUser && loggedInUser.businessId) {
             const batch = writeBatch(db);
-            const shiftsCollection = collection(db, 'shifts');
-            
-            // Find the active or temp-active shift for the user
-            const q = query(
-                shiftsCollection, 
-                where('userId', '==', loggedInUser.id), 
-                where('status', 'in', ['active', 'temp-active']), 
-                where('businessId', '==', loggedInUser.businessId)
-            );
-            const querySnapshot = await getDocs(q);
-            
-            if (!querySnapshot.empty) {
-                const activeShiftDoc = querySnapshot.docs[0];
-                const activeShiftData = activeShiftDoc.data();
-                
-                // Close the active shift
-                batch.update(doc(db, 'shifts', activeShiftDoc.id), { 
-                    status: 'closed', 
-                    endTime: new Date().toISOString() 
-                });
-                
-                // Release the device used in that shift, if any
-                if (activeShiftData.posDeviceId) {
-                    const deviceRef = doc(db, 'pos_devices', activeShiftData.posDeviceId);
-                    batch.update(deviceRef, { in_use_by_shift_id: null });
-                }
-            }
             // Revoke temporary access on logout
             if (loggedInUser.temp_access_given) {
                 batch.update(doc(db, 'users', loggedInUser.id), { temp_access_given: false });
@@ -350,8 +323,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         router.push('/sign-in');
     };
 
-    const getPermissionsForDepartment = useCallback((department: UserDepartment) => {
-        const departmentData = departments.find(d => d.name === department);
+    const getPermissionsForDepartment = useCallback((departmentName: string) => {
+        const departmentData = departments.find(d => d.name === departmentName);
         return departmentData?.permissions || [];
     }, [departments]);
 
@@ -429,7 +402,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const addBranch = addDocFactory('branches');
     const updateBranch = updateDocFactory('branches');
     const deleteBranch = deleteDocFactory('branches');
-    const addPosDevice = async (device: Omit<PosDeviceType, 'id' | 'in_use_by_shift_id'>) => {
+    const addPosDevice = async (device: Omit<PosDeviceType, 'id' | 'in_use_by_shift_id' | 'businessId'>) => {
       if (!loggedInUser?.businessId) return;
       await addDoc(collection(db, 'pos_devices'), { ...device, in_use_by_shift_id: null, businessId: loggedInUser.businessId });
     };
@@ -481,6 +454,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const setDebts = createBatchSetter('debts', setDebtsState);
     const setOpenTickets = createBatchSetter('open_tickets', setOpenTicketsState);
     const setVoidedLogs = createBatchSetter('voided_logs', setVoidedLogsState);
+    const setDepartments = createBatchSetter('departments', setDepartmentsState);
+
 
      const createOfflineDeleter = (collectionName: string, localSetter: React.Dispatch<React.SetStateAction<any[]>>) => 
         async (id: string) => {
@@ -606,7 +581,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         receiptSettings, setReceiptSettings,
         paymentTypes, addPaymentType, updatePaymentType, deletePaymentType,
         taxes, addTax, updateTax, deleteTax,
-        departments, setDepartments: setDepartmentsState,
+        departments, setDepartments,
         users, setUsers: setUsersState,
         products, setProducts,
         categories, setCategories,

@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type User, type UserDepartment, type Department } from "@/lib/types";
+import { type User, type Department } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Folder, Download, Eye, EyeOff, Search, Settings, Users as UsersIcon } from "lucide-react";
@@ -150,7 +150,7 @@ export default function TeamPage() {
 
     const formData = new FormData(event.currentTarget);
     const newPassword = formData.get("password") as string;
-    const departmentName = formData.get("department") as UserDepartment;
+    const departmentName = formData.get("department") as string;
 
     const userData: Partial<User> = {
         name: formData.get("name") as string,
@@ -249,7 +249,7 @@ export default function TeamPage() {
 
   const handleUserDepartmentChange = (departmentName: string) => {
     if(editingUser) {
-        setEditingUser({ ...editingUser, department: departmentName as UserDepartment });
+        setEditingUser({ ...editingUser, department: departmentName });
     }
   }
   
@@ -285,16 +285,13 @@ export default function TeamPage() {
           const usersQuery = query(collection(db, 'users'), where('department', '==', editingDepartment.name), where('businessId', '==', loggedInUser.businessId));
           const usersSnapshot = await getDocs(usersQuery);
           usersSnapshot.forEach(userDoc => {
-              batch.update(doc(db, 'users', userDoc.id), { permissions: selectedDepartmentPermissions });
+              batch.update(doc(db, 'users', userDoc.id), { permissions: selectedDepartmentPermissions, department: departmentName });
           });
           
           await batch.commit();
           toast({ title: "Department Updated", description: `Permissions for all users in the '${departmentName}' department have been updated.` });
       } else {
-          await addDoc(collection(db, 'departments'), {
-              ...departmentData,
-              id: doc(collection(db, 'departments')).id // Pre-generate ID to avoid conflict
-          });
+          await addDoc(collection(db, 'departments'), departmentData);
           toast({ title: "Department Added" });
       }
       handleDepartmentDialogClose(false);
@@ -317,7 +314,7 @@ export default function TeamPage() {
     }
   };
   
-  const getDepartmentBadgeVariant = (department: UserDepartment): BadgeProps['variant'] => {
+  const getDepartmentBadgeVariant = (department: string): BadgeProps['variant'] => {
     switch (department) {
       case "Owner": return "destructive";
       case "Administrator": return "default";
@@ -444,7 +441,7 @@ export default function TeamPage() {
                                     <span className="font-medium">{user.name}</span>
                                     </div>
                                 </TableCell>
-                                <TableCell><Badge variant={getDepartmentBadgeVariant(user.department as UserDepartment)}>{user.department}</Badge></TableCell>
+                                <TableCell><Badge variant={getDepartmentBadgeVariant(user.department as string)}>{user.department}</Badge></TableCell>
                                 <TableCell className="hidden md:table-cell">{user.email}</TableCell>
                                 <TableCell>
                                     <DropdownMenu>
@@ -497,7 +494,7 @@ export default function TeamPage() {
                             {filteredDepartments.length > 0 ? (
                                 filteredDepartments.map((department) => (
                                     <TableRow key={department.id}>
-                                        <TableCell><Badge variant={getDepartmentBadgeVariant(department.name as UserDepartment)}>{department.name}</Badge></TableCell>
+                                        <TableCell><Badge variant={getDepartmentBadgeVariant(department.name as string)}>{department.name}</Badge></TableCell>
                                         <TableCell>{department.permissions.length} permissions</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="icon" onClick={() => handleOpenDepartmentDialog(department)}><Edit className="h-4 w-4" /></Button>
