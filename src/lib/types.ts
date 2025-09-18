@@ -1,5 +1,6 @@
 
 
+
 import type { AnyPermission } from "./permissions";
 
 export type Business = {
@@ -16,6 +17,17 @@ export type OfflineAction = {
     timestamp: string;
     payload?: any; // To hold data for complex actions like restore
 };
+
+export interface FileItem {
+  name: string;
+  type: 'file' | 'folder';
+  metadata: {
+    size: number;
+    contentType?: string | undefined;
+    updated: string;
+    timeCreated: string;
+  };
+}
 
 export type StoreProduct = {
   id: string;
@@ -70,6 +82,7 @@ export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 
   storeName?: string;
   deviceName?: string;
   employeeName?: string | null;
+  pdf_url?: string | null;
 };
 export type Reservation = Omit<Database['public']['Tables']['reservations']['Row'], 'id'> & {
   id?: string;
@@ -634,5 +647,7 @@ export type Enums<
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
       
+
+    
 
     
