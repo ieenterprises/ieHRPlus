@@ -2,39 +2,39 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { IELogo } from '@/components/ie-logo';
-import { ShoppingCart, Package, BarChart3, Users, CalendarCheck, ReceiptText } from 'lucide-react';
+import { FolderLock, Users, Zap, Briefcase, History, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 
 const features = [
   {
-    icon: ShoppingCart,
-    title: 'Point of Sale',
-    description: 'A fast, intuitive, and easy-to-use interface for processing sales, including support for rooms and reservations.',
-  },
-  {
-    icon: Package,
-    title: 'Inventory Management',
-    description: 'Keep track of your stock levels with real-time updates, manage categories, and import/export products effortlessly.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Powerful Reporting',
-    description: 'Gain insights into your business performance with detailed reports on sales, products, and employees.',
+    icon: FolderLock,
+    title: 'Secure File Storage',
+    description: 'Centralize all your important documents and files in a secure, accessible cloud-based environment.',
   },
   {
     icon: Users,
-    title: 'Team Management',
-    description: 'Manage your staff with role-based permissions, ensuring secure access to different parts of the system.',
+    title: 'Team Collaboration',
+    description: 'Manage your team with role-based permissions and collaborate seamlessly on projects from anywhere.',
   },
   {
-    icon: CalendarCheck,
-    title: 'Reservations',
-    description: 'Handle room bookings and availability with an integrated reservation system, perfect for hotels and guesthouses.',
+    icon: Zap,
+    title: 'Workflow Automation',
+    description: 'Automate repetitive tasks and create custom workflows to boost your team’s productivity and efficiency.',
   },
   {
-    icon: ReceiptText,
-    title: 'Debt Tracking',
-    description: 'Easily manage credit sales and track outstanding customer debts, ensuring you never lose track of payments.',
+    icon: Briefcase,
+    title: 'Project Management',
+    description: 'Organize tasks, track progress, and manage project timelines with intuitive and powerful tools.',
+  },
+  {
+    icon: History,
+    title: 'Version Control',
+    description: 'Keep track of file versions and changes, ensuring you can always revert to a previous state when needed.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Advanced Security',
+    description: 'Protect your sensitive data with robust security features, including granular permissions and access controls.',
   },
 ];
 
@@ -69,10 +69,10 @@ export default function LandingPage() {
           </div>
           <div className="container relative text-center">
             <h1 className="text-4xl font-bold tracking-tight md:text-6xl font-headline">
-              The Modern Point of Sale for Your Business
+              Centralize Your Team's Workflow
             </h1>
             <p className="mt-6 max-w-2xl mx-auto text-lg text-muted-foreground">
-              ieOrderFlow is a complete POS solution designed to streamline your operations, from sales and inventory to customer management and reporting.
+              ieOrderFlow is the all-in-one platform to manage files, projects, and collaboration. Empower your team to do their best work, faster.
             </p>
             <div className="mt-8 flex justify-center gap-4">
               <Button size="lg" asChild>
@@ -88,9 +88,9 @@ export default function LandingPage() {
         <section className="py-16 md:py-24 bg-secondary/50">
           <div className="container">
             <div className="text-center">
-              <h2 className="text-3xl font-bold font-headline">Everything You Need to Succeed</h2>
+              <h2 className="text-3xl font-bold font-headline">A Better Way to Work Together</h2>
               <p className="mt-4 max-w-2xl mx-auto text-muted-foreground">
-                Our powerful features are designed to help you manage your business efficiently and effectively.
+                Our powerful features are designed to help you manage your business with clarity and control.
               </p>
             </div>
             <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
@@ -114,33 +114,33 @@ export default function LandingPage() {
         <section className="py-16 md:py-24">
           <div className="container grid items-center gap-8 md:grid-cols-2">
             <div className="order-2 md:order-1">
-              <h2 className="text-3xl font-bold font-headline">Streamline Your Workflow</h2>
+              <h2 className="text-3xl font-bold font-headline">Built for Productivity</h2>
               <p className="mt-4 text-muted-foreground">
-                From the front desk to the back office, ieOrderFlow provides the tools you need to operate smoothly. Manage sales, track inventory, and understand your business with our intuitive dashboard.
+                From managing files to tracking project milestones, ieOrderFlow provides the tools you need to operate smoothly. Keep your team organized and your data secure with our intuitive platform.
               </p>
               <div className="mt-6 space-y-4">
                   <div className="flex items-start gap-3">
                       <CheckCircle className="h-5 w-5 mt-1 text-primary"/>
-                      <p>Process transactions quickly with our user-friendly sales interface.</p>
+                      <p>Organize your files and projects in a centralized, secure location.</p>
                   </div>
                    <div className="flex items-start gap-3">
                       <CheckCircle className="h-5 w-5 mt-1 text-primary"/>
-                      <p>Never run out of stock with real-time inventory tracking and alerts.</p>
+                      <p>Collaborate with your team in real-time, with clear roles and permissions.</p>
                   </div>
                    <div className="flex items-start gap-3">
                       <CheckCircle className="h-5 w-5 mt-1 text-primary"/>
-                      <p>Make informed decisions with comprehensive, easy-to-understand reports.</p>
+                      <p>Streamline your processes and gain insights with powerful workflow tools.</p>
                   </div>
               </div>
             </div>
             <div className="order-1 md:order-2">
               <Image
-                src="https://images.unsplash.com/photo-1726065235239-b20b88d43eea?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxQb3MlMjBTeXN0ZW18ZW58MHx8fHwxNzUzODkyNjE4fDA&ixlib=rb-4.1.0&q=80&w=1080"
-                alt="Dashboard Screenshot"
+                src="https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxwcm9qZWN0JTIwbWFuYWdlbWVudCUyMGRhc2hib2FyZHxlbnwwfHx8fDE3MjY4NjgzNTh8MA&ixlib=rb-4.1.0&q=80&w=1080"
+                alt="Productivity Dashboard"
                 width={600}
                 height={400}
                 className="rounded-lg shadow-xl"
-                data-ai-hint="dashboard analytics"
+                data-ai-hint="dashboard project management"
               />
             </div>
           </div>
