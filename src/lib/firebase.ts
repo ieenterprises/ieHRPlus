@@ -1,3 +1,4 @@
+
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
@@ -6,13 +7,13 @@ import { getFirestore, enableIndexedDbPersistence, initializeFirestore, CACHE_SI
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  "projectId": "iefileflow-87306218-73bc1",
-  "appId": "1:460549901546:web:cbe9dac181e0b704909b93",
-  "storageBucket": "iefileflow-87306218-73bc1.firebasestorage.app",
-  "apiKey": "AIzaSyAUaFp1qiGfmpnW7rf5LiLyHntRfMxHjxs",
-  "authDomain": "iefileflow-87306218-73bc1.firebaseapp.com",
+  "projectId": "iehrplus-76988972-46fd7",
+  "appId": "1:1059131590119:web:37b42f1ac303dbe1622942",
+  "storageBucket": "iehrplus-76988972-46fd7.firebasestorage.app",
+  "apiKey": "AIzaSyD2f6abRKNEU-WafxCxUtVsTsJNtKVPFWg",
+  "authDomain": "iehrplus-76988972-46fd7.firebaseapp.com",
   "measurementId": "",
-  "messagingSenderId": "460549901546"
+  "messagingSenderId": "1059131590119"
 };
 
 // Initialize Firebase

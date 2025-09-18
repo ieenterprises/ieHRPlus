@@ -206,5 +206,3 @@ export async function copyItem(businessId: string, fromPath: string, toPath: str
         }
     }
 }
-
-    

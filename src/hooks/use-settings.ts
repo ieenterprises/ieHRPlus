@@ -625,5 +625,3 @@ export function useSettings() {
     }
     return context;
 }
-
-    
