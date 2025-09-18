@@ -6,12 +6,13 @@ import { getFirestore, enableIndexedDbPersistence, initializeFirestore, CACHE_SI
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+  "projectId": "iefileflow-87306218-73bc1",
+  "appId": "1:460549901546:web:cbe9dac181e0b704909b93",
+  "storageBucket": "iefileflow-87306218-73bc1.firebasestorage.app",
+  "apiKey": "AIzaSyAUaFp1qiGfmpnW7rf5LiLyHntRfMxHjxs",
+  "authDomain": "iefileflow-87306218-73bc1.firebaseapp.com",
+  "measurementId": "",
+  "messagingSenderId": "460549901546"
 };
 
 // Initialize Firebase
