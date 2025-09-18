@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -23,6 +24,7 @@ import {
   Store,
   HardDrive,
   Folder,
+  Briefcase,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
@@ -58,6 +60,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/hr-review", icon: Briefcase, label: "HR Review", permission: "MANAGE_USERS" },
   { href: "/file-manager", icon: Folder, label: "File Manager" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_USERS", offlineDisabled: true },
 ];
@@ -277,7 +280,7 @@ export function AppSidebar() {
                     <div className="space-y-1 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
                         {selectedBranch && (
                            <div className="flex items-center gap-2">
-                                <Branch className="h-3 w-3" />
+                                <Store className="h-3 w-3" />
                                 <span className="truncate">Branch: {selectedBranch.name}</span>
                            </div>
                         )}
@@ -297,3 +300,5 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+
+    

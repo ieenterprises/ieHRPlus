@@ -2,6 +2,17 @@
 
 import type { AnyPermission } from "./permissions";
 
+export type TimeRecord = {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  clockInTime: string;
+  clockOutTime: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  businessId: string;
+};
+
 export type Business = {
     id: string;
     name: string;
@@ -646,3 +657,5 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
+
+    

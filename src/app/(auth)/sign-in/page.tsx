@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -21,7 +22,7 @@ import { auth, db } from '@/lib/firebase';
 import { signInWithEmailAndPassword, User as FirebaseAuthUser } from 'firebase/auth';
 import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch, getDoc } from "firebase/firestore";
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
-import type { User } from "@/lib/types";
+import type { User, TimeRecord } from "@/lib/types";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -40,9 +41,25 @@ export default function SignInPage() {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
+      const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data() as User;
+        
+        // Create a time record
+        await addDoc(collection(db, "timeRecords"), {
+          userId: userCredential.user.uid,
+          userName: userData.name,
+          userEmail: userData.email,
+          clockInTime: new Date().toISOString(),
+          clockOutTime: null,
+          status: 'pending',
+          businessId: userData.businessId,
+        } as Omit<TimeRecord, 'id'>);
+      }
+
       toast({
           title: "Signed In",
-          description: `Welcome!`,
+          description: `Welcome! Your clock-in has been recorded.`,
       });
 
     } catch (error: any) {
@@ -114,3 +131,5 @@ export default function SignInPage() {
     </>
   );
 }
+
+    
