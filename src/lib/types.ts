@@ -64,8 +64,9 @@ export type Product = Omit<Database['public']['Tables']['products']['Row'], 'pri
   businessId: string;
   store_products: StoreProduct[];
 };
-export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions'> & {
+export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions' | 'role'> & {
     permissions: AnyPermission[];
+    department: string;
     password?: string;
     businessId: string;
     temp_access_given?: boolean;
@@ -157,14 +158,14 @@ export type SaleItem = {
   fulfilled_quantity?: number;
 }
 
-export type Role = {
+export type Department = {
   id: string;
   name: string;
   permissions: AnyPermission[];
   businessId: string;
 };
 
-export type UserRole = "Owner" | "Administrator" | "Manager" | "Cashier" | "Waitress" | "Bar Man";
+export type UserDepartment = "Owner" | "Administrator" | "Manager" | "Cashier" | "Waitress" | "Bar Man";
 
 export type VoidedLog = {
   id: string;

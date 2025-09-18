@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -39,7 +40,7 @@ export default function SelectDevicePage() {
         if (!loadingUser && !loggedInUser) {
             router.push('/sign-in');
         }
-        if (!loadingUser && loggedInUser?.role === 'Owner') {
+        if (!loadingUser && loggedInUser?.department === 'Owner') {
             router.push('/dashboard');
         }
     }, [loggedInUser, loadingUser, router]);

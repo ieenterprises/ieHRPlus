@@ -140,7 +140,7 @@ export function AppSidebar() {
     return featureSettings[featureFlag] === true;
   };
   
-  const shouldShowPosInfo = loggedInUser && ['Cashier', 'Waitress', 'Bar Man'].includes(loggedInUser.role);
+  const shouldShowPosInfo = loggedInUser && ['Cashier', 'Waitress', 'Bar Man'].includes(loggedInUser.department);
 
   const visibleNavItems = navItems.filter(item => hasPermission(item) && isFeatureEnabled(item.featureFlag));
 

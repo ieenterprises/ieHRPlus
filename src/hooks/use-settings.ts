@@ -5,24 +5,24 @@
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, StoreType, PosDeviceType, PaymentType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode, OfflineAction } from '@/lib/types';
+import type { User, StoreType, PosDeviceType, PaymentType, Department, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserDepartment, SaleItem, Shift, AccessCode, OfflineAction } from '@/lib/types';
 import { posPermissions, backOfficePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, Unsubscribe } from "firebase/auth";
 import { useOnlineStatus } from './use-online-status';
 
-export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
+export type { FeatureSettings, StoreType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Department, UserDepartment } from '@/lib/types';
 
 export type FeatureSettings = Record<string, boolean>;
 
-export const MOCK_INITIAL_ROLES: Role[] = [
-  { id: "role_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
-  { id: "role_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[] },
-  { id: "role_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS", "SETTLE_PREVIOUS_SHIFT_DEBTS", "MANAGE_SHIFTS", "REPRINT_ANY_RECEIPT", "FULFILL_ANY_ORDER"] },
-  { id: "role_cashier", name: "Cashier", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "MANAGE_CUSTOMERS", "VIEW_SALES_REPORTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS", "MANAGE_OPEN_TICKETS"] },
-  { id: "role_waitress", name: "Waitress", permissions: ["ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"] },
-  { id: "role_barman", name: "Bar Man", permissions: ["ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS", "REPRINT_ANY_RECEIPT", "FULFILL_ANY_ORDER"] },
+export const MOCK_INITIAL_DEPARTMENTS: Department[] = [
+  { id: "dept_owner", name: "Owner", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[], businessId: '' },
+  { id: "dept_admin", name: "Administrator", permissions: [...Object.keys(posPermissions), ...Object.keys(backOfficePermissions)] as AnyPermission[], businessId: '' },
+  { id: "dept_manager", name: "Manager", permissions: ["ACCEPT_PAYMENTS", "APPLY_DISCOUNTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "PERFORM_REFUNDS", "VIEW_SHIFT_REPORT", "MANAGE_ITEMS_POS", "VIEW_SALES_REPORTS", "MANAGE_ITEMS_BO", "MANAGE_EMPLOYEES", "MANAGE_CUSTOMERS", "VOID_SAVED_ITEMS", "CANCEL_RECEIPTS", "RESTORE_VOIDED_ITEMS", "PERMANENTLY_DELETE_VOIDS", "SETTLE_PREVIOUS_SHIFT_DEBTS", "MANAGE_SHIFTS", "REPRINT_ANY_RECEIPT", "FULFILL_ANY_ORDER"], businessId: '' },
+  { id: "dept_cashier", name: "Cashier", permissions: ["ACCEPT_PAYMENTS", "MANAGE_OPEN_TICKETS", "VIEW_ALL_RECEIPTS", "MANAGE_CUSTOMERS", "VIEW_SALES_REPORTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS", "MANAGE_OPEN_TICKETS"], businessId: '' },
+  { id: "dept_waitress", name: "Waitress", permissions: ["ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS"], businessId: '' },
+  { id: "dept_barman", name: "Bar Man", permissions: ["ACCEPT_PAYMENTS", "VIEW_ALL_RECEIPTS", "VOID_SAVED_ITEMS", "RESTORE_VOIDED_ITEMS", "REPRINT_ANY_RECEIPT", "FULFILL_ANY_ORDER"], businessId: '' },
 ];
 
 // --- Context and Provider ---
@@ -36,7 +36,7 @@ type SettingsContextType = {
     receiptSettings: Record<string, ReceiptSettings>;
     paymentTypes: PaymentType[];
     taxes: Tax[];
-    roles: Role[];
+    departments: Department[];
     users: User[];
     products: Product[];
     categories: Category[];
@@ -84,7 +84,7 @@ type SettingsContextType = {
     setOwnerSelectedStore: React.Dispatch<React.SetStateAction<StoreType | null>>;
     currency: string;
     setCurrency: (value: React.SetStateAction<string>) => void;
-    getPermissionsForRole: (role: UserRole) => AnyPermission[];
+    getPermissionsForDepartment: (department: UserDepartment) => AnyPermission[];
 
     // Cross-page state
     debtToSettle: Sale | null;
@@ -104,7 +104,7 @@ type SettingsContextType = {
     setOpenTickets: (value: React.SetStateAction<OpenTicket[]>) => Promise<void>;
     setVoidedLogs: (value: React.SetStateAction<VoidedLog[]>) => Promise<void>;
     setDebts: (value: React.SetStateAction<Debt[]>) => Promise<void>;
-    setRoles: (value: React.SetStateAction<Role[]>) => void;
+    setDepartments: (value: React.SetStateAction<Department[]>) => void;
     setUsers: (value: React.SetStateAction<User[]>) => void;
 
     // Voiding and ticket logic
@@ -149,7 +149,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [paymentTypes, setPaymentTypesState] = useState<PaymentType[]>([]);
     const [taxes, setTaxesState] = useState<Tax[]>([]);
     const [users, setUsersState] = useState<User[]>([]);
-    const [roles, setRolesState] = useState<Role[]>([]);
+    const [departments, setDepartmentsState] = useState<Department[]>([]);
     const [products, setProductsState] = useState<Product[]>([]);
     const [categories, setCategoriesState] = useState<Category[]>([]);
     const [customers, setCustomersState] = useState<Customer[]>([]);
@@ -249,7 +249,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
                     const collections = {
                         users: setUsersState,
-                        roles: setRolesState,
+                        departments: setDepartmentsState,
                         categories: setCategoriesState,
                         products: setProductsState,
                         customers: setCustomersState,
@@ -293,7 +293,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setStores, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes];
+                const collections = [setUsersState, setDepartmentsState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setStores, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes];
                 collections.forEach(setter => setter([]));
             }
         });
@@ -353,10 +353,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         router.push('/sign-in');
     };
 
-    const getPermissionsForRole = useCallback((role: UserRole) => {
-        const roleData = roles.find(r => r.name === role);
-        return roleData?.permissions || [];
-    }, [roles]);
+    const getPermissionsForDepartment = useCallback((department: UserDepartment) => {
+        const departmentData = departments.find(d => d.name === department);
+        return departmentData?.permissions || [];
+    }, [departments]);
 
     const setSettingsDoc = async (data: any) => {
         if (!loggedInUser?.businessId) return;
@@ -609,7 +609,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         receiptSettings, setReceiptSettings,
         paymentTypes, addPaymentType, updatePaymentType, deletePaymentType,
         taxes, addTax, updateTax, deleteTax,
-        roles, setRoles: setRolesState,
+        departments, setDepartments: setDepartmentsState,
         users, setUsers: setUsersState,
         products, setProducts,
         categories, setCategories,
@@ -631,7 +631,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         selectedDevice, setSelectedDevice,
         ownerSelectedStore, setOwnerSelectedStore,
         currency, setCurrency,
-        getPermissionsForRole,
+        getPermissionsForDepartment,
         debtToSettle, setDebtToSettle,
         printableData, setPrintableData,
         isPrintModalOpen, setIsPrintModalOpen,
@@ -657,6 +657,7 @@ export function useSettings() {
       
 
     
+
 
 
 

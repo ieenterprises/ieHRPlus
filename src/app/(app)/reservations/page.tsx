@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -170,7 +171,7 @@ export default function ReservationsPage() {
 
   const canManageStatus = useMemo(() => {
     if (!loggedInUser) return false;
-    return ['Owner', 'Administrator', 'Manager'].includes(loggedInUser.role);
+    return ['Owner', 'Administrator', 'Manager'].includes(loggedInUser.department);
   }, [loggedInUser]);
 
   const filteredRooms = useMemo(() => {
@@ -371,8 +372,8 @@ export default function ReservationsPage() {
   const handleExportRoomStatus = () => {
     const dataToExport = filteredRooms.map(room => ({
         "Room Name": room.name,
-        "Category": getCategoryName(room.category_id),
-        "Price": room.price.toFixed(2),
+        "Category": getCategoryName(room.category_id as string),
+        "Price": room.store_products[0]?.price.toFixed(2) || '0.00',
         "Status": room.status,
     }));
     

@@ -126,8 +126,8 @@ export default function SettingsPage() {
   const [currentPrinterConnectionType, setCurrentPrinterConnectionType] = useState<'Network' | 'Bluetooth' | 'Cable'>('Network');
 
   const eligibleUsersForTempAccess = useMemo(() => {
-    const eligibleRoles = ["Cashier", "Bar Man", "Waitress"];
-    return users.filter(user => eligibleRoles.includes(user.role));
+    const eligibleDepartments = ["Cashier", "Bar Man", "Waitress"];
+    return users.filter(user => eligibleDepartments.includes(user.department));
   }, [users]);
 
 
@@ -888,7 +888,7 @@ export default function SettingsPage() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Employee Name</TableHead>
-                                        <TableHead>Role</TableHead>
+                                        <TableHead>Department</TableHead>
                                         <TableHead className="text-right w-[150px]">Grant Access</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -896,7 +896,7 @@ export default function SettingsPage() {
                                     {eligibleUsersForTempAccess.map(user => (
                                         <TableRow key={user.id}>
                                             <TableCell className="font-medium">{user.name}</TableCell>
-                                            <TableCell><Badge variant="outline">{user.role}</Badge></TableCell>
+                                            <TableCell><Badge variant="outline">{user.department}</Badge></TableCell>
                                             <TableCell className="text-right">
                                                 <Switch
                                                     checked={!!user.temp_access_given}

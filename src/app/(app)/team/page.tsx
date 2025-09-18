@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type User, type UserRole, type Role } from "@/lib/types";
+import { type User, type UserDepartment, type Department } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Store, Download, Eye, EyeOff, Search } from "lucide-react";
@@ -65,14 +65,14 @@ import { updateUserPassword } from './actions';
 const EMPTY_USER: Partial<User> = {
   name: "",
   email: "",
-  role: "Cashier",
+  department: "Cashier",
   password: "",
   avatar_url: "https://placehold.co/100x100.png",
   permissions: [],
   temp_access_given: false,
 };
 
-const EMPTY_ROLE: Partial<Role> = {
+const EMPTY_DEPARTMENT: Partial<Department> = {
   name: "",
   permissions: [],
 };
@@ -80,22 +80,22 @@ const EMPTY_ROLE: Partial<Role> = {
 const allPosPermissions = Object.keys(posPermissions) as (keyof typeof posPermissions)[];
 const allBackOfficePermissions = Object.keys(backOfficePermissions) as (keyof typeof backOfficePermissions)[];
 
-const systemRoles = ["Owner"];
+const systemDepartments = ["Owner"];
 
 export default function TeamPage() {
-  const { users, setUsers, roles, setRoles, getPermissionsForRole, loggedInUser } = useSettings();
+  const { users, setUsers, departments, setDepartments, getPermissionsForDepartment, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
   
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
   
-  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
-  const [editingRole, setEditingRole] = useState<Partial<Role> | null>(null);
-  const [selectedRolePermissions, setSelectedRolePermissions] = useState<AnyPermission[]>([]);
+  const [isDepartmentDialogOpen, setIsDepartmentDialogOpen] = useState(false);
+  const [editingDepartment, setEditingDepartment] = useState<Partial<Department> | null>(null);
+  const [selectedDepartmentPermissions, setSelectedDepartmentPermissions] = useState<AnyPermission[]>([]);
   const [passwordVisible, setPasswordVisible] = useState(false);
   
   const [userSearchTerm, setUserSearchTerm] = useState("");
-  const [roleSearchTerm, setRoleSearchTerm] = useState("");
+  const [departmentSearchTerm, setDepartmentSearchTerm] = useState("");
 
   const { toast } = useToast();
 
@@ -108,27 +108,27 @@ export default function TeamPage() {
     );
   }, [users, userSearchTerm]);
 
-  const filteredRoles = useMemo(() => {
-    if (!roleSearchTerm) return roles;
-    return roles.filter(role => role.name.toLowerCase().includes(roleSearchTerm.toLowerCase()));
-  }, [roles, roleSearchTerm]);
+  const filteredDepartments = useMemo(() => {
+    if (!departmentSearchTerm) return departments;
+    return departments.filter(department => department.name.toLowerCase().includes(departmentSearchTerm.toLowerCase()));
+  }, [departments, departmentSearchTerm]);
 
   useEffect(() => {
     setLoading(false);
   }, []);
   
   useEffect(() => {
-    if (editingRole) {
-        const rolePerms = editingRole.permissions || [];
-        setSelectedRolePermissions(rolePerms);
+    if (editingDepartment) {
+        const departmentPerms = editingDepartment.permissions || [];
+        setSelectedDepartmentPermissions(departmentPerms);
     }
-  }, [editingRole]);
+  }, [editingDepartment]);
 
   const handleOpenUserDialog = (user: Partial<User> | null) => {
     const targetUser = user ? { ...user } : { ...EMPTY_USER };
     if (!user) {
-        const defaultRole = roles.find(r => r.name === 'Cashier');
-        targetUser.permissions = defaultRole?.permissions || [];
+        const defaultDepartment = departments.find(d => d.name === 'Cashier');
+        targetUser.permissions = defaultDepartment?.permissions || [];
     }
     setEditingUser(targetUser);
     setPasswordVisible(false);
@@ -148,13 +148,13 @@ export default function TeamPage() {
 
     const formData = new FormData(event.currentTarget);
     const newPassword = formData.get("password") as string;
-    const roleName = formData.get("role") as UserRole;
+    const departmentName = formData.get("department") as UserDepartment;
 
     const userData: Partial<User> = {
         name: formData.get("name") as string,
         email: formData.get("email") as string,
-        role: roleName,
-        permissions: getPermissionsForRole(roleName),
+        department: departmentName,
+        permissions: getPermissionsForDepartment(departmentName),
         avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
         businessId: loggedInUser.businessId,
         temp_access_given: editingUser.temp_access_given || false,
@@ -245,78 +245,78 @@ export default function TeamPage() {
     }
   }
 
-  const handleUserRoleChange = (roleName: string) => {
+  const handleUserDepartmentChange = (departmentName: string) => {
     if(editingUser) {
-        setEditingUser({ ...editingUser, role: roleName as UserRole });
+        setEditingUser({ ...editingUser, department: departmentName as UserDepartment });
     }
   }
   
-  // Role Handlers
-  const handleOpenRoleDialog = (role: Partial<Role> | null) => {
-    setEditingRole(role ? { ...role } : { ...EMPTY_ROLE });
-    setIsRoleDialogOpen(true);
+  // Department Handlers
+  const handleOpenDepartmentDialog = (department: Partial<Department> | null) => {
+    setEditingDepartment(department ? { ...department } : { ...EMPTY_DEPARTMENT });
+    setIsDepartmentDialogOpen(true);
   };
   
-  const handleRoleDialogClose = (open: boolean) => {
-    if (!open) setEditingRole(null);
-    setIsRoleDialogOpen(open);
+  const handleDepartmentDialogClose = (open: boolean) => {
+    if (!open) setEditingDepartment(null);
+    setIsDepartmentDialogOpen(open);
   }
   
-  const handleSaveRole = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveDepartment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!editingRole || !loggedInUser?.businessId) return;
+    if (!editingDepartment || !loggedInUser?.businessId) return;
     const formData = new FormData(event.currentTarget);
-    const roleName = formData.get("name") as string;
+    const departmentName = formData.get("name") as string;
     
-    const roleData = {
-      name: roleName,
-      permissions: selectedRolePermissions,
+    const departmentData = {
+      name: departmentName,
+      permissions: selectedDepartmentPermissions,
       businessId: loggedInUser.businessId,
     };
     
     try {
-      if (editingRole.id) {
+      if (editingDepartment.id) {
           const batch = writeBatch(db);
-          const roleDocRef = doc(db, 'roles', editingRole.id);
-          batch.update(roleDocRef, roleData);
+          const departmentDocRef = doc(db, 'departments', editingDepartment.id);
+          batch.update(departmentDocRef, departmentData);
           
-          const usersQuery = query(collection(db, 'users'), where('role', '==', editingRole.name), where('businessId', '==', loggedInUser.businessId));
+          const usersQuery = query(collection(db, 'users'), where('department', '==', editingDepartment.name), where('businessId', '==', loggedInUser.businessId));
           const usersSnapshot = await getDocs(usersQuery);
           usersSnapshot.forEach(userDoc => {
-              batch.update(doc(db, 'users', userDoc.id), { permissions: selectedRolePermissions });
+              batch.update(doc(db, 'users', userDoc.id), { permissions: selectedDepartmentPermissions });
           });
           
           await batch.commit();
-          toast({ title: "Role Updated", description: `Permissions for all users with the '${roleName}' role have been updated.` });
+          toast({ title: "Department Updated", description: `Permissions for all users in the '${departmentName}' department have been updated.` });
       } else {
-          await addDoc(collection(db, 'roles'), {
-              ...roleData,
-              id: doc(collection(db, 'roles')).id // Pre-generate ID to avoid conflict
+          await addDoc(collection(db, 'departments'), {
+              ...departmentData,
+              id: doc(collection(db, 'departments')).id // Pre-generate ID to avoid conflict
           });
-          toast({ title: "Role Added" });
+          toast({ title: "Department Added" });
       }
-      handleRoleDialogClose(false);
+      handleDepartmentDialogClose(false);
     } catch(error: any) {
-       toast({ title: "Error Saving Role", description: error.message, variant: "destructive" });
+       toast({ title: "Error Saving Department", description: error.message, variant: "destructive" });
     }
   };
 
-  const handleDeleteRole = async (roleId: string) => {
-    const roleToDelete = roles.find(r => r.id === roleId);
-    if (!roleToDelete || users.some(user => user.role === roleToDelete.name)) {
-        toast({ title: "Cannot Delete Role", description: "This role is assigned to one or more users.", variant: "destructive" });
+  const handleDeleteDepartment = async (departmentId: string) => {
+    const departmentToDelete = departments.find(d => d.id === departmentId);
+    if (!departmentToDelete || users.some(user => user.department === departmentToDelete.name)) {
+        toast({ title: "Cannot Delete Department", description: "This department is assigned to one or more users.", variant: "destructive" });
         return;
     }
     try {
-      await deleteDoc(doc(db, 'roles', roleId));
-      toast({ title: "Role Deleted" });
+      await deleteDoc(doc(db, 'departments', departmentId));
+      toast({ title: "Department Deleted" });
     } catch (error: any) {
-      toast({ title: "Error deleting role", description: error.message, variant: "destructive" });
+      toast({ title: "Error deleting department", description: error.message, variant: "destructive" });
     }
   };
   
-  const getRoleBadgeVariant = (role: UserRole): BadgeProps['variant'] => {
-    switch (role) {
+  const getDepartmentBadgeVariant = (department: UserDepartment): BadgeProps['variant'] => {
+    switch (department) {
       case "Owner": return "destructive";
       case "Administrator": return "default";
       case "Manager": return "secondary";
@@ -324,13 +324,13 @@ export default function TeamPage() {
     }
   };
 
-  const isRoleNameLocked = systemRoles.includes(editingRole?.name || "");
+  const isDepartmentNameLocked = systemDepartments.includes(editingDepartment?.name || "");
 
   const handleExport = () => {
     const dataToExport = filteredUsers.map(u => ({
       "Name": u.name,
       "Email": u.email,
-      "Role": u.role,
+      "Department": u.department,
     }));
 
     const csv = Papa.unparse(dataToExport);
@@ -381,11 +381,11 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Team Management" description="Manage your team members and their roles." />
+      <PageHeader title="Team Management" description="Manage your team members and their departments." />
       <Tabs defaultValue="users">
         <TabsList className="mb-4 grid w-full grid-cols-2">
             <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="roles">Roles</TabsTrigger>
+            <TabsTrigger value="departments">Departments</TabsTrigger>
         </TabsList>
         <TabsContent value="users">
             <Card>
@@ -417,7 +417,7 @@ export default function TeamPage() {
                 </div>
                 <div className="overflow-x-auto">
                     <Table>
-                        <TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead className="hidden md:table-cell">Email</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>User</TableHead><TableHead>Department</TableHead><TableHead className="hidden md:table-cell">Email</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
                         <TableBody>
                         {loading ? (
                             <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading...</TableCell></TableRow>
@@ -430,7 +430,7 @@ export default function TeamPage() {
                                     <span className="font-medium">{user.name}</span>
                                     </div>
                                 </TableCell>
-                                <TableCell><Badge variant={getRoleBadgeVariant(user.role as UserRole)}>{user.role}</Badge></TableCell>
+                                <TableCell><Badge variant={getDepartmentBadgeVariant(user.department as UserDepartment)}>{user.department}</Badge></TableCell>
                                 <TableCell className="hidden md:table-cell">{user.email}</TableCell>
                                 <TableCell>
                                     <DropdownMenu>
@@ -453,15 +453,15 @@ export default function TeamPage() {
                 </CardContent>
             </Card>
         </TabsContent>
-        <TabsContent value="roles">
+        <TabsContent value="departments">
             <Card>
                 <CardHeader>
                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
-                            <CardTitle>Roles</CardTitle>
-                            <CardDescription>Define roles and their permissions for your team.</CardDescription>
+                            <CardTitle>Departments</CardTitle>
+                            <CardDescription>Define departments and their permissions for your team.</CardDescription>
                         </div>
-                        <Button onClick={() => handleOpenRoleDialog(null)} size="sm" className="self-end"><PlusCircle className="mr-2 h-4 w-4" />Add Role</Button>
+                        <Button onClick={() => handleOpenDepartmentDialog(null)} size="sm" className="self-end"><PlusCircle className="mr-2 h-4 w-4" />Add Department</Button>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -469,32 +469,32 @@ export default function TeamPage() {
                         <div className="relative w-full max-w-sm">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input 
-                                placeholder="Search roles..."
+                                placeholder="Search departments..."
                                 className="pl-9"
-                                value={roleSearchTerm}
-                                onChange={(e) => setRoleSearchTerm(e.target.value)}
+                                value={departmentSearchTerm}
+                                onChange={(e) => setDepartmentSearchTerm(e.target.value)}
                             />
                         </div>
                     </div>
                     <div className="overflow-x-auto">
                         <Table>
-                            <TableHeader><TableRow><TableHead>Role Name</TableHead><TableHead>Permissions</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                            <TableHeader><TableRow><TableHead>Department Name</TableHead><TableHead>Permissions</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                             <TableBody>
-                            {filteredRoles.length > 0 ? (
-                                filteredRoles.map((role) => (
-                                    <TableRow key={role.id}>
-                                        <TableCell><Badge variant={getRoleBadgeVariant(role.name as UserRole)}>{role.name}</Badge></TableCell>
-                                        <TableCell>{role.permissions.length} permissions</TableCell>
+                            {filteredDepartments.length > 0 ? (
+                                filteredDepartments.map((department) => (
+                                    <TableRow key={department.id}>
+                                        <TableCell><Badge variant={getDepartmentBadgeVariant(department.name as UserDepartment)}>{department.name}</Badge></TableCell>
+                                        <TableCell>{department.permissions.length} permissions</TableCell>
                                         <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" onClick={() => handleOpenRoleDialog(role)}><Edit className="h-4 w-4" /></Button>
-                                            {!systemRoles.includes(role.name) && (
-                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteRole(role.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenDepartmentDialog(department)}><Edit className="h-4 w-4" /></Button>
+                                            {!systemDepartments.includes(department.name) && (
+                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteDepartment(department.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                             )}
                                         </TableCell>
                                     </TableRow>
                                 ))
                             ) : (
-                                <TableRow><TableCell colSpan={3} className="h-24 text-center">No roles found.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={3} className="h-24 text-center">No departments found.</TableCell></TableRow>
                             )}
                             </TableBody>
                         </Table>
@@ -529,36 +529,36 @@ export default function TeamPage() {
                         </Button>
                       </div>
                   </div>
-                  <div className="space-y-2"><Label htmlFor="role">Role</Label>
-                      <Select name="role" required defaultValue={editingUser?.role} onValueChange={handleUserRoleChange}>
-                      <SelectTrigger id="role"><SelectValue placeholder="Select a role" /></SelectTrigger>
-                      <SelectContent>{roles.map(role => (<SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>))}</SelectContent>
+                  <div className="space-y-2"><Label htmlFor="department">Department</Label>
+                      <Select name="department" required defaultValue={editingUser?.department} onValueChange={handleUserDepartmentChange}>
+                      <SelectTrigger id="department"><SelectValue placeholder="Select a department" /></SelectTrigger>
+                      <SelectContent>{departments.map(department => (<SelectItem key={department.id} value={department.name}>{department.name}</SelectItem>))}</SelectContent>
                       </Select>
                   </div>
-                  <p className="text-sm text-muted-foreground pt-2">Permissions are inherited from the assigned role. To change permissions, please edit the role.</p>
+                  <p className="text-sm text-muted-foreground pt-2">Permissions are inherited from the assigned department. To change permissions, please edit the department.</p>
               </div>
               <DialogFooter className="pt-4"><Button type="submit">Save Changes</Button></DialogFooter>
             </form>
           </DialogContent>
       </Dialog>
-      <Dialog open={isRoleDialogOpen} onOpenChange={handleRoleDialogClose}>
+      <Dialog open={isDepartmentDialogOpen} onOpenChange={handleDepartmentDialogClose}>
           <DialogContent className="sm:max-w-4xl">
-            <form onSubmit={handleSaveRole}>
+            <form onSubmit={handleSaveDepartment}>
               <DialogHeader>
-                <DialogTitle>{editingRole?.id ? 'Edit Role' : 'Add New Role'}</DialogTitle>
-                <DialogDescription>{editingRole?.id ? "Update the role's details." : "Define a new role and assign permissions."}</DialogDescription>
+                <DialogTitle>{editingDepartment?.id ? 'Edit Department' : 'Add New Department'}</DialogTitle>
+                <DialogDescription>{editingDepartment?.id ? "Update the department's details." : "Define a new department and assign permissions."}</DialogDescription>
               </DialogHeader>
               <div className="grid md:grid-cols-2 gap-8 py-4">
                   <div className="space-y-4">
-                    <div className="space-y-2"><Label htmlFor="name">Role Name</Label><Input id="name" name="name" defaultValue={editingRole?.name} required disabled={isRoleNameLocked} /></div>
+                    <div className="space-y-2"><Label htmlFor="name">Department Name</Label><Input id="name" name="name" defaultValue={editingDepartment?.name} required disabled={isDepartmentNameLocked} /></div>
                   </div>
                   <div className="space-y-4">
                       <h3 className="text-lg font-medium">Permissions</h3>
-                       {renderPermissions(selectedRolePermissions, (permission, checked) => {
-                          setSelectedRolePermissions(prev =>
+                       {renderPermissions(selectedDepartmentPermissions, (permission, checked) => {
+                          setSelectedDepartmentPermissions(prev =>
                               checked ? [...prev, permission] : prev.filter(p => p !== permission)
                           );
-                      }, isRoleNameLocked)}
+                      }, isDepartmentNameLocked)}
                   </div>
               </div>
               <DialogFooter className="pt-4"><Button type="submit">Save Changes</Button></DialogFooter>

@@ -1,9 +1,10 @@
 
+
 import { WriteBatch, doc, collection } from "firebase/firestore";
 import { db } from "./firebase";
 import { addDays, subDays } from "date-fns";
-import { SaleItem, Role } from "./types";
-import { MOCK_INITIAL_ROLES as initialMockRoles } from "@/hooks/use-settings";
+import { SaleItem, Department } from "./types";
+import { MOCK_INITIAL_DEPARTMENTS as initialMockDepartments } from "@/hooks/use-settings";
 
 // --- MOCK DATA GENERATION ---
 
@@ -91,7 +92,7 @@ export const seedDatabaseWithMockData = (batch: WriteBatch, businessId: string, 
   };
     
   // --- Add essential configuration data to batch ---
-  initialMockRoles.forEach(item => addWithBusinessId("roles", { name: item.name, permissions: item.permissions }));
+  initialMockDepartments.forEach(item => addWithBusinessId("departments", { name: item.name, permissions: item.permissions }));
   MOCK_CUSTOMERS.forEach(item => addWithBusinessId("customers", item));
   
   // Create store and get its unique ID
