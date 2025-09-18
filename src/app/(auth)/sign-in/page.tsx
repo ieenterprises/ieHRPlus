@@ -30,7 +30,6 @@ export default function SignInPage() {
   const { loggedInUser } = useSettings();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [justSignedIn, setJustSignedIn] = useState(false);
 
   const handlePasswordSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -62,28 +61,27 @@ export default function SignInPage() {
           description: `Proceeding to video verification.`,
       });
       
-      setJustSignedIn(true);
+      // Redirect directly after successful sign-in and record creation
+      router.push("/video-verification");
 
     } catch (error: any) {
+      setIsLoading(false);
       toast({
         title: "Sign-in Error",
         description: error.message,
         variant: "destructive",
       });
-    } finally {
-        setIsLoading(false);
     }
+    // Don't set loading to false here, as we are redirecting
   };
 
   useEffect(() => {
-    // Redirect only after a successful sign-in is complete and the context is updated.
-    if (loggedInUser && justSignedIn) {
-        router.push("/video-verification");
-    } else if (loggedInUser && !justSignedIn) {
-        // If user is already logged in and revisits sign-in page, go to dashboard
+    // This effect now only handles the case where a user is ALREADY logged in
+    // and visits the sign-in page.
+    if (loggedInUser) {
         router.push("/dashboard");
     }
-  }, [loggedInUser, router, justSignedIn]);
+  }, [loggedInUser, router]);
 
 
   return (
@@ -136,3 +134,4 @@ export default function SignInPage() {
     </>
   );
 }
+
