@@ -71,12 +71,13 @@ export default function HrReviewPage() {
                   <TableHead>Clock In Time</TableHead>
                   <TableHead>Clock Out Time</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
@@ -98,11 +99,17 @@ export default function HrReviewPage() {
                           {record.status}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm">Approve</Button>
+                            <Button variant="destructive" size="sm">Reject</Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       No pending submissions found.
                     </TableCell>
                   </TableRow>
@@ -115,5 +122,3 @@ export default function HrReviewPage() {
     </div>
   );
 }
-
-    
