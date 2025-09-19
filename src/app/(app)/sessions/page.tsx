@@ -75,14 +75,14 @@ export default function SessionsPage() {
           ...record,
           user: users.find(u => u.id === record.userId),
         }))
-        .filter(session => session.user && session.userId !== loggedInUser.id); // Exclude the currently logged-in user
+        .filter(session => session.user); // Show all users with a valid user object
 
       setActiveSessions(sessions.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime()));
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [loggedInUser?.businessId, loggedInUser?.id, users]);
+  }, [loggedInUser?.businessId, users]);
   
   const handleTakeOverSessionClick = (session: ActiveSession) => {
     setSelectedSession(session);
@@ -183,7 +183,12 @@ export default function SessionsPage() {
                         {formatDistanceToNow(new Date(session.clockInTime), { addSuffix: true })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => handleTakeOverSessionClick(session)}>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleTakeOverSessionClick(session)}
+                            disabled={session.userId === loggedInUser?.id}
+                        >
                             Take Over Session
                         </Button>
                       </TableCell>
