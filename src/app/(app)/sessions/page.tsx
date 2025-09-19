@@ -65,7 +65,7 @@ export default function SessionsPage() {
     const q = query(
       collection(db, "timeRecords"),
       where("businessId", "==", loggedInUser.businessId),
-      where("status", "==", "Clocked In")
+      where("status", "in", ["Clocked In", "pending"])
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -117,7 +117,8 @@ export default function SessionsPage() {
             description: "The password you entered is incorrect. Please try again.",
             variant: "destructive",
         });
-        // If re-authentication fails, the user is already logged out, so they stay on the sign-in page.
+        // If re-authentication fails, we need to sign the original user back in or send to sign-in
+        router.push('/sign-in');
     } finally {
         setIsVerifying(false);
     }
