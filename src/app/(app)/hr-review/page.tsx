@@ -39,13 +39,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon, Trash2 } from "lucide-react";
+import { Video, Download, Calendar as CalendarIcon, Trash2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -62,6 +63,8 @@ export default function HrReviewPage() {
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+  const [pendingSearchTerm, setPendingSearchTerm] = useState("");
+  const [historySearchTerm, setHistorySearchTerm] = useState("");
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -100,7 +103,7 @@ export default function HrReviewPage() {
     });
 
     return () => unsubscribe();
-  }, [loggedInUser?.businessId, selectedDate, toast]);
+  }, [loggedInUser?.businessId, selectedDate]);
   
   useEffect(() => {
       setSelectedRecordIds([]);
@@ -229,8 +232,27 @@ export default function HrReviewPage() {
   const pendingRecords = timeRecords.filter(r => r.status === 'pending');
   const historicalRecords = timeRecords.filter(r => r.status !== 'pending');
 
+  const filteredPendingRecords = useMemo(() => {
+    if (!pendingSearchTerm) return pendingRecords;
+    const lowercasedTerm = pendingSearchTerm.toLowerCase();
+    return pendingRecords.filter(record =>
+      record.userName.toLowerCase().includes(lowercasedTerm) ||
+      record.userEmail.toLowerCase().includes(lowercasedTerm)
+    );
+  }, [pendingRecords, pendingSearchTerm]);
+
+  const filteredHistoricalRecords = useMemo(() => {
+    if (!historySearchTerm) return historicalRecords;
+    const lowercasedTerm = historySearchTerm.toLowerCase();
+    return historicalRecords.filter(record =>
+      record.userName.toLowerCase().includes(lowercasedTerm) ||
+      record.userEmail.toLowerCase().includes(lowercasedTerm)
+    );
+  }, [historicalRecords, historySearchTerm]);
+
+
   const handleSelectAll = (table: 'pending' | 'history', checked: boolean) => {
-    const recordIds = (table === 'pending' ? pendingRecords : historicalRecords).map(r => r.id);
+    const recordIds = (table === 'pending' ? filteredPendingRecords : filteredHistoricalRecords).map(r => r.id);
     if (checked) {
         setSelectedRecordIds(prev => [...new Set([...prev, ...recordIds])]);
     } else {
@@ -275,35 +297,50 @@ export default function HrReviewPage() {
         )}
       </div>
       <Card>
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-          <div>
-            <CardTitle>Pending Submissions</CardTitle>
-            <CardDescription>
-              Approve or reject clock-in records after video verification.
-            </CardDescription>
-          </div>
-          {isSeniorStaff && (
-            <div className="flex items-center gap-2">
-                {selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length > 0 && (
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete ({selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length})
-                            </Button>
-                        </AlertDialogTrigger>
-                         <AlertDialogContent>
-                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected records and their associated videos. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+        <CardHeader>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                    <CardTitle>Pending Submissions</CardTitle>
+                    <CardDescription>
+                    Approve or reject clock-in records after video verification.
+                    </CardDescription>
+                </div>
+                {isSeniorStaff && (
+                    <div className="flex items-center gap-2 self-start sm:self-center">
+                        {selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length > 0 && (
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="sm">
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete ({selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length})
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected records and their associated videos. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredPendingRecords, 'pending')} disabled={filteredPendingRecords.length === 0}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download CSV
+                        </Button>
+                    </div>
                 )}
-                <Button variant="outline" size="sm" onClick={() => handleExportCSV(pendingRecords, 'pending')} disabled={pendingRecords.length === 0}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download CSV
-                </Button>
             </div>
-          )}
+            {isSeniorStaff && (
+                 <div className="mt-4">
+                    <div className="relative w-full max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Search by name or email..."
+                            className="pl-9"
+                            value={pendingSearchTerm}
+                            onChange={(e) => setPendingSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
+            )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -313,7 +350,7 @@ export default function HrReviewPage() {
                   {isSeniorStaff && (
                     <TableHead padding="checkbox">
                         <Checkbox
-                            checked={pendingRecords.length > 0 && pendingRecords.every(r => selectedRecordIds.includes(r.id))}
+                            checked={filteredPendingRecords.length > 0 && filteredPendingRecords.every(r => selectedRecordIds.includes(r.id))}
                             onCheckedChange={(checked) => handleSelectAll('pending', !!checked)}
                             aria-label="Select all pending"
                         />
@@ -333,8 +370,8 @@ export default function HrReviewPage() {
                       Loading records...
                     </TableCell>
                   </TableRow>
-                ) : pendingRecords.length > 0 ? (
-                  pendingRecords.map((record) => (
+                ) : filteredPendingRecords.length > 0 ? (
+                  filteredPendingRecords.map((record) => (
                     <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
                       {isSeniorStaff && (
                         <TableCell padding="checkbox">
@@ -384,35 +421,50 @@ export default function HrReviewPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-          <div>
-            <CardTitle>Time Clock History</CardTitle>
-            <CardDescription>
-              This is a log of all employee clock-in and clock-out events for the selected day.
-            </CardDescription>
-          </div>
-          {isSeniorStaff && (
-            <div className="flex items-center gap-2">
-                {selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length > 0 && (
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete ({selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length})
-                            </Button>
-                        </AlertDialogTrigger>
-                         <AlertDialogContent>
-                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected records and their associated videos. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+        <CardHeader>
+           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                    <CardTitle>Time Clock History</CardTitle>
+                    <CardDescription>
+                    This is a log of all employee clock-in and clock-out events for the selected day.
+                    </CardDescription>
+                </div>
+                {isSeniorStaff && (
+                    <div className="flex items-center gap-2 self-start sm:self-center">
+                        {selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length > 0 && (
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="sm">
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete ({selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length})
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected records and their associated videos. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredHistoricalRecords, 'history')} disabled={filteredHistoricalRecords.length === 0}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download CSV
+                        </Button>
+                    </div>
                 )}
-                <Button variant="outline" size="sm" onClick={() => handleExportCSV(historicalRecords, 'history')} disabled={historicalRecords.length === 0}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download CSV
-                </Button>
             </div>
-          )}
+            {isSeniorStaff && (
+                 <div className="mt-4">
+                    <div className="relative w-full max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Search by name or email..."
+                            className="pl-9"
+                            value={historySearchTerm}
+                            onChange={(e) => setHistorySearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
+            )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -422,7 +474,7 @@ export default function HrReviewPage() {
                   {isSeniorStaff && (
                       <TableHead padding="checkbox">
                           <Checkbox
-                              checked={historicalRecords.length > 0 && historicalRecords.every(r => selectedRecordIds.includes(r.id))}
+                              checked={filteredHistoricalRecords.length > 0 && filteredHistoricalRecords.every(r => selectedRecordIds.includes(r.id))}
                               onCheckedChange={(checked) => handleSelectAll('history', !!checked)}
                               aria-label="Select all history"
                           />
@@ -443,8 +495,8 @@ export default function HrReviewPage() {
                       Loading records...
                     </TableCell>
                   </TableRow>
-                ) : historicalRecords.length > 0 ? (
-                  historicalRecords.map((record) => (
+                ) : filteredHistoricalRecords.length > 0 ? (
+                  filteredHistoricalRecords.map((record) => (
                     <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
                        {isSeniorStaff && (
                           <TableCell padding="checkbox">
@@ -518,5 +570,3 @@ export default function HrReviewPage() {
     </div>
   );
 }
-
-    
