@@ -69,7 +69,6 @@ export default function SessionsPage() {
     
     setLoading(true);
     
-    // Query only by businessId to avoid composite index requirement
     const q = query(
       collection(db, "timeRecords"),
       where("businessId", "==", loggedInUser.businessId)
@@ -78,7 +77,6 @@ export default function SessionsPage() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
 
-      // Perform date filtering and sorting on the client side
       const start = startOfDay(selectedDate);
       const end = endOfDay(selectedDate);
       
@@ -87,7 +85,6 @@ export default function SessionsPage() {
         return isWithinInterval(clockInDate, { start, end });
       });
 
-      // Sort records client-side
       filteredRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
       
       const populatedSessions: ActiveSession[] = filteredRecords
@@ -101,7 +98,6 @@ export default function SessionsPage() {
       setLoading(false);
     }, (error) => {
       console.error("Error fetching sessions:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch sessions. ' + error.message });
       setLoading(false);
     });
 
