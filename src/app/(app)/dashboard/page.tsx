@@ -11,7 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export default function DashboardPage() {
-  const { loggedInUser } = useSettings();
+  const { loggedInUser, logout } = useSettings();
+
+  const handleSwitchUser = () => {
+    // We log out without clocking out, preserving the "Clocked In" status.
+    logout(false);
+  }
 
   return (
     <div className="space-y-8">
@@ -21,10 +26,8 @@ export default function DashboardPage() {
         />
 
         <div className="flex justify-start">
-            <Button asChild>
-                <Link href="/sign-in">
-                    <LogIn className="mr-2 h-4 w-4" /> Switch User
-                </Link>
+            <Button onClick={handleSwitchUser}>
+                <LogIn className="mr-2 h-4 w-4" /> Switch User
             </Button>
         </div>
 

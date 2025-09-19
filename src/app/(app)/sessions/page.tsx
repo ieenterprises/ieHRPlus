@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -94,10 +95,13 @@ export default function SessionsPage() {
     setIsVerifying(true);
 
     try {
-        // Step 1: Sign in the user whose session we are taking over
+        // Step 1: Sign out the current user without clocking them out
+        await logout(false);
+        
+        // Step 2: Sign in the user whose session we are taking over
         await signInWithEmailAndPassword(auth, selectedSession.user.email, password);
 
-        // Step 2: On success, redirect them to their dashboard.
+        // Step 3: On success, redirect them to their dashboard.
         // The auth state change will be picked up by the layout, and they will be logged in.
         toast({
             title: "Authentication Successful",
@@ -113,6 +117,7 @@ export default function SessionsPage() {
             description: "The password you entered is incorrect. Please try again.",
             variant: "destructive",
         });
+        // If re-authentication fails, the user is already logged out, so they stay on the sign-in page.
     } finally {
         setIsVerifying(false);
     }

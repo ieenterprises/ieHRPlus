@@ -303,16 +303,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }, [fetchAndSetUser]);
     
 
-    const logout = async () => {
+    const logout = async (shouldClockOut: boolean = true) => {
         try {
-            if (loggedInUser && loggedInUser.businessId) {
+            if (shouldClockOut && loggedInUser && loggedInUser.businessId) {
                 const batch = writeBatch(db);
 
                 // Find the user's latest "Clocked In" record to clock them out.
                 const timeRecordsQuery = query(
                     collection(db, 'timeRecords'),
                     where('userId', '==', loggedInUser.id),
-                    where('status', '==', 'Clocked In')
+                    where('status', '==', 'Clocked In'),
                 );
                 
                 const activeTimeRecordsSnapshot = await getDocs(timeRecordsQuery);
@@ -328,21 +328,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         clockOutTime: new Date().toISOString()
                     });
                 }
-
-
-                // Revoke temporary access on logout
-                if (loggedInUser.temp_access_given) {
-                    batch.update(doc(db, 'users', loggedInUser.id), { temp_access_given: false });
-                }
                 
                 await batch.commit();
             }
         } catch (error) {
             console.error("Error performing database operations on logout:", error);
-            // We still proceed to sign out even if DB operations fail
         }
 
-        // Proceed with sign out and client-side cleanup
         await auth.signOut();
         setLoggedInUser(null);
         setSelectedBranch(null);
@@ -658,6 +650,7 @@ export function useSettings() {
 }
 
     
+
 
 
 
