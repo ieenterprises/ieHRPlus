@@ -308,23 +308,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             if (shouldClockOut && loggedInUser && loggedInUser.businessId) {
                 const batch = writeBatch(db);
 
-                // Find the user's latest active record to clock them out.
                 const timeRecordsQuery = query(
                     collection(db, 'timeRecords'),
                     where('userId', '==', loggedInUser.id),
-                    where('status', 'in', ['pending', 'Clocked In']),
-                    orderBy('clockInTime', 'desc'),
-                    limit(1)
+                    where('status', 'in', ['pending', 'Clocked In'])
                 );
                 
                 const activeTimeRecordsSnapshot = await getDocs(timeRecordsQuery);
                 
                 if (!activeTimeRecordsSnapshot.empty) {
-                    const recordToClockOut = activeTimeRecordsSnapshot.docs[0];
-                    batch.update(doc(db, 'timeRecords', recordToClockOut.id), {
-                        status: 'Clocked Out',
-                        clockOutTime: new Date().toISOString()
-                    });
+                    // Find the most recent record client-side
+                    const records = activeTimeRecordsSnapshot.docs.map(d => d.data() as TimeRecord);
+                    records.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+                    const latestRecordId = activeTimeRecordsSnapshot.docs.find(d => d.data().clockInTime === records[0].clockInTime)?.id;
+                    
+                    if (latestRecordId) {
+                        batch.update(doc(db, 'timeRecords', latestRecordId), {
+                            status: 'Clocked Out',
+                            clockOutTime: new Date().toISOString()
+                        });
+                    }
                 }
                 
                 await batch.commit();
@@ -648,6 +651,7 @@ export function useSettings() {
 }
 
     
+
 
 
 
