@@ -13,10 +13,10 @@ export const fileManagementPermissions = {
 };
 
 export const teamManagementPermissions = {
-    VIEW_USERS: { label: "View all users and their departments" },
+    VIEW_USERS: { label: "View all users and their roles" },
     MANAGE_USERS: { label: "Add, edit, and remove users" },
-    VIEW_DEPARTMENTS: { label: "View departments and their permissions" },
-    MANAGE_DEPARTMENTS: { label: "Create, edit, and delete departments" },
+    VIEW_DEPARTMENTS: { label: "View roles and their permissions" },
+    MANAGE_DEPARTMENTS: { label: "Create, edit, and delete roles" },
 };
 
 export const settingsPermissions = {

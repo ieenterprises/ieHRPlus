@@ -5,18 +5,18 @@
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc, limit, orderBy } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, BranchType, PosDeviceType, Department, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserDepartment, SaleItem, Shift, AccessCode, OfflineAction, TimeRecord } from '@/lib/types';
+import type { User, BranchType, PosDeviceType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode, OfflineAction, TimeRecord } from '@/lib/types';
 import { fileManagementPermissions, teamManagementPermissions, settingsPermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, Unsubscribe } from "firebase/auth";
 import { useOnlineStatus } from './use-online-status';
 
-export type { FeatureSettings, BranchType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Department, UserDepartment } from '@/lib/types';
+export type { FeatureSettings, BranchType, PosDeviceType, PrinterType, ReceiptSettings, PaymentType, Tax, Role, UserRole } from '@/lib/types';
 
 export type FeatureSettings = Record<string, boolean>;
 
-export const MOCK_INITIAL_DEPARTMENTS: Omit<Department, 'businessId' | 'id'>[] = [
+export const MOCK_INITIAL_ROLES: Omit<Role, 'businessId' | 'id'>[] = [
     { name: "Owner", permissions: [...Object.keys(fileManagementPermissions), ...Object.keys(teamManagementPermissions), ...Object.keys(settingsPermissions)] as AnyPermission[] },
     { name: "Administrator", permissions: [...Object.keys(fileManagementPermissions), ...Object.keys(teamManagementPermissions), ...Object.keys(settingsPermissions)] as AnyPermission[] },
     { name: "Manager", permissions: ["VIEW_FILES", "UPLOAD_FILES", "DOWNLOAD_FILES", "APPROVE_DOCUMENTS", "VIEW_USERS", "MANAGE_USERS"] },
@@ -34,7 +34,7 @@ type SettingsContextType = {
     receiptSettings: Record<string, ReceiptSettings>;
     paymentTypes: PaymentType[];
     taxes: Tax[];
-    departments: Department[];
+    roles: Role[];
     users: User[];
     products: Product[];
     categories: Category[];
@@ -82,7 +82,7 @@ type SettingsContextType = {
     setOwnerSelectedBranch: React.Dispatch<React.SetStateAction<BranchType | null>>;
     currency: string;
     setCurrency: (value: React.SetStateAction<string>) => void;
-    getPermissionsForDepartment: (department: string) => AnyPermission[];
+    getPermissionsForRole: (role: string) => AnyPermission[];
 
     // Cross-page state
     debtToSettle: Sale | null;
@@ -102,7 +102,7 @@ type SettingsContextType = {
     setOpenTickets: (value: React.SetStateAction<OpenTicket[]>) => Promise<void>;
     setVoidedLogs: (value: React.SetStateAction<VoidedLog[]>) => Promise<void>;
     setDebts: (value: React.SetStateAction<Debt[]>) => Promise<void>;
-    setDepartments: (value: React.SetStateAction<Department[]>) => Promise<void>;
+    setRoles: (value: React.SetStateAction<Role[]>) => Promise<void>;
     setUsers: (value: React.SetStateAction<User[]>) => void;
 
     // Voiding and ticket logic
@@ -147,7 +147,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [paymentTypes, setPaymentTypesState] = useState<PaymentType[]>([]);
     const [taxes, setTaxesState] = useState<Tax[]>([]);
     const [users, setUsersState] = useState<User[]>([]);
-    const [departments, setDepartmentsState] = useState<Department[]>([]);
+    const [roles, setRolesState] = useState<Role[]>([]);
     const [products, setProductsState] = useState<Product[]>([]);
     const [categories, setCategoriesState] = useState<Category[]>([]);
     const [customers, setCustomersState] = useState<Customer[]>([]);
@@ -247,7 +247,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
                     const collections = {
                         users: setUsersState,
-                        departments: setDepartmentsState,
+                        roles: setRolesState,
                         categories: setCategoriesState,
                         products: setProductsState,
                         customers: setCustomersState,
@@ -291,7 +291,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setDepartmentsState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setBranches, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes];
+                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setBranches, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes];
                 collections.forEach(setter => setter([]));
             }
         });
@@ -354,10 +354,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         router.push('/sign-in');
     };
 
-    const getPermissionsForDepartment = useCallback((departmentName: string) => {
-        const departmentData = departments.find(d => d.name === departmentName);
-        return departmentData?.permissions || [];
-    }, [departments]);
+    const getPermissionsForRole = useCallback((roleName: string) => {
+        const roleData = roles.find(d => d.name === roleName);
+        return roleData?.permissions || [];
+    }, [roles]);
 
     const setSettingsDoc = async (data: any) => {
         if (!loggedInUser?.businessId) return;
@@ -485,7 +485,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const setDebts = createBatchSetter('debts', setDebtsState);
     const setOpenTickets = createBatchSetter('open_tickets', setOpenTicketsState);
     const setVoidedLogs = createBatchSetter('voided_logs', setVoidedLogsState);
-    const setDepartments = createBatchSetter('departments', setDepartmentsState);
+    const setRoles = createBatchSetter('roles', setRolesState);
 
 
      const createOfflineDeleter = (collectionName: string, localSetter: React.Dispatch<React.SetStateAction<any[]>>) => 
@@ -612,7 +612,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         receiptSettings, setReceiptSettings,
         paymentTypes, addPaymentType, updatePaymentType, deletePaymentType,
         taxes, addTax, updateTax, deleteTax,
-        departments, setDepartments,
+        roles, setRoles,
         users, setUsers: setUsersState,
         products, setProducts,
         categories, setCategories,
@@ -634,7 +634,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         selectedDevice, setSelectedDevice,
         ownerSelectedBranch, setOwnerSelectedBranch,
         currency, setCurrency,
-        getPermissionsForDepartment,
+        getPermissionsForRole,
         debtToSettle, setDebtToSettle,
         printableData, setPrintableData,
         isPrintModalOpen, setIsPrintModalOpen,
@@ -658,5 +658,6 @@ export function useSettings() {
 }
 
     
+
 
 

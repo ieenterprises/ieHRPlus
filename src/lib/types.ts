@@ -75,9 +75,9 @@ export type Product = Omit<Database['public']['Tables']['products']['Row'], 'pri
   businessId: string;
   branch_products: BranchProduct[];
 };
-export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions' | 'department'> & {
+export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissions' | 'role'> & {
     permissions: AnyPermission[];
-    department: string;
+    role: string;
     password?: string;
     businessId: string;
     temp_access_given?: boolean;
@@ -169,14 +169,14 @@ export type SaleItem = {
   fulfilled_quantity?: number;
 }
 
-export type Department = {
+export type Role = {
   id: string;
   name: string;
   permissions: AnyPermission[];
   businessId: string;
 };
 
-export type UserDepartment = "Owner" | "Administrator" | "Manager";
+export type UserRole = "Owner" | "Administrator" | "Manager" | "Staff";
 
 export type VoidedLog = {
   id: string;
@@ -527,7 +527,7 @@ export type Database = {
           id: string
           name: string
           permissions: Json | null
-          department: string
+          role: string
           password?: string | null,
           temp_access_given?: boolean | null,
         }
@@ -538,7 +538,7 @@ export type Database = {
           id: string
           name: string
           permissions?: Json | null
-          department: string
+          role: string
           password?: string | null,
           temp_access_given?: boolean | null,
         }
@@ -549,7 +549,7 @@ export type Database = {
           id?: string
           name?: string
           permissions?: Json | null
-          department?: string
+          role?: string
           password?: string | null,
           temp_access_given?: boolean | null,
         }

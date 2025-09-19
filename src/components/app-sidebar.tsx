@@ -105,7 +105,7 @@ export function AppSidebar() {
 
   const hasPermission = (item: NavItem) => {
     if (!loggedInUser) return false;
-    if (loggedInUser.department === 'Owner') return true;
+    if (loggedInUser.role === 'Owner') return true;
 
     // Grant access if temporary access flag is set for aware items
     if (item.tempAccessAware && loggedInUser.temp_access_given) {
@@ -126,7 +126,7 @@ export function AppSidebar() {
     return featureSettings[featureFlag] === true;
   };
   
-  const shouldShowPosInfo = loggedInUser && ['Cashier', 'Waitress', 'Bar Man'].includes(loggedInUser.department);
+  const shouldShowPosInfo = loggedInUser && ['Cashier', 'Waitress', 'Bar Man'].includes(loggedInUser.role);
 
   const visibleNavItems = navItems.filter(item => hasPermission(item) && isFeatureEnabled(item.featureFlag));
 

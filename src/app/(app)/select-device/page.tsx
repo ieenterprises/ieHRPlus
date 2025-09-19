@@ -39,7 +39,7 @@ export default function SelectDevicePage() {
         if (!loadingUser && !loggedInUser) {
             router.push('/sign-in');
         }
-        if (!loadingUser && loggedInUser?.department === 'Owner') {
+        if (!loadingUser && loggedInUser?.role === 'Owner') {
             router.push('/dashboard');
         }
     }, [loggedInUser, loadingUser, router]);

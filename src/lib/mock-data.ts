@@ -2,7 +2,7 @@
 
 import { WriteBatch, doc, collection } from "firebase/firestore";
 import { db } from "./firebase";
-import { MOCK_INITIAL_DEPARTMENTS as initialMockDepartments } from "@/hooks/use-settings";
+import { MOCK_INITIAL_ROLES as initialMockRoles } from "@/hooks/use-settings";
 
 // --- MOCK DATA GENERATION ---
 
@@ -76,7 +76,7 @@ export const seedDatabaseWithMockData = (batch: WriteBatch, businessId: string, 
   };
     
   // --- Add essential configuration data to batch ---
-  initialMockDepartments.forEach(item => addWithBusinessId("departments", { name: item.name, permissions: item.permissions }));
+  initialMockRoles.forEach(item => addWithBusinessId("roles", { name: item.name, permissions: item.permissions }));
   
   // Create branch and get its unique ID
   const newBranch = addWithBusinessId("branches", MOCK_BRANCHES[0]);

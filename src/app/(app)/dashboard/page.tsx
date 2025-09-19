@@ -39,8 +39,8 @@ export default function DashboardPage() {
                         </div>
                     </div>
                     <div>
-                        <p className="text-sm font-medium">Department</p>
-                        <Badge variant="secondary">{loggedInUser?.department}</Badge>
+                        <p className="text-sm font-medium">Role</p>
+                        <Badge variant="secondary">{loggedInUser?.role}</Badge>
                     </div>
                 </CardContent>
             </Card>

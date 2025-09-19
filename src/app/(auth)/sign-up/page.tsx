@@ -22,7 +22,7 @@ import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, writeBatch, collection, getDocs, query, where, setDoc, addDoc } from "firebase/firestore";
 import { fileManagementPermissions, teamManagementPermissions, settingsPermissions, AnyPermission } from "@/lib/permissions";
-import { MOCK_INITIAL_DEPARTMENTS } from "@/hooks/use-settings";
+import { MOCK_INITIAL_ROLES } from "@/hooks/use-settings";
 import { seedDatabaseWithMockData } from "@/lib/mock-data";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 
@@ -56,7 +56,7 @@ export default function SignUpPage() {
         seedDatabaseWithMockData(batch, businessId, user.uid);
         
         // 4. Define all permissions for the Owner
-        const ownerDepartmentPermissions: AnyPermission[] = [
+        const ownerRolePermissions: AnyPermission[] = [
           ...Object.keys(fileManagementPermissions) as (keyof typeof fileManagementPermissions)[],
           ...Object.keys(teamManagementPermissions) as (keyof typeof teamManagementPermissions)[],
           ...Object.keys(settingsPermissions) as (keyof typeof settingsPermissions)[]
@@ -67,9 +67,9 @@ export default function SignUpPage() {
           name: ownerName,
           email: email,
           password: password, // Store password for re-authentication needs
-          department: 'Owner' as const,
+          role: 'Owner' as const,
           avatar_url: `https://placehold.co/100x100.png?text=${ownerName.charAt(0)}`,
-          permissions: ownerDepartmentPermissions,
+          permissions: ownerRolePermissions,
           created_at: new Date().toISOString(),
           businessId: businessId, // Link user to the business
         };
