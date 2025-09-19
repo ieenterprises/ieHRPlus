@@ -140,7 +140,7 @@ export default function SessionsPage() {
         <CardHeader>
           <CardTitle>Clocked-In Users</CardTitle>
           <CardDescription>
-            Select a user to take over their session and access their dashboard.
+            Select a user to access their dashboard and clock out.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -184,7 +184,7 @@ export default function SessionsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" onClick={() => handleTakeOverSessionClick(session)}>
-                            Resume Session
+                            Take Over Session
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -206,9 +206,9 @@ export default function SessionsPage() {
         <DialogContent>
           <form onSubmit={handleVerification}>
             <DialogHeader>
-                <DialogTitle>Resume Session for {selectedSession?.user?.name}</DialogTitle>
+                <DialogTitle>Take Over Session for {selectedSession?.user?.name}</DialogTitle>
                 <DialogDescription>
-                    To resume this session and go to the dashboard, please enter the user's password for verification.
+                    To access this user's dashboard and clock out, please enter their password for verification.
                 </DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-4">
@@ -233,7 +233,7 @@ export default function SessionsPage() {
                 <Button type="button" variant="ghost" onClick={handleCloseDialog}>Cancel</Button>
                 <Button type="submit" disabled={isVerifying}>
                     {isVerifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Verify & Resume
+                    Verify & Access Dashboard
                 </Button>
             </DialogFooter>
           </form>
