@@ -154,7 +154,6 @@ export default function SessionsPage() {
       "Email": session.user?.email,
       "Clock In Time": format(new Date(session.clockInTime), "MMM d, yyyy, h:mm a"),
       "Clock Out Time": session.clockOutTime ? format(new Date(session.clockOutTime), "MMM d, yyyy, h:mm a") : "-",
-      "Duration": session.clockOutTime ? formatDistanceToNow(new Date(session.clockOutTime), { addSuffix: false }) : formatDistanceToNow(new Date(session.clockInTime), { addSuffix: true }),
       "Status": session.status,
     }));
 
@@ -226,15 +225,14 @@ export default function SessionsPage() {
                 <TableRow>
                   <TableHead>Employee</TableHead>
                   <TableHead>Clock In Time</TableHead>
-                  <TableHead>Duration</TableHead>
-                   <TableHead>Status</TableHead>
+                  <TableHead>Clock Out Time</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={4} className="h-24 text-center">
                       Loading active sessions...
                     </TableCell>
                   </TableRow>
@@ -258,19 +256,16 @@ export default function SessionsPage() {
                       </TableCell>
                       <TableCell>
                         {session.clockOutTime 
-                            ? formatDistanceToNow(new Date(session.clockOutTime), { addSuffix: false }) // This won't be accurate, better to calculate duration
-                            : formatDistanceToNow(new Date(session.clockInTime), { addSuffix: true })
+                            ? format(new Date(session.clockOutTime), "MMM d, h:mm a")
+                            : "-"
                         }
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusVariant(session.status)}>{session.status}</Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <Button 
                             variant="outline" 
                             size="sm" 
                             onClick={() => handleTakeOverSessionClick(session)}
-                            disabled={session.status === 'Clocked Out' || session.status === 'rejected' || session.userId === loggedInUser?.id}
+                            disabled={session.status === 'Clocked Out' || session.status === 'rejected'}
                         >
                             Take Over Session
                         </Button>
@@ -279,7 +274,7 @@ export default function SessionsPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={4} className="h-24 text-center">
                       No sessions found for {format(selectedDate, "PPP")}.
                     </TableCell>
                   </TableRow>
