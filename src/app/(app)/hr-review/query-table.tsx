@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PlusCircle, Loader2, File as FileIcon } from "lucide-react";
+import { PlusCircle, Loader2, File as FileIcon, X, CheckCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,15 +15,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type HRQuery } from "@/lib/types";
 import { db } from "@/lib/firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import Link from 'next/link';
 
 export function HRQueryTable() {
   const { loggedInUser, users, hrQueries } = useSettings();
   const [mySentQueries, setMySentQueries] = useState<HRQuery[]>([]);
   const [isQueryDialogOpen, setIsQueryDialogOpen] = useState(false);
+  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
+  const [reviewingQuery, setReviewingQuery] = useState<HRQuery | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
@@ -38,6 +42,22 @@ export function HRQueryTable() {
     setMySentQueries(sentByMe);
 
   }, [hrQueries, loggedInUser?.id]);
+  
+  const handleOpenReviewDialog = (query: HRQuery) => {
+    setReviewingQuery(query);
+    setIsReviewDialogOpen(true);
+  };
+  
+  const handleCloseQuery = async (queryId: string) => {
+    try {
+        const queryRef = doc(db, 'hr_queries', queryId);
+        await updateDoc(queryRef, { status: 'Closed' });
+        toast({ title: "Query Closed", description: "This query has been marked as closed." });
+        setIsReviewDialogOpen(false);
+    } catch (error: any) {
+        toast({ title: "Error", description: `Could not close query: ${error.message}`, variant: "destructive" });
+    }
+  };
 
   const handleQuerySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -182,6 +202,7 @@ export function HRQueryTable() {
                         <TableHead>Description</TableHead>
                         <TableHead className="w-[120px]">Date Sent</TableHead>
                         <TableHead className="w-[150px]">Status</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -195,16 +216,90 @@ export function HRQueryTable() {
                                 <TableCell>
                                     <Badge variant={getStatusBadgeVariant(query.status)}>{query.status}</Badge>
                                 </TableCell>
+                                <TableCell className="text-right">
+                                    <Button size="sm" variant="outline" onClick={() => handleOpenReviewDialog(query)}>
+                                        {query.status === 'Responded' ? 'Review Response' : 'View'}
+                                    </Button>
+                                </TableCell>
                             </TableRow>
                         ))
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={5} className="text-center h-24">You have not sent any queries.</TableCell>
+                            <TableCell colSpan={6} className="text-center h-24">You have not sent any queries.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
             </Table>
         </div>
+        
+        <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
+            <DialogContent className="sm:max-w-2xl">
+                {reviewingQuery && (
+                    <>
+                        <DialogHeader>
+                            <DialogTitle>Review Query: {reviewingQuery.title}</DialogTitle>
+                            <DialogDescription>
+                                Sent to: {reviewingQuery.assigneeName} on {format(new Date(reviewingQuery.createdAt), 'PPP')}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                            <div className="space-y-2">
+                                <Label className="font-semibold">Original Query</Label>
+                                <ScrollArea className="h-24 w-full rounded-md border p-4 bg-secondary/50">
+                                    <p className="text-sm whitespace-pre-wrap">{reviewingQuery.description}</p>
+                                </ScrollArea>
+                                {reviewingQuery.attachments && reviewingQuery.attachments.length > 0 && (
+                                    <div className="space-y-2 pt-2">
+                                        <Label className="text-muted-foreground">Attachments</Label>
+                                        <div className="space-y-2 rounded-md border p-2">
+                                        {reviewingQuery.attachments.map((file, index) => (
+                                            <Link key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                                            <FileIcon className="h-4 w-4" /> {file.name}
+                                            </Link>
+                                        ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {reviewingQuery.status === 'Responded' || reviewingQuery.status === 'Closed' ? (
+                                <div className="space-y-2">
+                                    <Label className="font-semibold">Employee's Response</Label>
+                                     <ScrollArea className="h-24 w-full rounded-md border p-4">
+                                        <p className="text-sm whitespace-pre-wrap">{reviewingQuery.response || 'No text response provided.'}</p>
+                                    </ScrollArea>
+                                    {reviewingQuery.responseAttachments && reviewingQuery.responseAttachments.length > 0 && (
+                                        <div className="space-y-2 pt-2">
+                                            <Label className="text-muted-foreground">Response Attachments</Label>
+                                            <div className="space-y-2 rounded-md border p-2">
+                                            {reviewingQuery.responseAttachments.map((file, index) => (
+                                                <Link key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                                                <FileIcon className="h-4 w-4" /> {file.name}
+                                                </Link>
+                                            ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-center text-sm text-muted-foreground p-4 border rounded-md">
+                                    The employee has not responded to this query yet.
+                                </div>
+                            )}
+                        </div>
+                        <DialogFooter className="gap-2">
+                            <Button variant="ghost" onClick={() => setIsReviewDialogOpen(false)}>Cancel</Button>
+                            {reviewingQuery.status === 'Responded' && (
+                                <Button onClick={() => handleCloseQuery(reviewingQuery.id)}>
+                                    <CheckCircle className="mr-2 h-4 w-4" /> Mark as Closed
+                                </Button>
+                            )}
+                        </DialogFooter>
+                    </>
+                )}
+            </DialogContent>
+        </Dialog>
     </>
   );
 }
+
