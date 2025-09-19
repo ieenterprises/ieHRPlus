@@ -42,6 +42,7 @@ export default function DashboardPage() {
   const { toast } = useToast();
 
   const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role)), [users]);
+  const pendingQueries = useMemo(() => myQueries.filter(q => q.status === 'Sent' || q.status === 'Read'), [myQueries]);
 
   useEffect(() => {
     if (!loggedInUser?.id) return;
@@ -204,6 +205,25 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      {pendingQueries.length > 0 && (
+          <Card className="border-blue-500">
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-blue-600">
+                      <HelpCircle />
+                      You Have Pending Queries
+                  </CardTitle>
+                  <CardDescription>
+                      HR or management requires information from you. Please review and respond to the queries listed below.
+                  </CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <Button asChild>
+                      <Link href="#my-queries-section">View Queries ({pendingQueries.length})</Link>
+                  </Button>
+              </CardContent>
+          </Card>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card className="lg:col-span-1">
               <CardHeader>
@@ -260,47 +280,51 @@ export default function DashboardPage() {
             </Card>
       </div>
 
-      {myQueries.length > 0 && (
-        <Card className="border-blue-500">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-blue-600">
-                    <HelpCircle />
-                    My Queries
-                </CardTitle>
-                <CardDescription>
-                    These are requests for information sent to you by HR or management.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Title</TableHead>
-                            <TableHead>From</TableHead>
-                            <TableHead>Date Sent</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Action</TableHead>
+      <Card id="my-queries-section">
+          <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-blue-600">
+                  <HelpCircle />
+                  My Queries
+              </CardTitle>
+              <CardDescription>
+                  These are requests for information sent to you by HR or management.
+              </CardDescription>
+          </CardHeader>
+          <CardContent>
+              <Table>
+                  <TableHeader>
+                      <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>From</TableHead>
+                          <TableHead>Date Sent</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {myQueries.length > 0 ? (
+                          myQueries.map(query => (
+                              <TableRow key={query.id}>
+                                  <TableCell className="font-medium">{query.title}</TableCell>
+                                  <TableCell>{query.requesterName}</TableCell>
+                                  <TableCell>{format(new Date(query.createdAt), 'MMM d, yyyy')}</TableCell>
+                                  <TableCell>
+                                      <Badge variant={getStatusBadgeVariant(query.status)}>{query.status}</Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                      <Button size="sm">View & Respond</Button>
+                                  </TableCell>
+                              </TableRow>
+                          ))
+                      ) : (
+                         <TableRow>
+                            <TableCell colSpan={5} className="text-center h-24">You have no queries.</TableCell>
                         </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {myQueries.map(query => (
-                            <TableRow key={query.id}>
-                                <TableCell className="font-medium">{query.title}</TableCell>
-                                <TableCell>{query.requesterName}</TableCell>
-                                <TableCell>{format(new Date(query.createdAt), 'MMM d, yyyy')}</TableCell>
-                                <TableCell>
-                                    <Badge variant={getStatusBadgeVariant(query.status)}>{query.status}</Badge>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <Button size="sm">View & Respond</Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
-      )}
+                      )}
+                  </TableBody>
+              </Table>
+          </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -449,4 +473,3 @@ export default function DashboardPage() {
   );
 }
 
-    
