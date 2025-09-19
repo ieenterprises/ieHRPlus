@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -48,7 +49,7 @@ import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeB
 import { db } from "@/lib/firebase";
 import { TimeRecord, UserRequest, User } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon, Trash2, Search, ClipboardList, Send, FileCheck, FileX, AlertCircle, File as FileIcon } from "lucide-react";
+import { Video, Download, Calendar as CalendarIcon, Trash2, Search, ClipboardList, Send, FileCheck, FileX, AlertCircle, File as FileIcon, MessageSquarePlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -58,6 +59,7 @@ import Papa from "papaparse";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from 'next/link';
+import { HRQueryTable } from './query-table';
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
@@ -446,6 +448,18 @@ export default function HrReviewPage() {
         )}
       </div>
       
+      {isSeniorStaff && (
+        <Card>
+          <CardHeader>
+              <CardTitle className="flex items-center gap-2"><MessageSquarePlus /> HR Queries</CardTitle>
+              <CardDescription>Send official queries and requests for information to employees.</CardDescription>
+          </CardHeader>
+          <CardContent>
+              <HRQueryTable />
+          </CardContent>
+        </Card>
+      )}
+
       {isSeniorStaff && (
          <Card>
             <CardHeader>

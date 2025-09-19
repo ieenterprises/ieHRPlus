@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { type UserRequest } from "@/lib/types";
+import { type UserRequest, type HRQuery } from "@/lib/types";
 import { db } from "@/lib/firebase";
 import { collection, addDoc } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
@@ -31,9 +31,10 @@ import type { DateRange } from "react-day-picker";
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
 export default function DashboardPage() {
-  const { loggedInUser, users, logout, userRequests: allUserRequests } = useSettings();
+  const { loggedInUser, users, logout, userRequests: allUserRequests, hrQueries: allHrQueries } = useSettings();
   const [myRequests, setMyRequests] = useState<UserRequest[]>([]);
   const [assignedRequests, setAssignedRequests] = useState<UserRequest[]>([]);
+  const [myQueries, setMyQueries] = useState<HRQuery[]>([]);
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,7 +54,11 @@ export default function DashboardPage() {
     assignedToMe.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     setAssignedRequests(assignedToMe);
 
-  }, [allUserRequests, loggedInUser?.id]);
+    const queriesForMe = allHrQueries.filter(q => q.assigneeId === loggedInUser.id);
+    queriesForMe.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setMyQueries(queriesForMe);
+
+  }, [allUserRequests, allHrQueries, loggedInUser?.id]);
 
   const handleSwitchUser = () => {
     logout(false);
@@ -129,12 +134,20 @@ export default function DashboardPage() {
       }
   };
   
-  const getStatusBadgeVariant = (status: UserRequest['status']) => {
+  const getStatusBadgeVariant = (status: UserRequest['status'] | HRQuery['status']) => {
     switch (status) {
-      case 'Pending': return 'secondary';
-      case 'Approved': return 'default';
-      case 'Rejected': return 'destructive';
-      case 'Forwarded': return 'outline';
+      case 'Pending':
+      case 'Sent':
+        return 'secondary';
+      case 'Approved':
+      case 'Responded':
+        return 'default';
+      case 'Rejected':
+      case 'Closed':
+        return 'destructive';
+      case 'Forwarded':
+      case 'Read':
+        return 'outline';
       default: return 'outline';
     }
   };
@@ -182,6 +195,48 @@ export default function DashboardPage() {
                                     <Button asChild size="sm">
                                         <Link href="/hr-review">Review Request</Link>
                                     </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+      )}
+
+      {myQueries.length > 0 && (
+        <Card className="border-blue-500">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-blue-600">
+                    <HelpCircle />
+                    My Queries
+                </CardTitle>
+                <CardDescription>
+                    These are requests for information sent to you by HR or management.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Title</TableHead>
+                            <TableHead>From</TableHead>
+                            <TableHead>Date Sent</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {myQueries.map(query => (
+                            <TableRow key={query.id}>
+                                <TableCell className="font-medium">{query.title}</TableCell>
+                                <TableCell>{query.requesterName}</TableCell>
+                                <TableCell>{format(new Date(query.createdAt), 'MMM d, yyyy')}</TableCell>
+                                <TableCell>
+                                    <Badge variant={getStatusBadgeVariant(query.status)}>{query.status}</Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <Button size="sm">View & Respond</Button>
                                 </TableCell>
                             </TableRow>
                         ))}
