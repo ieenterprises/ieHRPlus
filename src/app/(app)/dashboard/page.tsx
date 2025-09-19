@@ -1,12 +1,14 @@
 
 "use client";
 
+import Link from "next/link";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2 } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export default function DashboardPage() {
   const { loggedInUser } = useSettings();
@@ -17,6 +19,14 @@ export default function DashboardPage() {
             title={`Welcome, ${loggedInUser?.name || 'User'}!`}
             description="This is your personal dashboard."
         />
+
+        <div className="flex justify-start">
+            <Button asChild>
+                <Link href="/sign-in">
+                    <LogIn className="mr-2 h-4 w-4" /> Switch User
+                </Link>
+            </Button>
+        </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <Card className="lg:col-span-1">
