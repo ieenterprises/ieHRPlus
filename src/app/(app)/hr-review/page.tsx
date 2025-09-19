@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,13 +27,24 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from "@/hooks/use-settings";
-import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon } from "lucide-react";
+import { Video, Download, Calendar as CalendarIcon, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -41,14 +52,19 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import Papa from "papaparse";
 
+const seniorRoles = ["Owner", "Administrator", "Manager"];
+
 export default function HrReviewPage() {
   const { loggedInUser } = useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
   const { toast } = useToast();
   const storage = getStorage();
+
+  const isSeniorStaff = useMemo(() => loggedInUser && seniorRoles.includes(loggedInUser.role), [loggedInUser]);
 
   useEffect(() => {
     if (!loggedInUser?.businessId) {
@@ -56,7 +72,6 @@ export default function HrReviewPage() {
       return;
     }
 
-    // Query only by businessId to avoid composite index requirement
     const q = query(
       collection(db, "timeRecords"),
       where("businessId", "==", loggedInUser.businessId)
@@ -65,7 +80,6 @@ export default function HrReviewPage() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
       
-      // Perform date filtering and sorting on the client side
       const start = startOfDay(selectedDate);
       const end = endOfDay(selectedDate);
       
@@ -74,7 +88,6 @@ export default function HrReviewPage() {
         return isWithinInterval(clockInDate, { start, end });
       });
 
-      // Sort records client-side
       filteredRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
       
       setTimeRecords(filteredRecords);
@@ -86,8 +99,12 @@ export default function HrReviewPage() {
     });
 
     return () => unsubscribe();
-  }, [loggedInUser?.businessId, selectedDate]);
+  }, [loggedInUser?.businessId, selectedDate, toast]);
   
+  useEffect(() => {
+      setSelectedRecordIds([]);
+  }, [selectedDate, timeRecords]);
+
   const handleExportCSV = (data: TimeRecord[], tableType: 'pending' | 'history') => {
     const csvData = data.map(record => ({
       "Employee": record.userName,
@@ -137,8 +154,7 @@ export default function HrReviewPage() {
         await deleteDoc(doc(db, "timeRecords", record.id));
         toast({
             title: "Record Deleted",
-            description: "The time record and associated video have been permanently deleted.",
-            variant: "destructive"
+            description: "The time record has been permanently deleted.",
         });
       } catch (error: any) {
          toast({
@@ -147,6 +163,38 @@ export default function HrReviewPage() {
             variant: "destructive"
         });
       }
+  };
+
+  const handleDeleteSelected = async () => {
+    const batch = writeBatch(db);
+    const recordsToDelete = timeRecords.filter(r => selectedRecordIds.includes(r.id));
+    
+    recordsToDelete.forEach(record => {
+        batch.delete(doc(db, "timeRecords", record.id));
+        if (record.videoUrl) {
+            try {
+                const videoRef = ref(storage, record.videoUrl);
+                deleteObject(videoRef); // This can fail silently if permissions are off, but we proceed
+            } catch (e) {
+                console.warn("Could not delete video for record:", record.id, e);
+            }
+        }
+    });
+
+    try {
+        await batch.commit();
+        toast({
+            title: `${selectedRecordIds.length} Record(s) Deleted`,
+            description: "The selected records have been permanently removed.",
+        });
+        setSelectedRecordIds([]);
+    } catch (error: any) {
+         toast({
+            title: "Deletion Failed",
+            description: error.message,
+            variant: "destructive"
+        });
+    }
   };
   
   const getBadgeVariant = (status: TimeRecord['status']) => {
@@ -180,52 +228,96 @@ export default function HrReviewPage() {
   const pendingRecords = timeRecords.filter(r => r.status === 'pending');
   const historicalRecords = timeRecords.filter(r => r.status !== 'pending');
 
+  const handleSelectAll = (table: 'pending' | 'history', checked: boolean) => {
+    const recordIds = (table === 'pending' ? pendingRecords : historicalRecords).map(r => r.id);
+    if (checked) {
+        setSelectedRecordIds(prev => [...new Set([...prev, ...recordIds])]);
+    } else {
+        setSelectedRecordIds(prev => prev.filter(id => !recordIds.includes(id)));
+    }
+  };
+
+  const handleSelectRecord = (id: string, checked: boolean) => {
+    setSelectedRecordIds(prev => 
+        checked ? [...prev, id] : prev.filter(pId => pId !== id)
+    );
+  };
+
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <PageHeader title="HR Review" description="Review and manage employee clock-in/out records." />
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button
-                variant={"outline"}
-                className={cn(
-                    "w-[280px] justify-start text-left font-normal",
-                    !selectedDate && "text-muted-foreground"
-                )}
-                >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-                <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => date && setSelectedDate(date)}
-                initialFocus
-                />
-            </PopoverContent>
-        </Popover>
+        {isSeniorStaff && (
+          <Popover>
+              <PopoverTrigger asChild>
+                  <Button
+                  variant={"outline"}
+                  className={cn(
+                      "w-[280px] justify-start text-left font-normal",
+                      !selectedDate && "text-muted-foreground"
+                  )}
+                  >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                  <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => date && setSelectedDate(date)}
+                  initialFocus
+                  />
+              </PopoverContent>
+          </Popover>
+        )}
       </div>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
             <CardTitle>Pending Submissions</CardTitle>
             <CardDescription>
               Approve or reject clock-in records after video verification.
             </CardDescription>
           </div>
-           <Button variant="outline" size="sm" onClick={() => handleExportCSV(pendingRecords, 'pending')} disabled={pendingRecords.length === 0}>
-            <Download className="mr-2 h-4 w-4" />
-            Download CSV
-          </Button>
+          {isSeniorStaff && (
+            <div className="flex items-center gap-2">
+                {selectedRecordIds.length > 0 && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete ({selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length})
+                            </Button>
+                        </AlertDialogTrigger>
+                         <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected records and their associated videos. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
+                <Button variant="outline" size="sm" onClick={() => handleExportCSV(pendingRecords, 'pending')} disabled={pendingRecords.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download CSV
+                </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  {isSeniorStaff && (
+                    <TableHead padding="checkbox">
+                        <Checkbox
+                            checked={pendingRecords.length > 0 && pendingRecords.every(r => selectedRecordIds.includes(r.id))}
+                            onCheckedChange={(checked) => handleSelectAll('pending', !!checked)}
+                            aria-label="Select all pending"
+                        />
+                    </TableHead>
+                  )}
                   <TableHead>Employee</TableHead>
                   <TableHead>Clock In Time</TableHead>
                   <TableHead>Video</TableHead>
@@ -236,13 +328,22 @@ export default function HrReviewPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 6 : 5} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
                 ) : pendingRecords.length > 0 ? (
                   pendingRecords.map((record) => (
-                    <TableRow key={record.id}>
+                    <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
+                      {isSeniorStaff && (
+                        <TableCell padding="checkbox">
+                            <Checkbox
+                                checked={selectedRecordIds.includes(record.id)}
+                                onCheckedChange={(checked) => handleSelectRecord(record.id, !!checked)}
+                                aria-label="Select record"
+                            />
+                        </TableCell>
+                      )}
                       <TableCell className="font-medium">{record.userName}</TableCell>
                       <TableCell>
                         {format(new Date(record.clockInTime), "MMM d, yyyy, h:mm a")}
@@ -262,15 +363,15 @@ export default function HrReviewPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                          <Button size="sm" onClick={() => handleStatusUpdate(record.id, 'Clocked In')} disabled={!record.videoUrl}>Approve</Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleStatusUpdate(record.id, 'rejected')}>Reject</Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleDelete(record)}>Delete</Button>
+                          <Button size="sm" onClick={() => handleStatusUpdate(record.id, 'Clocked In')} disabled={!record.videoUrl || !isSeniorStaff}>Approve</Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleStatusUpdate(record.id, 'rejected')} disabled={!isSeniorStaff}>Reject</Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleDelete(record)} disabled={!isSeniorStaff}>Delete</Button>
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 6 : 5} className="h-24 text-center">
                       No pending submissions for {format(selectedDate, "PPP")}.
                     </TableCell>
                   </TableRow>
@@ -282,23 +383,50 @@ export default function HrReviewPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
             <CardTitle>Time Clock History</CardTitle>
             <CardDescription>
               This is a log of all employee clock-in and clock-out events for the selected day.
             </CardDescription>
           </div>
-           <Button variant="outline" size="sm" onClick={() => handleExportCSV(historicalRecords, 'history')} disabled={historicalRecords.length === 0}>
-            <Download className="mr-2 h-4 w-4" />
-            Download CSV
-          </Button>
+          {isSeniorStaff && (
+            <div className="flex items-center gap-2">
+                {selectedRecordIds.length > 0 && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete ({selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length})
+                            </Button>
+                        </AlertDialogTrigger>
+                         <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected records and their associated videos. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
+                <Button variant="outline" size="sm" onClick={() => handleExportCSV(historicalRecords, 'history')} disabled={historicalRecords.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download CSV
+                </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  {isSeniorStaff && (
+                      <TableHead padding="checkbox">
+                          <Checkbox
+                              checked={historicalRecords.length > 0 && historicalRecords.every(r => selectedRecordIds.includes(r.id))}
+                              onCheckedChange={(checked) => handleSelectAll('history', !!checked)}
+                              aria-label="Select all history"
+                          />
+                      </TableHead>
+                  )}
                   <TableHead>Employee</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Clock In Time</TableHead>
@@ -310,13 +438,22 @@ export default function HrReviewPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 7 : 6} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
                 ) : historicalRecords.length > 0 ? (
                   historicalRecords.map((record) => (
-                    <TableRow key={record.id}>
+                    <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
+                       {isSeniorStaff && (
+                          <TableCell padding="checkbox">
+                              <Checkbox
+                                  checked={selectedRecordIds.includes(record.id)}
+                                  onCheckedChange={(checked) => handleSelectRecord(record.id, !!checked)}
+                                  aria-label="Select record"
+                              />
+                          </TableCell>
+                       )}
                       <TableCell className="font-medium">{record.userName}</TableCell>
                       <TableCell>{record.userEmail}</TableCell>
                       <TableCell>
@@ -345,7 +482,7 @@ export default function HrReviewPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 7 : 6} className="h-24 text-center">
                       No historical records found for {format(selectedDate, "PPP")}.
                     </TableCell>
                   </TableRow>
