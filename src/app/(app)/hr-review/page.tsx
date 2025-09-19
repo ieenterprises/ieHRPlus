@@ -44,7 +44,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from "@/hooks/use-settings";
-import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch, deleteField } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord, UserRequest, User } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
@@ -135,7 +135,7 @@ export default function HrReviewPage() {
     
     try {
         const requestRef = doc(db, "userRequests", reviewRequest.id);
-        let updateData: Partial<UserRequest> = {
+        let updateData: any = { // Use 'any' to allow for deleteField()
             updatedAt: new Date().toISOString(),
         };
 
@@ -146,7 +146,11 @@ export default function HrReviewPage() {
                 reviewComments,
                 reviewerId: loggedInUser.id,
                 reviewerName: loggedInUser.name,
-                 assignedToId: undefined, // Clear assignment
+                assignedToId: deleteField(),
+                assignedToName: deleteField(),
+                forwardedById: deleteField(),
+                forwardedByName: deleteField(),
+                forwardingComments: deleteField(),
             };
         } else if (reviewAction === 'Reject') {
             updateData = {
@@ -155,7 +159,11 @@ export default function HrReviewPage() {
                 reviewComments,
                 reviewerId: loggedInUser.id,
                 reviewerName: loggedInUser.name,
-                assignedToId: undefined, // Clear assignment
+                assignedToId: deleteField(),
+                assignedToName: deleteField(),
+                forwardedById: deleteField(),
+                forwardedByName: deleteField(),
+                forwardingComments: deleteField(),
             };
         } else if (reviewAction === 'Forward') {
             if (!forwardToUserId) {
@@ -818,3 +826,6 @@ export default function HrReviewPage() {
     </div>
   );
 }
+
+
+    
