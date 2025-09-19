@@ -204,48 +204,6 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {myQueries.length > 0 && (
-        <Card className="border-blue-500">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-blue-600">
-                    <HelpCircle />
-                    My Queries
-                </CardTitle>
-                <CardDescription>
-                    These are requests for information sent to you by HR or management.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Title</TableHead>
-                            <TableHead>From</TableHead>
-                            <TableHead>Date Sent</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Action</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {myQueries.map(query => (
-                            <TableRow key={query.id}>
-                                <TableCell className="font-medium">{query.title}</TableCell>
-                                <TableCell>{query.requesterName}</TableCell>
-                                <TableCell>{format(new Date(query.createdAt), 'MMM d, yyyy')}</TableCell>
-                                <TableCell>
-                                    <Badge variant={getStatusBadgeVariant(query.status)}>{query.status}</Badge>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <Button size="sm">View & Respond</Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
-      )}
-
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card className="lg:col-span-1">
               <CardHeader>
@@ -301,6 +259,48 @@ export default function DashboardPage() {
                 </CardContent>
             </Card>
       </div>
+
+      {myQueries.length > 0 && (
+        <Card className="border-blue-500">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-blue-600">
+                    <HelpCircle />
+                    My Queries
+                </CardTitle>
+                <CardDescription>
+                    These are requests for information sent to you by HR or management.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Title</TableHead>
+                            <TableHead>From</TableHead>
+                            <TableHead>Date Sent</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {myQueries.map(query => (
+                            <TableRow key={query.id}>
+                                <TableCell className="font-medium">{query.title}</TableCell>
+                                <TableCell>{query.requesterName}</TableCell>
+                                <TableCell>{format(new Date(query.createdAt), 'MMM d, yyyy')}</TableCell>
+                                <TableCell>
+                                    <Badge variant={getStatusBadgeVariant(query.status)}>{query.status}</Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <Button size="sm">View & Respond</Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -448,3 +448,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
