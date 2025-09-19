@@ -9,12 +9,18 @@ export type UserRequest = {
   businessId: string;
   requestType: string;
   description: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Forwarded';
   createdAt: string;
   updatedAt?: string;
   reviewerId?: string;
   reviewerName?: string;
   reviewComments?: string;
+  // New fields for forwarding
+  assignedToId?: string;
+  assignedToName?: string;
+  forwardedById?: string;
+  forwardedByName?: string;
+  forwardingComments?: string;
 };
 
 export type TimeRecord = {

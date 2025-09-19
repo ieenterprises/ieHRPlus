@@ -46,9 +46,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { TimeRecord, UserRequest } from "@/lib/types";
+import { TimeRecord, UserRequest, User } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon, Trash2, Search, ClipboardList } from "lucide-react";
+import { Video, Download, Calendar as CalendarIcon, Trash2, Search, ClipboardList, Send, FileCheck, FileX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -56,11 +56,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import Papa from "papaparse";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
 export default function HrReviewPage() {
-  const { loggedInUser } = useSettings();
+  const { loggedInUser, users } = useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [userRequests, setUserRequests] = useState<UserRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,14 +72,16 @@ export default function HrReviewPage() {
   const [historySearchTerm, setHistorySearchTerm] = useState("");
   const [requestSearchTerm, setRequestSearchTerm] = useState("");
 
-  const [selectedRequest, setSelectedRequest] = useState<UserRequest | null>(null);
-  const [reviewAction, setReviewAction] = useState<'Approved' | 'Rejected' | null>(null);
+  const [reviewRequest, setReviewRequest] = useState<UserRequest | null>(null);
+  const [reviewAction, setReviewAction] = useState<'Approve' | 'Reject' | 'Forward' | null>(null);
   const [reviewComments, setReviewComments] = useState('');
+  const [forwardToUserId, setForwardToUserId] = useState('');
 
   const { toast } = useToast();
   const storage = getStorage();
 
   const isSeniorStaff = useMemo(() => loggedInUser && seniorRoles.includes(loggedInUser.role), [loggedInUser]);
+  const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role) && u.id !== loggedInUser?.id), [users, loggedInUser]);
 
   useEffect(() => {
     if (!loggedInUser?.businessId) {
@@ -133,30 +136,63 @@ export default function HrReviewPage() {
       setSelectedRecordIds([]);
   }, [selectedDate, filteredTimeRecords]);
   
-  const handleOpenReviewDialog = (request: UserRequest, action: 'Approved' | 'Rejected') => {
-    setSelectedRequest(request);
-    setReviewAction(action);
+  const handleOpenReviewDialog = (request: UserRequest) => {
+    setReviewRequest(request);
+    setReviewAction(null);
     setReviewComments('');
+    setForwardToUserId('');
   };
 
   const handleCloseReviewDialog = () => {
-    setSelectedRequest(null);
-    setReviewAction(null);
+    setReviewRequest(null);
   };
   
   const handleSubmitReview = async () => {
-    if (!selectedRequest || !reviewAction || !loggedInUser) return;
+    if (!reviewRequest || !reviewAction || !loggedInUser) return;
+    
     try {
-        const requestRef = doc(db, "userRequests", selectedRequest.id);
-        await updateDoc(requestRef, {
-            status: reviewAction,
-            reviewComments,
-            reviewerId: loggedInUser.id,
-            reviewerName: loggedInUser.name,
+        const requestRef = doc(db, "userRequests", reviewRequest.id);
+        let updateData: Partial<UserRequest> = {
             updatedAt: new Date().toISOString(),
-        });
+        };
+
+        if (reviewAction === 'Approve') {
+            updateData = {
+                ...updateData,
+                status: 'Approved',
+                reviewComments,
+                reviewerId: loggedInUser.id,
+                reviewerName: loggedInUser.name,
+            };
+        } else if (reviewAction === 'Reject') {
+            updateData = {
+                ...updateData,
+                status: 'Rejected',
+                reviewComments,
+                reviewerId: loggedInUser.id,
+                reviewerName: loggedInUser.name,
+            };
+        } else if (reviewAction === 'Forward') {
+            if (!forwardToUserId) {
+                toast({ title: "Validation Error", description: "Please select a user to forward the request to.", variant: "destructive" });
+                return;
+            }
+            const forwardToUser = users.find(u => u.id === forwardToUserId);
+            updateData = {
+                ...updateData,
+                status: 'Forwarded',
+                assignedToId: forwardToUserId,
+                assignedToName: forwardToUser?.name,
+                forwardedById: loggedInUser.id,
+                forwardedByName: loggedInUser.name,
+                forwardingComments: reviewComments,
+            };
+        }
+
+        await updateDoc(requestRef, updateData);
         toast({ title: "Request Updated", description: `The request has been ${reviewAction.toLowerCase()}.` });
         handleCloseReviewDialog();
+
     } catch (error: any) {
         toast({ title: "Update Failed", description: error.message, variant: "destructive" });
     }
@@ -171,6 +207,7 @@ export default function HrReviewPage() {
             "Description": req.description,
             "Date Submitted": format(new Date(req.createdAt), "MMM d, yyyy, h:mm a"),
             "Status": req.status,
+            "Assigned To": req.assignedToName || '',
         }));
     } else {
         csvData = data.map(record => ({
@@ -242,7 +279,7 @@ export default function HrReviewPage() {
         if (record.videoUrl) {
             try {
                 const videoRef = ref(storage, record.videoUrl);
-                deleteObject(videoRef); // This can fail silently if permissions are off, but we proceed
+                deleteObject(videoRef);
             } catch (e) {
                 console.warn("Could not delete video for record:", record.id, e);
             }
@@ -278,6 +315,8 @@ export default function HrReviewPage() {
       case 'rejected':
       case 'Rejected':
         return 'destructive';
+      case 'Forwarded':
+        return 'outline'; // Using outline for forwarded status
       default:
         return 'outline';
     }
@@ -322,7 +361,8 @@ export default function HrReviewPage() {
       const lowercasedTerm = requestSearchTerm.toLowerCase();
       return userRequests.filter(req =>
         req.userName.toLowerCase().includes(lowercasedTerm) ||
-        req.requestType.toLowerCase().includes(lowercasedTerm)
+        req.requestType.toLowerCase().includes(lowercasedTerm) ||
+        (req.assignedToName && req.assignedToName.toLowerCase().includes(lowercasedTerm))
       );
   }, [userRequests, requestSearchTerm]);
 
@@ -379,7 +419,7 @@ export default function HrReviewPage() {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                         <CardTitle className="flex items-center gap-2"><ClipboardList /> User Requests</CardTitle>
-                        <CardDescription>Review and respond to employee requests.</CardDescription>
+                        <CardDescription>Review, approve, reject, or forward employee requests.</CardDescription>
                     </div>
                      <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredUserRequests, 'requests')} disabled={filteredUserRequests.length === 0}>
                         <Download className="mr-2 h-4 w-4" />
@@ -390,7 +430,7 @@ export default function HrReviewPage() {
                     <div className="relative w-full max-w-sm">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input 
-                            placeholder="Search by name or request type..."
+                            placeholder="Search by name, request type, or assignee..."
                             className="pl-9"
                             value={requestSearchTerm}
                             onChange={(e) => setRequestSearchTerm(e.target.value)}
@@ -405,8 +445,8 @@ export default function HrReviewPage() {
                             <TableRow>
                                 <TableHead>Employee</TableHead>
                                 <TableHead>Request Type</TableHead>
-                                <TableHead>Description</TableHead>
                                 <TableHead>Submitted</TableHead>
+                                <TableHead>Assigned To</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -419,15 +459,12 @@ export default function HrReviewPage() {
                                     <TableRow key={request.id}>
                                         <TableCell className="font-medium">{request.userName}</TableCell>
                                         <TableCell>{request.requestType}</TableCell>
-                                        <TableCell className="text-muted-foreground truncate max-w-xs">{request.description}</TableCell>
                                         <TableCell>{format(new Date(request.createdAt), 'MMM d, yyyy')}</TableCell>
+                                        <TableCell>{request.assignedToName || 'HR Team'}</TableCell>
                                         <TableCell><Badge variant={getBadgeVariant(request.status)}>{request.status}</Badge></TableCell>
-                                        <TableCell className="text-right space-x-2">
-                                            {request.status === 'Pending' && isSeniorStaff && (
-                                                <>
-                                                    <Button size="sm" onClick={() => handleOpenReviewDialog(request, 'Approved')}>Approve</Button>
-                                                    <Button size="sm" variant="destructive" onClick={() => handleOpenReviewDialog(request, 'Rejected')}>Reject</Button>
-                                                </>
+                                        <TableCell className="text-right">
+                                            {isSeniorStaff && (
+                                                <Button size="sm" onClick={() => handleOpenReviewDialog(request)}>Review</Button>
                                             )}
                                         </TableCell>
                                     </TableRow>
@@ -713,43 +750,74 @@ export default function HrReviewPage() {
         </DialogContent>
       </Dialog>
       
-       <Dialog open={!!selectedRequest} onOpenChange={(open) => !open && handleCloseReviewDialog()}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Review Request: {selectedRequest?.requestType}</DialogTitle>
-            <DialogDescription>
-              From: {selectedRequest?.userName}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-             <div>
-                <Label className="text-muted-foreground">Full Description</Label>
-                <ScrollArea className="h-32 w-full rounded-md border p-4 mt-1">
-                    <p className="text-sm whitespace-pre-wrap">{selectedRequest?.description}</p>
-                </ScrollArea>
-             </div>
-            <div>
-              <Label htmlFor="comments">Comments (optional)</Label>
-              <Textarea 
-                  id="comments" 
-                  value={reviewComments} 
-                  onChange={(e) => setReviewComments(e.target.value)}
-                  placeholder="Provide feedback or reasons for your decision..."
-                  className="mt-1"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={handleCloseReviewDialog}>Cancel</Button>
-            <Button 
-                onClick={handleSubmitReview}
-                className={reviewAction === 'Rejected' ? 'bg-destructive hover:bg-destructive/90' : ''}
-            >
-                Confirm {reviewAction}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+       <Dialog open={!!reviewRequest} onOpenChange={(open) => !open && handleCloseReviewDialog()}>
+            <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Review Request: {reviewRequest?.requestType}</DialogTitle>
+                    <DialogDescription>
+                        From: {reviewRequest?.userName}
+                        {reviewRequest?.forwardedByName && ` (Forwarded by ${reviewRequest.forwardedByName})`}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="space-y-1">
+                        <Label className="text-muted-foreground">Full Description</Label>
+                        <ScrollArea className="h-24 w-full rounded-md border p-4">
+                            <p className="text-sm whitespace-pre-wrap">{reviewRequest?.description}</p>
+                        </ScrollArea>
+                    </div>
+                     {reviewRequest?.forwardingComments && (
+                         <div className="space-y-1">
+                            <Label className="text-muted-foreground">Forwarding Comments from {reviewRequest.forwardedByName}</Label>
+                            <ScrollArea className="h-20 w-full rounded-md border p-4 bg-secondary/50">
+                                <p className="text-sm whitespace-pre-wrap">{reviewRequest.forwardingComments}</p>
+                            </ScrollArea>
+                        </div>
+                    )}
+                    <div className="space-y-1">
+                        <Label htmlFor="comments">Add Comments (optional)</Label>
+                        <Textarea
+                            id="comments"
+                            value={reviewComments}
+                            onChange={(e) => setReviewComments(e.target.value)}
+                            placeholder="Provide feedback or reasons for your decision..."
+                        />
+                    </div>
+                     {seniorStaffList.length > 0 && (
+                        <div className="space-y-1">
+                            <Label htmlFor="forwardTo">Forward To (optional)</Label>
+                             <Select onValueChange={setForwardToUserId} value={forwardToUserId}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select a user to forward this request to..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {seniorStaffList.map(user => (
+                                        <SelectItem key={user.id} value={user.id}>{user.name} ({user.role})</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter className="gap-2">
+                    <Button variant="ghost" onClick={handleCloseReviewDialog}>Cancel</Button>
+                    {forwardToUserId ? (
+                        <Button onClick={() => { setReviewAction('Forward'); handleSubmitReview(); }}>
+                            <Send className="mr-2 h-4 w-4"/> Forward Request
+                        </Button>
+                    ) : (
+                        <>
+                            <Button variant="destructive" onClick={() => { setReviewAction('Reject'); handleSubmitReview(); }}>
+                                <FileX className="mr-2 h-4 w-4"/> Reject
+                            </Button>
+                            <Button onClick={() => { setReviewAction('Approve'); handleSubmitReview(); }}>
+                                <FileCheck className="mr-2 h-4 w-4"/> Approve
+                            </Button>
+                        </>
+                    )}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
     </div>
   );
