@@ -466,7 +466,13 @@ export default function HrReviewPage() {
                                         <TableCell><Badge variant={getBadgeVariant(request.status)}>{request.status}</Badge></TableCell>
                                         <TableCell className="text-right">
                                             {isSeniorStaff && (
-                                                <Button size="sm" onClick={() => handleOpenReviewDialog(request)}>Review</Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    onClick={() => handleOpenReviewDialog(request)}
+                                                    disabled={request.status === 'Approved' || request.status === 'Rejected'}
+                                                >
+                                                    Review
+                                                </Button>
                                             )}
                                         </TableCell>
                                     </TableRow>
@@ -826,6 +832,5 @@ export default function HrReviewPage() {
     </div>
   );
 }
-
 
     
