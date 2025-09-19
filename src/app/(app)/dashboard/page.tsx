@@ -28,6 +28,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AttachmentPreviewer } from "@/components/attachment-previewer";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
@@ -490,7 +491,7 @@ export default function DashboardPage() {
                                         <div className="mt-2 text-sm text-muted-foreground space-y-1">
                                             {attachments.map(file => (
                                                 <div key={file.name} className="flex items-center gap-2">
-                                                    <FileIcon className="h-4 w-4" />
+                                                    <FileIcon item={{ type: 'file', name: file.name, metadata: {size: 0, updated: '', timeCreated: ''} }} />
                                                     <span>{file.name}</span>
                                                 </div>
                                             ))}
@@ -569,13 +570,7 @@ export default function DashboardPage() {
                 {respondingQuery.attachments && respondingQuery.attachments.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Attachments from Requester</Label>
-                    <div className="space-y-2 rounded-md border p-2">
-                      {respondingQuery.attachments.map((file, index) => (
-                        <Link key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
-                          <FileIcon className="h-4 w-4" /> {file.name}
-                        </Link>
-                      ))}
-                    </div>
+                    <AttachmentPreviewer attachments={respondingQuery.attachments} />
                   </div>
                 )}
                 <div className="grid items-start gap-4">
@@ -590,7 +585,7 @@ export default function DashboardPage() {
                       <div className="mt-2 text-sm text-muted-foreground space-y-1">
                         {responseAttachments.map(file => (
                           <div key={file.name} className="flex items-center gap-2">
-                            <FileIcon className="h-4 w-4" />
+                            <FileIcon item={{ type: 'file', name: file.name, metadata: {size: 0, updated: '', timeCreated: ''} }} />
                             <span>{file.name}</span>
                           </div>
                         ))}
@@ -601,13 +596,7 @@ export default function DashboardPage() {
                 {respondingQuery.status === 'Responded' && respondingQuery.responseAttachments && respondingQuery.responseAttachments.length > 0 && (
                     <div className="space-y-2">
                         <Label className="text-muted-foreground">Your Submitted Attachments</Label>
-                        <div className="space-y-2 rounded-md border p-2">
-                        {respondingQuery.responseAttachments.map((file, index) => (
-                            <Link key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
-                            <FileIcon className="h-4 w-4" /> {file.name}
-                            </Link>
-                        ))}
-                        </div>
+                        <AttachmentPreviewer attachments={respondingQuery.responseAttachments} />
                     </div>
                 )}
               </div>
@@ -627,4 +616,6 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+
 

@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PlusCircle, Loader2, File as FileIcon, X, CheckCircle } from "lucide-react";
+import { PlusCircle, Loader2, File as FileIconLucide, X, CheckCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import Link from 'next/link';
+import { AttachmentPreviewer } from "@/components/attachment-previewer";
 
 export function HRQueryTable() {
   const { loggedInUser, users, hrQueries } = useSettings();
@@ -174,7 +174,7 @@ export function HRQueryTable() {
                                         <div className="mt-2 text-sm text-muted-foreground space-y-1">
                                             {attachments.map(file => (
                                                 <div key={file.name} className="flex items-center gap-2">
-                                                    <FileIcon className="h-4 w-4" />
+                                                    <FileIconLucide className="h-4 w-4" />
                                                     <span>{file.name}</span>
                                                 </div>
                                             ))}
@@ -251,13 +251,7 @@ export function HRQueryTable() {
                                 {reviewingQuery.attachments && reviewingQuery.attachments.length > 0 && (
                                     <div className="space-y-2 pt-2">
                                         <Label className="text-muted-foreground">Attachments</Label>
-                                        <div className="space-y-2 rounded-md border p-2">
-                                        {reviewingQuery.attachments.map((file, index) => (
-                                            <Link key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
-                                            <FileIcon className="h-4 w-4" /> {file.name}
-                                            </Link>
-                                        ))}
-                                        </div>
+                                        <AttachmentPreviewer attachments={reviewingQuery.attachments} />
                                     </div>
                                 )}
                             </div>
@@ -271,13 +265,7 @@ export function HRQueryTable() {
                                     {reviewingQuery.responseAttachments && reviewingQuery.responseAttachments.length > 0 && (
                                         <div className="space-y-2 pt-2">
                                             <Label className="text-muted-foreground">Response Attachments</Label>
-                                            <div className="space-y-2 rounded-md border p-2">
-                                            {reviewingQuery.responseAttachments.map((file, index) => (
-                                                <Link key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
-                                                <FileIcon className="h-4 w-4" /> {file.name}
-                                                </Link>
-                                            ))}
-                                            </div>
+                                            <AttachmentPreviewer attachments={reviewingQuery.responseAttachments} />
                                         </div>
                                     )}
                                 </div>
@@ -302,4 +290,3 @@ export function HRQueryTable() {
     </>
   );
 }
-

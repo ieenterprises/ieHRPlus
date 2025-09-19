@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { FileItem } from '@/lib/types';
 import { formatBytes } from '@/lib/utils';
 import { listItems, createFolder, uploadFile, deleteItem, renameItem, getPublicUrl, moveItem, copyItem } from '@/lib/firebase-storage';
-import FileIcon from '@/components/file-icon';
+import { FileIcon } from '@/components/file-icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSettings } from '@/hooks/use-settings';
 
