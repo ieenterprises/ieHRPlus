@@ -40,13 +40,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { TimeRecord } from "@/lib/types";
+import { TimeRecord, UserRequest } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon, Trash2, Search } from "lucide-react";
+import { Video, Download, Calendar as CalendarIcon, Trash2, Search, ClipboardList } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -59,12 +61,19 @@ const seniorRoles = ["Owner", "Administrator", "Manager"];
 export default function HrReviewPage() {
   const { loggedInUser } = useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
+  const [userRequests, setUserRequests] = useState<UserRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
   const [pendingSearchTerm, setPendingSearchTerm] = useState("");
   const [historySearchTerm, setHistorySearchTerm] = useState("");
+  const [requestSearchTerm, setRequestSearchTerm] = useState("");
+
+  const [selectedRequest, setSelectedRequest] = useState<UserRequest | null>(null);
+  const [reviewAction, setReviewAction] = useState<'Approved' | 'Rejected' | null>(null);
+  const [reviewComments, setReviewComments] = useState('');
+
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -76,25 +85,14 @@ export default function HrReviewPage() {
       return;
     }
 
-    const q = query(
+    const timeRecordsQuery = query(
       collection(db, "timeRecords"),
       where("businessId", "==", loggedInUser.businessId)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const timeRecordsUnsubscribe = onSnapshot(timeRecordsQuery, (snapshot) => {
       const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
-      
-      const start = startOfDay(selectedDate);
-      const end = endOfDay(selectedDate);
-      
-      const filteredRecords = allRecords.filter(record => {
-        const clockInDate = new Date(record.clockInTime);
-        return isWithinInterval(clockInDate, { start, end });
-      });
-
-      filteredRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
-      
-      setTimeRecords(filteredRecords);
+      setTimeRecords(allRecords);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching time records:", error);
@@ -102,28 +100,93 @@ export default function HrReviewPage() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [loggedInUser?.businessId, selectedDate]);
+    const requestsQuery = query(
+        collection(db, "userRequests"),
+        where("businessId", "==", loggedInUser.businessId)
+    );
+
+    const requestsUnsubscribe = onSnapshot(requestsQuery, (snapshot) => {
+        const allRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserRequest));
+        allRequests.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setUserRequests(allRequests);
+    }, (error) => {
+        console.error("Error fetching user requests:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch user requests. ' + error.message });
+    });
+
+
+    return () => {
+        timeRecordsUnsubscribe();
+        requestsUnsubscribe();
+    };
+  }, [loggedInUser?.businessId]);
+
+  const filteredTimeRecords = useMemo(() => {
+    const start = startOfDay(selectedDate);
+    const end = endOfDay(selectedDate);
+    return timeRecords.filter(record => isWithinInterval(new Date(record.clockInTime), { start, end }))
+      .sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+  }, [timeRecords, selectedDate]);
   
   useEffect(() => {
       setSelectedRecordIds([]);
-  }, [selectedDate, timeRecords]);
+  }, [selectedDate, filteredTimeRecords]);
+  
+  const handleOpenReviewDialog = (request: UserRequest, action: 'Approved' | 'Rejected') => {
+    setSelectedRequest(request);
+    setReviewAction(action);
+    setReviewComments('');
+  };
 
-  const handleExportCSV = (data: TimeRecord[], tableType: 'pending' | 'history') => {
-    const csvData = data.map(record => ({
-      "Employee": record.userName,
-      "Email": record.userEmail,
-      "Clock In Time": format(new Date(record.clockInTime), "MMM d, yyyy, h:mm a"),
-      "Clock Out Time": record.clockOutTime ? format(new Date(record.clockOutTime), "MMM d, yyyy, h:mm a") : "-",
-      "Status": record.status,
-    }));
+  const handleCloseReviewDialog = () => {
+    setSelectedRequest(null);
+    setReviewAction(null);
+  };
+  
+  const handleSubmitReview = async () => {
+    if (!selectedRequest || !reviewAction || !loggedInUser) return;
+    try {
+        const requestRef = doc(db, "userRequests", selectedRequest.id);
+        await updateDoc(requestRef, {
+            status: reviewAction,
+            reviewComments,
+            reviewerId: loggedInUser.id,
+            reviewerName: loggedInUser.name,
+            updatedAt: new Date().toISOString(),
+        });
+        toast({ title: "Request Updated", description: `The request has been ${reviewAction.toLowerCase()}.` });
+        handleCloseReviewDialog();
+    } catch (error: any) {
+        toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleExportCSV = (data: any[], tableType: string) => {
+    let csvData;
+    if (tableType === 'requests') {
+        csvData = data.map(req => ({
+            "Employee": req.userName,
+            "Request Type": req.requestType,
+            "Description": req.description,
+            "Date Submitted": format(new Date(req.createdAt), "MMM d, yyyy, h:mm a"),
+            "Status": req.status,
+        }));
+    } else {
+        csvData = data.map(record => ({
+            "Employee": record.userName,
+            "Email": record.userEmail,
+            "Clock In Time": format(new Date(record.clockInTime), "MMM d, yyyy, h:mm a"),
+            "Clock Out Time": record.clockOutTime ? format(new Date(record.clockOutTime), "MMM d, yyyy, h:mm a") : "-",
+            "Status": record.status,
+        }));
+    }
 
     const csv = Papa.unparse(csvData);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `${tableType}_records_${format(selectedDate, 'yyyy-MM-dd')}.csv`);
+    link.setAttribute("download", `${tableType}_records_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -201,15 +264,18 @@ export default function HrReviewPage() {
     }
   };
   
-  const getBadgeVariant = (status: TimeRecord['status']) => {
+  const getBadgeVariant = (status: TimeRecord['status'] | UserRequest['status']) => {
     switch (status) {
       case 'pending':
+      case 'Pending':
         return 'secondary';
       case 'Clocked In':
+      case 'Approved':
         return 'default';
       case 'Clocked Out':
         return 'outline';
       case 'rejected':
+      case 'Rejected':
         return 'destructive';
       default:
         return 'outline';
@@ -229,8 +295,8 @@ export default function HrReviewPage() {
     document.body.removeChild(a);
   };
   
-  const pendingRecords = timeRecords.filter(r => r.status === 'pending');
-  const historicalRecords = timeRecords.filter(r => r.status !== 'pending');
+  const pendingRecords = filteredTimeRecords.filter(r => r.status === 'pending');
+  const historicalRecords = filteredTimeRecords.filter(r => r.status !== 'pending');
 
   const filteredPendingRecords = useMemo(() => {
     if (!pendingSearchTerm) return pendingRecords;
@@ -249,6 +315,15 @@ export default function HrReviewPage() {
       record.userEmail.toLowerCase().includes(lowercasedTerm)
     );
   }, [historicalRecords, historySearchTerm]);
+
+  const filteredUserRequests = useMemo(() => {
+      if (!requestSearchTerm) return userRequests;
+      const lowercasedTerm = requestSearchTerm.toLowerCase();
+      return userRequests.filter(req =>
+        req.userName.toLowerCase().includes(lowercasedTerm) ||
+        req.requestType.toLowerCase().includes(lowercasedTerm)
+      );
+  }, [userRequests, requestSearchTerm]);
 
 
   const handleSelectAll = (table: 'pending' | 'history', checked: boolean) => {
@@ -270,7 +345,7 @@ export default function HrReviewPage() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <PageHeader title="HR Review" description="Review and manage employee clock-in/out records." />
+        <PageHeader title="HR Review" description="Review and manage employee clock-in records and requests." />
         {isSeniorStaff && (
           <Popover>
               <PopoverTrigger asChild>
@@ -296,6 +371,76 @@ export default function HrReviewPage() {
           </Popover>
         )}
       </div>
+      
+      {isSeniorStaff && (
+         <Card>
+            <CardHeader>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2"><ClipboardList /> User Requests</CardTitle>
+                        <CardDescription>Review and respond to employee requests.</CardDescription>
+                    </div>
+                     <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredUserRequests, 'requests')} disabled={filteredUserRequests.length === 0}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Download CSV
+                    </Button>
+                </div>
+                <div className="mt-4">
+                    <div className="relative w-full max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Search by name or request type..."
+                            className="pl-9"
+                            value={requestSearchTerm}
+                            onChange={(e) => setRequestSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent>
+                 <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Employee</TableHead>
+                                <TableHead>Request Type</TableHead>
+                                <TableHead>Description</TableHead>
+                                <TableHead>Submitted</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {loading ? (
+                                <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading requests...</TableCell></TableRow>
+                            ) : filteredUserRequests.length > 0 ? (
+                                filteredUserRequests.map(request => (
+                                    <TableRow key={request.id}>
+                                        <TableCell className="font-medium">{request.userName}</TableCell>
+                                        <TableCell>{request.requestType}</TableCell>
+                                        <TableCell className="text-muted-foreground truncate max-w-xs">{request.description}</TableCell>
+                                        <TableCell>{format(new Date(request.createdAt), 'MMM d, yyyy')}</TableCell>
+                                        <TableCell><Badge variant={getBadgeVariant(request.status)}>{request.status}</Badge></TableCell>
+                                        <TableCell className="text-right space-x-2">
+                                            {request.status === 'Pending' && isSeniorStaff && (
+                                                <>
+                                                    <Button size="sm" onClick={() => handleOpenReviewDialog(request, 'Approved')}>Approve</Button>
+                                                    <Button size="sm" variant="destructive" onClick={() => handleOpenReviewDialog(request, 'Rejected')}>Reject</Button>
+                                                </>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow><TableCell colSpan={6} className="h-24 text-center">No user requests found.</TableCell></TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -566,7 +711,32 @@ export default function HrReviewPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+       <Dialog open={!!selectedRequest} onOpenChange={(open) => !open && handleCloseReviewDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Review Request: {reviewAction}</DialogTitle>
+            <DialogDescription>
+              Add comments before you {reviewAction?.toLowerCase()} this request from {selectedRequest?.userName}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Label htmlFor="comments">Comments (optional)</Label>
+            <Textarea 
+                id="comments" 
+                value={reviewComments} 
+                onChange={(e) => setReviewComments(e.target.value)}
+                placeholder="Provide feedback or reasons for your decision..."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={handleCloseReviewDialog}>Cancel</Button>
+            <Button onClick={handleSubmitReview}>Confirm {reviewAction}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
 }
+
