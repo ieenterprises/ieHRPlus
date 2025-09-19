@@ -31,7 +31,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSettings } from "@/hooks/use-settings";
-import { collection, onSnapshot, query, where, doc, updateDoc, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, updateDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { TimeRecord, User } from "@/lib/types";
@@ -75,12 +75,14 @@ export default function SessionsPage() {
       collection(db, "timeRecords"),
       where("businessId", "==", loggedInUser.businessId),
       where("clockInTime", ">=", start.toISOString()),
-      where("clockInTime", "<=", end.toISOString()),
-      orderBy("clockInTime", "desc")
+      where("clockInTime", "<=", end.toISOString())
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
+       // Sort records client-side
+      records.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+      
       const populatedSessions: ActiveSession[] = records
         .map(record => ({
           ...record,
@@ -92,11 +94,12 @@ export default function SessionsPage() {
       setLoading(false);
     }, (error) => {
       console.error("Error fetching sessions:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch sessions. ' + error.message });
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [loggedInUser?.businessId, users, selectedDate]);
+  }, [loggedInUser?.businessId, selectedDate, users]);
   
   const handleTakeOverSessionClick = (session: ActiveSession) => {
     setSelectedSession(session);
