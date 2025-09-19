@@ -72,7 +72,7 @@ type SettingsContextType = {
     // Auth and session state
     loggedInUser: User | null;
     loadingUser: boolean;
-    logout: () => void;
+    logout: (shouldClockOut?: boolean) => Promise<void>;
     
     selectedBranch: BranchType | null;
     setSelectedBranch: React.Dispatch<React.SetStateAction<BranchType | null>>;
@@ -193,13 +193,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             } else {
                  console.error("User profile not found in database for UID:", uid);
                  setLoadingUser(false);
-                 logout();
+                 await logout();
                  return null;
             }
         } catch (error) {
             console.error("Error fetching user profile:", error);
             setLoadingUser(false);
-            logout();
+            await logout();
             return null;
         }
     }, []);
@@ -650,6 +650,7 @@ export function useSettings() {
 }
 
     
+
 
 
 
