@@ -303,13 +303,14 @@ export default function HrReviewPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Clock In Time</TableHead>
                   <TableHead>Clock Out Time</TableHead>
+                  <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
@@ -327,6 +328,15 @@ export default function HrReviewPage() {
                           : "-"}
                       </TableCell>
                       <TableCell>
+                        {record.videoUrl ? (
+                            <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
+                                <Video className="mr-2 h-4 w-4" /> View
+                            </Button>
+                        ) : (
+                            "N/A"
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <Badge variant={getBadgeVariant(record.status)}>
                           {record.status}
                         </Badge>
@@ -335,7 +345,7 @@ export default function HrReviewPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       No historical records found for {format(selectedDate, "PPP")}.
                     </TableCell>
                   </TableRow>
