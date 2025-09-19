@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type UserRequest, type HRQuery } from "@/lib/types";
 import { db } from "@/lib/firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -27,6 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
@@ -35,10 +36,18 @@ export default function DashboardPage() {
   const [myRequests, setMyRequests] = useState<UserRequest[]>([]);
   const [assignedRequests, setAssignedRequests] = useState<UserRequest[]>([]);
   const [myQueries, setMyQueries] = useState<HRQuery[]>([]);
+  
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
+  const [isQueryDialogOpen, setIsQueryDialogOpen] = useState(false);
+  
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [responseAttachments, setResponseAttachments] = useState<File[]>([]);
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  
+  const [respondingQuery, setRespondingQuery] = useState<HRQuery | null>(null);
+  
   const { toast } = useToast();
 
   const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role)), [users]);
@@ -129,9 +138,61 @@ export default function DashboardPage() {
     }
   };
 
+  const handleQueryResponseSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!loggedInUser?.businessId || !respondingQuery) return;
+
+    setIsSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+    const response = formData.get('response') as string;
+
+    if (!response) {
+      toast({ title: "Response Required", description: "Please enter a response.", variant: "destructive" });
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      let attachmentUrls: { name: string, url: string }[] = [];
+      if (responseAttachments.length > 0) {
+        const uploadPromises = responseAttachments.map(async (file) => {
+          const folder = `hr_query_responses/${loggedInUser.id}`;
+          await uploadFile(loggedInUser.businessId!, folder, file, () => {});
+          const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
+          return { name: file.name, url };
+        });
+        attachmentUrls = await Promise.all(uploadPromises);
+      }
+
+      const queryRef = doc(db, 'hr_queries', respondingQuery.id);
+      await updateDoc(queryRef, {
+        status: 'Responded',
+        response: response,
+        responseAttachments: attachmentUrls,
+        respondedAt: new Date().toISOString(),
+      });
+
+      toast({ title: "Response Sent", description: "Your response has been sent to HR/management." });
+      setRespondingQuery(null);
+      setResponseAttachments([]);
+
+    } catch (error: any) {
+      toast({ title: "Response Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       if (event.target.files) {
           setAttachments(Array.from(event.target.files));
+      }
+  };
+
+  const handleResponseFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (event.target.files) {
+          setResponseAttachments(Array.from(event.target.files));
       }
   };
   
@@ -151,6 +212,22 @@ export default function DashboardPage() {
         return 'outline';
       default: return 'outline';
     }
+  };
+
+  const openQueryDialog = async (query: HRQuery) => {
+    setRespondingQuery(query);
+    setIsQueryDialogOpen(true);
+    // Mark as read if status is 'Sent'
+    if (query.status === 'Sent') {
+        const queryRef = doc(db, 'hr_queries', query.id);
+        await updateDoc(queryRef, { status: 'Read' });
+    }
+  };
+  
+  const closeQueryDialog = () => {
+    setRespondingQuery(null);
+    setIsQueryDialogOpen(false);
+    setResponseAttachments([]);
   };
 
   return (
@@ -312,7 +389,9 @@ export default function DashboardPage() {
                                       <Badge variant={getStatusBadgeVariant(query.status)}>{query.status}</Badge>
                                   </TableCell>
                                   <TableCell className="text-right">
-                                      <Button size="sm">View & Respond</Button>
+                                      <Button size="sm" onClick={() => openQueryDialog(query)}>
+                                        {query.status === 'Responded' ? 'Preview' : 'View & Respond'}
+                                      </Button>
                                   </TableCell>
                               </TableRow>
                           ))
@@ -469,6 +548,82 @@ export default function DashboardPage() {
             </div>
         </CardContent>
       </Card>
+      
+      <Dialog open={isQueryDialogOpen} onOpenChange={closeQueryDialog}>
+        <DialogContent className="sm:max-w-xl">
+          {respondingQuery && (
+            <form onSubmit={handleQueryResponseSubmit}>
+              <DialogHeader>
+                <DialogTitle>Query: {respondingQuery.title}</DialogTitle>
+                <DialogDescription>
+                  From: {respondingQuery.requesterName} on {format(new Date(respondingQuery.createdAt), 'PPP')}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Query Details</Label>
+                  <ScrollArea className="h-24 w-full rounded-md border p-4 bg-secondary/50">
+                    <p className="text-sm whitespace-pre-wrap">{respondingQuery.description}</p>
+                  </ScrollArea>
+                </div>
+                {respondingQuery.attachments && respondingQuery.attachments.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Attachments from Requester</Label>
+                    <div className="space-y-2 rounded-md border p-2">
+                      {respondingQuery.attachments.map((file, index) => (
+                        <Link key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                          <FileIcon className="h-4 w-4" /> {file.name}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="grid items-start gap-4">
+                  <Label htmlFor="response" className="pt-2">Your Response</Label>
+                  <Textarea id="response" name="response" className="" required placeholder="Please provide a detailed response..." disabled={respondingQuery.status === 'Responded'} defaultValue={respondingQuery.response || ''} />
+                </div>
+                <div className="grid items-start gap-4">
+                  <Label htmlFor="response-attachments" className="pt-2">Add Attachments</Label>
+                  <div className="">
+                    <Input id="response-attachments" type="file" multiple onChange={handleResponseFileChange} disabled={respondingQuery.status === 'Responded'}/>
+                    {responseAttachments.length > 0 && (
+                      <div className="mt-2 text-sm text-muted-foreground space-y-1">
+                        {responseAttachments.map(file => (
+                          <div key={file.name} className="flex items-center gap-2">
+                            <FileIcon className="h-4 w-4" />
+                            <span>{file.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {respondingQuery.status === 'Responded' && respondingQuery.responseAttachments && respondingQuery.responseAttachments.length > 0 && (
+                    <div className="space-y-2">
+                        <Label className="text-muted-foreground">Your Submitted Attachments</Label>
+                        <div className="space-y-2 rounded-md border p-2">
+                        {respondingQuery.responseAttachments.map((file, index) => (
+                            <Link key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                            <FileIcon className="h-4 w-4" /> {file.name}
+                            </Link>
+                        ))}
+                        </div>
+                    </div>
+                )}
+              </div>
+              <DialogFooter>
+                {respondingQuery.status !== 'Responded' && (
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Submit Response
+                  </Button>
+                )}
+                <Button type="button" variant="ghost" onClick={closeQueryDialog}>Close</Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
