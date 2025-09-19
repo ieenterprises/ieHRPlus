@@ -36,6 +36,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -283,7 +284,7 @@ export default function HrReviewPage() {
           </div>
           {isSeniorStaff && (
             <div className="flex items-center gap-2">
-                {selectedRecordIds.length > 0 && (
+                {selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length > 0 && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
@@ -392,7 +393,7 @@ export default function HrReviewPage() {
           </div>
           {isSeniorStaff && (
             <div className="flex items-center gap-2">
-                {selectedRecordIds.length > 0 && (
+                {selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length > 0 && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
@@ -517,3 +518,5 @@ export default function HrReviewPage() {
     </div>
   );
 }
+
+    
