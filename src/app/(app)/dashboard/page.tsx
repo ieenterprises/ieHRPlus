@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2, LogIn, PlusCircle } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import Link from 'next/link';
 
 const requestTypes = {
   "Financial Requests": ["Salary Advance", "Salary Correction", "Benefits Information"],
@@ -28,23 +29,24 @@ const requestTypes = {
 };
 
 export default function DashboardPage() {
-  const { loggedInUser, logout } = useSettings();
-  const [requests, setRequests] = useState<UserRequest[]>([]);
+  const { loggedInUser, logout, userRequests: allUserRequests } = useSettings();
+  const [myRequests, setMyRequests] = useState<UserRequest[]>([]);
+  const [assignedRequests, setAssignedRequests] = useState<UserRequest[]>([]);
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (!loggedInUser?.id) return;
 
-    const q = query(collection(db, "userRequests"), where("userId", "==", loggedInUser.id));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const userRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserRequest))
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setRequests(userRequests);
-    });
+    const mySubmittedRequests = allUserRequests.filter(req => req.userId === loggedInUser.id);
+    mySubmittedRequests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setMyRequests(mySubmittedRequests);
+    
+    const assignedToMe = allUserRequests.filter(req => req.assignedToId === loggedInUser.id && (req.status === 'Forwarded' || req.status === 'Pending'));
+    assignedToMe.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setAssignedRequests(assignedToMe);
 
-    return () => unsubscribe();
-  }, [loggedInUser?.id]);
+  }, [allUserRequests, loggedInUser?.id]);
 
   const handleSwitchUser = () => {
     // We log out without clocking out, preserving the "Clocked In" status.
@@ -86,6 +88,7 @@ export default function DashboardPage() {
       case 'Pending': return 'secondary';
       case 'Approved': return 'default';
       case 'Rejected': return 'destructive';
+      case 'Forwarded': return 'outline';
       default: return 'outline';
     }
   };
@@ -102,6 +105,46 @@ export default function DashboardPage() {
         </Button>
       </div>
       
+      {assignedRequests.length > 0 && (
+        <Card className="border-primary">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-primary">
+                    <AlertCircle />
+                    Pending Your Review
+                </CardTitle>
+                <CardDescription>
+                    These requests have been assigned to you for review and approval.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Request Type</TableHead>
+                            <TableHead>From</TableHead>
+                            <TableHead>Forwarded By</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {assignedRequests.map(req => (
+                            <TableRow key={req.id}>
+                                <TableCell className="font-medium">{req.requestType}</TableCell>
+                                <TableCell>{req.userName}</TableCell>
+                                <TableCell>{req.forwardedByName || 'Direct'}</TableCell>
+                                <TableCell className="text-right">
+                                    <Button asChild size="sm">
+                                        <Link href="/hr-review">Review Request</Link>
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card className="lg:col-span-1">
               <CardHeader>
@@ -212,18 +255,21 @@ export default function DashboardPage() {
                         <TableHead className="w-[200px]">Request Type</TableHead>
                         <TableHead>Description</TableHead>
                         <TableHead className="w-[120px]">Date Submitted</TableHead>
-                        <TableHead className="w-[120px] text-right">Status</TableHead>
+                        <TableHead className="w-[150px]">Status</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {requests.length > 0 ? (
-                        requests.map(request => (
+                    {myRequests.length > 0 ? (
+                        myRequests.map(request => (
                             <TableRow key={request.id}>
                                 <TableCell className="font-medium">{request.requestType}</TableCell>
                                 <TableCell className="text-muted-foreground truncate max-w-sm">{request.description}</TableCell>
                                 <TableCell>{format(new Date(request.createdAt), 'MMM d, yyyy')}</TableCell>
-                                <TableCell className="text-right">
+                                <TableCell>
                                     <Badge variant={getStatusBadgeVariant(request.status)}>{request.status}</Badge>
+                                    {request.status === 'Forwarded' && request.assignedToName && (
+                                        <p className="text-xs text-muted-foreground">with {request.assignedToName}</p>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))
@@ -239,5 +285,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

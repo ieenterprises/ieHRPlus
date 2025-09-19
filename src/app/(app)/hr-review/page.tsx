@@ -48,7 +48,7 @@ import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeB
 import { db } from "@/lib/firebase";
 import { TimeRecord, UserRequest, User } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon, Trash2, Search, ClipboardList, Send, FileCheck, FileX } from "lucide-react";
+import { Video, Download, Calendar as CalendarIcon, Trash2, Search, ClipboardList, Send, FileCheck, FileX, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -61,9 +61,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
 export default function HrReviewPage() {
-  const { loggedInUser, users } = useSettings();
+  const { loggedInUser, users, userRequests } = useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
-  const [userRequests, setUserRequests] = useState<UserRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -104,24 +103,8 @@ export default function HrReviewPage() {
       setLoading(false);
     });
 
-    const requestsQuery = query(
-        collection(db, "userRequests"),
-        where("businessId", "==", loggedInUser.businessId)
-    );
-
-    const requestsUnsubscribe = onSnapshot(requestsQuery, (snapshot) => {
-        const allRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserRequest));
-        allRequests.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setUserRequests(allRequests);
-    }, (error) => {
-        console.error("Error fetching user requests:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch user requests. ' + error.message });
-    });
-
-
     return () => {
         timeRecordsUnsubscribe();
-        requestsUnsubscribe();
     };
   }, [loggedInUser?.businessId, toast]);
 
@@ -163,6 +146,7 @@ export default function HrReviewPage() {
                 reviewComments,
                 reviewerId: loggedInUser.id,
                 reviewerName: loggedInUser.name,
+                 assignedToId: undefined, // Clear assignment
             };
         } else if (reviewAction === 'Reject') {
             updateData = {
@@ -171,6 +155,7 @@ export default function HrReviewPage() {
                 reviewComments,
                 reviewerId: loggedInUser.id,
                 reviewerName: loggedInUser.name,
+                assignedToId: undefined, // Clear assignment
             };
         } else if (reviewAction === 'Forward') {
             if (!forwardToUserId) {
@@ -460,7 +445,16 @@ export default function HrReviewPage() {
                                         <TableCell className="font-medium">{request.userName}</TableCell>
                                         <TableCell>{request.requestType}</TableCell>
                                         <TableCell>{format(new Date(request.createdAt), 'MMM d, yyyy')}</TableCell>
-                                        <TableCell>{request.assignedToName || 'HR Team'}</TableCell>
+                                        <TableCell>
+                                            {request.status === 'Forwarded' && request.assignedToName ? (
+                                                <Badge variant="outline" className="flex items-center gap-1.5">
+                                                    <AlertCircle className="h-3.5 w-3.5"/>
+                                                    {request.assignedToName}
+                                                </Badge>
+                                            ) : (
+                                                'HR Team'
+                                            )}
+                                        </TableCell>
                                         <TableCell><Badge variant={getBadgeVariant(request.status)}>{request.status}</Badge></TableCell>
                                         <TableCell className="text-right">
                                             {isSeniorStaff && (
@@ -799,22 +793,24 @@ export default function HrReviewPage() {
                         </div>
                     )}
                 </div>
-                <DialogFooter className="gap-2">
-                    <Button variant="ghost" onClick={handleCloseReviewDialog}>Cancel</Button>
-                    {forwardToUserId ? (
-                        <Button onClick={() => { setReviewAction('Forward'); handleSubmitReview(); }}>
-                            <Send className="mr-2 h-4 w-4"/> Forward Request
-                        </Button>
-                    ) : (
-                        <>
-                            <Button variant="destructive" onClick={() => { setReviewAction('Reject'); handleSubmitReview(); }}>
-                                <FileX className="mr-2 h-4 w-4"/> Reject
+                <DialogFooter className="gap-2 sm:justify-between mt-4">
+                    <Button variant="ghost" onClick={handleCloseReviewDialog} className="order-last sm:order-first">Cancel</Button>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                        {forwardToUserId ? (
+                            <Button onClick={() => { setReviewAction('Forward'); handleSubmitReview(); }}>
+                                <Send className="mr-2 h-4 w-4"/> Forward Request
                             </Button>
-                            <Button onClick={() => { setReviewAction('Approve'); handleSubmitReview(); }}>
-                                <FileCheck className="mr-2 h-4 w-4"/> Approve
-                            </Button>
-                        </>
-                    )}
+                        ) : (
+                            <>
+                                <Button variant="destructive" onClick={() => { setReviewAction('Reject'); handleSubmitReview(); }}>
+                                    <FileX className="mr-2 h-4 w-4"/> Reject
+                                </Button>
+                                <Button onClick={() => { setReviewAction('Approve'); handleSubmitReview(); }}>
+                                    <FileCheck className="mr-2 h-4 w-4"/> Approve
+                                </Button>
+                            </>
+                        )}
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
