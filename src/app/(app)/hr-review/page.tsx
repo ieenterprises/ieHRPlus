@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -69,6 +68,7 @@ export default function HrReviewPage() {
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
   const [pendingSearchTerm, setPendingSearchTerm] = useState("");
   const [historySearchTerm, setHistorySearchTerm] = useState("");
   const [requestSearchTerm, setRequestSearchTerm] = useState("");
@@ -120,6 +120,10 @@ export default function HrReviewPage() {
   useEffect(() => {
       setSelectedRecordIds([]);
   }, [selectedDate, filteredTimeRecords]);
+
+  useEffect(() => {
+    setSelectedRequestIds([]);
+  }, [userRequests]);
   
   const handleOpenReviewDialog = (request: UserRequest) => {
     setReviewRequest(request);
@@ -285,6 +289,42 @@ export default function HrReviewPage() {
     }
   };
   
+  const handleDeleteSelectedRequests = async () => {
+    const batch = writeBatch(db);
+    const requestsToDelete = userRequests.filter(r => selectedRequestIds.includes(r.id));
+    
+    requestsToDelete.forEach(request => {
+        batch.delete(doc(db, "userRequests", request.id));
+        if (request.attachments && request.attachments.length > 0) {
+            request.attachments.forEach(attachment => {
+                try {
+                    // Firebase Storage URLs are complex, so we need to parse them.
+                    // This is a robust way to get the path from a gs:// or https:// URL.
+                    const fileRef = ref(storage, attachment.url);
+                    deleteObject(fileRef).catch(e => console.warn("Could not delete attachment:", attachment.url, e));
+                } catch (e) {
+                    console.warn("Invalid attachment URL, cannot delete:", attachment.url, e);
+                }
+            });
+        }
+    });
+
+    try {
+        await batch.commit();
+        toast({
+            title: `${selectedRequestIds.length} Request(s) Deleted`,
+            description: "The selected requests have been permanently removed.",
+        });
+        setSelectedRequestIds([]);
+    } catch (error: any) {
+         toast({
+            title: "Deletion Failed",
+            description: error.message,
+            variant: "destructive"
+        });
+    }
+  };
+  
   const getBadgeVariant = (status: TimeRecord['status'] | UserRequest['status']) => {
     switch (status) {
       case 'pending':
@@ -364,6 +404,16 @@ export default function HrReviewPage() {
         checked ? [...prev, id] : prev.filter(pId => pId !== id)
     );
   };
+  
+  const handleSelectAllRequests = (checked: boolean) => {
+    setSelectedRequestIds(checked ? filteredUserRequests.map(r => r.id) : []);
+  };
+
+  const handleSelectRequest = (id: string, checked: boolean) => {
+    setSelectedRequestIds(prev => 
+        checked ? [...prev, id] : prev.filter(pId => pId !== id)
+    );
+  };
 
 
   return (
@@ -404,10 +454,26 @@ export default function HrReviewPage() {
                         <CardTitle className="flex items-center gap-2"><ClipboardList /> User Requests</CardTitle>
                         <CardDescription>Review, approve, reject, or forward employee requests.</CardDescription>
                     </div>
-                     <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredUserRequests, 'requests')} disabled={filteredUserRequests.length === 0}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Download CSV
-                    </Button>
+                     <div className="flex items-center gap-2 self-start sm:self-center">
+                        {selectedRequestIds.length > 0 && (
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="sm">
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete ({selectedRequestIds.length})
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected requests and their associated files. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelectedRequests} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredUserRequests, 'requests')} disabled={filteredUserRequests.length === 0}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download CSV
+                        </Button>
+                    </div>
                 </div>
                 <div className="mt-4">
                     <div className="relative w-full max-w-sm">
@@ -426,6 +492,13 @@ export default function HrReviewPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                <TableHead padding="checkbox">
+                                    <Checkbox
+                                        checked={filteredUserRequests.length > 0 && selectedRequestIds.length === filteredUserRequests.length}
+                                        onCheckedChange={(checked) => handleSelectAllRequests(!!checked)}
+                                        aria-label="Select all requests"
+                                    />
+                                </TableHead>
                                 <TableHead>Employee</TableHead>
                                 <TableHead>Request Type</TableHead>
                                 <TableHead>Submitted</TableHead>
@@ -436,10 +509,17 @@ export default function HrReviewPage() {
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                <TableRow><TableCell colSpan={6} className="h-24 text-center">Loading requests...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="h-24 text-center">Loading requests...</TableCell></TableRow>
                             ) : filteredUserRequests.length > 0 ? (
                                 filteredUserRequests.map(request => (
-                                    <TableRow key={request.id}>
+                                    <TableRow key={request.id} data-state={selectedRequestIds.includes(request.id) && "selected"}>
+                                         <TableCell padding="checkbox">
+                                            <Checkbox
+                                                checked={selectedRequestIds.includes(request.id)}
+                                                onCheckedChange={(checked) => handleSelectRequest(request.id, !!checked)}
+                                                aria-label="Select request"
+                                            />
+                                        </TableCell>
                                         <TableCell className="font-medium">{request.userName}</TableCell>
                                         <TableCell>{request.requestType}</TableCell>
                                         <TableCell>{format(new Date(request.createdAt), 'MMM d, yyyy')}</TableCell>
@@ -468,7 +548,7 @@ export default function HrReviewPage() {
                                     </TableRow>
                                 ))
                             ) : (
-                                <TableRow><TableCell colSpan={6} className="h-24 text-center">No user requests found.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="h-24 text-center">No user requests found.</TableCell></TableRow>
                             )}
                         </TableBody>
                     </Table>
@@ -850,5 +930,7 @@ export default function HrReviewPage() {
     </div>
   );
 }
+
+    
 
     
