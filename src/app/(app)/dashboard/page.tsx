@@ -273,7 +273,7 @@ export default function DashboardPage() {
                                 <Textarea id="description" name="description" className="col-span-3" required placeholder="Please provide a detailed description..." />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label className="text-right">Leave Dates</Label>
+                                <Label className="text-right">Dates</Label>
                                 <Popover>
                                     <PopoverTrigger asChild>
                                     <Button
@@ -393,5 +393,7 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
 
     
