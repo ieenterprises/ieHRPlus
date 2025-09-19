@@ -2,6 +2,21 @@
 
 import type { AnyPermission } from "./permissions";
 
+export type UserRequest = {
+  id: string;
+  userId: string;
+  userName: string;
+  businessId: string;
+  requestType: string;
+  description: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  createdAt: string;
+  updatedAt?: string;
+  reviewerId?: string;
+  reviewerName?: string;
+  reviewComments?: string;
+};
+
 export type TimeRecord = {
   id: string;
   userId: string;
@@ -658,5 +673,7 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
+
+    
 
     
