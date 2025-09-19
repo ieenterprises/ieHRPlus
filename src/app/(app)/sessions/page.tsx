@@ -38,6 +38,7 @@ import { TimeRecord, User } from "@/lib/types";
 import { format, formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type ActiveSession = TimeRecord & {
     user: User | undefined;
@@ -52,6 +53,7 @@ export default function SessionsPage() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     if (!loggedInUser?.businessId) {
@@ -81,7 +83,7 @@ export default function SessionsPage() {
     return () => unsubscribe();
   }, [loggedInUser?.businessId, loggedInUser?.id, users]);
   
-  const handleEndSessionClick = (session: ActiveSession) => {
+  const handleTakeOverSessionClick = (session: ActiveSession) => {
     setSelectedSession(session);
   };
 
@@ -92,23 +94,18 @@ export default function SessionsPage() {
     setIsVerifying(true);
 
     try {
-        // Step 1: Temporarily sign in the user whose session we are ending
-        const userCredential = await signInWithEmailAndPassword(auth, selectedSession.user.email, password);
+        // Step 1: Sign in the user whose session we are taking over
+        await signInWithEmailAndPassword(auth, selectedSession.user.email, password);
 
-        // Step 2: Now that they are "logged in", call the logout function.
-        // The logout function contains the logic to update their time record to "Clocked Out".
-        await logout();
-
+        // Step 2: On success, redirect them to their dashboard.
+        // The auth state change will be picked up by the layout, and they will be logged in.
         toast({
-            title: "Session Ended",
-            description: `${selectedSession.user.name}'s session has been successfully ended and clocked out.`,
+            title: "Authentication Successful",
+            description: `Welcome back, ${selectedSession.user.name}. Redirecting to your dashboard...`,
         });
-
-        // The logout function will redirect to sign-in.
-        // To bring back the original user, we need them to sign in again.
-        // We can't automatically re-login the original user for security reasons.
-        // The shared device workflow implies the next user will sign in anyway.
+        
         handleCloseDialog();
+        router.push('/dashboard');
         
     } catch (error: any) {
         toast({
@@ -137,7 +134,7 @@ export default function SessionsPage() {
         <CardHeader>
           <CardTitle>Clocked-In Users</CardTitle>
           <CardDescription>
-            These users have active sessions. You can end a session to clock them out.
+            Select a user to take over their session and access their dashboard.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -180,8 +177,8 @@ export default function SessionsPage() {
                         {formatDistanceToNow(new Date(session.clockInTime), { addSuffix: true })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => handleEndSessionClick(session)}>
-                            End Session
+                        <Button variant="outline" size="sm" onClick={() => handleTakeOverSessionClick(session)}>
+                            Resume Session
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -203,9 +200,9 @@ export default function SessionsPage() {
         <DialogContent>
           <form onSubmit={handleVerification}>
             <DialogHeader>
-                <DialogTitle>End Session for {selectedSession?.user?.name}?</DialogTitle>
+                <DialogTitle>Resume Session for {selectedSession?.user?.name}</DialogTitle>
                 <DialogDescription>
-                    To clock out and end this session, please enter the user's password for verification.
+                    To resume this session and go to the dashboard, please enter the user's password for verification.
                 </DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-4">
@@ -230,7 +227,7 @@ export default function SessionsPage() {
                 <Button type="button" variant="ghost" onClick={handleCloseDialog}>Cancel</Button>
                 <Button type="submit" disabled={isVerifying}>
                     {isVerifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Verify & Clock Out
+                    Verify & Resume
                 </Button>
             </DialogFooter>
           </form>
