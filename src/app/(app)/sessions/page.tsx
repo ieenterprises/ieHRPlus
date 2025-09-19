@@ -35,7 +35,7 @@ import { collection, onSnapshot, query, where, doc, updateDoc } from "firebase/f
 import { db, auth } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { TimeRecord, User } from "@/lib/types";
-import { format, formatDistanceToNow, startOfDay, endOfDay } from "date-fns";
+import { format, formatDistanceToNow, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, Calendar as CalendarIcon, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -68,22 +68,29 @@ export default function SessionsPage() {
     }
     
     setLoading(true);
-    const start = startOfDay(selectedDate);
-    const end = endOfDay(selectedDate);
-
+    
+    // Query only by businessId to avoid composite index requirement
     const q = query(
       collection(db, "timeRecords"),
-      where("businessId", "==", loggedInUser.businessId),
-      where("clockInTime", ">=", start.toISOString()),
-      where("clockInTime", "<=", end.toISOString())
+      where("businessId", "==", loggedInUser.businessId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
-       // Sort records client-side
-      records.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+      const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
+
+      // Perform date filtering and sorting on the client side
+      const start = startOfDay(selectedDate);
+      const end = endOfDay(selectedDate);
       
-      const populatedSessions: ActiveSession[] = records
+      const filteredRecords = allRecords.filter(record => {
+        const clockInDate = new Date(record.clockInTime);
+        return isWithinInterval(clockInDate, { start, end });
+      });
+
+      // Sort records client-side
+      filteredRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+      
+      const populatedSessions: ActiveSession[] = filteredRecords
         .map(record => ({
           ...record,
           user: users.find(u => u.id === record.userId),

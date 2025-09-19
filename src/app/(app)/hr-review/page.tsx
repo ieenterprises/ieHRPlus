@@ -32,7 +32,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
-import { format, startOfDay, endOfDay } from "date-fns";
+import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { Video, Download, Calendar as CalendarIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
@@ -56,21 +56,28 @@ export default function HrReviewPage() {
       return;
     }
 
-    const start = startOfDay(selectedDate);
-    const end = endOfDay(selectedDate);
-
+    // Query only by businessId to avoid composite index requirement
     const q = query(
       collection(db, "timeRecords"),
-      where("businessId", "==", loggedInUser.businessId),
-      where("clockInTime", ">=", start.toISOString()),
-      where("clockInTime", "<=", end.toISOString())
+      where("businessId", "==", loggedInUser.businessId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
+      const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
+      
+      // Perform date filtering and sorting on the client side
+      const start = startOfDay(selectedDate);
+      const end = endOfDay(selectedDate);
+      
+      const filteredRecords = allRecords.filter(record => {
+        const clockInDate = new Date(record.clockInTime);
+        return isWithinInterval(clockInDate, { start, end });
+      });
+
       // Sort records client-side
-      records.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
-      setTimeRecords(records);
+      filteredRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+      
+      setTimeRecords(filteredRecords);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching time records:", error);
