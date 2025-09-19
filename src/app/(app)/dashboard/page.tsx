@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2 } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,10 @@ import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import Link from 'next/link';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
@@ -33,6 +37,7 @@ export default function DashboardPage() {
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const { toast } = useToast();
 
   const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role)), [users]);
@@ -85,7 +90,7 @@ export default function DashboardPage() {
             attachmentUrls = await Promise.all(uploadPromises);
         }
 
-        await addDoc(collection(db, "userRequests"), {
+        const newRequest: Partial<UserRequest> = {
             userId: loggedInUser.id,
             userName: loggedInUser.name,
             businessId: loggedInUser.businessId,
@@ -96,11 +101,21 @@ export default function DashboardPage() {
             assignedToName: assignedToUser?.name || null,
             status: "Pending",
             createdAt: new Date().toISOString(),
-        });
+        };
+
+        if (dateRange?.from) {
+            newRequest.startDate = dateRange.from.toISOString();
+        }
+        if (dateRange?.to) {
+            newRequest.endDate = dateRange.to.toISOString();
+        }
+
+        await addDoc(collection(db, "userRequests"), newRequest);
         
         toast({ title: "Request Submitted", description: "Your request has been sent for review." });
         setIsRequestDialogOpen(false);
         setAttachments([]);
+        setDateRange(undefined);
     } catch (error: any) {
         toast({ title: "Submission Failed", description: error.message, variant: "destructive" });
     } finally {
@@ -256,6 +271,45 @@ export default function DashboardPage() {
                              <div className="grid grid-cols-4 items-start gap-4">
                                 <Label htmlFor="description" className="text-right pt-2">Description</Label>
                                 <Textarea id="description" name="description" className="col-span-3" required placeholder="Please provide a detailed description..." />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label className="text-right">Leave Dates</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                    <Button
+                                        id="date"
+                                        variant={"outline"}
+                                        className={cn(
+                                        "col-span-3 justify-start text-left font-normal",
+                                        !dateRange && "text-muted-foreground"
+                                        )}
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {dateRange?.from ? (
+                                        dateRange.to ? (
+                                            <>
+                                            {format(dateRange.from, "LLL dd, y")} -{" "}
+                                            {format(dateRange.to, "LLL dd, y")}
+                                            </>
+                                        ) : (
+                                            format(dateRange.from, "LLL dd, y")
+                                        )
+                                        ) : (
+                                        <span>Pick a date range</span>
+                                        )}
+                                    </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                        initialFocus
+                                        mode="range"
+                                        defaultMonth={dateRange?.from}
+                                        selected={dateRange}
+                                        onSelect={setDateRange}
+                                        numberOfMonths={2}
+                                    />
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                              <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="assignedToId" className="text-right">Assign To</Label>

@@ -777,6 +777,21 @@ export default function HrReviewPage() {
                              </div>
                         </div>
                     )}
+                    {(reviewRequest?.startDate || reviewRequest?.endDate) && (
+                        <div className="space-y-1">
+                            <Label className="text-muted-foreground">Requested Dates</Label>
+                            <div className="flex items-center gap-2 text-sm rounded-md border p-3">
+                                <CalendarIcon className="h-4 w-4" />
+                                <span>
+                                    {reviewRequest.startDate ? format(new Date(reviewRequest.startDate), "PPP") : '...'}
+                                </span>
+                                <span>-</span>
+                                <span>
+                                    {reviewRequest.endDate ? format(new Date(reviewRequest.endDate), "PPP") : '...'}
+                                </span>
+                            </div>
+                        </div>
+                    )}
                      {reviewRequest?.forwardingComments && (
                          <div className="space-y-1">
                             <Label className="text-muted-foreground">Forwarding Comments from {reviewRequest.forwardedByName}</Label>

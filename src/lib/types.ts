@@ -23,6 +23,9 @@ export type UserRequest = {
   forwardingComments?: string;
   // Field for attachments
   attachments?: { name: string; url: string }[];
+  // Fields for date ranges
+  startDate?: string;
+  endDate?: string;
 };
 
 export type TimeRecord = {
