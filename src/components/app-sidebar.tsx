@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -60,6 +59,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/sessions", icon: Users, label: "Sessions", permission: "MANAGE_USERS" },
   { href: "/hr-review", icon: Briefcase, label: "HR Review", permission: "MANAGE_USERS" },
   { href: "/file-manager", icon: Folder, label: "File Manager" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_USERS", offlineDisabled: true },
@@ -300,5 +300,3 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
-
-    
