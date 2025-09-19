@@ -51,7 +51,7 @@ export default function SignInPage() {
           userEmail: userData.email,
           clockInTime: new Date().toISOString(),
           clockOutTime: null,
-          status: 'pending',
+          status: 'Clocked In',
           businessId: userData.businessId,
           videoUrl: null,
         } as Omit<TimeRecord, 'id'>);

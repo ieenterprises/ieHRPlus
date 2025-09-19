@@ -39,7 +39,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 
 export default function HrReviewPage() {
-  const { loggedInUser } = useSettings();
+  const { loggedInUser } from useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
@@ -65,42 +65,6 @@ export default function HrReviewPage() {
 
     return () => unsubscribe();
   }, [loggedInUser?.businessId]);
-
-  const handleApprove = async (recordId: string) => {
-    const recordRef = doc(db, 'timeRecords', recordId);
-    try {
-        await updateDoc(recordRef, { status: 'Clocked In' });
-        toast({ title: "Record Approved", description: "The user's clock-in has been approved." });
-    } catch (error) {
-        console.error("Error approving record:", error);
-        toast({ title: "Error", description: "Could not approve the record.", variant: "destructive" });
-    }
-  };
-
-  const handleReject = async (record: TimeRecord) => {
-    try {
-        // Delete the record from Firestore
-        await deleteDoc(doc(db, 'timeRecords', record.id));
-
-        // If there's a video, delete it from Storage
-        if (record.videoUrl) {
-            // Extract the storage path from the URL
-            try {
-                const videoPath = decodeURIComponent(record.videoUrl.split('/o/')[1].split('?')[0]);
-                const videoRef = ref(storage, videoPath);
-                await deleteObject(videoRef);
-            } catch (storageError) {
-                console.warn("Could not delete video from storage, it might have already been removed or the URL is malformed:", storageError);
-            }
-        }
-        
-        toast({ title: "Record Rejected", description: "The record and associated video have been deleted.", variant: "destructive" });
-
-    } catch (error) {
-        console.error("Error rejecting record:", error);
-        toast({ title: "Error", description: "Could not reject the record.", variant: "destructive" });
-    }
-  };
   
   const getBadgeVariant = (status: TimeRecord['status']) => {
     switch (status) {
@@ -136,9 +100,9 @@ export default function HrReviewPage() {
       <PageHeader title="HR Review" description="Review and manage employee clock-in/out records." />
       <Card>
         <CardHeader>
-          <CardTitle>Pending Submissions</CardTitle>
+          <CardTitle>Time Clock History</CardTitle>
           <CardDescription>
-            These are the clock-in records waiting for review.
+            This is a log of all employee clock-in and clock-out events.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -152,13 +116,12 @@ export default function HrReviewPage() {
                   <TableHead>Clock Out Time</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
@@ -189,18 +152,12 @@ export default function HrReviewPage() {
                           {record.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleApprove(record.id)} disabled={record.status !== 'pending'}>Approve</Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleReject(record)} disabled={record.status !== 'pending'}>Reject</Button>
-                        </div>
-                      </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
-                      No pending submissions found.
+                    <TableCell colSpan={6} className="h-24 text-center">
+                      No time clock records found.
                     </TableCell>
                   </TableRow>
                 )}
