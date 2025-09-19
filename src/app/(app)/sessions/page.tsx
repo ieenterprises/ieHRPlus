@@ -31,7 +31,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSettings } from "@/hooks/use-settings";
-import { collection, onSnapshot, query, where, doc, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, updateDoc, orderBy } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { TimeRecord, User } from "@/lib/types";
@@ -75,7 +75,8 @@ export default function SessionsPage() {
       collection(db, "timeRecords"),
       where("businessId", "==", loggedInUser.businessId),
       where("clockInTime", ">=", start.toISOString()),
-      where("clockInTime", "<=", end.toISOString())
+      where("clockInTime", "<=", end.toISOString()),
+      orderBy("clockInTime", "desc")
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -87,7 +88,7 @@ export default function SessionsPage() {
         }))
         .filter(session => session.user);
 
-      setSessions(populatedSessions.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime()));
+      setSessions(populatedSessions);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching sessions:", error);

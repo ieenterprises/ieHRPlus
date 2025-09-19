@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useSettings } from "@/hooks/use-settings";
-import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
 import { format, startOfDay, endOfDay } from "date-fns";
@@ -63,12 +63,13 @@ export default function HrReviewPage() {
       collection(db, "timeRecords"),
       where("businessId", "==", loggedInUser.businessId),
       where("clockInTime", ">=", start.toISOString()),
-      where("clockInTime", "<=", end.toISOString())
+      where("clockInTime", "<=", end.toISOString()),
+      orderBy("clockInTime", "desc")
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
-      setTimeRecords(records.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime()));
+      setTimeRecords(records);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching time records:", error);
