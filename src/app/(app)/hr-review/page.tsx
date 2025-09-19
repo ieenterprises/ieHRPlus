@@ -55,6 +55,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import Papa from "papaparse";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
@@ -119,7 +120,7 @@ export default function HrReviewPage() {
         timeRecordsUnsubscribe();
         requestsUnsubscribe();
     };
-  }, [loggedInUser?.businessId]);
+  }, [loggedInUser?.businessId, toast]);
 
   const filteredTimeRecords = useMemo(() => {
     const start = startOfDay(selectedDate);
@@ -713,25 +714,39 @@ export default function HrReviewPage() {
       </Dialog>
       
        <Dialog open={!!selectedRequest} onOpenChange={(open) => !open && handleCloseReviewDialog()}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Review Request: {reviewAction}</DialogTitle>
+            <DialogTitle>Review Request: {selectedRequest?.requestType}</DialogTitle>
             <DialogDescription>
-              Add comments before you {reviewAction?.toLowerCase()} this request from {selectedRequest?.userName}.
+              From: {selectedRequest?.userName}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <Label htmlFor="comments">Comments (optional)</Label>
-            <Textarea 
-                id="comments" 
-                value={reviewComments} 
-                onChange={(e) => setReviewComments(e.target.value)}
-                placeholder="Provide feedback or reasons for your decision..."
-            />
+             <div>
+                <Label className="text-muted-foreground">Full Description</Label>
+                <ScrollArea className="h-32 w-full rounded-md border p-4 mt-1">
+                    <p className="text-sm whitespace-pre-wrap">{selectedRequest?.description}</p>
+                </ScrollArea>
+             </div>
+            <div>
+              <Label htmlFor="comments">Comments (optional)</Label>
+              <Textarea 
+                  id="comments" 
+                  value={reviewComments} 
+                  onChange={(e) => setReviewComments(e.target.value)}
+                  placeholder="Provide feedback or reasons for your decision..."
+                  className="mt-1"
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={handleCloseReviewDialog}>Cancel</Button>
-            <Button onClick={handleSubmitReview}>Confirm {reviewAction}</Button>
+            <Button 
+                onClick={handleSubmitReview}
+                className={reviewAction === 'Rejected' ? 'bg-destructive hover:bg-destructive/90' : ''}
+            >
+                Confirm {reviewAction}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -739,4 +754,3 @@ export default function HrReviewPage() {
     </div>
   );
 }
-
