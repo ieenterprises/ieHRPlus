@@ -536,12 +536,8 @@ export default function HrReviewPage() {
                                         <TableCell><Badge variant={getBadgeVariant(request.status)}>{request.status}</Badge></TableCell>
                                         <TableCell className="text-right">
                                             {isSeniorStaff && (
-                                                <Button 
-                                                    size="sm" 
-                                                    onClick={() => handleOpenReviewDialog(request)}
-                                                    disabled={request.status === 'Approved' || request.status === 'Rejected'}
-                                                >
-                                                    Review
+                                                <Button size="sm" onClick={() => handleOpenReviewDialog(request)}>
+                                                    {request.status === 'Approved' || request.status === 'Rejected' ? 'Preview' : 'Review'}
                                                 </Button>
                                             )}
                                         </TableCell>
@@ -880,49 +876,66 @@ export default function HrReviewPage() {
                             </ScrollArea>
                         </div>
                     )}
-                    <div className="space-y-1">
-                        <Label htmlFor="comments">Add Comments (optional)</Label>
-                        <Textarea
-                            id="comments"
-                            value={reviewComments}
-                            onChange={(e) => setReviewComments(e.target.value)}
-                            placeholder="Provide feedback or reasons for your decision..."
-                        />
-                    </div>
-                     {seniorStaffList.length > 0 && (
-                        <div className="space-y-1">
-                            <Label htmlFor="forwardTo">Forward To (optional)</Label>
-                             <Select onValueChange={setForwardToUserId} value={forwardToUserId}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select a user to forward this request to..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {seniorStaffList.map(user => (
-                                        <SelectItem key={user.id} value={user.id}>{user.name} ({user.role})</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                    
+                    {reviewRequest?.status !== 'Approved' && reviewRequest?.status !== 'Rejected' && (
+                        <>
+                            <div className="space-y-1">
+                                <Label htmlFor="comments">Add Comments (optional)</Label>
+                                <Textarea
+                                    id="comments"
+                                    value={reviewComments}
+                                    onChange={(e) => setReviewComments(e.target.value)}
+                                    placeholder="Provide feedback or reasons for your decision..."
+                                />
+                            </div>
+                            {seniorStaffList.length > 0 && (
+                                <div className="space-y-1">
+                                    <Label htmlFor="forwardTo">Forward To (optional)</Label>
+                                    <Select onValueChange={setForwardToUserId} value={forwardToUserId}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Select a user to forward this request to..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {seniorStaffList.map(user => (
+                                                <SelectItem key={user.id} value={user.id}>{user.name} ({user.role})</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+                        </>
+                    )}
+                    {reviewRequest && (reviewRequest.status === 'Approved' || reviewRequest.status === 'Rejected') && reviewRequest.reviewComments && (
+                         <div className="space-y-1">
+                            <Label className="text-muted-foreground">Reviewer Comments from {reviewRequest.reviewerName}</Label>
+                            <ScrollArea className="h-20 w-full rounded-md border p-4 bg-secondary/50">
+                                <p className="text-sm whitespace-pre-wrap">{reviewRequest.reviewComments}</p>
+                            </ScrollArea>
                         </div>
                     )}
+
                 </div>
                 <DialogFooter className="gap-2 sm:justify-between mt-4">
-                    <Button variant="ghost" onClick={handleCloseReviewDialog} className="order-last sm:order-first">Cancel</Button>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                        {forwardToUserId ? (
-                            <Button onClick={() => { setReviewAction('Forward'); handleSubmitReview(); }}>
-                                <Send className="mr-2 h-4 w-4"/> Forward Request
-                            </Button>
-                        ) : (
-                            <>
-                                <Button variant="destructive" onClick={() => { setReviewAction('Reject'); handleSubmitReview(); }}>
-                                    <FileX className="mr-2 h-4 w-4"/> Reject
+                    <Button variant="ghost" onClick={handleCloseReviewDialog} className="order-last sm:order-first">Close</Button>
+                    
+                    {reviewRequest?.status !== 'Approved' && reviewRequest?.status !== 'Rejected' && (
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            {forwardToUserId ? (
+                                <Button onClick={() => { setReviewAction('Forward'); handleSubmitReview(); }}>
+                                    <Send className="mr-2 h-4 w-4"/> Forward Request
                                 </Button>
-                                <Button onClick={() => { setReviewAction('Approve'); handleSubmitReview(); }}>
-                                    <FileCheck className="mr-2 h-4 w-4"/> Approve
-                                </Button>
-                            </>
-                        )}
-                    </div>
+                            ) : (
+                                <>
+                                    <Button variant="destructive" onClick={() => { setReviewAction('Reject'); handleSubmitReview(); }}>
+                                        <FileX className="mr-2 h-4 w-4"/> Reject
+                                    </Button>
+                                    <Button onClick={() => { setReviewAction('Approve'); handleSubmitReview(); }}>
+                                        <FileCheck className="mr-2 h-4 w-4"/> Approve
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -930,7 +943,3 @@ export default function HrReviewPage() {
     </div>
   );
 }
-
-    
-
-    
