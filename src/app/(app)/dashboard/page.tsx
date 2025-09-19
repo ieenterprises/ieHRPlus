@@ -24,13 +24,6 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import Link from 'next/link';
 
-const requestTypes = {
-  "Financial Requests": ["Salary Advance", "Salary Correction", "Benefits Information"],
-  "Leave & Time-Off Requests": ["Leave of Absence", "Maternity/Paternity Leave"],
-  "Workplace & Professional Development": ["Training & Growth Opportunities", "Feedback & Performance Review", "Changes in Job Description or Contract"],
-  "Workplace Environment & Support": ["Grievance Redressal", "Reasonable Accommodations"],
-};
-
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
 export default function DashboardPage() {
@@ -75,7 +68,7 @@ export default function DashboardPage() {
     const assignedToUser = users.find(u => u.id === assignedToId);
 
     if (!requestType || !description) {
-        toast({ title: "Missing Information", description: "Please select a request type and provide a description.", variant: "destructive" });
+        toast({ title: "Missing Information", description: "Please enter a request type and provide a description.", variant: "destructive" });
         setIsSubmitting(false);
         return;
     }
@@ -253,26 +246,12 @@ export default function DashboardPage() {
                     <form onSubmit={handleRequestSubmit}>
                         <DialogHeader>
                             <DialogTitle>New Request</DialogTitle>
-                            <DialogDescription>Select the type of request, provide details, and optionally assign it to a manager.</DialogDescription>
+                            <DialogDescription>Provide a request type, a detailed description, and optionally assign it to a manager.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-6">
-                            <div className="grid grid-cols-4 items-center gap-4">
+                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="requestType" className="text-right">Request Type</Label>
-                                <Select name="requestType" required>
-                                    <SelectTrigger className="col-span-3">
-                                        <SelectValue placeholder="Select a request type..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {Object.entries(requestTypes).map(([group, types]) => (
-                                            <div key={group}>
-                                                <p className="px-2 py-1.5 text-sm font-semibold">{group}</p>
-                                                {types.map(type => (
-                                                    <SelectItem key={type} value={type} className="pl-4">{type}</SelectItem>
-                                                ))}
-                                            </div>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Input id="requestType" name="requestType" className="col-span-3" required placeholder="e.g., Salary Advance, Leave of Absence" />
                             </div>
                              <div className="grid grid-cols-4 items-start gap-4">
                                 <Label htmlFor="description" className="text-right pt-2">Description</Label>
@@ -360,3 +339,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
