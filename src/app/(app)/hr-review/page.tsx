@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -33,16 +32,21 @@ import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
-import { format } from "date-fns";
-import { Video, Download } from "lucide-react";
+import { format, startOfDay, endOfDay } from "date-fns";
+import { Video, Download, Calendar as CalendarIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import Papa from "papaparse";
 
 export default function HrReviewPage() {
   const { loggedInUser } = useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -52,20 +56,49 @@ export default function HrReviewPage() {
       return;
     }
 
-    // Query for pending and recently handled records
+    const start = startOfDay(selectedDate);
+    const end = endOfDay(selectedDate);
+
     const q = query(
       collection(db, "timeRecords"),
-      where("businessId", "==", loggedInUser.businessId)
+      where("businessId", "==", loggedInUser.businessId),
+      where("clockInTime", ">=", start.toISOString()),
+      where("clockInTime", "<=", end.toISOString())
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
       setTimeRecords(records.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime()));
       setLoading(false);
+    }, (error) => {
+      console.error("Error fetching time records:", error);
+      setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [loggedInUser?.businessId]);
+  }, [loggedInUser?.businessId, selectedDate]);
+  
+  const handleExportCSV = (data: TimeRecord[], tableType: 'pending' | 'history') => {
+    const csvData = data.map(record => ({
+      "Employee": record.userName,
+      "Email": record.userEmail,
+      "Clock In Time": format(new Date(record.clockInTime), "MMM d, yyyy, h:mm a"),
+      "Clock Out Time": record.clockOutTime ? format(new Date(record.clockOutTime), "MMM d, yyyy, h:mm a") : "-",
+      "Status": record.status,
+    }));
+
+    const csv = Papa.unparse(csvData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${tableType}_records_${format(selectedDate, 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete" });
+  };
+
 
   const handleStatusUpdate = async (recordId: string, status: 'Clocked In' | 'rejected') => {
     try {
@@ -87,16 +120,11 @@ export default function HrReviewPage() {
   const handleDelete = async (record: TimeRecord) => {
       if (!record.id) return;
       try {
-        // If there's a video, delete it from storage first
         if (record.videoUrl) {
-            // Create a reference to the file to delete
             const videoRef = ref(storage, record.videoUrl);
             await deleteObject(videoRef);
         }
-
-        // Then delete the Firestore document
         await deleteDoc(doc(db, "timeRecords", record.id));
-        
         toast({
             title: "Record Deleted",
             description: "The time record and associated video have been permanently deleted.",
@@ -135,20 +163,53 @@ export default function HrReviewPage() {
     a.href = url;
     a.download = `verification_${userName.replace(' ', '_')}_${new Date().toISOString()}.webm`;
     document.body.appendChild(a);
-a.click();
+    a.click();
     document.body.removeChild(a);
   };
+  
+  const pendingRecords = timeRecords.filter(r => r.status === 'pending');
+  const historicalRecords = timeRecords.filter(r => r.status !== 'pending');
 
 
   return (
     <div className="space-y-8">
-      <PageHeader title="HR Review" description="Review and manage employee clock-in/out records." />
+      <div className="flex items-center justify-between">
+        <PageHeader title="HR Review" description="Review and manage employee clock-in/out records." />
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button
+                variant={"outline"}
+                className={cn(
+                    "w-[280px] justify-start text-left font-normal",
+                    !selectedDate && "text-muted-foreground"
+                )}
+                >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+                <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                initialFocus
+                />
+            </PopoverContent>
+        </Popover>
+      </div>
       <Card>
-        <CardHeader>
-          <CardTitle>Pending Submissions</CardTitle>
-          <CardDescription>
-            Approve or reject clock-in records after video verification.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Pending Submissions</CardTitle>
+            <CardDescription>
+              Approve or reject clock-in records after video verification.
+            </CardDescription>
+          </div>
+           <Button variant="outline" size="sm" onClick={() => handleExportCSV(pendingRecords, 'pending')} disabled={pendingRecords.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Download CSV
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -169,8 +230,8 @@ a.click();
                       Loading records...
                     </TableCell>
                   </TableRow>
-                ) : timeRecords.filter(r => r.status === 'pending').length > 0 ? (
-                  timeRecords.filter(r => r.status === 'pending').map((record) => (
+                ) : pendingRecords.length > 0 ? (
+                  pendingRecords.map((record) => (
                     <TableRow key={record.id}>
                       <TableCell className="font-medium">{record.userName}</TableCell>
                       <TableCell>
@@ -200,7 +261,7 @@ a.click();
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="h-24 text-center">
-                      No pending submissions.
+                      No pending submissions for {format(selectedDate, "PPP")}.
                     </TableCell>
                   </TableRow>
                 )}
@@ -211,11 +272,17 @@ a.click();
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Time Clock History</CardTitle>
-          <CardDescription>
-            This is a log of all employee clock-in and clock-out events.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Time Clock History</CardTitle>
+            <CardDescription>
+              This is a log of all employee clock-in and clock-out events for the selected day.
+            </CardDescription>
+          </div>
+           <Button variant="outline" size="sm" onClick={() => handleExportCSV(historicalRecords, 'history')} disabled={historicalRecords.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Download CSV
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -236,8 +303,8 @@ a.click();
                       Loading records...
                     </TableCell>
                   </TableRow>
-                ) : timeRecords.filter(r => r.status !== 'pending').length > 0 ? (
-                  timeRecords.filter(r => r.status !== 'pending').map((record) => (
+                ) : historicalRecords.length > 0 ? (
+                  historicalRecords.map((record) => (
                     <TableRow key={record.id}>
                       <TableCell className="font-medium">{record.userName}</TableCell>
                       <TableCell>{record.userEmail}</TableCell>
@@ -259,7 +326,7 @@ a.click();
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="h-24 text-center">
-                      No historical records found.
+                      No historical records found for {format(selectedDate, "PPP")}.
                     </TableCell>
                   </TableRow>
                 )}

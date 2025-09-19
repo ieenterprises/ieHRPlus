@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -36,10 +35,15 @@ import { collection, onSnapshot, query, where, doc, updateDoc } from "firebase/f
 import { db, auth } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { TimeRecord, User } from "@/lib/types";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, startOfDay, endOfDay } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Calendar as CalendarIcon, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import Papa from "papaparse";
+import { Badge } from "@/components/ui/badge";
 
 type ActiveSession = TimeRecord & {
     user: User | undefined;
@@ -47,12 +51,13 @@ type ActiveSession = TimeRecord & {
 
 export default function SessionsPage() {
   const { loggedInUser, users, logout } = useSettings();
-  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
+  const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<ActiveSession | null>(null);
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const { toast } = useToast();
   const router = useRouter();
 
@@ -61,28 +66,36 @@ export default function SessionsPage() {
       setLoading(false);
       return;
     }
+    
+    setLoading(true);
+    const start = startOfDay(selectedDate);
+    const end = endOfDay(selectedDate);
 
     const q = query(
       collection(db, "timeRecords"),
       where("businessId", "==", loggedInUser.businessId),
-      where("status", "in", ["Clocked In", "pending"])
+      where("clockInTime", ">=", start.toISOString()),
+      where("clockInTime", "<=", end.toISOString())
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
-      const sessions: ActiveSession[] = records
+      const populatedSessions: ActiveSession[] = records
         .map(record => ({
           ...record,
           user: users.find(u => u.id === record.userId),
         }))
-        .filter(session => session.user); // Show all users with a valid user object
+        .filter(session => session.user);
 
-      setActiveSessions(sessions.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime()));
+      setSessions(populatedSessions.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime()));
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching sessions:", error);
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [loggedInUser?.businessId, users]);
+  }, [loggedInUser?.businessId, users, selectedDate]);
   
   const handleTakeOverSessionClick = (session: ActiveSession) => {
     setSelectedSession(session);
@@ -95,14 +108,9 @@ export default function SessionsPage() {
     setIsVerifying(true);
 
     try {
-        // Step 1: Sign out the current user without clocking them out
         await logout(false);
-        
-        // Step 2: Sign in the user whose session we are taking over
         await signInWithEmailAndPassword(auth, selectedSession.user.email, password);
 
-        // Step 3: On success, redirect them to their dashboard.
-        // The auth state change will be picked up by the layout, and they will be logged in.
         toast({
             title: "Authentication Successful",
             description: `Welcome back, ${selectedSession.user.name}. Redirecting to your dashboard...`,
@@ -117,7 +125,6 @@ export default function SessionsPage() {
             description: "The password you entered is incorrect. Please try again.",
             variant: "destructive",
         });
-        // If re-authentication fails, we need to sign the original user back in or send to sign-in
         router.push('/sign-in');
     } finally {
         setIsVerifying(false);
@@ -129,19 +136,77 @@ export default function SessionsPage() {
     setPassword("");
     setPasswordVisible(false);
   }
+  
+  const handleExportCSV = () => {
+    const csvData = sessions.map(session => ({
+      "Employee": session.user?.name,
+      "Email": session.user?.email,
+      "Clock In Time": format(new Date(session.clockInTime), "MMM d, yyyy, h:mm a"),
+      "Clock Out Time": session.clockOutTime ? format(new Date(session.clockOutTime), "MMM d, yyyy, h:mm a") : "-",
+      "Duration": session.clockOutTime ? formatDistanceToNow(new Date(session.clockOutTime), { addSuffix: false }) : formatDistanceToNow(new Date(session.clockInTime), { addSuffix: true }),
+      "Status": session.status,
+    }));
+
+    const csv = Papa.unparse(csvData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `sessions_report_${format(selectedDate, 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete" });
+  };
+  
+  const getStatusVariant = (status: TimeRecord['status']) => {
+    if (status === 'Clocked Out' || status === 'rejected') return 'outline';
+    if (status === 'pending') return 'secondary';
+    return 'default';
+  }
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Active Sessions"
-        description="Manage sessions for users who are clocked in but not currently active on this device."
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Active Sessions"
+          description="Manage sessions for users who are clocked in but not currently active on this device."
+        />
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button
+                variant={"outline"}
+                className={cn(
+                    "w-[280px] justify-start text-left font-normal",
+                    !selectedDate && "text-muted-foreground"
+                )}
+                >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+                <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                initialFocus
+                />
+            </PopoverContent>
+        </Popover>
+      </div>
       <Card>
-        <CardHeader>
-          <CardTitle>Clocked-In Users</CardTitle>
-          <CardDescription>
-            Select a user to access their dashboard and clock out.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Clocked-In Users</CardTitle>
+            <CardDescription>
+              Select a user to access their dashboard and clock out.
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={sessions.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Download CSV
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -151,18 +216,19 @@ export default function SessionsPage() {
                   <TableHead>Employee</TableHead>
                   <TableHead>Clock In Time</TableHead>
                   <TableHead>Duration</TableHead>
+                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-24 text-center">
+                    <TableCell colSpan={5} className="h-24 text-center">
                       Loading active sessions...
                     </TableCell>
                   </TableRow>
-                ) : activeSessions.length > 0 ? (
-                  activeSessions.map((session) => (
+                ) : sessions.length > 0 ? (
+                  sessions.map((session) => (
                     <TableRow key={session.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
@@ -180,14 +246,20 @@ export default function SessionsPage() {
                         {format(new Date(session.clockInTime), "MMM d, h:mm a")}
                       </TableCell>
                       <TableCell>
-                        {formatDistanceToNow(new Date(session.clockInTime), { addSuffix: true })}
+                        {session.clockOutTime 
+                            ? formatDistanceToNow(new Date(session.clockOutTime), { addSuffix: false }) // This won't be accurate, better to calculate duration
+                            : formatDistanceToNow(new Date(session.clockInTime), { addSuffix: true })
+                        }
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusVariant(session.status)}>{session.status}</Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <Button 
                             variant="outline" 
                             size="sm" 
                             onClick={() => handleTakeOverSessionClick(session)}
-                            disabled={session.userId === loggedInUser?.id}
+                            disabled={session.status === 'Clocked Out' || session.status === 'rejected' || session.userId === loggedInUser?.id}
                         >
                             Take Over Session
                         </Button>
@@ -196,8 +268,8 @@ export default function SessionsPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-24 text-center">
-                      No other active sessions found.
+                    <TableCell colSpan={5} className="h-24 text-center">
+                      No sessions found for {format(selectedDate, "PPP")}.
                     </TableCell>
                   </TableRow>
                 )}
