@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -44,11 +45,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from "@/hooks/use-settings";
-import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch, deleteField } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord, UserRequest, User } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon, Trash2, Search, ClipboardList, Send, FileCheck, FileX, AlertCircle } from "lucide-react";
+import { Video, Download, Calendar as CalendarIcon, Trash2, Search, ClipboardList, Send, FileCheck, FileX, AlertCircle, File as FileIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -57,6 +58,7 @@ import { cn } from "@/lib/utils";
 import Papa from "papaparse";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Link from 'next/link';
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
@@ -135,35 +137,23 @@ export default function HrReviewPage() {
     
     try {
         const requestRef = doc(db, "userRequests", reviewRequest.id);
-        let updateData: any = { // Use 'any' to allow for deleteField()
+        
+        let updateData: any = {
             updatedAt: new Date().toISOString(),
         };
 
-        if (reviewAction === 'Approve') {
+        if (reviewAction === 'Approve' || reviewAction === 'Reject') {
             updateData = {
                 ...updateData,
-                status: 'Approved',
+                status: reviewAction === 'Approve' ? 'Approved' : 'Rejected',
                 reviewComments,
                 reviewerId: loggedInUser.id,
                 reviewerName: loggedInUser.name,
-                assignedToId: deleteField(),
-                assignedToName: deleteField(),
-                forwardedById: deleteField(),
-                forwardedByName: deleteField(),
-                forwardingComments: deleteField(),
-            };
-        } else if (reviewAction === 'Reject') {
-            updateData = {
-                ...updateData,
-                status: 'Rejected',
-                reviewComments,
-                reviewerId: loggedInUser.id,
-                reviewerName: loggedInUser.name,
-                assignedToId: deleteField(),
-                assignedToName: deleteField(),
-                forwardedById: deleteField(),
-                forwardedByName: deleteField(),
-                forwardingComments: deleteField(),
+                assignedToId: null,
+                assignedToName: null,
+                forwardedById: null,
+                forwardedByName: null,
+                forwardingComments: null,
             };
         } else if (reviewAction === 'Forward') {
             if (!forwardToUserId) {
@@ -454,7 +444,7 @@ export default function HrReviewPage() {
                                         <TableCell>{request.requestType}</TableCell>
                                         <TableCell>{format(new Date(request.createdAt), 'MMM d, yyyy')}</TableCell>
                                         <TableCell>
-                                            {request.status === 'Forwarded' && request.assignedToName ? (
+                                            {(request.status === 'Forwarded' || request.status === 'Pending') && request.assignedToName ? (
                                                 <Badge variant="outline" className="flex items-center gap-1.5">
                                                     <AlertCircle className="h-3.5 w-3.5"/>
                                                     {request.assignedToName}
@@ -774,6 +764,19 @@ export default function HrReviewPage() {
                             <p className="text-sm whitespace-pre-wrap">{reviewRequest?.description}</p>
                         </ScrollArea>
                     </div>
+                     {reviewRequest?.attachments && reviewRequest.attachments.length > 0 && (
+                        <div className="space-y-2">
+                             <Label className="text-muted-foreground">Attachments</Label>
+                             <div className="space-y-2 rounded-md border p-2">
+                                {reviewRequest.attachments.map((file, index) => (
+                                    <Link key={index} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                                        <FileIcon className="h-4 w-4"/>
+                                        {file.name}
+                                    </Link>
+                                ))}
+                             </div>
+                        </div>
+                    )}
                      {reviewRequest?.forwardingComments && (
                          <div className="space-y-1">
                             <Label className="text-muted-foreground">Forwarding Comments from {reviewRequest.forwardedByName}</Label>

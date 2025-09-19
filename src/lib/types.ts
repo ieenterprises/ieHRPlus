@@ -15,12 +15,14 @@ export type UserRequest = {
   reviewerId?: string;
   reviewerName?: string;
   reviewComments?: string;
-  // New fields for forwarding
+  // Fields for assignment and forwarding
   assignedToId?: string;
   assignedToName?: string;
   forwardedById?: string;
   forwardedByName?: string;
   forwardingComments?: string;
+  // Field for attachments
+  attachments?: { name: string; url: string }[];
 };
 
 export type TimeRecord = {

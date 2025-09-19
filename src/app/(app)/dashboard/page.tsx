@@ -1,14 +1,16 @@
 
+
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -16,7 +18,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type UserRequest } from "@/lib/types";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc } from "firebase/firestore";
+import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import Link from 'next/link';
@@ -28,12 +31,18 @@ const requestTypes = {
   "Workplace Environment & Support": ["Grievance Redressal", "Reasonable Accommodations"],
 };
 
+const seniorRoles = ["Owner", "Administrator", "Manager"];
+
 export default function DashboardPage() {
-  const { loggedInUser, logout, userRequests: allUserRequests } = useSettings();
+  const { loggedInUser, users, logout, userRequests: allUserRequests } = useSettings();
   const [myRequests, setMyRequests] = useState<UserRequest[]>([]);
   const [assignedRequests, setAssignedRequests] = useState<UserRequest[]>([]);
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+
+  const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role)), [users]);
 
   useEffect(() => {
     if (!loggedInUser?.id) return;
@@ -49,38 +58,67 @@ export default function DashboardPage() {
   }, [allUserRequests, loggedInUser?.id]);
 
   const handleSwitchUser = () => {
-    // We log out without clocking out, preserving the "Clocked In" status.
     logout(false);
   };
   
   const handleRequestSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!loggedInUser) return;
+    if (!loggedInUser?.businessId) return;
+
+    setIsSubmitting(true);
     
     const formData = new FormData(event.currentTarget);
     const requestType = formData.get('requestType') as string;
     const description = formData.get('description') as string;
+    const assignedToId = formData.get('assignedToId') as string;
+    
+    const assignedToUser = users.find(u => u.id === assignedToId);
 
     if (!requestType || !description) {
         toast({ title: "Missing Information", description: "Please select a request type and provide a description.", variant: "destructive" });
+        setIsSubmitting(false);
         return;
     }
 
     try {
+        let attachmentUrls: { name: string, url: string }[] = [];
+        if (attachments.length > 0) {
+            const uploadPromises = attachments.map(async (file) => {
+                const folder = `request_attachments/${loggedInUser.id}`;
+                await uploadFile(loggedInUser.businessId!, folder, file, () => {});
+                const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
+                return { name: file.name, url };
+            });
+            attachmentUrls = await Promise.all(uploadPromises);
+        }
+
         await addDoc(collection(db, "userRequests"), {
             userId: loggedInUser.id,
             userName: loggedInUser.name,
             businessId: loggedInUser.businessId,
             requestType,
             description,
+            attachments: attachmentUrls,
+            assignedToId: assignedToId || null,
+            assignedToName: assignedToUser?.name || null,
             status: "Pending",
             createdAt: new Date().toISOString(),
         });
+        
         toast({ title: "Request Submitted", description: "Your request has been sent for review." });
         setIsRequestDialogOpen(false);
+        setAttachments([]);
     } catch (error: any) {
         toast({ title: "Submission Failed", description: error.message, variant: "destructive" });
+    } finally {
+        setIsSubmitting(false);
     }
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (event.target.files) {
+          setAttachments(Array.from(event.target.files));
+      }
   };
   
   const getStatusBadgeVariant = (status: UserRequest['status']) => {
@@ -215,7 +253,7 @@ export default function DashboardPage() {
                     <form onSubmit={handleRequestSubmit}>
                         <DialogHeader>
                             <DialogTitle>New Request</DialogTitle>
-                            <DialogDescription>Select the type of request you want to make and provide details.</DialogDescription>
+                            <DialogDescription>Select the type of request, provide details, and optionally assign it to a manager.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-6">
                             <div className="grid grid-cols-4 items-center gap-4">
@@ -238,48 +276,85 @@ export default function DashboardPage() {
                             </div>
                              <div className="grid grid-cols-4 items-start gap-4">
                                 <Label htmlFor="description" className="text-right pt-2">Description</Label>
-                                <Textarea id="description" name="description" className="col-span-3" required placeholder="Please provide a detailed description of your request..." />
+                                <Textarea id="description" name="description" className="col-span-3" required placeholder="Please provide a detailed description..." />
+                            </div>
+                             <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="assignedToId" className="text-right">Assign To</Label>
+                                <Select name="assignedToId">
+                                    <SelectTrigger className="col-span-3">
+                                        <SelectValue placeholder="Optional: Assign to a manager..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {seniorStaffList.map(user => (
+                                            <SelectItem key={user.id} value={user.id}>{user.name} ({user.role})</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                             <div className="grid grid-cols-4 items-start gap-4">
+                                <Label htmlFor="attachments" className="text-right pt-2">Attachments</Label>
+                                <div className="col-span-3">
+                                    <Input id="attachments" type="file" multiple onChange={handleFileChange} />
+                                    {attachments.length > 0 && (
+                                        <div className="mt-2 text-sm text-muted-foreground space-y-1">
+                                            {attachments.map(file => (
+                                                <div key={file.name} className="flex items-center gap-2">
+                                                    <FileIcon className="h-4 w-4" />
+                                                    <span>{file.name}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                         <DialogFooter>
-                            <Button type="submit">Submit Request</Button>
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Submit Request
+                            </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
         </CardHeader>
         <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead className="w-[200px]">Request Type</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead className="w-[120px]">Date Submitted</TableHead>
-                        <TableHead className="w-[150px]">Status</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {myRequests.length > 0 ? (
-                        myRequests.map(request => (
-                            <TableRow key={request.id}>
-                                <TableCell className="font-medium">{request.requestType}</TableCell>
-                                <TableCell className="text-muted-foreground truncate max-w-sm">{request.description}</TableCell>
-                                <TableCell>{format(new Date(request.createdAt), 'MMM d, yyyy')}</TableCell>
-                                <TableCell>
-                                    <Badge variant={getStatusBadgeVariant(request.status)}>{request.status}</Badge>
-                                    {request.status === 'Forwarded' && request.assignedToName && (
-                                        <p className="text-xs text-muted-foreground">with {request.assignedToName}</p>
-                                    )}
-                                </TableCell>
-                            </TableRow>
-                        ))
-                    ) : (
+            <div className="overflow-x-auto">
+                <Table>
+                    <TableHeader>
                         <TableRow>
-                            <TableCell colSpan={4} className="text-center h-24">You have not made any requests yet.</TableCell>
+                            <TableHead className="w-[200px]">Request Type</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead className="w-[120px]">Date Submitted</TableHead>
+                            <TableHead className="w-[150px]">Status</TableHead>
+                            <TableHead>Assigned To</TableHead>
                         </TableRow>
-                    )}
-                </TableBody>
-            </Table>
+                    </TableHeader>
+                    <TableBody>
+                        {myRequests.length > 0 ? (
+                            myRequests.map(request => (
+                                <TableRow key={request.id}>
+                                    <TableCell className="font-medium">{request.requestType}</TableCell>
+                                    <TableCell className="text-muted-foreground truncate max-w-sm">{request.description}</TableCell>
+                                    <TableCell>{format(new Date(request.createdAt), 'MMM d, yyyy')}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={getStatusBadgeVariant(request.status)}>{request.status}</Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        {request.assignedToName && (
+                                            <Badge variant="outline">{request.assignedToName}</Badge>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center h-24">You have not made any requests yet.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
         </CardContent>
       </Card>
     </div>
