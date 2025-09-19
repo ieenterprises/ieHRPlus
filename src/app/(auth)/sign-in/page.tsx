@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { auth, db } from '@/lib/firebase';
 import { signInWithEmailAndPassword, User as FirebaseAuthUser } from 'firebase/auth';
-import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch, getDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch, getDoc, orderBy, limit } from "firebase/firestore";
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import type { User, TimeRecord } from "@/lib/types";
 
@@ -40,32 +40,52 @@ export default function SignInPage() {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const authUser = userCredential.user;
       
-      const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data() as User;
-        
+      const userDoc = await getDoc(doc(db, "users", authUser.uid));
+      if (!userDoc.exists()) {
+        throw new Error("User profile not found in database.");
+      }
+      const userData = userDoc.data() as User;
+
+      // Check for an existing active time record
+      const timeRecordsQuery = query(
+        collection(db, 'timeRecords'),
+        where('userId', '==', authUser.uid),
+        where('status', 'in', ['pending', 'Clocked In'])
+      );
+      const activeRecordsSnapshot = await getDocs(timeRecordsQuery);
+
+      if (activeRecordsSnapshot.empty) {
+        // --- This is a new Clock-In ---
         const timeRecordRef = await addDoc(collection(db, "timeRecords"), {
-          userId: userCredential.user.uid,
+          userId: authUser.uid,
           userName: userData.name,
           userEmail: userData.email,
           clockInTime: new Date().toISOString(),
           clockOutTime: null,
-          status: 'Clocked In',
+          status: 'pending', // Start as pending for HR review
           businessId: userData.businessId,
           videoUrl: null,
         } as Omit<TimeRecord, 'id'>);
         
-        // Save the new record's ID to pass to the next page
         sessionStorage.setItem('latestTimeRecordId', timeRecordRef.id);
-      }
 
-      toast({
-          title: "Signed In Successfully",
-          description: `Proceeding to video verification.`,
-      });
-      
-      router.push("/video-verification");
+        toast({
+            title: "Signed In Successfully",
+            description: `Proceeding to video verification.`,
+        });
+        
+        router.push("/video-verification");
+
+      } else {
+        // --- User is just regaining access to their dashboard ---
+        toast({
+            title: "Welcome Back!",
+            description: `Redirecting to your dashboard.`,
+        });
+        router.push("/dashboard");
+      }
 
     } catch (error: any) {
       setIsLoading(false);
@@ -78,6 +98,7 @@ export default function SignInPage() {
   };
 
   useEffect(() => {
+    // This check is for users who are already logged in and try to visit the sign-in page.
     if (loggedInUser) {
         router.push("/dashboard");
     }
@@ -98,7 +119,7 @@ export default function SignInPage() {
             <CardHeader>
               <CardTitle className="text-2xl">Sign In</CardTitle>
               <CardDescription>
-                Sign in to your business account.
+                Sign in to your business account to clock-in or manage your session.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">

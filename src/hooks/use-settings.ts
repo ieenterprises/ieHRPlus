@@ -308,21 +308,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             if (shouldClockOut && loggedInUser && loggedInUser.businessId) {
                 const batch = writeBatch(db);
 
-                // Find the user's latest "Clocked In" record to clock them out.
+                // Find the user's latest active record to clock them out.
                 const timeRecordsQuery = query(
                     collection(db, 'timeRecords'),
                     where('userId', '==', loggedInUser.id),
-                    where('status', '==', 'Clocked In'),
+                    where('status', 'in', ['pending', 'Clocked In']),
+                    orderBy('clockInTime', 'desc'),
+                    limit(1)
                 );
                 
                 const activeTimeRecordsSnapshot = await getDocs(timeRecordsQuery);
-                const activeTimeRecords = activeTimeRecordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
-
-                if (activeTimeRecords.length > 0) {
-                    // Sort locally to find the most recent one
-                    activeTimeRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
-                    const recordToClockOut = activeTimeRecords[0];
-                    
+                
+                if (!activeTimeRecordsSnapshot.empty) {
+                    const recordToClockOut = activeTimeRecordsSnapshot.docs[0];
                     batch.update(doc(db, 'timeRecords', recordToClockOut.id), {
                         status: 'Clocked Out',
                         clockOutTime: new Date().toISOString()
@@ -650,6 +648,7 @@ export function useSettings() {
 }
 
     
+
 
 
 
