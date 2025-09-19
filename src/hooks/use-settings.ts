@@ -20,6 +20,7 @@ export const MOCK_INITIAL_DEPARTMENTS: Omit<Department, 'businessId' | 'id'>[] =
     { name: "Owner", permissions: [...Object.keys(fileManagementPermissions), ...Object.keys(teamManagementPermissions), ...Object.keys(settingsPermissions)] as AnyPermission[] },
     { name: "Administrator", permissions: [...Object.keys(fileManagementPermissions), ...Object.keys(teamManagementPermissions), ...Object.keys(settingsPermissions)] as AnyPermission[] },
     { name: "Manager", permissions: ["VIEW_FILES", "UPLOAD_FILES", "DOWNLOAD_FILES", "APPROVE_DOCUMENTS", "VIEW_USERS", "MANAGE_USERS"] },
+    { name: "Staff", permissions: [] },
 ];
 
 // --- Context and Provider ---
@@ -657,4 +658,5 @@ export function useSettings() {
 }
 
     
+
 
