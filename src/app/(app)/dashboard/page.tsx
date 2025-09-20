@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift, Download, Search } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AttachmentPreviewer } from "@/components/attachment-previewer";
+import Papa from "papaparse";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
@@ -52,7 +53,13 @@ export default function DashboardPage() {
   const [respondingQuery, setRespondingQuery] = useState<HRQuery | null>(null);
   const [viewingReward, setViewingReward] = useState<Reward | null>(null);
   
+  const [requestSearch, setRequestSearch] = useState("");
+  const [querySearch, setQuerySearch] = useState("");
+  const [rewardSearch, setRewardSearch] = useState("");
+
   const { toast } = useToast();
+  
+  const isSeniorStaff = useMemo(() => loggedInUser && seniorRoles.includes(loggedInUser.role), [loggedInUser]);
 
   const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role)), [users]);
   const pendingQueries = useMemo(() => myQueries.filter(q => q.status === 'Sent' || q.status === 'Read'), [myQueries]);
@@ -78,6 +85,36 @@ export default function DashboardPage() {
     setMyRewards(rewardsForMe);
 
   }, [allUserRequests, allHrQueries, allRewards, loggedInUser?.id]);
+
+  const filteredMyRequests = useMemo(() => {
+      if (!requestSearch) return myRequests;
+      const lowercasedTerm = requestSearch.toLowerCase();
+      return myRequests.filter(req => 
+          req.requestType.toLowerCase().includes(lowercasedTerm) ||
+          req.description.toLowerCase().includes(lowercasedTerm) ||
+          req.status.toLowerCase().includes(lowercasedTerm)
+      );
+  }, [myRequests, requestSearch]);
+
+  const filteredMyQueries = useMemo(() => {
+      if (!querySearch) return myQueries;
+      const lowercasedTerm = querySearch.toLowerCase();
+      return myQueries.filter(q =>
+          q.title.toLowerCase().includes(lowercasedTerm) ||
+          q.requesterName.toLowerCase().includes(lowercasedTerm) ||
+          q.status.toLowerCase().includes(lowercasedTerm)
+      );
+  }, [myQueries, querySearch]);
+  
+  const filteredMyRewards = useMemo(() => {
+      if (!rewardSearch) return myRewards;
+      const lowercasedTerm = rewardSearch.toLowerCase();
+      return myRewards.filter(r =>
+          r.title.toLowerCase().includes(lowercasedTerm) ||
+          r.proposerName.toLowerCase().includes(lowercasedTerm) ||
+          r.status.toLowerCase().includes(lowercasedTerm)
+      );
+  }, [myRewards, rewardSearch]);
 
   const handleSwitchUser = () => {
     logout(false);
@@ -190,6 +227,23 @@ export default function DashboardPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleExportCSV = (data: any[], fileName: string) => {
+    if (data.length === 0) {
+      toast({ title: "No Data to Export" });
+      return;
+    }
+    const csv = Papa.unparse(data);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${fileName}_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Export Complete" });
   };
 
 
@@ -402,14 +456,32 @@ export default function DashboardPage() {
       </div>
 
       <Card id="my-queries-section">
-          <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-blue-600">
-                  <HelpCircle />
-                  My Queries
-              </CardTitle>
-              <CardDescription>
-                  These are requests for information sent to you by HR or management.
-              </CardDescription>
+          <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                  <CardTitle className="flex items-center gap-2 text-blue-600">
+                      <HelpCircle />
+                      My Queries
+                  </CardTitle>
+                  <CardDescription>
+                      These are requests for information sent to you by HR or management.
+                  </CardDescription>
+              </div>
+              {isSeniorStaff && (
+                  <div className="flex w-full sm:w-auto items-center gap-2">
+                      <div className="relative flex-1 sm:flex-initial">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input 
+                              placeholder="Search queries..."
+                              className="pl-9"
+                              value={querySearch}
+                              onChange={(e) => setQuerySearch(e.target.value)}
+                          />
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyQueries, 'my_queries')}>
+                          <Download className="mr-2 h-4 w-4" /> Export
+                      </Button>
+                  </div>
+              )}
           </CardHeader>
           <CardContent>
               <Table>
@@ -424,8 +496,8 @@ export default function DashboardPage() {
                       </TableRow>
                   </TableHeader>
                   <TableBody>
-                      {myQueries.length > 0 ? (
-                          myQueries.map(query => (
+                      {filteredMyQueries.length > 0 ? (
+                          filteredMyQueries.map(query => (
                               <TableRow key={query.id}>
                                   <TableCell className="font-medium">{query.title}</TableCell>
                                   <TableCell>{query.requesterName}</TableCell>
@@ -454,14 +526,32 @@ export default function DashboardPage() {
       </Card>
       
        <Card id="my-rewards-section">
-          <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-green-600">
-                  <Gift />
-                  My Rewards
-              </CardTitle>
-              <CardDescription>
-                  A log of all rewards and recognitions you have received.
-              </CardDescription>
+          <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                  <CardTitle className="flex items-center gap-2 text-green-600">
+                      <Gift />
+                      My Rewards
+                  </CardTitle>
+                  <CardDescription>
+                      A log of all rewards and recognitions you have received.
+                  </CardDescription>
+              </div>
+              {isSeniorStaff && (
+                  <div className="flex w-full sm:w-auto items-center gap-2">
+                      <div className="relative flex-1 sm:flex-initial">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input 
+                              placeholder="Search rewards..."
+                              className="pl-9"
+                              value={rewardSearch}
+                              onChange={(e) => setRewardSearch(e.target.value)}
+                          />
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRewards, 'my_rewards')}>
+                          <Download className="mr-2 h-4 w-4" /> Export
+                      </Button>
+                  </div>
+              )}
           </CardHeader>
           <CardContent>
               <Table>
@@ -476,8 +566,8 @@ export default function DashboardPage() {
                       </TableRow>
                   </TableHeader>
                   <TableBody>
-                      {myRewards.length > 0 ? (
-                          myRewards.map(reward => (
+                      {filteredMyRewards.length > 0 ? (
+                          filteredMyRewards.map(reward => (
                               <TableRow key={reward.id}>
                                   <TableCell className="font-medium">{reward.title}</TableCell>
                                   <TableCell>{reward.proposerName}</TableCell>
@@ -511,103 +601,121 @@ export default function DashboardPage() {
                 <CardTitle>My Requests</CardTitle>
                 <CardDescription>Submit and track requests for leave, salary, and more.</CardDescription>
             </div>
-            <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
-                <DialogTrigger asChild>
-                    <Button size="sm"><PlusCircle className="mr-2 h-4 w-4" /> Make a New Request</Button>
-                </DialogTrigger>
-                <DialogContent>
-                    <form onSubmit={handleRequestSubmit}>
-                        <DialogHeader>
-                            <DialogTitle>New Request</DialogTitle>
-                            <DialogDescription>Provide a request type, a detailed description, and optionally assign it to a manager.</DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-6">
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="requestType" className="text-right">Request Type</Label>
-                                <Input id="requestType" name="requestType" className="col-span-3" required placeholder="e.g., Salary Advance, Leave of Absence" />
-                            </div>
-                             <div className="grid grid-cols-4 items-start gap-4">
-                                <Label htmlFor="description" className="text-right pt-2">Description</Label>
-                                <Textarea id="description" name="description" className="col-span-3" required placeholder="Please provide a detailed description..." />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label className="text-right">Dates</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                    <Button
-                                        id="date"
-                                        variant={"outline"}
-                                        className={cn(
-                                        "col-span-3 justify-start text-left font-normal",
-                                        !dateRange && "text-muted-foreground"
-                                        )}
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {dateRange?.from ? (
-                                        dateRange.to ? (
-                                            <>
-                                            {format(dateRange.from, "LLL dd, y")} -{" "}
-                                            {format(dateRange.to, "LLL dd, y")}
-                                            </>
-                                        ) : (
-                                            format(dateRange.from, "LLL dd, y")
-                                        )
-                                        ) : (
-                                        <span>Pick a date range</span>
-                                        )}
-                                    </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                        initialFocus
-                                        mode="range"
-                                        defaultMonth={dateRange?.from}
-                                        selected={dateRange}
-                                        onSelect={setDateRange}
-                                        numberOfMonths={2}
-                                    />
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="assignedToId" className="text-right">Assign To</Label>
-                                <Select name="assignedToId">
-                                    <SelectTrigger className="col-span-3">
-                                        <SelectValue placeholder="Optional: Assign to a manager..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {seniorStaffList.map(user => (
-                                            <SelectItem key={user.id} value={user.id}>{user.name} ({user.role})</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                             <div className="grid grid-cols-4 items-start gap-4">
-                                <Label htmlFor="attachments" className="text-right pt-2">Attachments</Label>
-                                <div className="col-span-3">
-                                    <Input id="attachments" type="file" multiple onChange={handleFileChange} />
-                                    {attachments.length > 0 && (
-                                        <div className="mt-2 text-sm text-muted-foreground space-y-1">
-                                            {attachments.map(file => (
-                                                <div key={file.name} className="flex items-center gap-2">
-                                                    <FileIcon item={{ type: 'file', name: file.name, metadata: {size: 0, updated: '', timeCreated: ''} }} />
-                                                    <span>{file.name}</span>
-                                                </div>
+             <div className="flex w-full sm:w-auto items-center gap-2 self-start sm:self-center">
+                {isSeniorStaff && (
+                    <>
+                        <div className="relative flex-1 sm:flex-initial">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                placeholder="Search requests..."
+                                className="pl-9"
+                                value={requestSearch}
+                                onChange={(e) => setRequestSearch(e.target.value)}
+                            />
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRequests, 'my_requests')}>
+                            <Download className="mr-2 h-4 w-4" /> Export
+                        </Button>
+                    </>
+                )}
+                <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button size="sm"><PlusCircle className="mr-2 h-4 w-4" /> New</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <form onSubmit={handleRequestSubmit}>
+                            <DialogHeader>
+                                <DialogTitle>New Request</DialogTitle>
+                                <DialogDescription>Provide a request type, a detailed description, and optionally assign it to a manager.</DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-6">
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="requestType" className="text-right">Request Type</Label>
+                                    <Input id="requestType" name="requestType" className="col-span-3" required placeholder="e.g., Salary Advance, Leave of Absence" />
+                                </div>
+                                <div className="grid grid-cols-4 items-start gap-4">
+                                    <Label htmlFor="description" className="text-right pt-2">Description</Label>
+                                    <Textarea id="description" name="description" className="col-span-3" required placeholder="Please provide a detailed description..." />
+                                </div>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label className="text-right">Dates</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                        <Button
+                                            id="date"
+                                            variant={"outline"}
+                                            className={cn(
+                                            "col-span-3 justify-start text-left font-normal",
+                                            !dateRange && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {dateRange?.from ? (
+                                            dateRange.to ? (
+                                                <>
+                                                {format(dateRange.from, "LLL dd, y")} -{" "}
+                                                {format(dateRange.to, "LLL dd, y")}
+                                                </>
+                                            ) : (
+                                                format(dateRange.from, "LLL dd, y")
+                                            )
+                                            ) : (
+                                            <span>Pick a date range</span>
+                                            )}
+                                        </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            initialFocus
+                                            mode="range"
+                                            defaultMonth={dateRange?.from}
+                                            selected={dateRange}
+                                            onSelect={setDateRange}
+                                            numberOfMonths={2}
+                                        />
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="assignedToId" className="text-right">Assign To</Label>
+                                    <Select name="assignedToId">
+                                        <SelectTrigger className="col-span-3">
+                                            <SelectValue placeholder="Optional: Assign to a manager..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {seniorStaffList.map(user => (
+                                                <SelectItem key={user.id} value={user.id}>{user.name} ({user.role})</SelectItem>
                                             ))}
-                                        </div>
-                                    )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid grid-cols-4 items-start gap-4">
+                                    <Label htmlFor="attachments" className="text-right pt-2">Attachments</Label>
+                                    <div className="col-span-3">
+                                        <Input id="attachments" type="file" multiple onChange={handleFileChange} />
+                                        {attachments.length > 0 && (
+                                            <div className="mt-2 text-sm text-muted-foreground space-y-1">
+                                                {attachments.map(file => (
+                                                    <div key={file.name} className="flex items-center gap-2">
+                                                        <FileIcon item={{ type: 'file', name: file.name, metadata: {size: 0, updated: '', timeCreated: ''} }} />
+                                                        <span>{file.name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <DialogFooter>
-                            <Button type="submit" disabled={isSubmitting}>
-                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Submit Request
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
+                            <DialogFooter>
+                                <Button type="submit" disabled={isSubmitting}>
+                                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Submit Request
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+            </div>
         </CardHeader>
         <CardContent>
             <div className="overflow-x-auto">
@@ -622,8 +730,8 @@ export default function DashboardPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {myRequests.length > 0 ? (
-                            myRequests.map(request => (
+                        {filteredMyRequests.length > 0 ? (
+                            filteredMyRequests.map(request => (
                                 <TableRow key={request.id}>
                                     <TableCell className="font-medium">{request.requestType}</TableCell>
                                     <TableCell className="text-muted-foreground truncate max-w-sm">{request.description}</TableCell>
@@ -762,3 +870,6 @@ export default function DashboardPage() {
 
 
 
+
+
+      
