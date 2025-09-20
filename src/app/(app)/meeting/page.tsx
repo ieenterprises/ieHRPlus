@@ -1,23 +1,30 @@
 
+
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail, Send, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { collection, query, where, onSnapshot, addDoc, orderBy, or, updateDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import type { User, ChatMessage } from '@/lib/types';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 
 type MeetingState = 'idle' | 'active' | 'ended';
 
 export default function MeetingPage() {
   const { toast } = useToast();
-  const { loggedInUser } = useSettings();
+  const { loggedInUser, users } = useSettings();
   const [meetingState, setMeetingState] = useState<MeetingState>('idle');
   const [meetingTitle, setMeetingTitle] = useState('');
   const [hasPermissions, setHasPermissions] = useState<boolean | null>(null);
@@ -25,6 +32,14 @@ export default function MeetingPage() {
   const [isVideoOff, setIsVideoOff] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  
+  // Chat state
+  const [selectedChatUser, setSelectedChatUser] = useState<User | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+  const [unreadSenders, setUnreadSenders] = useState<Set<string>>(new Set());
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const cleanupStream = () => {
       if (localStreamRef.current) {
@@ -99,6 +114,89 @@ export default function MeetingPage() {
       });
       setIsVideoOff(prev => !prev);
     }
+  };
+  
+  const filteredUsers = useMemo(() => {
+      if (!userSearch) return users.filter(u => u.id !== loggedInUser?.id);
+      return users.filter(u => u.id !== loggedInUser?.id && u.name.toLowerCase().includes(userSearch.toLowerCase()));
+  }, [users, userSearch, loggedInUser]);
+
+  // Effect for fetching all messages and identifying unread ones
+  useEffect(() => {
+    if (!loggedInUser) return;
+    const q = query(
+        collection(db, 'chatMessages'),
+        where('businessId', '==', loggedInUser.businessId),
+        where('receiverId', '==', loggedInUser.id),
+        where('isRead', '==', false)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const newUnread = new Set<string>();
+        snapshot.forEach(doc => {
+            newUnread.add(doc.data().senderId);
+        });
+        setUnreadSenders(newUnread);
+    });
+    return () => unsubscribe();
+  }, [loggedInUser]);
+
+  // Effect for fetching messages for a specific chat
+  useEffect(() => {
+    if (!loggedInUser || !selectedChatUser) return;
+
+    const q = query(
+      collection(db, 'chatMessages'),
+      where('businessId', '==', loggedInUser.businessId),
+      or(
+        where('senderId', '==', loggedInUser.id, 'receiverId', '==', selectedChatUser.id),
+        where('senderId', '==', selectedChatUser.id, 'receiverId', '==', loggedInUser.id)
+      ),
+      orderBy('timestamp', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage));
+      setMessages(msgs);
+      
+      // Mark messages as read
+      const batch = [];
+      for (const doc of snapshot.docs) {
+          if (doc.data().receiverId === loggedInUser.id && !doc.data().isRead) {
+              batch.push(updateDoc(doc.ref, { isRead: true }));
+          }
+      }
+      if (batch.length > 0) {
+          await Promise.all(batch);
+      }
+    });
+
+    return () => unsubscribe();
+
+  }, [loggedInUser, selectedChatUser]);
+  
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+  
+  const handleSendMessage = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newMessage.trim() || !loggedInUser || !selectedChatUser) return;
+      
+      const messageData: Omit<ChatMessage, 'id'> = {
+          senderId: loggedInUser.id,
+          receiverId: selectedChatUser.id,
+          content: newMessage,
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          businessId: loggedInUser.businessId,
+      };
+      
+      try {
+          await addDoc(collection(db, 'chatMessages'), messageData);
+          setNewMessage('');
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error sending message' });
+      }
   };
 
   return (
@@ -235,16 +333,112 @@ export default function MeetingPage() {
         </TabsContent>
 
         <TabsContent value="chat">
-           <Card>
-              <CardHeader>
-                <CardTitle>Team Chat</CardTitle>
-              </CardHeader>
-              <CardContent className="min-h-[60vh] flex items-center justify-center">
-                  <div className="text-center text-muted-foreground">
-                    <MessageSquare className="mx-auto h-12 w-12 mb-4" />
-                    <p>Real-time team chat is coming soon.</p>
-                  </div>
-              </CardContent>
+           <Card className="h-[70vh] flex">
+              <div className="w-1/3 border-r flex flex-col">
+                  <CardHeader>
+                      <CardTitle>Conversations</CardTitle>
+                      <div className="relative mt-2">
+                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                           <Input 
+                                placeholder="Search users..."
+                                className="pl-9"
+                                value={userSearch}
+                                onChange={(e) => setUserSearch(e.target.value)}
+                           />
+                      </div>
+                  </CardHeader>
+                  <ScrollArea className="flex-1">
+                      {filteredUsers.map(user => (
+                          <button 
+                            key={user.id} 
+                            className={`w-full text-left p-3 hover:bg-accent ${selectedChatUser?.id === user.id ? 'bg-accent' : ''}`}
+                            onClick={() => setSelectedChatUser(user)}
+                          >
+                              <div className="flex items-center gap-3">
+                                  <Avatar>
+                                      <AvatarImage src={user.avatar_url || ''} alt={user.name} data-ai-hint="person portrait" />
+                                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex-1">
+                                      <p className="font-semibold">{user.name}</p>
+                                      <p className="text-xs text-muted-foreground">{user.role}</p>
+                                  </div>
+                                  {unreadSenders.has(user.id) && (
+                                    <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+                                  )}
+                              </div>
+                          </button>
+                      ))}
+                  </ScrollArea>
+              </div>
+              <div className="w-2/3 flex flex-col">
+                    {selectedChatUser ? (
+                        <>
+                            <CardHeader className="border-b">
+                                <CardTitle className="flex items-center gap-3">
+                                     <Avatar>
+                                      <AvatarImage src={selectedChatUser.avatar_url || ''} alt={selectedChatUser.name} />
+                                      <AvatarFallback>{selectedChatUser.name.charAt(0)}</AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    {selectedChatUser.name}
+                                     <p className="text-sm font-normal text-muted-foreground">{selectedChatUser.role}</p>
+                                  </div>
+                                </CardTitle>
+                            </CardHeader>
+                             <ScrollArea className="flex-1 p-4">
+                                <div className="space-y-4">
+                                    {messages.map(msg => (
+                                        <div 
+                                            key={msg.id} 
+                                            className={`flex items-end gap-2 ${msg.senderId === loggedInUser?.id ? 'justify-end' : ''}`}
+                                        >
+                                            {msg.senderId !== loggedInUser?.id && (
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarImage src={selectedChatUser?.avatar_url || ''} />
+                                                    <AvatarFallback>{selectedChatUser?.name.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                            )}
+                                            <div>
+                                                <div className={`rounded-lg px-3 py-2 max-w-sm break-words ${msg.senderId === loggedInUser?.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                                                    {msg.content}
+                                                </div>
+                                                <p className={`text-xs text-muted-foreground mt-1 ${msg.senderId === loggedInUser?.id ? 'text-right' : ''}`}>
+                                                    {formatDistanceToNowStrict(new Date(msg.timestamp), { addSuffix: true })}
+                                                </p>
+                                            </div>
+                                             {msg.senderId === loggedInUser?.id && (
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarImage src={loggedInUser?.avatar_url || ''} />
+                                                    <AvatarFallback>{loggedInUser?.name.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div ref={messagesEndRef} />
+                            </ScrollArea>
+                            <CardFooter className="pt-4 border-t">
+                                <form onSubmit={handleSendMessage} className="flex w-full items-center gap-2">
+                                    <Input 
+                                        value={newMessage}
+                                        onChange={(e) => setNewMessage(e.target.value)}
+                                        placeholder="Type a message..."
+                                    />
+                                    <Button type="submit" size="icon">
+                                        <Send className="h-4 w-4" />
+                                    </Button>
+                                </form>
+                            </CardFooter>
+                        </>
+                    ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground">
+                            <MessageSquare className="h-16 w-16 mb-4" />
+                            <h3 className="text-lg font-semibold">Select a user to start chatting</h3>
+                            <p className="max-w-xs">Choose someone from the list on the left to view your conversation or start a new one.</p>
+                        </div>
+                    )}
+              </div>
            </Card>
         </TabsContent>
 
@@ -265,3 +459,4 @@ export default function MeetingPage() {
     </div>
   );
 }
+

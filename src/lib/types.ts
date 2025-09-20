@@ -2,6 +2,16 @@
 
 import type { AnyPermission } from "./permissions";
 
+export type ChatMessage = {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  timestamp: string;
+  isRead: boolean;
+  businessId: string;
+};
+
 export type Department = {
   id: string;
   name: string;
@@ -738,6 +748,7 @@ export type Enums<
     
 
     
+
 
 
 
