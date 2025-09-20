@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { collection, query, where, onSnapshot, addDoc, orderBy, or, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, orderBy, or, and, updateDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { User, ChatMessage } from '@/lib/types';
 import { format, formatDistanceToNowStrict } from 'date-fns';
@@ -146,10 +146,12 @@ export default function MeetingPage() {
 
     const q = query(
       collection(db, 'chatMessages'),
-      where('businessId', '==', loggedInUser.businessId),
-      or(
-        where('senderId', '==', loggedInUser.id, 'receiverId', '==', selectedChatUser.id),
-        where('senderId', '==', selectedChatUser.id, 'receiverId', '==', loggedInUser.id)
+      and(
+        where('businessId', '==', loggedInUser.businessId),
+        or(
+          and(where('senderId', '==', loggedInUser.id), where('receiverId', '==', selectedChatUser.id)),
+          and(where('senderId', '==', selectedChatUser.id), where('receiverId', '==', loggedInUser.id))
+        )
       ),
       orderBy('timestamp', 'asc')
     );
@@ -459,4 +461,5 @@ export default function MeetingPage() {
     </div>
   );
 }
+
 
