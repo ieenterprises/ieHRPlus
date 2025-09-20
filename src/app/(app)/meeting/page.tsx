@@ -141,8 +141,8 @@ export default function MeetingPage() {
               )}
             </div>
 
-            {/* Placeholder for remote videos */}
-            {Array.from({ length: 5 }).map((_, i) => (
+            {/* Placeholder for remote videos - only shown when meeting is active */}
+            {meetingState === 'active' && Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="aspect-video bg-muted rounded-lg flex items-center justify-center border">
                     <p className="text-muted-foreground text-sm">Waiting for user...</p>
                 </div>
