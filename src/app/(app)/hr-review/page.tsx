@@ -39,13 +39,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon, Trash2 } from "lucide-react";
+import { Video, Download, Calendar as CalendarIcon, Trash2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -64,6 +65,7 @@ export default function HrReviewPage() {
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -107,6 +109,19 @@ export default function HrReviewPage() {
   useEffect(() => {
       setSelectedRecordIds([]);
   }, [selectedDate, timeRecords]);
+  
+  const filteredRecords = useMemo(() => {
+    const lowercasedTerm = searchTerm.toLowerCase();
+    return timeRecords.filter(record => 
+        record.userName.toLowerCase().includes(lowercasedTerm) ||
+        record.userEmail.toLowerCase().includes(lowercasedTerm) ||
+        record.status.toLowerCase().includes(lowercasedTerm)
+    );
+  }, [timeRecords, searchTerm]);
+
+  const pendingRecords = filteredRecords.filter(r => r.status === 'pending');
+  const historicalRecords = filteredRecords.filter(r => r.status !== 'pending');
+
 
   const handleExportCSV = (data: TimeRecord[], tableType: 'pending' | 'history') => {
     const csvData = data.map(record => ({
@@ -228,9 +243,6 @@ export default function HrReviewPage() {
     document.body.removeChild(a);
   };
   
-  const pendingRecords = timeRecords.filter(r => r.status === 'pending');
-  const historicalRecords = timeRecords.filter(r => r.status !== 'pending');
-
   const handleSelectAll = (table: 'pending' | 'history', checked: boolean) => {
     const recordIds = (table === 'pending' ? pendingRecords : historicalRecords).map(r => r.id);
     if (checked) {
@@ -276,6 +288,19 @@ export default function HrReviewPage() {
           </Popover>
         )}
       </div>
+      
+      {isSeniorStaff && (
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+                placeholder="Search by name, email, or status..."
+                className="pl-9"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+      )}
+
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
@@ -325,7 +350,7 @@ export default function HrReviewPage() {
                   <TableHead>Clock In Time</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {isSeniorStaff && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -365,11 +390,13 @@ export default function HrReviewPage() {
                           {record.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right space-x-2">
-                          <Button size="sm" onClick={() => handleStatusUpdate(record.id, 'Clocked In')} disabled={!record.videoUrl || !isSeniorStaff}>Approve</Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleStatusUpdate(record.id, 'rejected')} disabled={!isSeniorStaff}>Reject</Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleDelete(record)} disabled={!isSeniorStaff}>Delete</Button>
-                      </TableCell>
+                      {isSeniorStaff && (
+                        <TableCell className="text-right space-x-2">
+                            <Button size="sm" onClick={() => handleStatusUpdate(record.id, 'Clocked In')} disabled={!record.videoUrl}>Approve</Button>
+                            <Button size="sm" variant="destructive" onClick={() => handleStatusUpdate(record.id, 'rejected')}>Reject</Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleDelete(record)}>Delete</Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 ) : (

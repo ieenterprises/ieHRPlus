@@ -49,7 +49,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { TimeRecord, User } from "@/lib/types";
 import { format, formatDistanceToNow, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Loader2, Calendar as CalendarIcon, Download, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Calendar as CalendarIcon, Download, Trash2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -73,6 +73,7 @@ export default function SessionsPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const router = useRouter();
 
@@ -125,6 +126,14 @@ export default function SessionsPage() {
       setSelectedRecordIds([]);
   }, [selectedDate, sessions]);
   
+  const filteredSessions = useMemo(() => {
+    const lowercasedTerm = searchTerm.toLowerCase();
+    return sessions.filter(session => 
+      session.user?.name.toLowerCase().includes(lowercasedTerm) ||
+      session.user?.email.toLowerCase().includes(lowercasedTerm)
+    );
+  }, [sessions, searchTerm]);
+
   const handleTakeOverSessionClick = (session: ActiveSession) => {
     setSelectedSession(session);
   };
@@ -166,7 +175,7 @@ export default function SessionsPage() {
   }
   
   const handleExportCSV = () => {
-    const csvData = sessions.map(session => ({
+    const csvData = filteredSessions.map(session => ({
       "Employee": session.user?.name,
       "Email": session.user?.email,
       "Clock In Time": format(new Date(session.clockInTime), "MMM d, yyyy, h:mm a"),
@@ -209,7 +218,7 @@ export default function SessionsPage() {
   };
 
   const handleSelectAll = (checked: boolean) => {
-      setSelectedRecordIds(checked ? sessions.map(s => s.id) : []);
+      setSelectedRecordIds(checked ? filteredSessions.map(s => s.id) : []);
   };
 
   const handleSelectRecord = (id: string, checked: boolean) => {
@@ -275,7 +284,7 @@ export default function SessionsPage() {
                         </AlertDialogContent>
                     </AlertDialog>
                 )}
-                <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={sessions.length === 0}>
+                <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={filteredSessions.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Download CSV
                 </Button>
@@ -283,6 +292,19 @@ export default function SessionsPage() {
           )}
         </CardHeader>
         <CardContent>
+          {isSeniorStaff && (
+              <div className="mb-4">
+                  <div className="relative w-full max-w-sm">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                          placeholder="Search by name or email..."
+                          className="pl-9"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                  </div>
+              </div>
+          )}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -290,7 +312,7 @@ export default function SessionsPage() {
                   {isSeniorStaff && (
                     <TableHead padding="checkbox">
                         <Checkbox
-                            checked={sessions.length > 0 && selectedRecordIds.length === sessions.length}
+                            checked={filteredSessions.length > 0 && selectedRecordIds.length === filteredSessions.length}
                             onCheckedChange={(checked) => handleSelectAll(!!checked)}
                             aria-label="Select all sessions"
                         />
@@ -309,8 +331,8 @@ export default function SessionsPage() {
                       Loading active sessions...
                     </TableCell>
                   </TableRow>
-                ) : sessions.length > 0 ? (
-                  sessions.map((session) => (
+                ) : filteredSessions.length > 0 ? (
+                  filteredSessions.map((session) => (
                     <TableRow key={session.id} data-state={selectedRecordIds.includes(session.id) && "selected"}>
                       {isSeniorStaff && (
                           <TableCell padding="checkbox">
@@ -407,3 +429,5 @@ export default function SessionsPage() {
     </div>
   );
 }
+
+    
