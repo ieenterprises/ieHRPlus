@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { type UserRequest, type HRQuery } from "@/lib/types";
+import { type UserRequest, type HRQuery, type Reward } from "@/lib/types";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
@@ -33,13 +33,15 @@ import { AttachmentPreviewer } from "@/components/attachment-previewer";
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
 export default function DashboardPage() {
-  const { loggedInUser, users, logout, userRequests: allUserRequests, hrQueries: allHrQueries } = useSettings();
+  const { loggedInUser, users, logout, userRequests: allUserRequests, hrQueries: allHrQueries, rewards: allRewards } = useSettings();
   const [myRequests, setMyRequests] = useState<UserRequest[]>([]);
   const [assignedRequests, setAssignedRequests] = useState<UserRequest[]>([]);
   const [myQueries, setMyQueries] = useState<HRQuery[]>([]);
+  const [myRewards, setMyRewards] = useState<Reward[]>([]);
   
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [isQueryDialogOpen, setIsQueryDialogOpen] = useState(false);
+  const [isRewardDialogOpen, setIsRewardDialogOpen] = useState(false);
   
   const [attachments, setAttachments] = useState<File[]>([]);
   const [responseAttachments, setResponseAttachments] = useState<File[]>([]);
@@ -48,11 +50,13 @@ export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   
   const [respondingQuery, setRespondingQuery] = useState<HRQuery | null>(null);
+  const [viewingReward, setViewingReward] = useState<Reward | null>(null);
   
   const { toast } = useToast();
 
   const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role)), [users]);
   const pendingQueries = useMemo(() => myQueries.filter(q => q.status === 'Sent' || q.status === 'Read'), [myQueries]);
+  const pendingRewards = useMemo(() => myRewards.filter(r => r.status === 'Proposed'), [myRewards]);
 
   useEffect(() => {
     if (!loggedInUser?.id) return;
@@ -68,8 +72,12 @@ export default function DashboardPage() {
     const queriesForMe = allHrQueries.filter(q => q.assigneeId === loggedInUser.id);
     queriesForMe.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     setMyQueries(queriesForMe);
+    
+    const rewardsForMe = allRewards.filter(r => r.assigneeId === loggedInUser.id);
+    rewardsForMe.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setMyRewards(rewardsForMe);
 
-  }, [allUserRequests, allHrQueries, loggedInUser?.id]);
+  }, [allUserRequests, allHrQueries, allRewards, loggedInUser?.id]);
 
   const handleSwitchUser = () => {
     logout(false);
@@ -197,13 +205,15 @@ export default function DashboardPage() {
       }
   };
   
-  const getStatusBadgeVariant = (status: UserRequest['status'] | HRQuery['status']) => {
+  const getStatusBadgeVariant = (status: UserRequest['status'] | HRQuery['status'] | Reward['status']) => {
     switch (status) {
       case 'Pending':
       case 'Sent':
+      case 'Proposed':
         return 'secondary';
       case 'Approved':
       case 'Responded':
+      case 'Acknowledged':
         return 'default';
       case 'Rejected':
       case 'Closed':
@@ -225,10 +235,24 @@ export default function DashboardPage() {
     }
   };
   
+  const openRewardDialog = async (reward: Reward) => {
+    setViewingReward(reward);
+    setIsRewardDialogOpen(true);
+    if (reward.status === 'Proposed') {
+        const rewardRef = doc(db, 'rewards', reward.id);
+        await updateDoc(rewardRef, { status: 'Acknowledged' });
+    }
+  };
+  
   const closeQueryDialog = () => {
     setRespondingQuery(null);
     setIsQueryDialogOpen(false);
     setResponseAttachments([]);
+  };
+
+  const closeRewardDialog = () => {
+    setViewingReward(null);
+    setIsRewardDialogOpen(false);
   };
 
   return (
@@ -297,6 +321,25 @@ export default function DashboardPage() {
               <CardContent>
                   <Button asChild>
                       <Link href="#my-queries-section">View Queries ({pendingQueries.length})</Link>
+                  </Button>
+              </CardContent>
+          </Card>
+      )}
+      
+      {pendingRewards.length > 0 && (
+          <Card className="border-green-500">
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-green-600">
+                      <Gift />
+                      You Have New Rewards
+                  </CardTitle>
+                  <CardDescription>
+                      You have been recognized for your hard work! View your rewards below.
+                  </CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <Button asChild>
+                      <Link href="#my-rewards-section">View Rewards ({pendingRewards.length})</Link>
                   </Button>
               </CardContent>
           </Card>
@@ -399,6 +442,54 @@ export default function DashboardPage() {
                       ) : (
                          <TableRow>
                             <TableCell colSpan={5} className="text-center h-24">You have no queries.</TableCell>
+                        </TableRow>
+                      )}
+                  </TableBody>
+              </Table>
+          </CardContent>
+      </Card>
+      
+       <Card id="my-rewards-section">
+          <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-green-600">
+                  <Gift />
+                  My Rewards
+              </CardTitle>
+              <CardDescription>
+                  A log of all rewards and recognitions you have received.
+              </CardDescription>
+          </CardHeader>
+          <CardContent>
+              <Table>
+                  <TableHeader>
+                      <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>From</TableHead>
+                          <TableHead>Date Sent</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {myRewards.length > 0 ? (
+                          myRewards.map(reward => (
+                              <TableRow key={reward.id}>
+                                  <TableCell className="font-medium">{reward.title}</TableCell>
+                                  <TableCell>{reward.proposerName}</TableCell>
+                                  <TableCell>{format(new Date(reward.createdAt), 'MMM d, yyyy')}</TableCell>
+                                  <TableCell>
+                                      <Badge variant={getStatusBadgeVariant(reward.status)}>{reward.status}</Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                      <Button size="sm" variant="outline" onClick={() => openRewardDialog(reward)}>
+                                        View
+                                      </Button>
+                                  </TableCell>
+                              </TableRow>
+                          ))
+                      ) : (
+                         <TableRow>
+                            <TableCell colSpan={5} className="text-center h-24">You have no rewards.</TableCell>
                         </TableRow>
                       )}
                   </TableBody>
@@ -613,9 +704,42 @@ export default function DashboardPage() {
           )}
         </DialogContent>
       </Dialog>
+      
+       <Dialog open={isRewardDialogOpen} onOpenChange={closeRewardDialog}>
+        <DialogContent className="sm:max-w-xl">
+          {viewingReward && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Reward: {viewingReward.title}</DialogTitle>
+                <DialogDescription>
+                  From: {viewingReward.proposerName} on {format(new Date(viewingReward.createdAt), 'PPP')}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Reward Details</Label>
+                  <ScrollArea className="h-24 w-full rounded-md border p-4 bg-secondary/50">
+                    <p className="text-sm whitespace-pre-wrap">{viewingReward.description}</p>
+                  </ScrollArea>
+                </div>
+                {viewingReward.attachments && viewingReward.attachments.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Attachments</Label>
+                    <AttachmentPreviewer attachments={viewingReward.attachments} />
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={closeRewardDialog}>Close</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
 
 
 

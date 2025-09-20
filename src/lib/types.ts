@@ -2,6 +2,21 @@
 
 import type { AnyPermission } from "./permissions";
 
+export type Reward = {
+  id: string;
+  proposerId: string;
+  proposerName: string;
+  assigneeId: string;
+  assigneeName: string;
+  businessId: string;
+  title: string;
+  description: string;
+  status: 'Proposed' | 'Acknowledged' | 'Closed';
+  createdAt: string;
+  acknowledgedAt?: string;
+  attachments?: { name: string; url: string }[];
+};
+
 export type HRQuery = {
   id: string;
   requesterId: string;
@@ -705,5 +720,6 @@ export type Enums<
     
 
     
+
 
 

@@ -52,6 +52,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import Papa from "papaparse";
+import { HRQueryTable } from "./query-table";
+import { RewardTable } from "./reward-table";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
@@ -381,6 +383,30 @@ export default function HrReviewPage() {
             </Table>
           </div>
         </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+            <CardTitle>HR Queries</CardTitle>
+            <CardDescription>
+                Send and manage official information requests to employees.
+            </CardDescription>
+        </CardHeader>
+        <CardContent>
+            <HRQueryTable />
+        </CardContent>
+      </Card>
+
+      <Card>
+          <CardHeader>
+              <CardTitle>Employee Rewards</CardTitle>
+              <CardDescription>
+                  Propose and manage rewards for employees.
+              </CardDescription>
+          </CardHeader>
+          <CardContent>
+              <RewardTable />
+          </CardContent>
       </Card>
 
       <Card>
