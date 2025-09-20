@@ -24,6 +24,7 @@ import {
   HardDrive,
   Folder,
   Briefcase,
+  Video,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
@@ -63,6 +64,7 @@ const navItems: NavItem[] = [
   { href: "/hr-review", icon: Briefcase, label: "HR Review", permission: "MANAGE_USERS" },
   { href: "/file-manager", icon: Folder, label: "File Manager" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_USERS", offlineDisabled: true },
+  { href: "/meeting", icon: Video, label: "Meeting" },
 ];
 
 export function AppSidebar() {
