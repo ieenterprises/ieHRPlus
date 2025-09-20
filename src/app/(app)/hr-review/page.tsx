@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -40,52 +39,33 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { TimeRecord, UserRequest, User } from "@/lib/types";
+import { TimeRecord } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon, Trash2, Search, ClipboardList, Send, FileCheck, FileX, AlertCircle, File as FileIconLucide, MessageSquarePlus } from "lucide-react";
+import { Video, Download, Calendar as CalendarIcon, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import Papa from "papaparse";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import Link from 'next/link';
-import { HRQueryTable } from './query-table';
-import { AttachmentPreviewer } from "@/components/attachment-previewer";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
 export default function HrReviewPage() {
-  const { loggedInUser, users, userRequests } = useSettings();
+  const { loggedInUser } = useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
-  const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
-  const [pendingSearchTerm, setPendingSearchTerm] = useState("");
-  const [historySearchTerm, setHistorySearchTerm] = useState("");
-  const [requestSearchTerm, setRequestSearchTerm] = useState("");
-
-  const [reviewRequest, setReviewRequest] = useState<UserRequest | null>(null);
-  const [reviewAction, setReviewAction] = useState<'Approve' | 'Reject' | 'Forward' | null>(null);
-  const [reviewComments, setReviewComments] = useState('');
-  const [forwardToUserId, setForwardToUserId] = useState('');
-
   const { toast } = useToast();
   const storage = getStorage();
 
   const isSeniorStaff = useMemo(() => loggedInUser && seniorRoles.includes(loggedInUser.role), [loggedInUser]);
-  const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role) && u.id !== loggedInUser?.id), [users, loggedInUser]);
 
   useEffect(() => {
     if (!loggedInUser?.businessId) {
@@ -93,14 +73,25 @@ export default function HrReviewPage() {
       return;
     }
 
-    const timeRecordsQuery = query(
+    const q = query(
       collection(db, "timeRecords"),
       where("businessId", "==", loggedInUser.businessId)
     );
 
-    const timeRecordsUnsubscribe = onSnapshot(timeRecordsQuery, (snapshot) => {
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
-      setTimeRecords(allRecords);
+      
+      const start = startOfDay(selectedDate);
+      const end = endOfDay(selectedDate);
+      
+      const filteredRecords = allRecords.filter(record => {
+        const clockInDate = new Date(record.clockInTime);
+        return isWithinInterval(clockInDate, { start, end });
+      });
+
+      filteredRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+      
+      setTimeRecords(filteredRecords);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching time records:", error);
@@ -108,113 +99,28 @@ export default function HrReviewPage() {
       setLoading(false);
     });
 
-    return () => {
-        timeRecordsUnsubscribe();
-    };
-  }, [loggedInUser?.businessId, toast]);
-
-  const filteredTimeRecords = useMemo(() => {
-    const start = startOfDay(selectedDate);
-    const end = endOfDay(selectedDate);
-    return timeRecords.filter(record => isWithinInterval(new Date(record.clockInTime), { start, end }))
-      .sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
-  }, [timeRecords, selectedDate]);
+    return () => unsubscribe();
+  }, [loggedInUser?.businessId, selectedDate, toast]);
   
   useEffect(() => {
       setSelectedRecordIds([]);
-  }, [selectedDate, filteredTimeRecords]);
+  }, [selectedDate, timeRecords]);
 
-  useEffect(() => {
-    setSelectedRequestIds([]);
-  }, [userRequests]);
-  
-  const handleOpenReviewDialog = (request: UserRequest) => {
-    setReviewRequest(request);
-    setReviewAction(null);
-    setReviewComments('');
-    setForwardToUserId('');
-  };
-
-  const handleCloseReviewDialog = () => {
-    setReviewRequest(null);
-  };
-  
-  const handleSubmitReview = async () => {
-    if (!reviewRequest || !reviewAction || !loggedInUser) return;
-    
-    try {
-        const requestRef = doc(db, "userRequests", reviewRequest.id);
-        
-        let updateData: any = {
-            updatedAt: new Date().toISOString(),
-        };
-
-        if (reviewAction === 'Approve' || reviewAction === 'Reject') {
-            updateData = {
-                ...updateData,
-                status: reviewAction === 'Approve' ? 'Approved' : 'Rejected',
-                reviewComments,
-                reviewerId: loggedInUser.id,
-                reviewerName: loggedInUser.name,
-                assignedToId: null,
-                assignedToName: null,
-                forwardedById: null,
-                forwardedByName: null,
-                forwardingComments: null,
-            };
-        } else if (reviewAction === 'Forward') {
-            if (!forwardToUserId) {
-                toast({ title: "Validation Error", description: "Please select a user to forward the request to.", variant: "destructive" });
-                return;
-            }
-            const forwardToUser = users.find(u => u.id === forwardToUserId);
-            updateData = {
-                ...updateData,
-                status: 'Forwarded',
-                assignedToId: forwardToUserId,
-                assignedToName: forwardToUser?.name,
-                forwardedById: loggedInUser.id,
-                forwardedByName: loggedInUser.name,
-                forwardingComments: reviewComments,
-            };
-        }
-
-        await updateDoc(requestRef, updateData);
-        toast({ title: "Request Updated", description: `The request has been ${reviewAction.toLowerCase()}.` });
-        handleCloseReviewDialog();
-
-    } catch (error: any) {
-        toast({ title: "Update Failed", description: error.message, variant: "destructive" });
-    }
-  };
-
-  const handleExportCSV = (data: any[], tableType: string) => {
-    let csvData;
-    if (tableType === 'requests') {
-        csvData = data.map(req => ({
-            "Employee": req.userName,
-            "Request Type": req.requestType,
-            "Description": req.description,
-            "Date Submitted": format(new Date(req.createdAt), "MMM d, yyyy, h:mm a"),
-            "Status": req.status,
-            "Assigned To": req.assignedToName || '',
-        }));
-    } else {
-        csvData = data.map(record => ({
-            "Employee": record.userName,
-            "Email": record.userEmail,
-            "Clock In Time": format(new Date(record.clockInTime), "MMM d, yyyy, h:mm a"),
-            "Clock Out Time": record.clockOutTime ? format(new Date(record.clockOutTime), "MMM d, yyyy, h:mm a") : "-",
-            "Status": record.status,
-        }));
-    }
+  const handleExportCSV = (data: TimeRecord[], tableType: 'pending' | 'history') => {
+    const csvData = data.map(record => ({
+      "Employee": record.userName,
+      "Email": record.userEmail,
+      "Clock In Time": format(new Date(record.clockInTime), "MMM d, yyyy, h:mm a"),
+      "Clock Out Time": record.clockOutTime ? format(new Date(record.clockOutTime), "MMM d, yyyy, h:mm a") : "-",
+      "Status": record.status,
+    }));
 
     const csv = Papa.unparse(csvData);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `${tableType}_records_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute("download", `${tableType}_records_${format(selectedDate, 'yyyy-MM-dd')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -269,7 +175,7 @@ export default function HrReviewPage() {
         if (record.videoUrl) {
             try {
                 const videoRef = ref(storage, record.videoUrl);
-                deleteObject(videoRef);
+                deleteObject(videoRef); // This can fail silently if permissions are off, but we proceed
             } catch (e) {
                 console.warn("Could not delete video for record:", record.id, e);
             }
@@ -292,57 +198,16 @@ export default function HrReviewPage() {
     }
   };
   
-  const handleDeleteSelectedRequests = async () => {
-    const batch = writeBatch(db);
-    const requestsToDelete = userRequests.filter(r => selectedRequestIds.includes(r.id));
-    
-    requestsToDelete.forEach(request => {
-        batch.delete(doc(db, "userRequests", request.id));
-        if (request.attachments && request.attachments.length > 0) {
-            request.attachments.forEach(attachment => {
-                try {
-                    // Firebase Storage URLs are complex, so we need to parse them.
-                    // This is a robust way to get the path from a gs:// or https:// URL.
-                    const fileRef = ref(storage, attachment.url);
-                    deleteObject(fileRef).catch(e => console.warn("Could not delete attachment:", attachment.url, e));
-                } catch (e) {
-                    console.warn("Invalid attachment URL, cannot delete:", attachment.url, e);
-                }
-            });
-        }
-    });
-
-    try {
-        await batch.commit();
-        toast({
-            title: `${selectedRequestIds.length} Request(s) Deleted`,
-            description: "The selected requests have been permanently removed.",
-        });
-        setSelectedRequestIds([]);
-    } catch (error: any) {
-         toast({
-            title: "Deletion Failed",
-            description: error.message,
-            variant: "destructive"
-        });
-    }
-  };
-  
-  const getBadgeVariant = (status: TimeRecord['status'] | UserRequest['status']) => {
+  const getBadgeVariant = (status: TimeRecord['status']) => {
     switch (status) {
       case 'pending':
-      case 'Pending':
         return 'secondary';
       case 'Clocked In':
-      case 'Approved':
         return 'default';
       case 'Clocked Out':
         return 'outline';
       case 'rejected':
-      case 'Rejected':
         return 'destructive';
-      case 'Forwarded':
-        return 'outline'; // Using outline for forwarded status
       default:
         return 'outline';
     }
@@ -361,40 +226,11 @@ export default function HrReviewPage() {
     document.body.removeChild(a);
   };
   
-  const pendingRecords = filteredTimeRecords.filter(r => r.status === 'pending');
-  const historicalRecords = filteredTimeRecords.filter(r => r.status !== 'pending');
-
-  const filteredPendingRecords = useMemo(() => {
-    if (!pendingSearchTerm) return pendingRecords;
-    const lowercasedTerm = pendingSearchTerm.toLowerCase();
-    return pendingRecords.filter(record =>
-      record.userName.toLowerCase().includes(lowercasedTerm) ||
-      record.userEmail.toLowerCase().includes(lowercasedTerm)
-    );
-  }, [pendingRecords, pendingSearchTerm]);
-
-  const filteredHistoricalRecords = useMemo(() => {
-    if (!historySearchTerm) return historicalRecords;
-    const lowercasedTerm = historySearchTerm.toLowerCase();
-    return historicalRecords.filter(record =>
-      record.userName.toLowerCase().includes(lowercasedTerm) ||
-      record.userEmail.toLowerCase().includes(lowercasedTerm)
-    );
-  }, [historicalRecords, historySearchTerm]);
-
-  const filteredUserRequests = useMemo(() => {
-      if (!requestSearchTerm) return userRequests;
-      const lowercasedTerm = requestSearchTerm.toLowerCase();
-      return userRequests.filter(req =>
-        req.userName.toLowerCase().includes(lowercasedTerm) ||
-        req.requestType.toLowerCase().includes(lowercasedTerm) ||
-        (req.assignedToName && req.assignedToName.toLowerCase().includes(lowercasedTerm))
-      );
-  }, [userRequests, requestSearchTerm]);
-
+  const pendingRecords = timeRecords.filter(r => r.status === 'pending');
+  const historicalRecords = timeRecords.filter(r => r.status !== 'pending');
 
   const handleSelectAll = (table: 'pending' | 'history', checked: boolean) => {
-    const recordIds = (table === 'pending' ? filteredPendingRecords : filteredHistoricalRecords).map(r => r.id);
+    const recordIds = (table === 'pending' ? pendingRecords : historicalRecords).map(r => r.id);
     if (checked) {
         setSelectedRecordIds(prev => [...new Set([...prev, ...recordIds])]);
     } else {
@@ -407,22 +243,12 @@ export default function HrReviewPage() {
         checked ? [...prev, id] : prev.filter(pId => pId !== id)
     );
   };
-  
-  const handleSelectAllRequests = (checked: boolean) => {
-    setSelectedRequestIds(checked ? filteredUserRequests.map(r => r.id) : []);
-  };
-
-  const handleSelectRequest = (id: string, checked: boolean) => {
-    setSelectedRequestIds(prev => 
-        checked ? [...prev, id] : prev.filter(pId => pId !== id)
-    );
-  };
 
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <PageHeader title="HR Review" description="Review and manage employee clock-in records and requests." />
+        <PageHeader title="HR Review" description="Review and manage employee clock-in/out records." />
         {isSeniorStaff && (
           <Popover>
               <PopoverTrigger asChild>
@@ -448,171 +274,36 @@ export default function HrReviewPage() {
           </Popover>
         )}
       </div>
-      
-      {isSeniorStaff && (
-        <Card>
-          <CardHeader>
-              <CardTitle className="flex items-center gap-2"><MessageSquarePlus /> HR Queries</CardTitle>
-              <CardDescription>Send official queries and requests for information to employees.</CardDescription>
-          </CardHeader>
-          <CardContent>
-              <HRQueryTable />
-          </CardContent>
-        </Card>
-      )}
-
-      {isSeniorStaff && (
-         <Card>
-            <CardHeader>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <CardTitle className="flex items-center gap-2"><ClipboardList /> User Requests</CardTitle>
-                        <CardDescription>Review, approve, reject, or forward employee requests.</CardDescription>
-                    </div>
-                     <div className="flex items-center gap-2 self-start sm:self-center">
-                        {selectedRequestIds.length > 0 && (
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="sm">
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Delete ({selectedRequestIds.length})
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected requests and their associated files. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelectedRequests} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        )}
-                        <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredUserRequests, 'requests')} disabled={filteredUserRequests.length === 0}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Download CSV
-                        </Button>
-                    </div>
-                </div>
-                <div className="mt-4">
-                    <div className="relative w-full max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search by name, request type, or assignee..."
-                            className="pl-9"
-                            value={requestSearchTerm}
-                            onChange={(e) => setRequestSearchTerm(e.target.value)}
-                        />
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent>
-                 <div className="overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead padding="checkbox">
-                                    <Checkbox
-                                        checked={filteredUserRequests.length > 0 && selectedRequestIds.length === filteredUserRequests.length}
-                                        onCheckedChange={(checked) => handleSelectAllRequests(!!checked)}
-                                        aria-label="Select all requests"
-                                    />
-                                </TableHead>
-                                <TableHead>Employee</TableHead>
-                                <TableHead>Request Type</TableHead>
-                                <TableHead>Submitted</TableHead>
-                                <TableHead>Assigned To</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {loading ? (
-                                <TableRow><TableCell colSpan={7} className="h-24 text-center">Loading requests...</TableCell></TableRow>
-                            ) : filteredUserRequests.length > 0 ? (
-                                filteredUserRequests.map(request => (
-                                    <TableRow key={request.id} data-state={selectedRequestIds.includes(request.id) && "selected"}>
-                                         <TableCell padding="checkbox">
-                                            <Checkbox
-                                                checked={selectedRequestIds.includes(request.id)}
-                                                onCheckedChange={(checked) => handleSelectRequest(request.id, !!checked)}
-                                                aria-label="Select request"
-                                            />
-                                        </TableCell>
-                                        <TableCell className="font-medium">{request.userName}</TableCell>
-                                        <TableCell>{request.requestType}</TableCell>
-                                        <TableCell>{format(new Date(request.createdAt), 'MMM d, yyyy')}</TableCell>
-                                        <TableCell>
-                                            {(request.status === 'Forwarded' || request.status === 'Pending') && request.assignedToName ? (
-                                                <Badge variant="outline" className="flex items-center gap-1.5">
-                                                    <AlertCircle className="h-3.5 w-3.5"/>
-                                                    {request.assignedToName}
-                                                </Badge>
-                                            ) : (
-                                                'HR Team'
-                                            )}
-                                        </TableCell>
-                                        <TableCell><Badge variant={getBadgeVariant(request.status)}>{request.status}</Badge></TableCell>
-                                        <TableCell className="text-right">
-                                            {isSeniorStaff && (
-                                                <Button size="sm" onClick={() => handleOpenReviewDialog(request)}>
-                                                    {request.status === 'Approved' || request.status === 'Rejected' ? 'Preview' : 'Review'}
-                                                </Button>
-                                            )}
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow><TableCell colSpan={7} className="h-24 text-center">No user requests found.</TableCell></TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-            </CardContent>
-        </Card>
-      )}
-
       <Card>
-        <CardHeader>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <CardTitle>Pending Submissions</CardTitle>
-                    <CardDescription>
-                    Approve or reject clock-in records after video verification.
-                    </CardDescription>
-                </div>
-                {isSeniorStaff && (
-                    <div className="flex items-center gap-2 self-start sm:self-center">
-                        {selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length > 0 && (
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="sm">
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Delete ({selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length})
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected records and their associated videos. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        )}
-                        <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredPendingRecords, 'pending')} disabled={filteredPendingRecords.length === 0}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Download CSV
-                        </Button>
-                    </div>
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div>
+            <CardTitle>Pending Submissions</CardTitle>
+            <CardDescription>
+              Approve or reject clock-in records after video verification.
+            </CardDescription>
+          </div>
+          {isSeniorStaff && (
+            <div className="flex items-center gap-2">
+                {selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length > 0 && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete ({selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length})
+                            </Button>
+                        </AlertDialogTrigger>
+                         <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected records and their associated videos. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 )}
+                <Button variant="outline" size="sm" onClick={() => handleExportCSV(pendingRecords, 'pending')} disabled={pendingRecords.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download CSV
+                </Button>
             </div>
-            {isSeniorStaff && (
-                 <div className="mt-4">
-                    <div className="relative w-full max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search by name or email..."
-                            className="pl-9"
-                            value={pendingSearchTerm}
-                            onChange={(e) => setPendingSearchTerm(e.target.value)}
-                        />
-                    </div>
-                </div>
-            )}
+          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -622,7 +313,7 @@ export default function HrReviewPage() {
                   {isSeniorStaff && (
                     <TableHead padding="checkbox">
                         <Checkbox
-                            checked={filteredPendingRecords.length > 0 && filteredPendingRecords.every(r => selectedRecordIds.includes(r.id))}
+                            checked={pendingRecords.length > 0 && pendingRecords.every(r => selectedRecordIds.includes(r.id))}
                             onCheckedChange={(checked) => handleSelectAll('pending', !!checked)}
                             aria-label="Select all pending"
                         />
@@ -642,8 +333,8 @@ export default function HrReviewPage() {
                       Loading records...
                     </TableCell>
                   </TableRow>
-                ) : filteredPendingRecords.length > 0 ? (
-                  filteredPendingRecords.map((record) => (
+                ) : pendingRecords.length > 0 ? (
+                  pendingRecords.map((record) => (
                     <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
                       {isSeniorStaff && (
                         <TableCell padding="checkbox">
@@ -693,50 +384,35 @@ export default function HrReviewPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <CardTitle>Time Clock History</CardTitle>
-                    <CardDescription>
-                    This is a log of all employee clock-in and clock-out events for the selected day.
-                    </CardDescription>
-                </div>
-                {isSeniorStaff && (
-                    <div className="flex items-center gap-2 self-start sm:self-center">
-                        {selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length > 0 && (
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="sm">
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Delete ({selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length})
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected records and their associated videos. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        )}
-                        <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredHistoricalRecords, 'history')} disabled={filteredHistoricalRecords.length === 0}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Download CSV
-                        </Button>
-                    </div>
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div>
+            <CardTitle>Time Clock History</CardTitle>
+            <CardDescription>
+              This is a log of all employee clock-in and clock-out events for the selected day.
+            </CardDescription>
+          </div>
+          {isSeniorStaff && (
+            <div className="flex items-center gap-2">
+                {selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length > 0 && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete ({selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length})
+                            </Button>
+                        </AlertDialogTrigger>
+                         <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected records and their associated videos. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 )}
+                <Button variant="outline" size="sm" onClick={() => handleExportCSV(historicalRecords, 'history')} disabled={historicalRecords.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download CSV
+                </Button>
             </div>
-            {isSeniorStaff && (
-                 <div className="mt-4">
-                    <div className="relative w-full max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search by name or email..."
-                            className="pl-9"
-                            value={historySearchTerm}
-                            onChange={(e) => setHistorySearchTerm(e.target.value)}
-                        />
-                    </div>
-                </div>
-            )}
+          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -746,7 +422,7 @@ export default function HrReviewPage() {
                   {isSeniorStaff && (
                       <TableHead padding="checkbox">
                           <Checkbox
-                              checked={filteredHistoricalRecords.length > 0 && filteredHistoricalRecords.every(r => selectedRecordIds.includes(r.id))}
+                              checked={historicalRecords.length > 0 && historicalRecords.every(r => selectedRecordIds.includes(r.id))}
                               onCheckedChange={(checked) => handleSelectAll('history', !!checked)}
                               aria-label="Select all history"
                           />
@@ -767,8 +443,8 @@ export default function HrReviewPage() {
                       Loading records...
                     </TableCell>
                   </TableRow>
-                ) : filteredHistoricalRecords.length > 0 ? (
-                  filteredHistoricalRecords.map((record) => (
+                ) : historicalRecords.length > 0 ? (
+                  historicalRecords.map((record) => (
                     <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
                        {isSeniorStaff && (
                           <TableCell padding="checkbox">
@@ -838,116 +514,9 @@ export default function HrReviewPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
-       <Dialog open={!!reviewRequest} onOpenChange={(open) => !open && handleCloseReviewDialog()}>
-            <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>Review Request: {reviewRequest?.requestType}</DialogTitle>
-                    <DialogDescription>
-                        From: {reviewRequest?.userName}
-                        {reviewRequest?.forwardedByName && ` (Forwarded by ${reviewRequest.forwardedByName})`}
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    <div className="space-y-1">
-                        <Label className="text-muted-foreground">Full Description</Label>
-                        <ScrollArea className="h-24 w-full rounded-md border p-4">
-                            <p className="text-sm whitespace-pre-wrap">{reviewRequest?.description}</p>
-                        </ScrollArea>
-                    </div>
-                     {reviewRequest?.attachments && reviewRequest.attachments.length > 0 && (
-                        <div className="space-y-2">
-                             <Label className="text-muted-foreground">Attachments</Label>
-                             <AttachmentPreviewer attachments={reviewRequest.attachments} />
-                        </div>
-                    )}
-                    {(reviewRequest?.startDate || reviewRequest?.endDate) && (
-                        <div className="space-y-1">
-                            <Label className="text-muted-foreground">Requested Dates</Label>
-                            <div className="flex items-center gap-2 text-sm rounded-md border p-3">
-                                <CalendarIcon className="h-4 w-4" />
-                                <span>
-                                    {reviewRequest.startDate ? format(new Date(reviewRequest.startDate), "PPP") : '...'}
-                                </span>
-                                <span>-</span>
-                                <span>
-                                    {reviewRequest.endDate ? format(new Date(reviewRequest.endDate), "PPP") : '...'}
-                                </span>
-                            </div>
-                        </div>
-                    )}
-                     {reviewRequest?.forwardingComments && (
-                         <div className="space-y-1">
-                            <Label className="text-muted-foreground">Forwarding Comments from {reviewRequest.forwardedByName}</Label>
-                            <ScrollArea className="h-20 w-full rounded-md border p-4 bg-secondary/50">
-                                <p className="text-sm whitespace-pre-wrap">{reviewRequest.forwardingComments}</p>
-                            </ScrollArea>
-                        </div>
-                    )}
-                    
-                    {reviewRequest?.status !== 'Approved' && reviewRequest?.status !== 'Rejected' && (
-                        <>
-                            <div className="space-y-1">
-                                <Label htmlFor="comments">Add Comments (optional)</Label>
-                                <Textarea
-                                    id="comments"
-                                    value={reviewComments}
-                                    onChange={(e) => setReviewComments(e.target.value)}
-                                    placeholder="Provide feedback or reasons for your decision..."
-                                />
-                            </div>
-                            {seniorStaffList.length > 0 && (
-                                <div className="space-y-1">
-                                    <Label htmlFor="forwardTo">Forward To (optional)</Label>
-                                    <Select onValueChange={setForwardToUserId} value={forwardToUserId}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Select a user to forward this request to..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {seniorStaffList.map(user => (
-                                                <SelectItem key={user.id} value={user.id}>{user.name} ({user.role})</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
-                        </>
-                    )}
-                    {reviewRequest && (reviewRequest.status === 'Approved' || reviewRequest.status === 'Rejected') && reviewRequest.reviewComments && (
-                         <div className="space-y-1">
-                            <Label className="text-muted-foreground">Reviewer Comments from {reviewRequest.reviewerName}</Label>
-                            <ScrollArea className="h-20 w-full rounded-md border p-4 bg-secondary/50">
-                                <p className="text-sm whitespace-pre-wrap">{reviewRequest.reviewComments}</p>
-                            </ScrollArea>
-                        </div>
-                    )}
-
-                </div>
-                <DialogFooter className="gap-2 sm:justify-between mt-4">
-                    <Button variant="ghost" onClick={handleCloseReviewDialog} className="order-last sm:order-first">Close</Button>
-                    
-                    {reviewRequest?.status !== 'Approved' && reviewRequest?.status !== 'Rejected' && (
-                        <div className="flex flex-col sm:flex-row gap-2">
-                            {forwardToUserId ? (
-                                <Button onClick={() => { setReviewAction('Forward'); handleSubmitReview(); }}>
-                                    <Send className="mr-2 h-4 w-4"/> Forward Request
-                                </Button>
-                            ) : (
-                                <>
-                                    <Button variant="destructive" onClick={() => { setReviewAction('Reject'); handleSubmitReview(); }}>
-                                        <FileX className="mr-2 h-4 w-4"/> Reject
-                                    </Button>
-                                    <Button onClick={() => { setReviewAction('Approve'); handleSubmitReview(); }}>
-                                        <FileCheck className="mr-2 h-4 w-4"/> Approve
-                                    </Button>
-                                </>
-                            )}
-                        </div>
-                    )}
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
 
     </div>
   );
 }
+
+    
