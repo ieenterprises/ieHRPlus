@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -43,16 +42,18 @@ export default function VideoVerificationPage() {
   useEffect(() => {
     if (!loggedInUser) return;
 
+    let stream: MediaStream | null = null;
+
     async function setupCamera() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setHasCameraPermission(true);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
 
         // Start recording immediately
-        mediaRecorderRef.current = new MediaRecorder(stream);
+        mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'video/webm' });
         mediaRecorderRef.current.ondataavailable = (event) => {
           if (event.data.size > 0) {
             recordedChunksRef.current.push(event.data);
@@ -63,7 +64,13 @@ export default function VideoVerificationPage() {
           const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
           setRecordedVideo(blob);
           recordedChunksRef.current = [];
-          stream.getTracks().forEach(track => track.stop()); // Turn off camera
+          // Stop all tracks to turn off camera and mic
+          if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+          }
+          if(videoRef.current) {
+            videoRef.current.srcObject = null;
+          }
         };
 
         mediaRecorderRef.current.start();
@@ -75,12 +82,19 @@ export default function VideoVerificationPage() {
         toast({
           variant: "destructive",
           title: "Camera Access Denied",
-          description: "Please enable camera permissions in your browser settings.",
+          description: "Please enable camera and microphone permissions in your browser settings.",
         });
       }
     }
 
     setupCamera();
+
+    return () => {
+        // Cleanup function to stop tracks if component unmounts
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+    }
   }, [loggedInUser, toast]);
 
   // Handle recording progress and stopping
@@ -159,7 +173,7 @@ export default function VideoVerificationPage() {
             <Video /> Video Verification
           </CardTitle>
           <CardDescription>
-            Please record a brief 8-second video for identity verification.
+            Please record a brief 8-second video with audio for identity verification.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -167,9 +181,12 @@ export default function VideoVerificationPage() {
             <video ref={videoRef} className="h-full w-full object-cover" autoPlay muted playsInline />
             {hasCameraPermission === false && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                <p className="text-white">Camera access is required.</p>
+                <p className="text-white">Camera and Mic access is required.</p>
               </div>
             )}
+             {!isRecording && recordedVideo && (
+                 <video src={URL.createObjectURL(recordedVideo)} className="absolute inset-0 h-full w-full object-cover" controls />
+             )}
           </div>
           {isRecording && (
             <div className="mt-4 space-y-2">
