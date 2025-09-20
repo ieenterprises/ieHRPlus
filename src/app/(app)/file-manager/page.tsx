@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { MoreVertical, Folder, File as FileIconLucide, FolderPlus, UploadCloud, Home, ChevronRight, Download, Trash2, Edit, Copy, Move, ClipboardPaste, X, ExternalLink, Loader2 } from 'lucide-react';
+import { MoreVertical, Folder, File as FileIconLucide, FolderPlus, UploadCloud, Home, ChevronRight, Download, Trash2, Edit, Copy, Move, ClipboardPaste, X, ExternalLink, Loader2, Search } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, } from '@/components/ui/dropdown-menu';
@@ -66,6 +66,7 @@ export default function FileManagerPage() {
     const [items, setItems] = useState<FileItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState("");
 
     const [renameData, setRenameData] = useState<{ item: FileItem; newName: string } | null>(null);
     const [createFolderName, setCreateFolderName] = useState('');
@@ -238,13 +239,17 @@ export default function FileManagerPage() {
         return segments.map((segment, index) => ({ name: segment, path: segments.slice(0, index + 1).join('/') }));
     }, [path]);
 
+    const filteredItems = useMemo(() => {
+        return items.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [items, searchTerm]);
+
     const sortedItems = useMemo(() => {
-        return [...items].sort((a, b) => {
+        return [...filteredItems].sort((a, b) => {
             if (a.type === 'folder' && b.type !== 'folder') return -1;
             if (a.type !== 'folder' && b.type === 'folder') return 1;
             return a.name.localeCompare(b.name);
         });
-    }, [items]);
+    }, [filteredItems]);
 
     const showLoading = isLoading || loadingUser;
 
@@ -256,10 +261,21 @@ export default function FileManagerPage() {
                         <CardTitle className="text-2xl font-bold flex items-center gap-2">File Manager</CardTitle>
                         <CardDescription>Your organization's cloud storage powered by Firebase.</CardDescription>
                     </div>
-                    <div className="flex gap-2">
-                        {clipboard && <Button onClick={handlePaste} disabled={showLoading}><ClipboardPaste className="mr-2 h-4 w-4" /> Paste</Button>}
-                        <Button variant="outline" onClick={() => setDialogOpen({ ...dialogOpen, create: true })} disabled={showLoading}><FolderPlus className="mr-2 h-4 w-4" /> New Folder</Button>
-                        <Button onClick={() => setDialogOpen({ ...dialogOpen, upload: true })} disabled={showLoading}><UploadCloud className="mr-2 h-4 w-4" /> Upload File</Button>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search in this folder..."
+                                className="pl-9 w-full sm:w-64"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex gap-2">
+                            {clipboard && <Button onClick={handlePaste} disabled={showLoading}><ClipboardPaste className="mr-2 h-4 w-4" /> Paste</Button>}
+                            <Button variant="outline" onClick={() => setDialogOpen({ ...dialogOpen, create: true })} disabled={showLoading}><FolderPlus className="mr-2 h-4 w-4" /> New Folder</Button>
+                            <Button onClick={() => setDialogOpen({ ...dialogOpen, upload: true })} disabled={showLoading}><UploadCloud className="mr-2 h-4 w-4" /> Upload File</Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col">
@@ -326,7 +342,7 @@ export default function FileManagerPage() {
                                         </TableRow>
                                     ))
                                 ) : (
-                                    <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">This folder is empty.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">{searchTerm ? `No results for "${searchTerm}"` : 'This folder is empty.'}</TableCell></TableRow>
                                 )}
                             </TableBody>
                         </Table>
@@ -385,5 +401,3 @@ export default function FileManagerPage() {
         </div>
     );
 }
-
-    
