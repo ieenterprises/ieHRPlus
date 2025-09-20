@@ -6,9 +6,11 @@ import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, Type } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type MeetingState = 'idle' | 'active' | 'ended';
 
@@ -16,6 +18,7 @@ export default function MeetingPage() {
   const { toast } = useToast();
   const { loggedInUser } = useSettings();
   const [meetingState, setMeetingState] = useState<MeetingState>('idle');
+  const [meetingTitle, setMeetingTitle] = useState('');
   const [hasPermissions, setHasPermissions] = useState<boolean | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -40,6 +43,14 @@ export default function MeetingPage() {
   }, []);
 
   const startMeeting = async () => {
+    if (!meetingTitle) {
+        toast({
+            variant: 'destructive',
+            title: 'Title Required',
+            description: 'Please enter a title for the meeting before starting.',
+        });
+        return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       localStreamRef.current = stream;
@@ -65,6 +76,11 @@ export default function MeetingPage() {
     cleanupStream();
     setMeetingState('ended');
   };
+  
+  const returnToLobby = () => {
+    setMeetingTitle('');
+    setMeetingState('idle');
+  }
 
   const toggleAudio = () => {
     if (localStreamRef.current) {
@@ -87,7 +103,7 @@ export default function MeetingPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Company Meeting Room"
+        title={meetingState === 'active' ? meetingTitle : 'Company Meeting Room'}
         description="This is the central meeting place for all employees."
       />
 
@@ -106,8 +122,20 @@ export default function MeetingPage() {
               {/* Overlays */}
               {meetingState === 'idle' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 gap-4">
-                    <h3 className="text-xl font-semibold text-white">Ready to join?</h3>
-                    <Button size="lg" onClick={startMeeting}>
+                    <div className="w-full max-w-sm space-y-2">
+                         <Label htmlFor="meeting-title" className="flex items-center gap-2 text-white">
+                            <Type className="h-4 w-4" />
+                            Meeting Title
+                        </Label>
+                        <Input 
+                            id="meeting-title"
+                            value={meetingTitle}
+                            onChange={(e) => setMeetingTitle(e.target.value)}
+                            placeholder="e.g., Weekly Sync"
+                            className="bg-white/90"
+                        />
+                    </div>
+                    <Button size="lg" onClick={startMeeting} disabled={!meetingTitle}>
                         <Phone className="mr-2" /> Start Meeting
                     </Button>
                 </div>
@@ -115,7 +143,7 @@ export default function MeetingPage() {
               {meetingState === 'ended' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 gap-4">
                     <h3 className="text-xl font-semibold text-white">Meeting has ended.</h3>
-                    <Button size="lg" variant="outline" onClick={() => setMeetingState('idle')}>
+                    <Button size="lg" variant="outline" onClick={returnToLobby}>
                         Return to Lobby
                     </Button>
                 </div>
