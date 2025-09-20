@@ -66,6 +66,8 @@ export type UserRequest = {
   // Fields for date ranges
   startDate?: string;
   endDate?: string;
+  // Field for monetary amount
+  amount?: number;
 };
 
 export type TimeRecord = {
@@ -736,6 +738,7 @@ export type Enums<
     
 
     
+
 
 
 

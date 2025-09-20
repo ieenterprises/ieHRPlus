@@ -130,6 +130,7 @@ export default function DashboardPage() {
     const requestType = formData.get('requestType') as string;
     const description = formData.get('description') as string;
     const assignedToId = formData.get('assignedToId') as string;
+    const amount = formData.get('amount') as string;
     
     const assignedToUser = users.find(u => u.id === assignedToId);
 
@@ -162,6 +163,7 @@ export default function DashboardPage() {
             assignedToName: assignedToUser?.name || null,
             status: "Pending",
             createdAt: new Date().toISOString(),
+            amount: amount ? parseFloat(amount) : undefined,
         };
 
         if (dateRange?.from) {
@@ -638,6 +640,10 @@ export default function DashboardPage() {
                                     <Textarea id="description" name="description" className="col-span-3" required placeholder="Please provide a detailed description..." />
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="amount" className="text-right">Amount (Optional)</Label>
+                                    <Input id="amount" name="amount" type="number" step="0.01" className="col-span-3" placeholder="e.g., 500.00" />
+                                </div>
+                                <div className="grid grid-cols-4 items-center gap-4">
                                     <Label className="text-right">Dates</Label>
                                     <Popover>
                                         <PopoverTrigger asChild>
@@ -724,6 +730,7 @@ export default function DashboardPage() {
                         <TableRow>
                             <TableHead className="w-[200px]">Request Type</TableHead>
                             <TableHead>Description</TableHead>
+                            <TableHead>Amount</TableHead>
                             <TableHead className="w-[120px]">Date Submitted</TableHead>
                             <TableHead className="w-[150px]">Status</TableHead>
                             <TableHead>Assigned To</TableHead>
@@ -735,6 +742,9 @@ export default function DashboardPage() {
                                 <TableRow key={request.id}>
                                     <TableCell className="font-medium">{request.requestType}</TableCell>
                                     <TableCell className="text-muted-foreground truncate max-w-sm">{request.description}</TableCell>
+                                    <TableCell>
+                                        {request.amount != null ? `${currency}${request.amount.toFixed(2)}` : 'N/A'}
+                                    </TableCell>
                                     <TableCell>{format(new Date(request.createdAt), 'MMM d, yyyy')}</TableCell>
                                     <TableCell>
                                         <Badge variant={getStatusBadgeVariant(request.status)}>{request.status}</Badge>
@@ -748,7 +758,7 @@ export default function DashboardPage() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center h-24">You have not made any requests yet.</TableCell>
+                                <TableCell colSpan={6} className="text-center h-24">You have not made any requests yet.</TableCell>
                             </TableRow>
                         )}
                     </TableBody>
