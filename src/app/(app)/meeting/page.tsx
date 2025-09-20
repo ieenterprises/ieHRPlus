@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail, Send, Search } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail, Send, Search, Type } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { collection, query, where, onSnapshot, addDoc, orderBy, or, and, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, orderBy, and, updateDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { User, ChatMessage } from '@/lib/types';
 import { format, formatDistanceToNowStrict } from 'date-fns';
@@ -142,37 +142,63 @@ export default function MeetingPage() {
 
   // Effect for fetching messages for a specific chat
   useEffect(() => {
-    if (!loggedInUser || !selectedChatUser) return;
+    if (!loggedInUser || !selectedChatUser) {
+        setMessages([]);
+        return;
+    };
 
-    const q = query(
-      collection(db, 'chatMessages'),
-      and(
+    let combinedMessages: ChatMessage[] = [];
+    const messageMap = new Map<string, ChatMessage>();
+
+    const updateAndSortMessages = () => {
+        combinedMessages = Array.from(messageMap.values());
+        combinedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        setMessages(combinedMessages);
+    }
+
+    const markMessagesAsRead = (snapshot: any) => {
+        const batch: any[] = [];
+        snapshot.docs.forEach((document: any) => {
+            if (document.data().receiverId === loggedInUser.id && !document.data().isRead) {
+                batch.push(updateDoc(document.ref, { isRead: true }));
+            }
+        });
+        if (batch.length > 0) {
+            Promise.all(batch).catch(err => console.error("Error marking messages as read:", err));
+        }
+    }
+    
+    // Query for messages sent by loggedInUser to selectedChatUser
+    const q1 = query(
+        collection(db, 'chatMessages'),
         where('businessId', '==', loggedInUser.businessId),
-        or(
-          and(where('senderId', '==', loggedInUser.id), where('receiverId', '==', selectedChatUser.id)),
-          and(where('senderId', '==', selectedChatUser.id), where('receiverId', '==', loggedInUser.id))
-        )
-      ),
-      orderBy('timestamp', 'asc')
+        where('senderId', '==', loggedInUser.id),
+        where('receiverId', '==', selectedChatUser.id)
     );
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage));
-      setMessages(msgs);
-      
-      // Mark messages as read
-      const batch = [];
-      for (const doc of snapshot.docs) {
-          if (doc.data().receiverId === loggedInUser.id && !doc.data().isRead) {
-              batch.push(updateDoc(doc.ref, { isRead: true }));
-          }
-      }
-      if (batch.length > 0) {
-          await Promise.all(batch);
-      }
+    // Query for messages sent by selectedChatUser to loggedInUser
+    const q2 = query(
+        collection(db, 'chatMessages'),
+        where('businessId', '==', loggedInUser.businessId),
+        where('senderId', '==', selectedChatUser.id),
+        where('receiverId', '==', loggedInUser.id)
+    );
+
+    const unsub1 = onSnapshot(q1, (snapshot) => {
+        snapshot.docs.forEach(doc => messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage));
+        updateAndSortMessages();
     });
 
-    return () => unsubscribe();
+    const unsub2 = onSnapshot(q2, (snapshot) => {
+        snapshot.docs.forEach(doc => messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage));
+        markMessagesAsRead(snapshot);
+        updateAndSortMessages();
+    });
+
+    return () => {
+        unsub1();
+        unsub2();
+    };
 
   }, [loggedInUser, selectedChatUser]);
   
@@ -461,5 +487,6 @@ export default function MeetingPage() {
     </div>
   );
 }
+
 
 
