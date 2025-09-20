@@ -124,7 +124,6 @@ export default function MeetingPage() {
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 gap-4">
                     <div className="w-full max-w-sm space-y-2">
                          <Label htmlFor="meeting-title" className="flex items-center gap-2 text-white">
-                            <Type className="h-4 w-4" />
                             Meeting Title
                         </Label>
                         <Input 
