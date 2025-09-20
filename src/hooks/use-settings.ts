@@ -5,7 +5,7 @@
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc, limit, orderBy } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, BranchType, PosDeviceType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode, OfflineAction, TimeRecord, UserRequest, HRQuery, Reward } from '@/lib/types';
+import type { User, BranchType, PosDeviceType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode, OfflineAction, TimeRecord, UserRequest, HRQuery, Reward, Department } from '@/lib/types';
 import { fileManagementPermissions, teamManagementPermissions, settingsPermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
@@ -35,6 +35,7 @@ type SettingsContextType = {
     paymentTypes: PaymentType[];
     taxes: Tax[];
     roles: Role[];
+    departments: Department[];
     users: User[];
     products: Product[];
     categories: Category[];
@@ -71,6 +72,9 @@ type SettingsContextType = {
     generateAccessCode: () => Promise<AccessCode | null>;
     validateAndUseAccessCode: (code: string) => Promise<boolean>;
     updateUserTempAccess: (userId: string, hasAccess: boolean) => Promise<void>;
+    addDepartment: (department: Omit<Department, 'id' | 'businessId'>) => Promise<void>;
+    updateDepartment: (id: string, department: Partial<Department>) => Promise<void>;
+    deleteDepartment: (id: string) => Promise<void>;
     
     // Auth and session state
     loggedInUser: User | null;
@@ -106,6 +110,7 @@ type SettingsContextType = {
     setVoidedLogs: (value: React.SetStateAction<VoidedLog[]>) => Promise<void>;
     setDebts: (value: React.SetStateAction<Debt[]>) => Promise<void>;
     setRoles: (value: React.SetStateAction<Role[]>) => Promise<void>;
+    setDepartments: (value: React.SetStateAction<Department[]>) => Promise<void>;
     setUsers: (value: React.SetStateAction<User[]>) => void;
 
     // Voiding and ticket logic
@@ -151,6 +156,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [taxes, setTaxesState] = useState<Tax[]>([]);
     const [users, setUsersState] = useState<User[]>([]);
     const [roles, setRolesState] = useState<Role[]>([]);
+    const [departments, setDepartmentsState] = useState<Department[]>([]);
     const [products, setProductsState] = useState<Product[]>([]);
     const [categories, setCategoriesState] = useState<Category[]>([]);
     const [customers, setCustomersState] = useState<Customer[]>([]);
@@ -254,6 +260,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                     const collections = {
                         users: setUsersState,
                         roles: setRolesState,
+                        departments: setDepartmentsState,
                         categories: setCategoriesState,
                         products: setProductsState,
                         customers: setCustomersState,
@@ -300,7 +307,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setRolesState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setBranches, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes, setUserRequestsState, setHrQueriesState, setRewardsState];
+                const collections = [setUsersState, setRolesState, setDepartmentsState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setBranches, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes, setUserRequestsState, setHrQueriesState, setRewardsState];
                 collections.forEach(setter => setter([]));
             }
         });
@@ -450,6 +457,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const addTax = addDocFactory('taxes');
     const updateTax = updateDocFactory('taxes');
     const deleteTax = deleteDocFactory('taxes');
+    const addDepartment = addDocFactory('departments');
+    const updateDepartment = updateDocFactory('departments');
+    const deleteDepartment = deleteDocFactory('departments');
 
     const createBatchSetter = <T extends {id?: string}>(collectionName: string, localSetter: React.Dispatch<React.SetStateAction<T[]>>) => 
         async (value: React.SetStateAction<T[]>) => {
@@ -488,6 +498,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const setOpenTickets = createBatchSetter('open_tickets', setOpenTicketsState);
     const setVoidedLogs = createBatchSetter('voided_logs', setVoidedLogsState);
     const setRoles = createBatchSetter('roles', setRolesState);
+    const setDepartments = createBatchSetter('departments', setDepartmentsState);
 
 
      const createOfflineDeleter = (collectionName: string, localSetter: React.Dispatch<React.SetStateAction<any[]>>) => 
@@ -615,6 +626,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         paymentTypes, addPaymentType, updatePaymentType, deletePaymentType,
         taxes, addTax, updateTax, deleteTax,
         roles, setRoles,
+        departments, addDepartment, updateDepartment, deleteDepartment,
         users, setUsers: setUsersState,
         products, setProducts,
         categories, setCategories,
@@ -649,6 +661,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         deleteProduct,
         deleteVoidedLog,
         restoreVoidedLog,
+        setDepartments
     };
 
     return createElement(SettingsContext.Provider, { value }, children);
@@ -663,6 +676,7 @@ export function useSettings() {
 }
 
     
+
 
 
 

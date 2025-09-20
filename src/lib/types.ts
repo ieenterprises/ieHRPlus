@@ -2,6 +2,12 @@
 
 import type { AnyPermission } from "./permissions";
 
+export type Department = {
+  id: string;
+  name: string;
+  businessId: string;
+};
+
 export type Reward = {
   id: string;
   proposerId: string;
@@ -141,6 +147,8 @@ export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissio
     password?: string;
     businessId: string;
     temp_access_given?: boolean;
+    departmentId?: string;
+    departmentName?: string;
 }
 export type Customer = Database['public']['Tables']['customers']['Row'] & { businessId: string };
 export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 'payment_methods'> & {
@@ -590,6 +598,8 @@ export type Database = {
           role: string
           password?: string | null,
           temp_access_given?: boolean | null,
+          departmentId?: string | null,
+          departmentName?: string | null,
         }
         Insert: {
           avatar_url?: string | null
@@ -601,6 +611,8 @@ export type Database = {
           role: string
           password?: string | null,
           temp_access_given?: boolean | null,
+          departmentId?: string | null,
+          departmentName?: string | null,
         }
         Update: {
           avatar_url?: string | null
@@ -612,6 +624,8 @@ export type Database = {
           role?: string
           password?: string | null,
           temp_access_given?: boolean | null,
+          departmentId?: string | null,
+          departmentName?: string | null,
         }
         Relationships: [
           {
@@ -722,6 +736,7 @@ export type Enums<
     
 
     
+
 
 
 

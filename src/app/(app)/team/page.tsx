@@ -20,10 +20,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { type User, type Role } from "@/lib/types";
+import { type User, type Role, type Department } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Folder, Download, Eye, EyeOff, Search, Settings, Users as UsersIcon } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Folder, Download, Eye, EyeOff, Search, Settings, Users as UsersIcon, Building } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,6 +77,11 @@ const EMPTY_ROLE: Partial<Role> = {
   permissions: [],
 };
 
+const EMPTY_DEPARTMENT: Partial<Department> = {
+  name: "",
+};
+
+
 const allFileManagementPermissions = Object.keys(fileManagementPermissions) as (keyof typeof fileManagementPermissions)[];
 const allTeamManagementPermissions = Object.keys(teamManagementPermissions) as (keyof typeof teamManagementPermissions)[];
 const allSettingsPermissions = Object.keys(settingsPermissions) as (keyof typeof settingsPermissions)[];
@@ -85,7 +90,7 @@ const allSettingsPermissions = Object.keys(settingsPermissions) as (keyof typeof
 const systemRoles = ["Owner"];
 
 export default function TeamPage() {
-  const { users, setUsers, roles, setRoles, getPermissionsForRole, loggedInUser } = useSettings();
+  const { users, setUsers, roles, setRoles, departments, addDepartment, updateDepartment, deleteDepartment, getPermissionsForRole, loggedInUser } = useSettings();
   const [loading, setLoading] = useState(true);
   
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -96,8 +101,12 @@ export default function TeamPage() {
   const [selectedRolePermissions, setSelectedRolePermissions] = useState<AnyPermission[]>([]);
   const [passwordVisible, setPasswordVisible] = useState(false);
   
+  const [isDepartmentDialogOpen, setIsDepartmentDialogOpen] = useState(false);
+  const [editingDepartment, setEditingDepartment] = useState<Partial<Department> | null>(null);
+
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [roleSearchTerm, setRoleSearchTerm] = useState("");
+  const [departmentSearchTerm, setDepartmentSearchTerm] = useState("");
 
   const { toast } = useToast();
 
@@ -114,6 +123,12 @@ export default function TeamPage() {
     if (!roleSearchTerm) return roles;
     return roles.filter(role => role.name.toLowerCase().includes(roleSearchTerm.toLowerCase()));
   }, [roles, roleSearchTerm]);
+  
+  const filteredDepartments = useMemo(() => {
+    if (!departmentSearchTerm) return departments;
+    return departments.filter(dept => dept.name.toLowerCase().includes(departmentSearchTerm.toLowerCase()));
+  }, [departments, departmentSearchTerm]);
+
 
   useEffect(() => {
     setLoading(false);
@@ -151,6 +166,9 @@ export default function TeamPage() {
     const formData = new FormData(event.currentTarget);
     const newPassword = formData.get("password") as string;
     const roleName = formData.get("role") as string;
+    const departmentId = formData.get("departmentId") as string | undefined;
+
+    const department = departments.find(d => d.id === departmentId);
 
     const userData: Partial<User> = {
         name: formData.get("name") as string,
@@ -160,6 +178,8 @@ export default function TeamPage() {
         avatar_url: editingUser.avatar_url || EMPTY_USER.avatar_url!,
         businessId: loggedInUser.businessId,
         temp_access_given: editingUser.temp_access_given || false,
+        departmentId: department?.id,
+        departmentName: department?.name,
     };
 
     try {
@@ -313,7 +333,52 @@ export default function TeamPage() {
       toast({ title: "Error deleting role", description: error.message, variant: "destructive" });
     }
   };
+
+  // Department Handlers
+  const handleOpenDepartmentDialog = (dept: Partial<Department> | null) => {
+    setEditingDepartment(dept ? { ...dept } : { ...EMPTY_DEPARTMENT });
+    setIsDepartmentDialogOpen(true);
+  };
   
+  const handleDepartmentDialogClose = (open: boolean) => {
+    if (!open) setEditingDepartment(null);
+    setIsDepartmentDialogOpen(open);
+  }
+
+  const handleSaveDepartment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingDepartment) return;
+
+    const formData = new FormData(event.currentTarget);
+    const departmentName = formData.get("name") as string;
+    
+    try {
+        if (editingDepartment.id) {
+            await updateDepartment(editingDepartment.id, { name: departmentName });
+            toast({ title: "Department Updated" });
+        } else {
+            await addDepartment({ name: departmentName });
+            toast({ title: "Department Added" });
+        }
+        handleDepartmentDialogClose(false);
+    } catch (error: any) {
+        toast({ title: "Error saving department", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleDeleteDepartment = async (departmentId: string) => {
+     if (users.some(user => user.departmentId === departmentId)) {
+        toast({ title: "Cannot Delete Department", description: "This department is assigned to one or more users.", variant: "destructive" });
+        return;
+    }
+    try {
+        await deleteDepartment(departmentId);
+        toast({ title: "Department Deleted" });
+    } catch (error: any) {
+        toast({ title: "Error deleting department", description: error.message, variant: "destructive" });
+    }
+  };
+
   const getRoleBadgeVariant = (role: string): BadgeProps['variant'] => {
     switch (role) {
       case "Owner": return "destructive";
@@ -330,6 +395,7 @@ export default function TeamPage() {
       "Name": u.name,
       "Email": u.email,
       "Role": u.role,
+      "Department": u.departmentName || "N/A",
     }));
 
     const csv = Papa.unparse(dataToExport);
@@ -394,9 +460,10 @@ export default function TeamPage() {
     <div className="space-y-8">
       <PageHeader title="Team Management" description="Manage your team members and their roles." />
       <Tabs defaultValue="users">
-        <TabsList className="mb-4 grid w-full grid-cols-2">
+        <TabsList className="mb-4 grid w-full grid-cols-3">
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="roles">Roles</TabsTrigger>
+            <TabsTrigger value="departments">Departments</TabsTrigger>
         </TabsList>
         <TabsContent value="users">
             <Card>
@@ -428,10 +495,10 @@ export default function TeamPage() {
                 </div>
                 <div className="overflow-x-auto">
                     <Table>
-                        <TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead className="hidden md:table-cell">Email</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead>Department</TableHead><TableHead className="hidden md:table-cell">Email</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
                         <TableBody>
                         {loading ? (
-                            <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading...</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell></TableRow>
                         ) : filteredUsers.length > 0 ? (
                             filteredUsers.map((user) => (
                                 <TableRow key={user.id}>
@@ -442,6 +509,7 @@ export default function TeamPage() {
                                     </div>
                                 </TableCell>
                                 <TableCell><Badge variant={getRoleBadgeVariant(user.role as string)}>{user.role}</Badge></TableCell>
+                                <TableCell>{user.departmentName || 'N/A'}</TableCell>
                                 <TableCell className="hidden md:table-cell">{user.email}</TableCell>
                                 <TableCell>
                                     <DropdownMenu>
@@ -456,7 +524,7 @@ export default function TeamPage() {
                                 </TableRow>
                             ))
                         ) : (
-                            <TableRow><TableCell colSpan={4} className="h-24 text-center">No users found.</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={5} className="h-24 text-center">No users found.</TableCell></TableRow>
                         )}
                         </TableBody>
                     </Table>
@@ -513,6 +581,52 @@ export default function TeamPage() {
                 </CardContent>
             </Card>
         </TabsContent>
+        <TabsContent value="departments">
+            <Card>
+                <CardHeader>
+                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle>Departments</CardTitle>
+                            <CardDescription>Manage your company's departments.</CardDescription>
+                        </div>
+                        <Button onClick={() => handleOpenDepartmentDialog(null)} size="sm" className="self-end"><PlusCircle className="mr-2 h-4 w-4" />Add Department</Button>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <div className="mb-4">
+                        <div className="relative w-full max-w-sm">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                placeholder="Search departments..."
+                                className="pl-9"
+                                value={departmentSearchTerm}
+                                onChange={(e) => setDepartmentSearchTerm(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader><TableRow><TableHead>Department Name</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                            {filteredDepartments.length > 0 ? (
+                                filteredDepartments.map((dept) => (
+                                    <TableRow key={dept.id}>
+                                        <TableCell className="font-medium">{dept.name}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenDepartmentDialog(dept)}><Edit className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteDepartment(dept.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow><TableCell colSpan={2} className="h-24 text-center">No departments found.</TableCell></TableRow>
+                            )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
+        </TabsContent>
       </Tabs>
       <Dialog open={isUserDialogOpen} onOpenChange={handleUserDialogClose}>
           <DialogContent className="sm:max-w-xl">
@@ -540,11 +654,19 @@ export default function TeamPage() {
                         </Button>
                       </div>
                   </div>
-                  <div className="space-y-2"><Label htmlFor="role">Role</Label>
-                      <Select name="role" required defaultValue={editingUser?.role} onValueChange={handleUserRoleChange}>
-                      <SelectTrigger id="role"><SelectValue placeholder="Select a role" /></SelectTrigger>
-                      <SelectContent>{roles.map(role => (<SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>))}</SelectContent>
-                      </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label htmlFor="role">Role</Label>
+                        <Select name="role" required defaultValue={editingUser?.role} onValueChange={handleUserRoleChange}>
+                        <SelectTrigger id="role"><SelectValue placeholder="Select a role" /></SelectTrigger>
+                        <SelectContent>{roles.map(role => (<SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>))}</SelectContent>
+                        </Select>
+                    </div>
+                     <div className="space-y-2"><Label htmlFor="departmentId">Department</Label>
+                        <Select name="departmentId" defaultValue={editingUser?.departmentId}>
+                        <SelectTrigger id="departmentId"><SelectValue placeholder="Select a department" /></SelectTrigger>
+                        <SelectContent>{departments.map(dept => (<SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>))}</SelectContent>
+                        </Select>
+                    </div>
                   </div>
                   <p className="text-sm text-muted-foreground pt-2">Permissions are inherited from the assigned role. To change permissions, please edit the role.</p>
               </div>
@@ -575,6 +697,27 @@ export default function TeamPage() {
               <DialogFooter className="pt-4"><Button type="submit">Save Changes</Button></DialogFooter>
             </form>
           </DialogContent>
+      </Dialog>
+      <Dialog open={isDepartmentDialogOpen} onOpenChange={handleDepartmentDialogClose}>
+        <DialogContent className="sm:max-w-md">
+            <form onSubmit={handleSaveDepartment}>
+              <DialogHeader>
+                <DialogTitle>{editingDepartment?.id ? 'Edit Department' : 'Add Department'}</DialogTitle>
+                <DialogDescription>
+                    {editingDepartment?.id ? 'Update the name of this department.' : 'Create a new department to organize your users.'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Department Name</Label>
+                    <Input id="name" name="name" defaultValue={editingDepartment?.name} required />
+                  </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit">Save</Button>
+              </DialogFooter>
+            </form>
+        </DialogContent>
       </Dialog>
     </div>
   );
