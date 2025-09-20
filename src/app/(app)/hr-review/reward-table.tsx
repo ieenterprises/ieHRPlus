@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -22,7 +23,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AttachmentPreviewer } from "@/components/attachment-previewer";
 
 export function RewardTable() {
-  const { loggedInUser, users, rewards } = useSettings();
+  const { loggedInUser, users, rewards, currency } = useSettings();
   const [mySentRewards, setMySentRewards] = useState<Reward[]>([]);
   const [isRewardDialogOpen, setIsRewardDialogOpen] = useState(false);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
@@ -68,6 +69,7 @@ export function RewardTable() {
     const title = formData.get('title') as string;
     const description = formData.get('description') as string;
     const assigneeId = formData.get('assigneeId') as string;
+    const amount = formData.get('amount') as string;
     
     const assigneeUser = users.find(u => u.id === assigneeId);
 
@@ -100,6 +102,7 @@ export function RewardTable() {
             attachments: attachmentUrls,
             status: "Proposed",
             createdAt: new Date().toISOString(),
+            amount: amount ? parseFloat(amount) : undefined,
         };
 
         await addDoc(collection(db, "rewards"), newReward);
@@ -164,6 +167,10 @@ export function RewardTable() {
                                 <Label htmlFor="description" className="text-right pt-2">Reason / Description</Label>
                                 <Textarea id="description" name="description" className="col-span-3" required placeholder="Please provide details..." />
                             </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="amount" className="text-right">Amount (Optional)</Label>
+                                <Input id="amount" name="amount" type="number" step="0.01" className="col-span-3" placeholder="e.g., 200.00 for a bonus" />
+                            </div>
                              <div className="grid grid-cols-4 items-start gap-4">
                                 <Label htmlFor="attachments" className="text-right pt-2">Attachments</Label>
                                 <div className="col-span-3">
@@ -198,6 +205,7 @@ export function RewardTable() {
                         <TableHead>Sent To</TableHead>
                         <TableHead className="w-[250px]">Title</TableHead>
                         <TableHead>Description</TableHead>
+                        <TableHead>Amount</TableHead>
                         <TableHead className="w-[120px]">Date Sent</TableHead>
                         <TableHead className="w-[150px]">Status</TableHead>
                         <TableHead className="text-right">Action</TableHead>
@@ -210,6 +218,9 @@ export function RewardTable() {
                                 <TableCell className="font-medium">{reward.assigneeName}</TableCell>
                                 <TableCell>{reward.title}</TableCell>
                                 <TableCell className="text-muted-foreground truncate max-w-xs">{reward.description}</TableCell>
+                                <TableCell>
+                                    {reward.amount != null ? `${currency}${reward.amount.toFixed(2)}` : 'N/A'}
+                                </TableCell>
                                 <TableCell>{format(new Date(reward.createdAt), 'MMM d, yyyy')}</TableCell>
                                 <TableCell>
                                     <Badge variant={getStatusBadgeVariant(reward.status)}>{reward.status}</Badge>
@@ -223,7 +234,7 @@ export function RewardTable() {
                         ))
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={6} className="text-center h-24">You have not proposed any rewards.</TableCell>
+                            <TableCell colSpan={7} className="text-center h-24">You have not proposed any rewards.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -246,6 +257,11 @@ export function RewardTable() {
                                 <ScrollArea className="h-24 w-full rounded-md border p-4 bg-secondary/50">
                                     <p className="text-sm whitespace-pre-wrap">{reviewingReward.description}</p>
                                 </ScrollArea>
+                                 {reviewingReward.amount != null && (
+                                    <div className="text-sm font-medium">
+                                        Amount: <span className="font-bold text-green-600">{currency}{reviewingReward.amount.toFixed(2)}</span>
+                                    </div>
+                                )}
                                 {reviewingReward.attachments && reviewingReward.attachments.length > 0 && (
                                     <div className="space-y-2 pt-2">
                                         <Label className="text-muted-foreground">Attachments</Label>

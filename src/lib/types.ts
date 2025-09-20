@@ -15,6 +15,7 @@ export type Reward = {
   createdAt: string;
   acknowledgedAt?: string;
   attachments?: { name: string; url: string }[];
+  amount?: number;
 };
 
 export type HRQuery = {
@@ -32,6 +33,7 @@ export type HRQuery = {
   attachments?: { name: string; url: string }[];
   response?: string;
   responseAttachments?: { name: string; url: string }[];
+  amount?: number;
 };
 
 export type UserRequest = {
@@ -720,6 +722,7 @@ export type Enums<
     
 
     
+
 
 
 

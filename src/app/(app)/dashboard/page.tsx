@@ -33,7 +33,7 @@ import { AttachmentPreviewer } from "@/components/attachment-previewer";
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
 export default function DashboardPage() {
-  const { loggedInUser, users, logout, userRequests: allUserRequests, hrQueries: allHrQueries, rewards: allRewards } = useSettings();
+  const { loggedInUser, users, logout, userRequests: allUserRequests, hrQueries: allHrQueries, rewards: allRewards, currency } = useSettings();
   const [myRequests, setMyRequests] = useState<UserRequest[]>([]);
   const [assignedRequests, setAssignedRequests] = useState<UserRequest[]>([]);
   const [myQueries, setMyQueries] = useState<HRQuery[]>([]);
@@ -417,6 +417,7 @@ export default function DashboardPage() {
                       <TableRow>
                           <TableHead>Title</TableHead>
                           <TableHead>From</TableHead>
+                          <TableHead>Amount</TableHead>
                           <TableHead>Date Sent</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Action</TableHead>
@@ -428,6 +429,9 @@ export default function DashboardPage() {
                               <TableRow key={query.id}>
                                   <TableCell className="font-medium">{query.title}</TableCell>
                                   <TableCell>{query.requesterName}</TableCell>
+                                  <TableCell>
+                                      {query.amount != null ? `${currency}${query.amount.toFixed(2)}` : 'N/A'}
+                                  </TableCell>
                                   <TableCell>{format(new Date(query.createdAt), 'MMM d, yyyy')}</TableCell>
                                   <TableCell>
                                       <Badge variant={getStatusBadgeVariant(query.status)}>{query.status}</Badge>
@@ -441,7 +445,7 @@ export default function DashboardPage() {
                           ))
                       ) : (
                          <TableRow>
-                            <TableCell colSpan={5} className="text-center h-24">You have no queries.</TableCell>
+                            <TableCell colSpan={6} className="text-center h-24">You have no queries.</TableCell>
                         </TableRow>
                       )}
                   </TableBody>
@@ -465,6 +469,7 @@ export default function DashboardPage() {
                       <TableRow>
                           <TableHead>Title</TableHead>
                           <TableHead>From</TableHead>
+                          <TableHead>Amount</TableHead>
                           <TableHead>Date Sent</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Action</TableHead>
@@ -476,6 +481,9 @@ export default function DashboardPage() {
                               <TableRow key={reward.id}>
                                   <TableCell className="font-medium">{reward.title}</TableCell>
                                   <TableCell>{reward.proposerName}</TableCell>
+                                   <TableCell>
+                                      {reward.amount != null ? `${currency}${reward.amount.toFixed(2)}` : 'N/A'}
+                                  </TableCell>
                                   <TableCell>{format(new Date(reward.createdAt), 'MMM d, yyyy')}</TableCell>
                                   <TableCell>
                                       <Badge variant={getStatusBadgeVariant(reward.status)}>{reward.status}</Badge>
@@ -489,7 +497,7 @@ export default function DashboardPage() {
                           ))
                       ) : (
                          <TableRow>
-                            <TableCell colSpan={5} className="text-center h-24">You have no rewards.</TableCell>
+                            <TableCell colSpan={6} className="text-center h-24">You have no rewards.</TableCell>
                         </TableRow>
                       )}
                   </TableBody>
@@ -658,6 +666,11 @@ export default function DashboardPage() {
                     <p className="text-sm whitespace-pre-wrap">{respondingQuery.description}</p>
                   </ScrollArea>
                 </div>
+                 {respondingQuery.amount != null && (
+                    <div className="text-sm font-medium">
+                        Associated Amount/Fine: <span className="font-bold text-destructive">{currency}{respondingQuery.amount.toFixed(2)}</span>
+                    </div>
+                )}
                 {respondingQuery.attachments && respondingQuery.attachments.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Attachments from Requester</Label>
@@ -722,6 +735,11 @@ export default function DashboardPage() {
                     <p className="text-sm whitespace-pre-wrap">{viewingReward.description}</p>
                   </ScrollArea>
                 </div>
+                {viewingReward.amount != null && (
+                    <div className="text-sm font-medium">
+                        Amount: <span className="font-bold text-green-600">{currency}{viewingReward.amount.toFixed(2)}</span>
+                    </div>
+                )}
                 {viewingReward.attachments && viewingReward.attachments.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Attachments</Label>
@@ -739,6 +757,7 @@ export default function DashboardPage() {
     </div>
   );
 }
+
 
 
 

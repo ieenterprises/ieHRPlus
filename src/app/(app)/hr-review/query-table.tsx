@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -23,7 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AttachmentPreviewer } from "@/components/attachment-previewer";
 
 export function HRQueryTable() {
-  const { loggedInUser, users, hrQueries } = useSettings();
+  const { loggedInUser, users, hrQueries, currency } = useSettings();
   const [mySentQueries, setMySentQueries] = useState<HRQuery[]>([]);
   const [isQueryDialogOpen, setIsQueryDialogOpen] = useState(false);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
@@ -69,6 +70,7 @@ export function HRQueryTable() {
     const title = formData.get('title') as string;
     const description = formData.get('description') as string;
     const assigneeId = formData.get('assigneeId') as string;
+    const amount = formData.get('amount') as string;
     
     const assigneeUser = users.find(u => u.id === assigneeId);
 
@@ -101,6 +103,7 @@ export function HRQueryTable() {
             attachments: attachmentUrls,
             status: "Sent",
             createdAt: new Date().toISOString(),
+            amount: amount ? parseFloat(amount) : undefined,
         };
 
         await addDoc(collection(db, "hr_queries"), newQuery);
@@ -166,6 +169,10 @@ export function HRQueryTable() {
                                 <Label htmlFor="description" className="text-right pt-2">Description</Label>
                                 <Textarea id="description" name="description" className="col-span-3" required placeholder="Please provide details..." />
                             </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="amount" className="text-right">Amount (Optional)</Label>
+                                <Input id="amount" name="amount" type="number" step="0.01" className="col-span-3" placeholder="e.g., 50.00 for a fine" />
+                            </div>
                              <div className="grid grid-cols-4 items-start gap-4">
                                 <Label htmlFor="attachments" className="text-right pt-2">Attachments</Label>
                                 <div className="col-span-3">
@@ -200,6 +207,7 @@ export function HRQueryTable() {
                         <TableHead>Sent To</TableHead>
                         <TableHead className="w-[250px]">Title</TableHead>
                         <TableHead>Description</TableHead>
+                        <TableHead>Amount</TableHead>
                         <TableHead className="w-[120px]">Date Sent</TableHead>
                         <TableHead className="w-[150px]">Status</TableHead>
                         <TableHead className="text-right">Action</TableHead>
@@ -212,6 +220,9 @@ export function HRQueryTable() {
                                 <TableCell className="font-medium">{query.assigneeName}</TableCell>
                                 <TableCell>{query.title}</TableCell>
                                 <TableCell className="text-muted-foreground truncate max-w-xs">{query.description}</TableCell>
+                                <TableCell>
+                                    {query.amount != null ? `${currency}${query.amount.toFixed(2)}` : 'N/A'}
+                                </TableCell>
                                 <TableCell>{format(new Date(query.createdAt), 'MMM d, yyyy')}</TableCell>
                                 <TableCell>
                                     <Badge variant={getStatusBadgeVariant(query.status)}>{query.status}</Badge>
@@ -225,7 +236,7 @@ export function HRQueryTable() {
                         ))
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={6} className="text-center h-24">You have not sent any queries.</TableCell>
+                            <TableCell colSpan={7} className="text-center h-24">You have not sent any queries.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -248,6 +259,11 @@ export function HRQueryTable() {
                                 <ScrollArea className="h-24 w-full rounded-md border p-4 bg-secondary/50">
                                     <p className="text-sm whitespace-pre-wrap">{reviewingQuery.description}</p>
                                 </ScrollArea>
+                                {reviewingQuery.amount != null && (
+                                    <div className="text-sm font-medium">
+                                        Amount/Fine: <span className="font-bold text-destructive">{currency}{reviewingQuery.amount.toFixed(2)}</span>
+                                    </div>
+                                )}
                                 {reviewingQuery.attachments && reviewingQuery.attachments.length > 0 && (
                                     <div className="space-y-2 pt-2">
                                         <Label className="text-muted-foreground">Attachments</Label>
