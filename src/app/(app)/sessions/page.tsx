@@ -49,7 +49,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { TimeRecord, User } from "@/lib/types";
 import { format, formatDistanceToNow, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Loader2, Calendar as CalendarIcon, Download, Trash2, Search } from "lucide-react";
+import { Eye, EyeOff, Loader2, Calendar as CalendarIcon, Download, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -73,7 +73,6 @@ export default function SessionsPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const router = useRouter();
 
@@ -125,15 +124,6 @@ export default function SessionsPage() {
   useEffect(() => {
       setSelectedRecordIds([]);
   }, [selectedDate, sessions]);
-
-  const filteredSessions = useMemo(() => {
-    if (!searchTerm) return sessions;
-    const lowercasedTerm = searchTerm.toLowerCase();
-    return sessions.filter(session =>
-      session.user?.name.toLowerCase().includes(lowercasedTerm) ||
-      session.user?.email.toLowerCase().includes(lowercasedTerm)
-    );
-  }, [sessions, searchTerm]);
   
   const handleTakeOverSessionClick = (session: ActiveSession) => {
     setSelectedSession(session);
@@ -176,7 +166,7 @@ export default function SessionsPage() {
   }
   
   const handleExportCSV = () => {
-    const csvData = filteredSessions.map(session => ({
+    const csvData = sessions.map(session => ({
       "Employee": session.user?.name,
       "Email": session.user?.email,
       "Clock In Time": format(new Date(session.clockInTime), "MMM d, yyyy, h:mm a"),
@@ -219,7 +209,7 @@ export default function SessionsPage() {
   };
 
   const handleSelectAll = (checked: boolean) => {
-      setSelectedRecordIds(checked ? filteredSessions.map(s => s.id) : []);
+      setSelectedRecordIds(checked ? sessions.map(s => s.id) : []);
   };
 
   const handleSelectRecord = (id: string, checked: boolean) => {
@@ -262,50 +252,35 @@ export default function SessionsPage() {
         )}
       </div>
       <Card>
-        <CardHeader>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <CardTitle>Clocked-In Users</CardTitle>
-                    <CardDescription>
-                    Select a user to access their dashboard and clock out.
-                    </CardDescription>
-                </div>
-                 {isSeniorStaff && (
-                    <div className="flex items-center gap-2 self-start sm:self-center">
-                        {selectedRecordIds.length > 0 && (
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="sm">
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Delete ({selectedRecordIds.length})
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected sessions. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        )}
-                        <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={sessions.length === 0}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Download CSV
-                        </Button>
-                    </div>
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div>
+            <CardTitle>Clocked-In Users</CardTitle>
+            <CardDescription>
+              Select a user to access their dashboard and clock out.
+            </CardDescription>
+          </div>
+          {isSeniorStaff && (
+            <div className="flex items-center gap-2">
+                {selectedRecordIds.length > 0 && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete ({selectedRecordIds.length})
+                            </Button>
+                        </AlertDialogTrigger>
+                         <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected sessions. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 )}
+                <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={sessions.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download CSV
+                </Button>
             </div>
-             {isSeniorStaff && (
-                 <div className="mt-4">
-                    <div className="relative w-full max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search by name or email..."
-                            className="pl-9"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                </div>
-            )}
+          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -315,7 +290,7 @@ export default function SessionsPage() {
                   {isSeniorStaff && (
                     <TableHead padding="checkbox">
                         <Checkbox
-                            checked={filteredSessions.length > 0 && selectedRecordIds.length === filteredSessions.length}
+                            checked={sessions.length > 0 && selectedRecordIds.length === sessions.length}
                             onCheckedChange={(checked) => handleSelectAll(!!checked)}
                             aria-label="Select all sessions"
                         />
@@ -334,8 +309,8 @@ export default function SessionsPage() {
                       Loading active sessions...
                     </TableCell>
                   </TableRow>
-                ) : filteredSessions.length > 0 ? (
-                  filteredSessions.map((session) => (
+                ) : sessions.length > 0 ? (
+                  sessions.map((session) => (
                     <TableRow key={session.id} data-state={selectedRecordIds.includes(session.id) && "selected"}>
                       {isSeniorStaff && (
                           <TableCell padding="checkbox">
