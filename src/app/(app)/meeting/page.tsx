@@ -28,6 +28,7 @@ import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogD
 
 type MeetingState = 'idle' | 'active' | 'ended';
 type AudioCallState = 'idle' | 'calling' | 'active' | 'ended';
+type ChatMode = 'individual' | 'group';
 
 export default function MeetingPage() {
   const { toast } = useToast();
@@ -69,6 +70,12 @@ export default function MeetingPage() {
   const [forwardRecipients, setForwardRecipients] = useState<string[]>([]);
   const [forwardUserSearch, setForwardUserSearch] = useState('');
 
+  // Group Chat State
+  const [isGroupChatDialogOpen, setIsGroupChatDialogOpen] = useState(false);
+  const [groupRecipients, setGroupRecipients] = useState<User[]>([]);
+  const [groupUserSearch, setGroupUserSearch] = useState('');
+  const [activeChatMode, setActiveChatMode] = useState<ChatMode>('individual');
+  const [activeGroup, setActiveGroup] = useState<User[]>([]);
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
@@ -409,6 +416,78 @@ export default function MeetingPage() {
       return allOtherUsers.filter(u => u.name.toLowerCase().includes(forwardUserSearch.toLowerCase()));
   }, [users, forwardUserSearch, loggedInUser]);
 
+  const handleSelectIndividualChat = (user: User) => {
+    setActiveChatMode('individual');
+    setSelectedChatUser(user);
+    setActiveGroup([]);
+  };
+
+  const handleToggleGroupRecipient = (user: User) => {
+    setGroupRecipients(prev =>
+        prev.some(u => u.id === user.id)
+            ? prev.filter(u => u.id !== user.id)
+            : [...prev, user]
+    );
+  };
+
+  const handleStartGroupChat = () => {
+    if (groupRecipients.length < 2) {
+      toast({ variant: 'destructive', title: "Not enough users", description: "Please select at least two users for a group chat." });
+      return;
+    }
+    setActiveChatMode('group');
+    setActiveGroup(groupRecipients);
+    setMessages([]); // Clear messages for new group chat
+    setSelectedChatUser(null);
+    setIsGroupChatDialogOpen(false);
+    setGroupRecipients([]);
+    setGroupUserSearch('');
+  };
+
+  const filteredGroupUsers = useMemo(() => {
+    const allOtherUsers = users.filter(u => u.id !== loggedInUser?.id);
+    if (!groupUserSearch) return allOtherUsers;
+    return allOtherUsers.filter(u => u.name.toLowerCase().includes(groupUserSearch.toLowerCase()));
+  }, [users, groupUserSearch, loggedInUser]);
+
+  const ChatHeaderContent = () => {
+    if (activeChatMode === 'group') {
+      const participantNames = activeGroup.map(u => u.name).join(', ');
+      return (
+        <CardTitle className="flex items-center gap-3">
+          <div className="flex -space-x-4">
+            {activeGroup.slice(0, 3).map(user => (
+              <Avatar key={user.id} className="h-9 w-9 border-2 border-background">
+                <AvatarImage src={user.avatar_url || ''} />
+                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+            ))}
+          </div>
+          <div className="truncate">
+             <p className="truncate">{participantNames}</p>
+             <p className="text-sm font-normal text-muted-foreground">Group Chat</p>
+          </div>
+        </CardTitle>
+      );
+    }
+
+    if (selectedChatUser) {
+      return (
+        <CardTitle className="flex items-center gap-3">
+          <Avatar>
+            <AvatarImage src={selectedChatUser.avatar_url || ''} alt={selectedChatUser.name} />
+            <AvatarFallback>{selectedChatUser.name.charAt(0)}</AvatarFallback>
+          </Avatar>
+          <div>
+            {selectedChatUser.name}
+            <p className="text-sm font-normal text-muted-foreground">{selectedChatUser.role}</p>
+          </div>
+        </CardTitle>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -627,7 +706,12 @@ export default function MeetingPage() {
            <Card className="h-[70vh] flex">
               <div className="w-1/3 border-r flex flex-col">
                   <CardHeader>
-                      <CardTitle>Conversations</CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle>Conversations</CardTitle>
+                        <Button variant="ghost" size="icon" onClick={() => setIsGroupChatDialogOpen(true)}>
+                          <Users className="h-5 w-5" />
+                        </Button>
+                      </div>
                       <div className="relative mt-2">
                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                            <Input 
@@ -642,8 +726,8 @@ export default function MeetingPage() {
                       {filteredUsers.map(user => (
                           <button 
                             key={user.id} 
-                            className={`w-full text-left p-3 hover:bg-accent ${selectedChatUser?.id === user.id ? 'bg-accent' : ''}`}
-                            onClick={() => setSelectedChatUser(user)}
+                            className={`w-full text-left p-3 hover:bg-accent ${selectedChatUser?.id === user.id && activeChatMode === 'individual' ? 'bg-accent' : ''}`}
+                            onClick={() => handleSelectIndividualChat(user)}
                           >
                               <div className="flex items-center gap-3">
                                   <Avatar>
@@ -663,20 +747,11 @@ export default function MeetingPage() {
                   </ScrollArea>
               </div>
               <div className="w-2/3 flex flex-col">
-                    {selectedChatUser ? (
+                    {selectedChatUser || activeChatMode === 'group' ? (
                         audioCallState === 'idle' ? (
                         <>
                             <CardHeader className="border-b flex-row items-center justify-between">
-                                <CardTitle className="flex items-center gap-3">
-                                     <Avatar>
-                                      <AvatarImage src={selectedChatUser.avatar_url || ''} alt={selectedChatUser.name} />
-                                      <AvatarFallback>{selectedChatUser.name.charAt(0)}</AvatarFallback>
-                                  </Avatar>
-                                  <div>
-                                    {selectedChatUser.name}
-                                     <p className="text-sm font-normal text-muted-foreground">{selectedChatUser.role}</p>
-                                  </div>
-                                </CardTitle>
+                                <ChatHeaderContent />
                                 <div className="flex items-center gap-2">
                                      <div className="relative">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -687,22 +762,24 @@ export default function MeetingPage() {
                                             onChange={(e) => setChatSearch(e.target.value)}
                                         />
                                     </div>
-                                    <Button variant="outline" size="icon" onClick={startAudioCall}>
-                                        <Phone className="h-5 w-5"/>
-                                    </Button>
+                                    {activeChatMode === 'individual' && (
+                                      <Button variant="outline" size="icon" onClick={startAudioCall}>
+                                          <Phone className="h-5 w-5"/>
+                                      </Button>
+                                    )}
                                 </div>
                             </CardHeader>
                              <ScrollArea className="flex-1 p-4">
                                 <div className="space-y-4">
-                                    {filteredMessages.map(msg => (
+                                    {filteredMessages.length > 0 ? filteredMessages.map(msg => (
                                         <div 
                                             key={msg.id} 
                                             className={`group relative flex items-start w-full gap-3 ${msg.senderId === loggedInUser?.id ? 'justify-end' : 'justify-start'}`}
                                         >
                                             {msg.senderId !== loggedInUser?.id && (
                                               <Avatar className="h-8 w-8">
-                                                  <AvatarImage src={selectedChatUser?.avatar_url || ''} />
-                                                  <AvatarFallback>{selectedChatUser?.name?.charAt(0)}</AvatarFallback>
+                                                  <AvatarImage src={users.find(u => u.id === msg.senderId)?.avatar_url || ''} />
+                                                  <AvatarFallback>{users.find(u => u.id === msg.senderId)?.name?.charAt(0)}</AvatarFallback>
                                               </Avatar>
                                             )}
                                             <div className={`flex flex-col ${msg.senderId === loggedInUser?.id ? 'items-end' : 'items-start'}`}>
@@ -739,7 +816,13 @@ export default function MeetingPage() {
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </div>
-                                    ))}
+                                    )) : (
+                                        <div className="text-center text-sm text-muted-foreground pt-10">
+                                            {activeChatMode === 'group' 
+                                                ? 'This is the beginning of your group chat.'
+                                                : 'No messages yet. Start the conversation!'}
+                                        </div>
+                                    )}
                                 </div>
                                 <div ref={messagesEndRef} />
                             </ScrollArea>
@@ -759,10 +842,10 @@ export default function MeetingPage() {
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center text-center bg-muted/30">
                                 <Avatar className="h-32 w-32 mb-4 ring-4 ring-background">
-                                    <AvatarImage src={selectedChatUser.avatar_url || ''} alt={selectedChatUser.name} />
-                                    <AvatarFallback className="text-4xl">{selectedChatUser.name.charAt(0)}</AvatarFallback>
+                                    <AvatarImage src={selectedChatUser!.avatar_url || ''} alt={selectedChatUser!.name} />
+                                    <AvatarFallback className="text-4xl">{selectedChatUser!.name.charAt(0)}</AvatarFallback>
                                 </Avatar>
-                                <h2 className="text-3xl font-bold">{selectedChatUser.name}</h2>
+                                <h2 className="text-3xl font-bold">{selectedChatUser!.name}</h2>
                                 <p className="text-muted-foreground mt-2">
                                     {audioCallState === 'calling' && 'Ringing...'}
                                     {audioCallState === 'active' && 'Connected'}
@@ -788,7 +871,7 @@ export default function MeetingPage() {
                         <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground">
                             <MessageSquare className="h-16 w-16 mb-4" />
                             <h3 className="text-lg font-semibold">Select a user to start chatting</h3>
-                            <p className="max-w-xs">Choose someone from the list on the left to view your conversation or start a new one.</p>
+                            <p className="max-w-xs">Or, start a new group chat using the icon in the top left.</p>
                         </div>
                     )}
               </div>
@@ -879,6 +962,57 @@ export default function MeetingPage() {
                 </Button>
             </DialogFooter>
         </DialogContent>
+    </Dialog>
+
+    <Dialog open={isGroupChatDialogOpen} onOpenChange={setIsGroupChatDialogOpen}>
+      <DialogContent className="flex flex-col h-[80vh]">
+        <DialogHeader>
+            <DialogTitle>New Group Chat</DialogTitle>
+            <DialogDescription>Select two or more users to start a temporary group chat.</DialogDescription>
+        </DialogHeader>
+        <div className="relative mt-2">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input 
+              placeholder="Search users..."
+              className="pl-9"
+              value={groupUserSearch}
+              onChange={(e) => setGroupUserSearch(e.target.value)}
+          />
+        </div>
+        <ScrollArea className="flex-1 mt-4 border rounded-md">
+            <div className="p-2">
+                {filteredGroupUsers.map(user => (
+                    <div 
+                    key={user.id} 
+                    className="flex items-center gap-3 p-2 rounded-md hover:bg-accent"
+                    >
+                        <Checkbox 
+                            id={`grp-user-${user.id}`}
+                            checked={groupRecipients.some(u => u.id === user.id)}
+                            onCheckedChange={() => handleToggleGroupRecipient(user)}
+                        />
+                        <label htmlFor={`grp-user-${user.id}`} className="flex-1 flex items-center gap-3 cursor-pointer">
+                            <Avatar>
+                                <AvatarImage src={user.avatar_url || ''} alt={user.name} data-ai-hint="person portrait" />
+                                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                                <p className="font-semibold">{user.name}</p>
+                                <p className="text-xs text-muted-foreground">{user.role}</p>
+                            </div>
+                        </label>
+                    </div>
+                ))}
+            </div>
+        </ScrollArea>
+        <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsGroupChatDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleStartGroupChat} disabled={groupRecipients.length < 2}>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Start Chat ({groupRecipients.length})
+            </Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
     </div>
   );
