@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -61,6 +61,8 @@ export default function MeetingPage() {
   const [groupUserSearch, setGroupUserSearch] = useState('');
   const [activeChatMode, setActiveChatMode] = useState<ChatMode>('individual');
   const [activeGroup, setActiveGroup] = useState<User[]>([]);
+  const [replyingToMessage, setReplyingToMessage] = useState<ChatMessage | null>(null);
+
 
   // Invite state
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -312,10 +314,19 @@ export default function MeetingPage() {
           isRead: false,
           businessId: loggedInUser.businessId,
       };
+
+      if (replyingToMessage) {
+        messageData.replyTo = {
+            messageId: replyingToMessage.id,
+            senderName: users.find(u => u.id === replyingToMessage.senderId)?.name || 'Unknown',
+            content: replyingToMessage.content,
+        };
+      }
       
       try {
           await addDoc(collection(db, 'chatMessages'), messageData);
           setNewMessage('');
+          setReplyingToMessage(null);
       } catch (error) {
           toast({ variant: 'destructive', title: 'Error sending message' });
       }
@@ -762,6 +773,12 @@ export default function MeetingPage() {
                                               </Avatar>
                                             )}
                                             <div className={`flex flex-col ${msg.senderId === loggedInUser?.id ? 'items-end' : 'items-start'}`}>
+                                                {msg.replyTo && (
+                                                    <div className="mb-1 rounded-md bg-black/5 dark:bg-white/5 px-2 py-1 text-xs text-muted-foreground max-w-sm w-full">
+                                                        <p className="font-semibold">{msg.replyTo.senderName}</p>
+                                                        <p className="truncate">{msg.replyTo.content}</p>
+                                                    </div>
+                                                )}
                                                 <div 
                                                     className={`rounded-lg px-3 py-2 max-w-sm break-words ${msg.senderId === loggedInUser?.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
                                                     dangerouslySetInnerHTML={{ __html: msg.content.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ') }}
@@ -783,6 +800,10 @@ export default function MeetingPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent>
+                                                    <DropdownMenuItem onClick={() => setReplyingToMessage(msg)}>
+                                                        <MessageCircleReply className="mr-2 h-4 w-4"/>
+                                                        Reply
+                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => setForwardingMessage(msg)}>
                                                         <Forward className="mr-2 h-4 w-4"/>
                                                         Forward
@@ -806,7 +827,21 @@ export default function MeetingPage() {
                                 </div>
                                 <div ref={messagesEndRef} />
                             </ScrollArea>
-                            <CardFooter className="pt-4 border-t">
+                            <CardFooter className="pt-4 border-t flex flex-col items-start gap-2">
+                                {replyingToMessage && (
+                                    <div className="w-full relative rounded-md bg-muted p-2 pr-8 text-sm">
+                                        <p className="font-semibold text-primary">Replying to {users.find(u => u.id === replyingToMessage.senderId)?.name}</p>
+                                        <p className="text-muted-foreground truncate">{replyingToMessage.content}</p>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="absolute top-1 right-1 h-6 w-6"
+                                            onClick={() => setReplyingToMessage(null)}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                )}
                                 <form onSubmit={handleSendMessage} className="flex w-full items-center gap-2">
                                     <Input 
                                         value={newMessage}

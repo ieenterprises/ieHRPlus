@@ -10,6 +10,11 @@ export type ChatMessage = {
   timestamp: string;
   isRead: boolean;
   businessId: string;
+  replyTo?: {
+    messageId: string;
+    senderName: string;
+    content: string;
+  };
 };
 
 export type Department = {
@@ -762,11 +767,4 @@ export type Enums<
 
     
 
-
-
-
-
-
-
-
-
+    
