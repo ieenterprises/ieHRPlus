@@ -23,6 +23,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 
 type MeetingState = 'idle' | 'active' | 'ended';
+type AudioCallState = 'idle' | 'calling' | 'active' | 'ended';
 
 export default function MeetingPage() {
   const { toast } = useToast();
@@ -45,6 +46,11 @@ export default function MeetingPage() {
   const [showMeetingChat, setShowMeetingChat] = useState(false);
   const [meetingChatMessage, setMeetingChatMessage] = useState('');
 
+  // Audio Call State
+  const [audioCallState, setAudioCallState] = useState<AudioCallState>('idle');
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+
 
   const meetingTitle = useMemo(() => {
     if (selectedMeetingUsers.length === 0) return 'New Meeting';
@@ -65,6 +71,9 @@ export default function MeetingPage() {
   useEffect(() => {
     return () => {
       cleanupStream();
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => track.stop());
+      }
     };
   }, []);
 
@@ -268,6 +277,48 @@ export default function MeetingPage() {
           toast({ variant: 'destructive', title: 'Error sending message' });
       }
   };
+  
+  // Audio Call Handlers
+  const startAudioCall = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+      setAudioCallState('calling');
+      // In a real app, you'd signal the other user here.
+      // For now, we'll simulate it moving to 'active' after a delay.
+      setTimeout(() => setAudioCallState('active'), 3000);
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Microphone Access Denied',
+        description: 'Please enable microphone permissions to make a call.',
+      });
+    }
+  };
+
+  const endAudioCall = () => {
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => track.stop());
+      audioStreamRef.current = null;
+    }
+    setAudioCallState('ended');
+    // Go back to chat view after ending
+    setTimeout(() => setAudioCallState('idle'), 1500);
+  };
+  
+  const toggleCallAudio = () => {
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getAudioTracks().forEach(track => {
+        track.enabled = !track.enabled;
+      });
+      setIsAudioMuted(prev => !prev);
+    }
+  };
+
+  useEffect(() => {
+    // Reset audio call state if chat user changes
+    setAudioCallState('idle');
+  }, [selectedChatUser]);
 
   return (
     <div className="space-y-8">
@@ -515,8 +566,9 @@ export default function MeetingPage() {
               </div>
               <div className="w-2/3 flex flex-col">
                     {selectedChatUser ? (
+                        audioCallState === 'idle' ? (
                         <>
-                            <CardHeader className="border-b">
+                            <CardHeader className="border-b flex-row items-center justify-between">
                                 <CardTitle className="flex items-center gap-3">
                                      <Avatar>
                                       <AvatarImage src={selectedChatUser.avatar_url || ''} alt={selectedChatUser.name} />
@@ -527,6 +579,9 @@ export default function MeetingPage() {
                                      <p className="text-sm font-normal text-muted-foreground">{selectedChatUser.role}</p>
                                   </div>
                                 </CardTitle>
+                                <Button variant="outline" size="icon" onClick={startAudioCall}>
+                                    <Phone className="h-5 w-5"/>
+                                </Button>
                             </CardHeader>
                              <ScrollArea className="flex-1 p-4">
                                 <div className="space-y-4">
@@ -573,6 +628,34 @@ export default function MeetingPage() {
                                 </form>
                             </CardFooter>
                         </>
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center text-center bg-muted/30">
+                                <Avatar className="h-32 w-32 mb-4 ring-4 ring-background">
+                                    <AvatarImage src={selectedChatUser.avatar_url || ''} alt={selectedChatUser.name} />
+                                    <AvatarFallback className="text-4xl">{selectedChatUser.name.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <h2 className="text-3xl font-bold">{selectedChatUser.name}</h2>
+                                <p className="text-muted-foreground mt-2">
+                                    {audioCallState === 'calling' && 'Ringing...'}
+                                    {audioCallState === 'active' && 'Connected'}
+                                    {audioCallState === 'ended' && 'Call Ended'}
+                                </p>
+                                <div className="flex items-center justify-center gap-4 mt-8">
+                                    <Button
+                                        variant={isAudioMuted ? 'destructive' : 'secondary'}
+                                        size="icon"
+                                        className="rounded-full h-16 w-16"
+                                        onClick={toggleCallAudio}
+                                        disabled={audioCallState !== 'active'}
+                                    >
+                                        {isAudioMuted ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
+                                    </Button>
+                                     <Button variant="destructive" size="icon" className="rounded-full h-16 w-16" onClick={endAudioCall}>
+                                        <PhoneOff className="h-8 w-8" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground">
                             <MessageSquare className="h-16 w-16 mb-4" />
@@ -601,3 +684,4 @@ export default function MeetingPage() {
     </div>
   );
 }
+
