@@ -92,7 +92,7 @@ export function HRQueryTable() {
             attachmentUrls = await Promise.all(uploadPromises);
         }
 
-        const newQuery: Omit<HRQuery, 'id'> = {
+        const newQuery: Omit<HRQuery, 'id'> & { amount?: number } = {
             requesterId: loggedInUser.id,
             requesterName: loggedInUser.name,
             assigneeId,
@@ -103,8 +103,11 @@ export function HRQueryTable() {
             attachments: attachmentUrls,
             status: "Sent",
             createdAt: new Date().toISOString(),
-            amount: amount ? parseFloat(amount) : undefined,
         };
+
+        if (amount) {
+            newQuery.amount = parseFloat(amount);
+        }
 
         await addDoc(collection(db, "hr_queries"), newQuery);
         

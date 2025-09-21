@@ -91,7 +91,7 @@ export function RewardTable() {
             attachmentUrls = await Promise.all(uploadPromises);
         }
 
-        const newReward: Omit<Reward, 'id'> = {
+        const newReward: Omit<Reward, 'id'> & { amount?: number } = {
             proposerId: loggedInUser.id,
             proposerName: loggedInUser.name,
             assigneeId,
@@ -102,8 +102,11 @@ export function RewardTable() {
             attachments: attachmentUrls,
             status: "Proposed",
             createdAt: new Date().toISOString(),
-            amount: amount ? parseFloat(amount) : undefined,
         };
+
+        if (amount) {
+            newReward.amount = parseFloat(amount);
+        }
 
         await addDoc(collection(db, "rewards"), newReward);
         

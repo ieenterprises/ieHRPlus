@@ -168,7 +168,7 @@ export default function DashboardPage() {
             attachmentUrls = await Promise.all(uploadPromises);
         }
 
-        const newRequest: Partial<UserRequest> = {
+        const newRequest: Partial<UserRequest> & { amount?: number } = {
             userId: loggedInUser.id,
             userName: loggedInUser.name,
             businessId: loggedInUser.businessId,
@@ -179,8 +179,11 @@ export default function DashboardPage() {
             assignedToName: assignedToUser?.name || null,
             status: "Pending",
             createdAt: new Date().toISOString(),
-            amount: amount ? parseFloat(amount) : undefined,
         };
+
+        if (amount) {
+            newRequest.amount = parseFloat(amount);
+        }
 
         if (dateRange?.from) {
             newRequest.startDate = dateRange.from.toISOString();
@@ -910,5 +913,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
