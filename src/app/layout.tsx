@@ -28,6 +28,7 @@ export default function RootLayout({
       <body className={cn("font-body antialiased", inter.variable)}>
         {children}
         <Toaster />
+        <script src="https://sdk.videosdk.live/js-sdk/0.1.6/videosdk.js"></script>
       </body>
     </html>
   );

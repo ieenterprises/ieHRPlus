@@ -5,8 +5,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -19,63 +18,50 @@ import { db } from '@/lib/firebase';
 import type { User, ChatMessage } from '@/lib/types';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MoreVertical } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { VIDEOSDK_TOKEN } from '@/lib/videosdk-config';
 
-
-type MeetingState = 'idle' | 'active' | 'ended';
-type AudioCallState = 'idle' | 'calling' | 'active' | 'ended';
 type ChatMode = 'individual' | 'group';
+
+// Reference to the global VideoSDK object from the script
+declare global {
+  interface Window {
+    VideoSDK: any;
+  }
+}
 
 export default function MeetingPage() {
   const { toast } = useToast();
   const { loggedInUser, users } = useSettings();
-  const [meetingState, setMeetingState] = useState<MeetingState>('idle');
-  const [hasPermissions, setHasPermissions] = useState<boolean | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const [meetingTitle, setMeetingTitle] = useState('');
+  const [activeTab, setActiveTab] = useState('video');
+  const [meetingId, setMeetingId] = useState<string | null>(null);
+  const [meeting, setMeeting] = useState<any | null>(null);
+  const [localParticipant, setLocalParticipant] = useState<any | null>(null);
+  const [participants, setParticipants] = useState<any[]>([]);
 
-  
-  // Chat and Video Call state
+  // Chat state
   const [userSearch, setUserSearch] = useState('');
   const [selectedChatUser, setSelectedChatUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [unreadSenders, setUnreadSenders] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [selectedMeetingUsers, setSelectedMeetingUsers] = useState<User[]>([]);
-  const [showMeetingChat, setShowMeetingChat] = useState(false);
-  const [meetingChatMessage, setMeetingChatMessage] = useState('');
-
-  // Audio Call State
-  const [audioCallState, setAudioCallState] = useState<AudioCallState>('idle');
-  const [isAudioMuted, setIsAudioMuted] = useState(false);
-  const audioStreamRef = useRef<MediaStream | null>(null);
-  
-  // Tab state
-  const [activeTab, setActiveTab] = useState('video');
-
-  // Chat Search & Delete State
   const [chatSearch, setChatSearch] = useState('');
   const [deletingMessage, setDeletingMessage] = useState<ChatMessage | null>(null);
-
-  // Forwarding State
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
   const [forwardRecipients, setForwardRecipients] = useState<string[]>([]);
   const [forwardUserSearch, setForwardUserSearch] = useState('');
-
-  // Group Chat State
   const [isGroupChatDialogOpen, setIsGroupChatDialogOpen] = useState(false);
   const [groupRecipients, setGroupRecipients] = useState<User[]>([]);
   const [groupUserSearch, setGroupUserSearch] = useState('');
   const [activeChatMode, setActiveChatMode] = useState<ChatMode>('individual');
   const [activeGroup, setActiveGroup] = useState<User[]>([]);
+
+  // VideoSDK states
+  const [isMicOn, setIsMicOn] = useState(true);
+  const [isWebCamOn, setIsWebCamOn] = useState(true);
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
@@ -84,107 +70,105 @@ export default function MeetingPage() {
     }
   }, []);
 
-  const cleanupStream = () => {
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
-        localStreamRef.current = null;
-      }
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = null;
-      }
-  };
-  
-  useEffect(() => {
-    return () => {
-      cleanupStream();
-      if (audioStreamRef.current) {
-        audioStreamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
-  const startMeeting = async () => {
-    if (selectedMeetingUsers.length === 0) {
+  const createMeeting = async () => {
+      if (!VIDEOSDK_TOKEN || VIDEOSDK_TOKEN === "Your_Token_Here") {
         toast({
-            variant: 'destructive',
-            title: 'No Users Selected',
-            description: 'Please select at least one user to start a meeting.',
+          variant: "destructive",
+          title: "VideoSDK Token Missing",
+          description: "Please add your VideoSDK token to src/lib/videosdk-config.ts",
         });
         return;
-    }
-     if (!meetingTitle.trim()) {
+      }
+      try {
+        const url = `https://api.videosdk.live/v2/rooms`;
+        const options = {
+          method: "POST",
+          headers: { Authorization: VIDEOSDK_TOKEN, "Content-Type": "application/json" },
+        };
+        const { roomId } = await fetch(url, options).then(res => res.json());
+        if (roomId) {
+          setMeetingId(roomId);
+          joinMeeting(roomId);
+        }
+      } catch (e) {
+        console.error(e);
+        toast({ variant: "destructive", title: "Error creating meeting" });
+      }
+  };
+
+  const joinMeeting = (id: string) => {
+    if (!VIDEOSDK_TOKEN || VIDEOSDK_TOKEN === "Your_Token_Here") {
         toast({
-            variant: 'destructive',
-            title: 'Meeting Title Required',
-            description: 'Please enter a title for the meeting before starting.',
+          variant: "destructive",
+          title: "VideoSDK Token Missing",
+          description: "Please add your VideoSDK token to src/lib/videosdk-config.ts",
         });
         return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localStreamRef.current = stream;
-      setHasPermissions(true);
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
       }
-      setMeetingState('active');
-      setIsMuted(false);
-      setIsVideoOff(false);
-      setShowMeetingChat(true); // Open chat by default when meeting starts
-    } catch (error) {
-      console.error('Error accessing media devices:', error);
-      setHasPermissions(false);
-      toast({
-        variant: 'destructive',
-        title: 'Media Access Denied',
-        description: 'Please enable camera and microphone permissions to join the meeting.',
-      });
+    if (!id) {
+        toast({ variant: "destructive", title: "Meeting ID required" });
+        return;
     }
-  };
-  
-  const endMeeting = () => {
-    cleanupStream();
-    setMeetingState('ended');
-    setShowMeetingChat(false);
-  };
-  
-  const returnToLobby = () => {
-    setSelectedMeetingUsers([]);
-    setMeetingState('idle');
-    setMeetingTitle('');
-  }
 
-  const toggleAudio = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = !track.enabled;
-      });
-      setIsMuted(prev => !prev);
-    }
+    window.VideoSDK.config(VIDEOSDK_TOKEN);
+    const newMeeting = window.VideoSDK.initMeeting({
+        meetingId: id,
+        name: loggedInUser?.name || 'Guest',
+        micEnabled: true,
+        webcamEnabled: true,
+    });
+    newMeeting.join();
+
+    newMeeting.on("meeting-joined", () => {
+        setMeeting(newMeeting);
+        setLocalParticipant(newMeeting.localParticipant);
+        setParticipants(Array.from(newMeeting.participants.values()));
+    });
+
+     newMeeting.on("meeting-left", () => {
+        setMeeting(null);
+        setMeetingId(null);
+        setLocalParticipant(null);
+        setParticipants([]);
+    });
+
+    newMeeting.on("participant-joined", (participant: any) => {
+        setParticipants(prev => [...prev, participant]);
+    });
+
+    newMeeting.on("participant-left", (participant: any) => {
+        setParticipants(prev => prev.filter(p => p.id !== participant.id));
+    });
   };
 
-  const toggleVideo = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getVideoTracks().forEach(track => {
-        track.enabled = !track.enabled;
-      });
-      setIsVideoOff(prev => !prev);
-    }
+  const leaveMeeting = () => {
+    meeting?.leave();
   };
-  
+
+  const toggleMic = () => {
+    if (isMicOn) {
+      meeting?.muteMic();
+    } else {
+      meeting?.unmuteMic();
+    }
+    setIsMicOn(!isMicOn);
+  };
+
+  const toggleWebcam = () => {
+    if (isWebCamOn) {
+      meeting?.disableWebcam();
+    } else {
+      meeting?.enableWebcam();
+    }
+    setIsWebCamOn(!isWebCamOn);
+  };
+
+  // ----- Existing Chat Logic -----
   const filteredUsers = useMemo(() => {
       if (!userSearch) return users.filter(u => u.id !== loggedInUser?.id);
       return users.filter(u => u.id !== loggedInUser?.id && u.name.toLowerCase().includes(userSearch.toLowerCase()));
   }, [users, userSearch, loggedInUser]);
 
-  const handleToggleMeetingUser = (user: User) => {
-    setSelectedMeetingUsers(prev =>
-        prev.some(u => u.id === user.id)
-            ? prev.filter(u => u.id !== user.id)
-            : [...prev, user]
-    );
-  };
-  
   useEffect(() => {
     if (!loggedInUser) return;
     const q = query(
@@ -287,75 +271,6 @@ export default function MeetingPage() {
       }
   };
 
-  const handleSendMeetingMessage = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!meetingChatMessage.trim() || !loggedInUser) return;
-      
-      // In a real app, this would send to all participants.
-      // For now, it sends to the first selected user as a demo.
-      const firstParticipant = selectedMeetingUsers[0];
-      if (!firstParticipant) return;
-
-      const messageData: Omit<ChatMessage, 'id'> = {
-          senderId: loggedInUser.id,
-          receiverId: firstParticipant.id,
-          content: meetingChatMessage,
-          timestamp: new Date().toISOString(),
-          isRead: false,
-          businessId: loggedInUser.businessId,
-      };
-      
-      try {
-          await addDoc(collection(db, 'chatMessages'), messageData);
-          setMeetingChatMessage('');
-      } catch (error) {
-          toast({ variant: 'destructive', title: 'Error sending message' });
-      }
-  };
-  
-  // Audio Call Handlers
-  const startAudioCall = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioStreamRef.current = stream;
-      setAudioCallState('calling');
-      // In a real app, you'd signal the other user here.
-      // For now, we'll simulate it moving to 'active' after a delay.
-      setTimeout(() => setAudioCallState('active'), 3000);
-    } catch (err) {
-      toast({
-        variant: 'destructive',
-        title: 'Microphone Access Denied',
-        description: 'Please enable microphone permissions to make a call.',
-      });
-    }
-  };
-
-  const endAudioCall = () => {
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getTracks().forEach(track => track.stop());
-      audioStreamRef.current = null;
-    }
-    setAudioCallState('ended');
-    // Go back to chat view after ending
-    setTimeout(() => setAudioCallState('idle'), 1500);
-  };
-  
-  const toggleCallAudio = () => {
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = !track.enabled;
-      });
-      setIsAudioMuted(prev => !prev);
-    }
-  };
-
-  useEffect(() => {
-    // Reset audio call state if chat user changes
-    setAudioCallState('idle');
-    setChatSearch('');
-  }, [selectedChatUser]);
-
   const filteredMessages = useMemo(() => {
     if (!chatSearch) return messages;
     return messages.filter(msg => msg.content.toLowerCase().includes(chatSearch.toLowerCase()));
@@ -414,7 +329,7 @@ export default function MeetingPage() {
       const allOtherUsers = users.filter(u => u.id !== loggedInUser?.id);
       if (!forwardUserSearch) return allOtherUsers;
       return allOtherUsers.filter(u => u.name.toLowerCase().includes(forwardUserSearch.toLowerCase()));
-  }, [users, forwardUserSearch, loggedInUser]);
+    }, [users, forwardUserSearch, loggedInUser]);
 
   const handleSelectIndividualChat = (user: User) => {
     setActiveChatMode('individual');
@@ -487,11 +402,73 @@ export default function MeetingPage() {
     }
     return null;
   };
+  
+    const ParticipantView = ({ participant }: { participant: any }) => {
+    const micRef = useRef<HTMLAudioElement>(null);
+    const webcamRef = useRef<HTMLVideoElement>(null);
+    const [micOn, setMicOn] = useState(false);
+    const [webcamOn, setWebcamOn] = useState(false);
+    
+    useEffect(() => {
+      participant.on('stream-enabled', (stream: any) => {
+        if (stream.kind === 'audio') {
+          setMicOn(true);
+          if (micRef.current) {
+            micRef.current.srcObject = new MediaStream([stream.track]);
+            micRef.current.play().catch(e => console.error("audio play error", e));
+          }
+        }
+        if (stream.kind === 'video') {
+          setWebcamOn(true);
+          if (webcamRef.current) {
+            webcamRef.current.srcObject = new MediaStream([stream.track]);
+            webcamRef.current.play().catch(e => console.error("video play error", e));
+          }
+        }
+      });
+      participant.on('stream-disabled', (stream: any) => {
+        if (stream.kind === 'audio') setMicOn(false);
+        if (stream.kind === 'video') setWebcamOn(false);
+      });
+      
+      // Set initial state
+      const audioStream = Array.from(participant.streams.values()).find((s: any) => s.kind === 'audio');
+      if (audioStream) {
+          setMicOn(true);
+          if (micRef.current) micRef.current.srcObject = new MediaStream([audioStream.track]);
+      }
+      const videoStream = Array.from(participant.streams.values()).find((s: any) => s.kind === 'video');
+      if (videoStream) {
+          setWebcamOn(true);
+          if (webcamRef.current) webcamRef.current.srcObject = new MediaStream([videoStream.track]);
+      }
+    }, [participant]);
+
+    return (
+      <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
+        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
+        <video ref={webcamRef} autoPlay playsInline className="h-full w-full object-cover" />
+        {!webcamOn && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+            <div className="text-center text-white">
+              <VideoOff className="h-10 w-10 mx-auto mb-2" />
+              <p>Video is off</p>
+            </div>
+          </div>
+        )}
+        <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded flex items-center gap-2">
+            {micOn ? <Mic className="h-3 w-3"/> : <MicOff className="h-3 w-3"/>}
+            {participant.displayName}
+        </div>
+      </div>
+    );
+  };
+
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title={meetingState === 'active' ? meetingTitle : 'Communications Hub'}
+        title={'Communications Hub'}
         description="Connect with your team through video, chat, and mail."
       />
 
@@ -512,194 +489,59 @@ export default function MeetingPage() {
         </TabsList>
         
         <TabsContent value="video">
-           <Card className="h-[70vh] flex">
-              {/* Lobby / User Selection Panel */}
-              <div className={`border-r flex flex-col ${meetingState === 'active' ? 'w-1/4' : 'w-1/3'}`}>
-                  <CardHeader>
-                      <CardTitle>Select Users</CardTitle>
-                       <CardDescription>Choose who to invite to the meeting.</CardDescription>
-                      <div className="relative mt-2">
-                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                           <Input 
-                                placeholder="Search users..."
-                                className="pl-9"
-                                value={userSearch}
-                                onChange={(e) => setUserSearch(e.target.value)}
-                           />
-                      </div>
-                  </CardHeader>
-                  <ScrollArea className="flex-1">
-                      {filteredUsers.map(user => (
-                          <div 
-                            key={user.id} 
-                            className="flex items-center gap-3 p-3"
-                          >
-                              <Checkbox 
-                                id={`user-check-${user.id}`}
-                                checked={selectedMeetingUsers.some(u => u.id === user.id)}
-                                onCheckedChange={() => handleToggleMeetingUser(user)}
-                                disabled={meetingState !== 'idle'}
-                              />
-                               <label htmlFor={`user-check-${user.id}`} className="flex-1 flex items-center gap-3 cursor-pointer">
-                                  <Avatar>
-                                      <AvatarImage src={user.avatar_url || ''} alt={user.name} data-ai-hint="person portrait" />
-                                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                                  </Avatar>
-                                  <div className="flex-1">
-                                      <p className="font-semibold">{user.name}</p>
-                                      <p className="text-xs text-muted-foreground">{user.role}</p>
-                                  </div>
-                              </label>
-                          </div>
-                      ))}
-                  </ScrollArea>
-                  {meetingState === 'idle' && (
-                    <CardFooter className="pt-4 border-t">
-                      <Button 
-                          className="w-full" 
-                          onClick={startMeeting}
-                          disabled={selectedMeetingUsers.length === 0 || !meetingTitle.trim()}
-                      >
-                          <Phone className="mr-2" /> Start Call with {selectedMeetingUsers.length} user(s)
-                      </Button>
-                    </CardFooter>
-                  )}
-              </div>
-              
-              {/* Meeting Area */}
-              <div className="flex-1 flex flex-col bg-muted/30">
-                  <div className="flex-1 flex">
-                      <div className="flex-1 flex flex-col">
-                          <CardContent className="p-0 flex-1">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 min-h-full">
-                                <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border-2 border-primary">
-                                    <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
-                                    {meetingState === 'active' && (
-                                        <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                                            {loggedInUser?.name || 'You'}
-                                        </div>
-                                    )}
-                                    {meetingState === 'idle' && (
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 gap-4 text-center text-white">
-                                            <Video className="h-12 w-12 mb-2" />
-                                            <h3 className="font-semibold text-lg">Ready to join?</h3>
-                                             <div className="w-full max-w-sm">
-                                                <Label htmlFor="meeting-title" className="sr-only">Meeting Title</Label>
-                                                <Input 
-                                                    id="meeting-title"
-                                                    placeholder="Enter meeting title..."
-                                                    className="bg-transparent text-white placeholder:text-gray-300 border-gray-400 text-center"
-                                                    value={meetingTitle}
-                                                    onChange={(e) => setMeetingTitle(e.target.value)}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-                                    {meetingState === 'ended' && (
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 gap-4">
-                                            <h3 className="text-xl font-semibold text-white">Meeting has ended.</h3>
-                                            <Button size="lg" variant="outline" onClick={returnToLobby}>
-                                                Return to Lobby
-                                            </Button>
-                                        </div>
-                                    )}
-                                    {meetingState === 'active' && isVideoOff && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-                                            <div className="text-center text-white">
-                                                <VideoOff className="h-10 w-10 mx-auto mb-2" />
-                                                <p>Video is off</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                {meetingState === 'active' && selectedMeetingUsers.map((user) => (
-                                    <div key={user.id} className="relative aspect-video bg-muted rounded-lg flex items-center justify-center border">
-                                        <div className="text-center">
-                                          <Avatar className="h-16 w-16 mx-auto mb-2">
-                                              <AvatarImage src={user.avatar_url || ''} />
-                                              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                                          </Avatar>
-                                          <p className="text-muted-foreground text-sm">Waiting for {user.name}...</p>
-                                        </div>
-                                        <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                                            {user.name}
-                                        </div>
-                                    </div>
-                                ))}
+            <Card className="h-[70vh]">
+                {meeting && meetingId ? (
+                    <div className="h-full flex flex-col">
+                        <CardHeader>
+                            <CardTitle>Meeting ID: {meetingId}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
+                            {localParticipant && <ParticipantView participant={localParticipant} />}
+                            {participants.map(participant => (
+                                <ParticipantView key={participant.id} participant={participant} />
+                            ))}
+                        </CardContent>
+                        <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
+                             <Button
+                                variant={isMicOn ? 'secondary' : 'destructive'}
+                                size="icon"
+                                className="rounded-full h-12 w-12"
+                                onClick={toggleMic}
+                                aria-label={isMicOn ? 'Mute' : 'Unmute'}
+                            >
+                                {isMicOn ? <Mic /> : <MicOff />}
+                            </Button>
+                            <Button
+                                variant={isWebCamOn ? 'secondary' : 'destructive'}
+                                size="icon"
+                                className="rounded-full h-12 w-12"
+                                onClick={toggleWebcam}
+                                aria-label={isWebCamOn ? 'Turn off video' : 'Turn on video'}
+                            >
+                                {isWebCamOn ? <Video /> : <VideoOff />}
+                            </Button>
+                             <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
+                                <ScreenShare />
+                            </Button>
+                             <Button variant="destructive" size="icon" className="rounded-full h-12 w-12 ml-8" onClick={leaveMeeting}>
+                                <PhoneOff />
+                            </Button>
+                        </CardFooter>
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-full gap-4">
+                        <CardTitle className="text-2xl">Join or Create a Meeting</CardTitle>
+                        <div className="flex gap-4">
+                            <Button onClick={createMeeting}>New Meeting</Button>
+                            <span className="flex items-center">OR</span>
+                            <div className="flex gap-2">
+                                <Input type="text" id="meetingIdTxt" placeholder="Enter Meeting ID" />
+                                <Button onClick={() => joinMeeting((document.getElementById('meetingIdTxt') as HTMLInputElement).value)}>Join Meeting</Button>
                             </div>
-                          </CardContent>
-                          {meetingState === 'active' && (
-                            <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
-                                <Button
-                                    variant={isMuted ? 'destructive' : 'secondary'}
-                                    size="icon"
-                                    className="rounded-full h-12 w-12"
-                                    onClick={toggleAudio}
-                                    disabled={hasPermissions === false}
-                                    aria-label={isMuted ? 'Unmute' : 'Mute'}
-                                >
-                                    {isMuted ? <MicOff /> : <Mic />}
-                                </Button>
-                                <Button
-                                    variant={isVideoOff ? 'destructive' : 'secondary'}
-                                    size="icon"
-                                    className="rounded-full h-12 w-12"
-                                    onClick={toggleVideo}
-                                    disabled={hasPermissions === false}
-                                    aria-label={isVideoOff ? 'Turn on video' : 'Turn off video'}
-                                >
-                                    {isVideoOff ? <VideoOff /> : <Video />}
-                                </Button>
-                                <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setShowMeetingChat(!showMeetingChat)}>
-                                    <MessageSquare />
-                                </Button>
-                                <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
-                                    <ScreenShare />
-                                </Button>
-                                <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
-                                    <Disc />
-                                </Button>
-                                <Button variant="destructive" size="icon" className="rounded-full h-12 w-12 ml-8" onClick={endMeeting}>
-                                    <PhoneOff />
-                                </Button>
-                            </CardFooter>
-                        )}
-                      </div>
-
-                       {/* Meeting Chat Panel */}
-                      {meetingState === 'active' && showMeetingChat && (
-                          <div className="w-1/3 border-l flex flex-col bg-background">
-                              <div className="p-4 border-b">
-                                  <h3 className="font-semibold flex items-center justify-between">
-                                      Meeting Chat
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowMeetingChat(false)}>
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                  </h3>
-                              </div>
-                              <ScrollArea className="flex-1 p-4">
-                                <div className="space-y-4">
-                                    {/* A placeholder for chat messages */}
-                                     <div className="text-center text-xs text-muted-foreground pt-4">Messages with participants will appear here.</div>
-                                </div>
-                              </ScrollArea>
-                              <div className="p-4 border-t">
-                                  <form onSubmit={handleSendMeetingMessage} className="flex w-full items-center gap-2">
-                                      <Input 
-                                          value={meetingChatMessage}
-                                          onChange={(e) => setMeetingChatMessage(e.target.value)}
-                                          placeholder="Type a message..."
-                                      />
-                                      <Button type="submit" size="icon">
-                                          <Send className="h-4 w-4" />
-                                      </Button>
-                                  </form>
-                              </div>
-                          </div>
-                      )}
-                  </div>
-              </div>
-           </Card>
+                        </div>
+                    </div>
+                )}
+            </Card>
         </TabsContent>
 
         <TabsContent value="chat">
@@ -748,7 +590,6 @@ export default function MeetingPage() {
               </div>
               <div className="w-2/3 flex flex-col">
                     {selectedChatUser || activeChatMode === 'group' ? (
-                        audioCallState === 'idle' ? (
                         <>
                             <CardHeader className="border-b flex-row items-center justify-between">
                                 <ChatHeaderContent />
@@ -763,8 +604,11 @@ export default function MeetingPage() {
                                         />
                                     </div>
                                     {activeChatMode === 'individual' && (
-                                      <Button variant="outline" size="icon" onClick={startAudioCall}>
-                                          <Phone className="h-5 w-5"/>
+                                      <Button variant="outline" size="icon" onClick={() => {
+                                          setActiveTab('video');
+                                          createMeeting();
+                                      }}>
+                                          <Video className="h-5 w-5"/>
                                       </Button>
                                     )}
                                 </div>
@@ -839,34 +683,6 @@ export default function MeetingPage() {
                                 </form>
                             </CardFooter>
                         </>
-                        ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-center bg-muted/30">
-                                <Avatar className="h-32 w-32 mb-4 ring-4 ring-background">
-                                    <AvatarImage src={selectedChatUser!.avatar_url || ''} alt={selectedChatUser!.name} />
-                                    <AvatarFallback className="text-4xl">{selectedChatUser!.name.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                                <h2 className="text-3xl font-bold">{selectedChatUser!.name}</h2>
-                                <p className="text-muted-foreground mt-2">
-                                    {audioCallState === 'calling' && 'Ringing...'}
-                                    {audioCallState === 'active' && 'Connected'}
-                                    {audioCallState === 'ended' && 'Call Ended'}
-                                </p>
-                                <div className="flex items-center justify-center gap-4 mt-8">
-                                    <Button
-                                        variant={isAudioMuted ? 'destructive' : 'secondary'}
-                                        size="icon"
-                                        className="rounded-full h-16 w-16"
-                                        onClick={toggleCallAudio}
-                                        disabled={audioCallState !== 'active'}
-                                    >
-                                        {isAudioMuted ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
-                                    </Button>
-                                     <Button variant="destructive" size="icon" className="rounded-full h-16 w-16" onClick={endAudioCall}>
-                                        <PhoneOff className="h-8 w-8" />
-                                    </Button>
-                                </div>
-                            </div>
-                        )
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground">
                             <MessageSquare className="h-16 w-16 mb-4" />
