@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -7,7 +6,7 @@ import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail, Send, Search, Users, X } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -15,12 +14,16 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { collection, query, where, onSnapshot, addDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { User, ChatMessage } from '@/lib/types';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { MoreVertical } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+
 
 type MeetingState = 'idle' | 'active' | 'ended';
 type AudioCallState = 'idle' | 'calling' | 'active' | 'ended';
@@ -34,6 +37,8 @@ export default function MeetingPage() {
   const [isVideoOff, setIsVideoOff] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const [meetingTitle, setMeetingTitle] = useState('');
+
   
   // Chat and Video Call state
   const [userSearch, setUserSearch] = useState('');
@@ -54,19 +59,17 @@ export default function MeetingPage() {
   // Tab state
   const [activeTab, setActiveTab] = useState('video');
 
+  // Chat Search & Delete State
+  const [chatSearch, setChatSearch] = useState('');
+  const [deletingMessage, setDeletingMessage] = useState<ChatMessage | null>(null);
+
+
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
     if (hash === 'chat' || hash === 'video' || hash === 'mail') {
         setActiveTab(hash);
     }
   }, []);
-
-
-  const meetingTitle = useMemo(() => {
-    if (selectedMeetingUsers.length === 0) return 'New Meeting';
-    if (selectedMeetingUsers.length === 1) return `Meeting with ${selectedMeetingUsers[0].name}`;
-    return `Meeting with ${selectedMeetingUsers.length} people`;
-  }, [selectedMeetingUsers]);
 
   const cleanupStream = () => {
       if (localStreamRef.current) {
@@ -93,6 +96,14 @@ export default function MeetingPage() {
             variant: 'destructive',
             title: 'No Users Selected',
             description: 'Please select at least one user to start a meeting.',
+        });
+        return;
+    }
+     if (!meetingTitle.trim()) {
+        toast({
+            variant: 'destructive',
+            title: 'Meeting Title Required',
+            description: 'Please enter a title for the meeting before starting.',
         });
         return;
     }
@@ -127,6 +138,7 @@ export default function MeetingPage() {
   const returnToLobby = () => {
     setSelectedMeetingUsers([]);
     setMeetingState('idle');
+    setMeetingTitle('');
   }
 
   const toggleAudio = () => {
@@ -239,7 +251,7 @@ export default function MeetingPage() {
   
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, chatSearch]);
   
   const handleSendMessage = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -328,7 +340,24 @@ export default function MeetingPage() {
   useEffect(() => {
     // Reset audio call state if chat user changes
     setAudioCallState('idle');
+    setChatSearch('');
   }, [selectedChatUser]);
+
+  const filteredMessages = useMemo(() => {
+    if (!chatSearch) return messages;
+    return messages.filter(msg => msg.content.toLowerCase().includes(chatSearch.toLowerCase()));
+  }, [messages, chatSearch]);
+
+  const handleDeleteMessage = async () => {
+    if (!deletingMessage) return;
+    try {
+        await deleteDoc(doc(db, 'chatMessages', deletingMessage.id));
+        toast({ title: 'Message deleted' });
+        setDeletingMessage(null);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error deleting message' });
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -400,7 +429,7 @@ export default function MeetingPage() {
                       <Button 
                           className="w-full" 
                           onClick={startMeeting}
-                          disabled={selectedMeetingUsers.length === 0}
+                          disabled={selectedMeetingUsers.length === 0 || !meetingTitle.trim()}
                       >
                           <Phone className="mr-2" /> Start Call with {selectedMeetingUsers.length} user(s)
                       </Button>
@@ -425,7 +454,16 @@ export default function MeetingPage() {
                                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 gap-4 text-center text-white">
                                             <Video className="h-12 w-12 mb-2" />
                                             <h3 className="font-semibold text-lg">Ready to join?</h3>
-                                            <p className="text-sm">Select users and start the call.</p>
+                                             <div className="w-full max-w-sm">
+                                                <Label htmlFor="meeting-title" className="sr-only">Meeting Title</Label>
+                                                <Input 
+                                                    id="meeting-title"
+                                                    placeholder="Enter meeting title..."
+                                                    className="bg-transparent text-white placeholder:text-gray-300 border-gray-400 text-center"
+                                                    value={meetingTitle}
+                                                    onChange={(e) => setMeetingTitle(e.target.value)}
+                                                />
+                                            </div>
                                         </div>
                                     )}
                                     {meetingState === 'ended' && (
@@ -452,7 +490,7 @@ export default function MeetingPage() {
                                               <AvatarImage src={user.avatar_url || ''} />
                                               <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                                           </Avatar>
-                                          <p className="text-muted-foreground text-sm">Connecting to {user.name}...</p>
+                                          <p className="text-muted-foreground text-sm">Waiting for {user.name}...</p>
                                         </div>
                                         <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
                                             {user.name}
@@ -589,16 +627,27 @@ export default function MeetingPage() {
                                      <p className="text-sm font-normal text-muted-foreground">{selectedChatUser.role}</p>
                                   </div>
                                 </CardTitle>
-                                <Button variant="outline" size="icon" onClick={startAudioCall}>
-                                    <Phone className="h-5 w-5"/>
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                     <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input 
+                                            placeholder="Search chat..."
+                                            className="pl-9 h-9 w-48"
+                                            value={chatSearch}
+                                            onChange={(e) => setChatSearch(e.target.value)}
+                                        />
+                                    </div>
+                                    <Button variant="outline" size="icon" onClick={startAudioCall}>
+                                        <Phone className="h-5 w-5"/>
+                                    </Button>
+                                </div>
                             </CardHeader>
                              <ScrollArea className="flex-1 p-4">
                                 <div className="space-y-4">
-                                    {messages.map(msg => (
+                                    {filteredMessages.map(msg => (
                                         <div 
                                             key={msg.id} 
-                                            className={`flex items-end gap-2 ${msg.senderId === loggedInUser?.id ? 'justify-end' : ''}`}
+                                            className={`group relative flex items-end gap-2 ${msg.senderId === loggedInUser?.id ? 'justify-end' : ''}`}
                                         >
                                             {msg.senderId !== loggedInUser?.id && (
                                                 <Avatar className="h-8 w-8">
@@ -615,10 +664,25 @@ export default function MeetingPage() {
                                                 </p>
                                             </div>
                                              {msg.senderId === loggedInUser?.id && (
-                                                <Avatar className="h-8 w-8">
-                                                    <AvatarImage src={loggedInUser?.avatar_url || ''} />
-                                                    <AvatarFallback>{loggedInUser?.name.charAt(0)}</AvatarFallback>
-                                                </Avatar>
+                                                <>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="absolute top-0 right-8 h-6 w-6 opacity-0 group-hover:opacity-100">
+                                                                <MoreVertical className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent>
+                                                            <DropdownMenuItem onClick={() => setDeletingMessage(msg)} className="text-destructive">
+                                                                <Trash2 className="mr-2 h-4 w-4"/>
+                                                                Delete
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                    <Avatar className="h-8 w-8">
+                                                        <AvatarImage src={loggedInUser?.avatar_url || ''} />
+                                                        <AvatarFallback>{loggedInUser?.name.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                </>
                                             )}
                                         </div>
                                     ))}
@@ -691,6 +755,25 @@ export default function MeetingPage() {
            </Card>
         </TabsContent>
       </Tabs>
+      
+      <AlertDialog open={!!deletingMessage} onOpenChange={(open) => !open && setDeletingMessage(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete this message.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteMessage} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+    
