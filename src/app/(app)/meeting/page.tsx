@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2 } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { User, ChatMessage } from '@/lib/types';
 import { formatDistanceToNowStrict } from 'date-fns';
@@ -23,6 +23,7 @@ import { Separator } from '@/components/ui/separator';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MoreVertical } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 
 type MeetingState = 'idle' | 'active' | 'ended';
@@ -62,6 +63,11 @@ export default function MeetingPage() {
   // Chat Search & Delete State
   const [chatSearch, setChatSearch] = useState('');
   const [deletingMessage, setDeletingMessage] = useState<ChatMessage | null>(null);
+
+  // Forwarding State
+  const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
+  const [forwardRecipients, setForwardRecipients] = useState<string[]>([]);
+  const [forwardUserSearch, setForwardUserSearch] = useState('');
 
 
   useEffect(() => {
@@ -358,6 +364,50 @@ export default function MeetingPage() {
         toast({ variant: 'destructive', title: 'Error deleting message' });
     }
   };
+  
+    const handleToggleForwardRecipient = (userId: string) => {
+        setForwardRecipients(prev =>
+            prev.includes(userId)
+                ? prev.filter(id => id !== userId)
+                : [...prev, userId]
+        );
+    };
+
+    const handleForwardMessage = async () => {
+        if (!forwardingMessage || forwardRecipients.length === 0 || !loggedInUser) return;
+        
+        const batch = writeBatch(db);
+        const originalSender = users.find(u => u.id === forwardingMessage.senderId);
+        
+        forwardRecipients.forEach(recipientId => {
+            const newMessageRef = doc(collection(db, 'chatMessages'));
+            const messageData: Omit<ChatMessage, 'id'> = {
+                senderId: loggedInUser.id,
+                receiverId: recipientId,
+                content: `Fwd from ${originalSender?.name || 'Unknown'}: ${forwardingMessage.content}`,
+                timestamp: new Date().toISOString(),
+                isRead: false,
+                businessId: loggedInUser.businessId,
+            };
+            batch.set(newMessageRef, messageData);
+        });
+
+        try {
+            await batch.commit();
+            toast({ title: `Message forwarded to ${forwardRecipients.length} user(s).` });
+            setForwardingMessage(null);
+            setForwardRecipients([]);
+            setForwardUserSearch('');
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error forwarding message' });
+        }
+    };
+    
+    const filteredForwardUsers = useMemo(() => {
+      const allOtherUsers = users.filter(u => u.id !== loggedInUser?.id);
+      if (!forwardUserSearch) return allOtherUsers;
+      return allOtherUsers.filter(u => u.name.toLowerCase().includes(forwardUserSearch.toLowerCase()));
+  }, [users, forwardUserSearch, loggedInUser]);
 
   return (
     <div className="space-y-8">
@@ -647,43 +697,39 @@ export default function MeetingPage() {
                                     {filteredMessages.map(msg => (
                                         <div 
                                             key={msg.id} 
-                                            className={`group relative flex items-end gap-2 ${msg.senderId === loggedInUser?.id ? 'justify-end' : ''}`}
+                                            className={`group relative flex items-start gap-2 ${msg.senderId === loggedInUser?.id ? 'justify-end' : 'flex-row-reverse'}`}
                                         >
-                                            {msg.senderId !== loggedInUser?.id && (
-                                                <Avatar className="h-8 w-8">
-                                                    <AvatarImage src={selectedChatUser?.avatar_url || ''} />
-                                                    <AvatarFallback>{selectedChatUser?.name.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                            )}
-                                            <div>
+                                            <Avatar className="h-8 w-8">
+                                                <AvatarImage src={msg.senderId === loggedInUser?.id ? loggedInUser?.avatar_url || '' : selectedChatUser?.avatar_url || ''} />
+                                                <AvatarFallback>{(msg.senderId === loggedInUser?.id ? loggedInUser?.name : selectedChatUser?.name)?.charAt(0)}</AvatarFallback>
+                                            </Avatar>
+                                            <div className={`flex flex-col ${msg.senderId === loggedInUser?.id ? 'items-end' : 'items-start'}`}>
                                                 <div className={`rounded-lg px-3 py-2 max-w-sm break-words ${msg.senderId === loggedInUser?.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                                                     {msg.content}
                                                 </div>
-                                                <p className={`text-xs text-muted-foreground mt-1 ${msg.senderId === loggedInUser?.id ? 'text-right' : ''}`}>
+                                                <p className="text-xs text-muted-foreground mt-1">
                                                     {formatDistanceToNowStrict(new Date(msg.timestamp), { addSuffix: true })}
                                                 </p>
                                             </div>
-                                             {msg.senderId === loggedInUser?.id && (
-                                                <>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="absolute top-0 right-8 h-6 w-6 opacity-0 group-hover:opacity-100">
-                                                                <MoreVertical className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent>
-                                                            <DropdownMenuItem onClick={() => setDeletingMessage(msg)} className="text-destructive">
-                                                                <Trash2 className="mr-2 h-4 w-4"/>
-                                                                Delete
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                    <Avatar className="h-8 w-8">
-                                                        <AvatarImage src={loggedInUser?.avatar_url || ''} />
-                                                        <AvatarFallback>{loggedInUser?.name.charAt(0)}</AvatarFallback>
-                                                    </Avatar>
-                                                </>
-                                            )}
+                                             <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className={`absolute top-0 h-6 w-6 opacity-0 group-hover:opacity-100 ${msg.senderId === loggedInUser?.id ? 'left-0' : 'right-0'}`}>
+                                                        <MoreVertical className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    <DropdownMenuItem onClick={() => setForwardingMessage(msg)}>
+                                                        <Forward className="mr-2 h-4 w-4"/>
+                                                        Forward
+                                                    </DropdownMenuItem>
+                                                    {msg.senderId === loggedInUser?.id && (
+                                                        <DropdownMenuItem onClick={() => setDeletingMessage(msg)} className="text-destructive">
+                                                            <Trash2 className="mr-2 h-4 w-4"/>
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </div>
                                     ))}
                                 </div>
@@ -772,6 +818,60 @@ export default function MeetingPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+       <Dialog open={!!forwardingMessage} onOpenChange={(open) => {if (!open) setForwardingMessage(null)}}>
+        <DialogContent className="flex flex-col h-[80vh]">
+            <DialogHeader>
+                <DialogTitle>Forward Message</DialogTitle>
+                <DialogDescription>Select who to forward this message to.</DialogDescription>
+            </DialogHeader>
+            <div className="p-4 border rounded-md bg-muted text-sm">
+                <p className="break-words">{forwardingMessage?.content}</p>
+            </div>
+             <div className="relative mt-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Search users..."
+                    className="pl-9"
+                    value={forwardUserSearch}
+                    onChange={(e) => setForwardUserSearch(e.target.value)}
+                />
+            </div>
+            <ScrollArea className="flex-1 mt-4 border rounded-md">
+                <div className="p-2">
+                    {filteredForwardUsers.map(user => (
+                        <div 
+                        key={user.id} 
+                        className="flex items-center gap-3 p-2 rounded-md hover:bg-accent"
+                        >
+                            <Checkbox 
+                                id={`fwd-user-${user.id}`}
+                                checked={forwardRecipients.includes(user.id)}
+                                onCheckedChange={() => handleToggleForwardRecipient(user.id)}
+                            />
+                            <label htmlFor={`fwd-user-${user.id}`} className="flex-1 flex items-center gap-3 cursor-pointer">
+                                <Avatar>
+                                    <AvatarImage src={user.avatar_url || ''} alt={user.name} data-ai-hint="person portrait" />
+                                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                    <p className="font-semibold">{user.name}</p>
+                                    <p className="text-xs text-muted-foreground">{user.role}</p>
+                                </div>
+                            </label>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
+            <DialogFooter>
+                 <Button variant="ghost" onClick={() => setForwardingMessage(null)}>Cancel</Button>
+                <Button onClick={handleForwardMessage} disabled={forwardRecipients.length === 0}>
+                    <Send className="mr-2 h-4 w-4" />
+                    Forward ({forwardRecipients.length})
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </div>
   );
 }
