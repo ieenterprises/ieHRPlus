@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -469,7 +470,11 @@ export default function MeetingPage() {
           const mediaStream = new MediaStream();
           mediaStream.addTrack(audioStream.track);
           micRef.current.srcObject = mediaStream;
-          micRef.current.play().catch(e => console.error("audio play error", e));
+          micRef.current.play().catch(e => {
+            if (e.name !== 'AbortError') {
+              console.error("audio play error", e)
+            }
+          });
         }
       }
 
@@ -479,7 +484,11 @@ export default function MeetingPage() {
           const mediaStream = new MediaStream();
           mediaStream.addTrack(videoStream.track);
           webcamRef.current.srcObject = mediaStream;
-          webcamRef.current.play().catch(e => console.error("video play error", e));
+          webcamRef.current.play().catch(e => {
+            if (e.name !== 'AbortError') {
+              console.error("video play error", e);
+            }
+          });
         }
       }
 
@@ -490,7 +499,11 @@ export default function MeetingPage() {
             const mediaStream = new MediaStream();
             mediaStream.addTrack(stream.track);
             micRef.current.srcObject = mediaStream;
-            micRef.current.play().catch(e => console.error("audio play error", e));
+            micRef.current.play().catch(e => {
+                if (e.name !== 'AbortError') {
+                    console.error("audio play error", e)
+                }
+            });
           }
         }
         if (stream.kind === 'video') {
@@ -499,7 +512,11 @@ export default function MeetingPage() {
             const mediaStream = new MediaStream();
             mediaStream.addTrack(stream.track);
             webcamRef.current.srcObject = mediaStream;
-            webcamRef.current.play().catch(e => console.error("video play error", e));
+            webcamRef.current.play().catch(e => {
+                if (e.name !== 'AbortError') {
+                    console.error("video play error", e);
+                }
+            });
           }
         }
       };
@@ -965,3 +982,4 @@ export default function MeetingPage() {
     
 
     
+
