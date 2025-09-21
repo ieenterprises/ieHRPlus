@@ -38,6 +38,7 @@ export default function MeetingPage() {
   const [activeTab, setActiveTab] = useState('video');
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [meeting, setMeeting] = useState<any | null>(null);
+  const [participants, setParticipants] = useState<any[]>([]);
 
   // Chat state
   const [userSearch, setUserSearch] = useState('');
@@ -114,26 +115,28 @@ export default function MeetingPage() {
         micEnabled: true,
         webcamEnabled: true,
     });
+    
+    setMeeting(newMeeting); // Set meeting object to state
+    setMeetingId(id); // Set meeting ID to state
+    
     newMeeting.join();
 
-    setMeeting(newMeeting);
-    setMeetingId(id);
-
     newMeeting.on("meeting-joined", () => {
-        // Now handled by state change, but keep for potential future logic
+      setParticipants(Array.from(newMeeting.participants.values()));
     });
 
      newMeeting.on("meeting-left", () => {
         setMeeting(null);
         setMeetingId(null);
+        setParticipants([]);
     });
 
     newMeeting.on("participant-joined", (participant: any) => {
-        // UI update will be handled by ParticipantView component re-render
+        setParticipants(prev => [...prev, participant]);
     });
 
     newMeeting.on("participant-left", (participant: any) => {
-        // UI update will be handled by ParticipantView component re-render
+        setParticipants(prev => prev.filter(p => p.id !== participant.id));
     });
   };
 
@@ -517,7 +520,7 @@ export default function MeetingPage() {
                         </CardHeader>
                         <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
                             {meeting.localParticipant && <ParticipantView participant={meeting.localParticipant} />}
-                            {Array.from(meeting.participants.values()).map((participant: any) => (
+                            {participants.map((participant: any) => (
                                 <ParticipantView key={participant.id} participant={participant} />
                             ))}
                         </CardContent>
@@ -853,3 +856,5 @@ export default function MeetingPage() {
     </div>
   );
 }
+
+    
