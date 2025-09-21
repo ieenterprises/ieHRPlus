@@ -50,6 +50,16 @@ export default function MeetingPage() {
   const [audioCallState, setAudioCallState] = useState<AudioCallState>('idle');
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const audioStreamRef = useRef<MediaStream | null>(null);
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState('video');
+
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '');
+    if (hash === 'chat' || hash === 'video' || hash === 'mail') {
+        setActiveTab(hash);
+    }
+  }, []);
 
 
   const meetingTitle = useMemo(() => {
@@ -327,7 +337,7 @@ export default function MeetingPage() {
         description="Connect with your team through video, chat, and mail."
       />
 
-      <Tabs defaultValue="video" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="video">
             <Video className="mr-2 h-4 w-4" />
@@ -684,4 +694,3 @@ export default function MeetingPage() {
     </div>
   );
 }
-

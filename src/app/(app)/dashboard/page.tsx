@@ -395,7 +395,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
                 <Button asChild>
-                    <Link href="/meeting">View Chats ({unreadChatCount})</Link>
+                    <Link href="/meeting#chat">View Chats ({unreadChatCount})</Link>
                 </Button>
             </CardContent>
         </Card>
