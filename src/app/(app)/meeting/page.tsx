@@ -3,6 +3,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { VIDEOSDK_TOKEN } from '@/lib/videosdk-config';
+import Link from 'next/link';
 
 type ChatMode = 'individual' | 'group';
 
@@ -36,6 +38,7 @@ declare global {
 export default function MeetingPage() {
   const { toast } = useToast();
   const { loggedInUser, users } = useSettings();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('video');
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [meeting, setMeeting] = useState<any | null>(null);
@@ -74,16 +77,22 @@ export default function MeetingPage() {
     if (hash === 'chat' || hash === 'video' || hash === 'mail') {
         setActiveTab(hash);
     }
-  }, []);
+    
+    const joinMeetingId = searchParams.get('join');
+    if (joinMeetingId) {
+        setActiveTab('video');
+        joinMeeting(joinMeetingId);
+    }
+  }, [searchParams]);
 
-  const createMeeting = async () => {
+  const createMeeting = async (): Promise<string | null> => {
       if (!process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN) {
         toast({
           variant: "destructive",
           title: "VideoSDK Token Missing",
           description: "Please add your VideoSDK token to a .env file.",
         });
-        return;
+        return null;
       }
       try {
         const url = `https://api.videosdk.live/v2/rooms`;
@@ -95,9 +104,11 @@ export default function MeetingPage() {
         if (roomId) {
           joinMeeting(roomId);
         }
+        return roomId;
       } catch (e) {
         console.error(e);
         toast({ variant: "destructive", title: "Error creating meeting" });
+        return null;
       }
   };
 
@@ -168,6 +179,39 @@ export default function MeetingPage() {
     }
     setIsWebCamOn(!isWebCamOn);
   };
+
+  const sendMeetingInvite = async (recipientId: string, meetingId: string) => {
+      if (!loggedInUser || !recipientId || !meetingId) return;
+
+      const inviteLink = `/meeting?join=${meetingId}`;
+      const inviteMessage = `${loggedInUser.name} is inviting you to a video call. <a href="${inviteLink}" class="text-blue-500 underline">Join Now</a>`;
+
+      const messageData: Omit<ChatMessage, 'id'> = {
+          senderId: loggedInUser.id,
+          receiverId: recipientId,
+          content: inviteMessage,
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          businessId: loggedInUser.businessId,
+      };
+
+      try {
+          await addDoc(collection(db, 'chatMessages'), messageData);
+          toast({ title: 'Invitation sent!' });
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error sending invitation' });
+      }
+  };
+
+  const handleStartVideoCall = async () => {
+      if (!selectedChatUser) return;
+      setActiveTab('video');
+      const newMeetingId = await createMeeting();
+      if (newMeetingId) {
+          await sendMeetingInvite(selectedChatUser.id, newMeetingId);
+      }
+  };
+
 
   // ----- Existing Chat Logic -----
   const filteredUsers = useMemo(() => {
@@ -626,7 +670,7 @@ export default function MeetingPage() {
                     <div className="flex flex-col items-center justify-center h-full gap-4">
                         <CardTitle className="text-2xl">Join or Create a Meeting</CardTitle>
                         <div className="flex gap-4">
-                            <Button onClick={createMeeting}>New Meeting</Button>
+                            <Button onClick={() => createMeeting()}>New Meeting</Button>
                             <span className="flex items-center">OR</span>
                             <div className="flex gap-2">
                                 <Input type="text" id="meetingIdTxt" placeholder="Enter Meeting ID" />
@@ -698,10 +742,7 @@ export default function MeetingPage() {
                                         />
                                     </div>
                                     {activeChatMode === 'individual' && (
-                                      <Button variant="outline" size="icon" onClick={() => {
-                                          setActiveTab('video');
-                                          createMeeting();
-                                      }}>
+                                      <Button variant="outline" size="icon" onClick={handleStartVideoCall}>
                                           <Video className="h-5 w-5"/>
                                       </Button>
                                     )}
@@ -721,9 +762,10 @@ export default function MeetingPage() {
                                               </Avatar>
                                             )}
                                             <div className={`flex flex-col ${msg.senderId === loggedInUser?.id ? 'items-end' : 'items-start'}`}>
-                                                <div className={`rounded-lg px-3 py-2 max-w-sm break-words ${msg.senderId === loggedInUser?.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                                                    {msg.content}
-                                                </div>
+                                                <div 
+                                                    className={`rounded-lg px-3 py-2 max-w-sm break-words ${msg.senderId === loggedInUser?.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                                                    dangerouslySetInnerHTML={{ __html: msg.content.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ') }}
+                                                />
                                                 <p className="text-xs text-muted-foreground mt-1">
                                                     {formatDistanceToNowStrict(new Date(msg.timestamp), { addSuffix: true })}
                                                 </p>
@@ -983,3 +1025,6 @@ export default function MeetingPage() {
 
     
 
+
+
+    
