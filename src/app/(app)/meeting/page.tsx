@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail, Send, Search } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, UserPlus, ScreenShare, Disc, Phone, PhoneOff, MessageSquare, Mail, Send, Search, Users, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import { db } from '@/lib/firebase';
 import type { User, ChatMessage } from '@/lib/types';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
 
 type MeetingState = 'idle' | 'active' | 'ended';
 
@@ -41,6 +42,9 @@ export default function MeetingPage() {
   const [unreadSenders, setUnreadSenders] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [selectedMeetingUsers, setSelectedMeetingUsers] = useState<User[]>([]);
+  const [showMeetingChat, setShowMeetingChat] = useState(false);
+  const [meetingChatMessage, setMeetingChatMessage] = useState('');
+
 
   const meetingTitle = useMemo(() => {
     if (selectedMeetingUsers.length === 0) return 'New Meeting';
@@ -83,6 +87,7 @@ export default function MeetingPage() {
       setMeetingState('active');
       setIsMuted(false);
       setIsVideoOff(false);
+      setShowMeetingChat(true); // Open chat by default when meeting starts
     } catch (error) {
       console.error('Error accessing media devices:', error);
       setHasPermissions(false);
@@ -97,6 +102,7 @@ export default function MeetingPage() {
   const endMeeting = () => {
     cleanupStream();
     setMeetingState('ended');
+    setShowMeetingChat(false);
   };
   
   const returnToLobby = () => {
@@ -237,6 +243,32 @@ export default function MeetingPage() {
       }
   };
 
+  const handleSendMeetingMessage = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!meetingChatMessage.trim() || !loggedInUser) return;
+      
+      // In a real app, this would send to all participants.
+      // For now, it sends to the first selected user as a demo.
+      const firstParticipant = selectedMeetingUsers[0];
+      if (!firstParticipant) return;
+
+      const messageData: Omit<ChatMessage, 'id'> = {
+          senderId: loggedInUser.id,
+          receiverId: firstParticipant.id,
+          content: meetingChatMessage,
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          businessId: loggedInUser.businessId,
+      };
+      
+      try {
+          await addDoc(collection(db, 'chatMessages'), messageData);
+          setMeetingChatMessage('');
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error sending message' });
+      }
+  };
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -262,7 +294,8 @@ export default function MeetingPage() {
         
         <TabsContent value="video">
            <Card className="h-[70vh] flex">
-              <div className="w-1/3 border-r flex flex-col">
+              {/* Lobby / User Selection Panel */}
+              <div className={`border-r flex flex-col ${meetingState === 'active' ? 'w-1/4' : 'w-1/3'}`}>
                   <CardHeader>
                       <CardTitle>Select Users</CardTitle>
                        <CardDescription>Choose who to invite to the meeting.</CardDescription>
@@ -286,6 +319,7 @@ export default function MeetingPage() {
                                 id={`user-check-${user.id}`}
                                 checked={selectedMeetingUsers.some(u => u.id === user.id)}
                                 onCheckedChange={() => handleToggleMeetingUser(user)}
+                                disabled={meetingState !== 'idle'}
                               />
                                <label htmlFor={`user-check-${user.id}`} className="flex-1 flex items-center gap-3 cursor-pointer">
                                   <Avatar>
@@ -300,96 +334,142 @@ export default function MeetingPage() {
                           </div>
                       ))}
                   </ScrollArea>
-                  <CardFooter className="pt-4 border-t">
-                     <Button 
-                        className="w-full" 
-                        onClick={startMeeting}
-                        disabled={selectedMeetingUsers.length === 0 || meetingState === 'active'}
-                    >
-                        <Phone className="mr-2" /> Start Call with {selectedMeetingUsers.length} user(s)
-                    </Button>
-                  </CardFooter>
-              </div>
-              <div className="w-2/3 flex flex-col bg-muted/30">
-                  <CardContent className="p-0 flex-1">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 min-h-full">
-                        <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border-2 border-primary">
-                            <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
-                             {meetingState === 'active' && (
-                                <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                                    {loggedInUser?.name || 'You'}
-                                </div>
-                            )}
-                             {meetingState !== 'active' && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 gap-4 text-center text-white">
-                                    <Video className="h-12 w-12 mb-2" />
-                                    <h3 className="font-semibold text-lg">Ready to join?</h3>
-                                    <p className="text-sm">Select users and start the call.</p>
-                                </div>
-                            )}
-                             {meetingState === 'ended' && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 gap-4">
-                                    <h3 className="text-xl font-semibold text-white">Meeting has ended.</h3>
-                                    <Button size="lg" variant="outline" onClick={returnToLobby}>
-                                        Return to Lobby
-                                    </Button>
-                                </div>
-                            )}
-                             {meetingState === 'active' && isVideoOff && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-                                    <div className="text-center text-white">
-                                        <VideoOff className="h-10 w-10 mx-auto mb-2" />
-                                        <p>Video is off</p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                        {meetingState === 'active' && selectedMeetingUsers.map((user) => (
-                            <div key={user.id} className="relative aspect-video bg-muted rounded-lg flex items-center justify-center border">
-                                <p className="text-muted-foreground text-sm">Waiting for {user.name}...</p>
-                                <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                                    {user.name}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                  </CardContent>
-                  {meetingState === 'active' && (
-                    <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
-                        <Button
-                            variant={isMuted ? 'destructive' : 'secondary'}
-                            size="icon"
-                            className="rounded-full h-12 w-12"
-                            onClick={toggleAudio}
-                            disabled={hasPermissions === false}
-                            aria-label={isMuted ? 'Unmute' : 'Mute'}
-                        >
-                            {isMuted ? <MicOff /> : <Mic />}
-                        </Button>
-                        <Button
-                            variant={isVideoOff ? 'destructive' : 'secondary'}
-                            size="icon"
-                            className="rounded-full h-12 w-12"
-                            onClick={toggleVideo}
-                            disabled={hasPermissions === false}
-                            aria-label={isVideoOff ? 'Turn on video' : 'Turn off video'}
-                        >
-                            {isVideoOff ? <VideoOff /> : <Video />}
-                        </Button>
-                        <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
-                            <ScreenShare />
-                        </Button>
-                        <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
-                            <UserPlus />
-                        </Button>
-                        <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
-                            <Disc />
-                        </Button>
-                        <Button variant="destructive" size="icon" className="rounded-full h-12 w-12 ml-8" onClick={endMeeting}>
-                            <PhoneOff />
-                        </Button>
+                  {meetingState === 'idle' && (
+                    <CardFooter className="pt-4 border-t">
+                      <Button 
+                          className="w-full" 
+                          onClick={startMeeting}
+                          disabled={selectedMeetingUsers.length === 0}
+                      >
+                          <Phone className="mr-2" /> Start Call with {selectedMeetingUsers.length} user(s)
+                      </Button>
                     </CardFooter>
-                )}
+                  )}
+              </div>
+              
+              {/* Meeting Area */}
+              <div className="flex-1 flex flex-col bg-muted/30">
+                  <div className="flex-1 flex">
+                      <div className="flex-1 flex flex-col">
+                          <CardContent className="p-0 flex-1">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 min-h-full">
+                                <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border-2 border-primary">
+                                    <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+                                    {meetingState === 'active' && (
+                                        <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                                            {loggedInUser?.name || 'You'}
+                                        </div>
+                                    )}
+                                    {meetingState === 'idle' && (
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 gap-4 text-center text-white">
+                                            <Video className="h-12 w-12 mb-2" />
+                                            <h3 className="font-semibold text-lg">Ready to join?</h3>
+                                            <p className="text-sm">Select users and start the call.</p>
+                                        </div>
+                                    )}
+                                    {meetingState === 'ended' && (
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 gap-4">
+                                            <h3 className="text-xl font-semibold text-white">Meeting has ended.</h3>
+                                            <Button size="lg" variant="outline" onClick={returnToLobby}>
+                                                Return to Lobby
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {meetingState === 'active' && isVideoOff && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+                                            <div className="text-center text-white">
+                                                <VideoOff className="h-10 w-10 mx-auto mb-2" />
+                                                <p>Video is off</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                {meetingState === 'active' && selectedMeetingUsers.map((user) => (
+                                    <div key={user.id} className="relative aspect-video bg-muted rounded-lg flex items-center justify-center border">
+                                        <div className="text-center">
+                                          <Avatar className="h-16 w-16 mx-auto mb-2">
+                                              <AvatarImage src={user.avatar_url || ''} />
+                                              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                          </Avatar>
+                                          <p className="text-muted-foreground text-sm">Connecting to {user.name}...</p>
+                                        </div>
+                                        <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                                            {user.name}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                          </CardContent>
+                          {meetingState === 'active' && (
+                            <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
+                                <Button
+                                    variant={isMuted ? 'destructive' : 'secondary'}
+                                    size="icon"
+                                    className="rounded-full h-12 w-12"
+                                    onClick={toggleAudio}
+                                    disabled={hasPermissions === false}
+                                    aria-label={isMuted ? 'Unmute' : 'Mute'}
+                                >
+                                    {isMuted ? <MicOff /> : <Mic />}
+                                </Button>
+                                <Button
+                                    variant={isVideoOff ? 'destructive' : 'secondary'}
+                                    size="icon"
+                                    className="rounded-full h-12 w-12"
+                                    onClick={toggleVideo}
+                                    disabled={hasPermissions === false}
+                                    aria-label={isVideoOff ? 'Turn on video' : 'Turn off video'}
+                                >
+                                    {isVideoOff ? <VideoOff /> : <Video />}
+                                </Button>
+                                <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setShowMeetingChat(!showMeetingChat)}>
+                                    <MessageSquare />
+                                </Button>
+                                <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
+                                    <ScreenShare />
+                                </Button>
+                                <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
+                                    <Disc />
+                                </Button>
+                                <Button variant="destructive" size="icon" className="rounded-full h-12 w-12 ml-8" onClick={endMeeting}>
+                                    <PhoneOff />
+                                </Button>
+                            </CardFooter>
+                        )}
+                      </div>
+
+                       {/* Meeting Chat Panel */}
+                      {meetingState === 'active' && showMeetingChat && (
+                          <div className="w-1/3 border-l flex flex-col bg-background">
+                              <div className="p-4 border-b">
+                                  <h3 className="font-semibold flex items-center justify-between">
+                                      Meeting Chat
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowMeetingChat(false)}>
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                  </h3>
+                              </div>
+                              <ScrollArea className="flex-1 p-4">
+                                <div className="space-y-4">
+                                    {/* A placeholder for chat messages */}
+                                     <div className="text-center text-xs text-muted-foreground pt-4">Messages with participants will appear here.</div>
+                                </div>
+                              </ScrollArea>
+                              <div className="p-4 border-t">
+                                  <form onSubmit={handleSendMeetingMessage} className="flex w-full items-center gap-2">
+                                      <Input 
+                                          value={meetingChatMessage}
+                                          onChange={(e) => setMeetingChatMessage(e.target.value)}
+                                          placeholder="Type a message..."
+                                      />
+                                      <Button type="submit" size="icon">
+                                          <Send className="h-4 w-4" />
+                                      </Button>
+                                  </form>
+                              </div>
+                          </div>
+                      )}
+                  </div>
               </div>
            </Card>
         </TabsContent>
