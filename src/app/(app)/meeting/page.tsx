@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -57,6 +57,12 @@ export default function MeetingPage() {
   const [groupUserSearch, setGroupUserSearch] = useState('');
   const [activeChatMode, setActiveChatMode] = useState<ChatMode>('individual');
   const [activeGroup, setActiveGroup] = useState<User[]>([]);
+
+  // Invite state
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [inviteRecipients, setInviteRecipients] = useState<string[]>([]);
+  const [inviteUserSearch, setInviteUserSearch] = useState('');
+
 
   // VideoSDK states
   const [isMicOn, setIsMicOn] = useState(true);
@@ -122,7 +128,7 @@ export default function MeetingPage() {
     newMeeting.join();
 
     newMeeting.on("meeting-joined", () => {
-      setParticipants(Array.from(newMeeting.participants.values()));
+        setParticipants(Array.from(newMeeting.participants.values()));
     });
 
      newMeeting.on("meeting-left", () => {
@@ -364,6 +370,51 @@ export default function MeetingPage() {
     return allOtherUsers.filter(u => u.name.toLowerCase().includes(groupUserSearch.toLowerCase()));
   }, [users, groupUserSearch, loggedInUser]);
 
+    const handleToggleInviteRecipient = (userId: string) => {
+        setInviteRecipients(prev =>
+            prev.includes(userId)
+                ? prev.filter(id => id !== userId)
+                : [...prev, userId]
+        );
+    };
+
+    const handleSendInvites = async () => {
+        if (!meetingId || inviteRecipients.length === 0 || !loggedInUser) return;
+
+        const batch = writeBatch(db);
+        const inviteMessage = `${loggedInUser.name} has invited you to a meeting. Meeting ID: ${meetingId}`;
+
+        inviteRecipients.forEach(recipientId => {
+            const newMessageRef = doc(collection(db, 'chatMessages'));
+            const messageData: Omit<ChatMessage, 'id'> = {
+                senderId: loggedInUser.id,
+                receiverId: recipientId,
+                content: inviteMessage,
+                timestamp: new Date().toISOString(),
+                isRead: false,
+                businessId: loggedInUser.businessId,
+            };
+            batch.set(newMessageRef, messageData);
+        });
+
+        try {
+            await batch.commit();
+            toast({ title: `Invitation sent to ${inviteRecipients.length} user(s).` });
+            setIsInviteDialogOpen(false);
+            setInviteRecipients([]);
+            setInviteUserSearch('');
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error sending invitations' });
+        }
+    };
+
+    const filteredInviteUsers = useMemo(() => {
+        const allOtherUsers = users.filter(u => u.id !== loggedInUser?.id);
+        if (!inviteUserSearch) return allOtherUsers;
+        return allOtherUsers.filter(u => u.name.toLowerCase().includes(inviteUserSearch.toLowerCase()));
+    }, [users, inviteUserSearch, loggedInUser]);
+
+
   const ChatHeaderContent = () => {
     if (activeChatMode === 'group') {
       const participantNames = activeGroup.map(u => u.name).join(', ');
@@ -545,6 +596,9 @@ export default function MeetingPage() {
                             </Button>
                              <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
                                 <ScreenShare />
+                            </Button>
+                            <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsInviteDialogOpen(true)}>
+                                <UserPlus />
                             </Button>
                              <Button variant="destructive" size="icon" className="rounded-full h-12 w-12 ml-8" onClick={leaveMeeting}>
                                 <PhoneOff />
@@ -853,8 +907,61 @@ export default function MeetingPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    
+    <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+      <DialogContent className="flex flex-col h-[80vh]">
+        <DialogHeader>
+            <DialogTitle>Invite to Meeting</DialogTitle>
+            <DialogDescription>Select users to invite to the current meeting.</DialogDescription>
+        </DialogHeader>
+        <div className="relative mt-2">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input 
+              placeholder="Search users..."
+              className="pl-9"
+              value={inviteUserSearch}
+              onChange={(e) => setInviteUserSearch(e.target.value)}
+          />
+        </div>
+        <ScrollArea className="flex-1 mt-4 border rounded-md">
+            <div className="p-2">
+                {filteredInviteUsers.map(user => (
+                    <div 
+                    key={user.id} 
+                    className="flex items-center gap-3 p-2 rounded-md hover:bg-accent"
+                    >
+                        <Checkbox 
+                            id={`inv-user-${user.id}`}
+                            checked={inviteRecipients.includes(user.id)}
+                            onCheckedChange={() => handleToggleInviteRecipient(user.id)}
+                        />
+                        <label htmlFor={`inv-user-${user.id}`} className="flex-1 flex items-center gap-3 cursor-pointer">
+                            <Avatar>
+                                <AvatarImage src={user.avatar_url || ''} alt={user.name} data-ai-hint="person portrait" />
+                                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                                <p className="font-semibold">{user.name}</p>
+                                <p className="text-xs text-muted-foreground">{user.role}</p>
+                            </div>
+                        </label>
+                    </div>
+                ))}
+            </div>
+        </ScrollArea>
+        <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsInviteDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSendInvites} disabled={inviteRecipients.length === 0}>
+                <Send className="mr-2 h-4 w-4" />
+                Send Invites ({inviteRecipients.length})
+            </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </div>
   );
 }
+
+    
 
     
