@@ -1,2 +1,3 @@
+
 // Auth token will be used to generate a meeting and connect to it
-export const VIDEOSDK_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlrZXkiOiJkMTliNjI3Ny05NjgyLTRlNzUtOGEzOC03MDY0NmY2ZGFlZTMiLCJwZXJtaXNzaW9ucyI6WyJhbGxvd19qb2luIl0sImlhdCI6MTc1ODQzNTA0MCwiZXhwIjoxOTE2MjIzMDQwfQ.D9jsSOHYo5GtOWLSS0lw9IcgBa5TmUN_M_dSPAREvcE";
+export const VIDEOSDK_TOKEN = process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN || "Your_Token_Here";

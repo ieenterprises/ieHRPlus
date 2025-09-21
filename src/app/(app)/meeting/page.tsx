@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -18,9 +18,9 @@ import { db } from '@/lib/firebase';
 import type { User, ChatMessage } from '@/lib/types';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
-import { MoreVertical } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { VIDEOSDK_TOKEN } from '@/lib/videosdk-config';
 
 type ChatMode = 'individual' | 'group';
@@ -38,8 +38,6 @@ export default function MeetingPage() {
   const [activeTab, setActiveTab] = useState('video');
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [meeting, setMeeting] = useState<any | null>(null);
-  const [localParticipant, setLocalParticipant] = useState<any | null>(null);
-  const [participants, setParticipants] = useState<any[]>([]);
 
   // Chat state
   const [userSearch, setUserSearch] = useState('');
@@ -71,11 +69,11 @@ export default function MeetingPage() {
   }, []);
 
   const createMeeting = async () => {
-      if (!VIDEOSDK_TOKEN || VIDEOSDK_TOKEN === "Your_Token_Here") {
+      if (!process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN) {
         toast({
           variant: "destructive",
           title: "VideoSDK Token Missing",
-          description: "Please add your VideoSDK token to src/lib/videosdk-config.ts",
+          description: "Please add your VideoSDK token to a .env file.",
         });
         return;
       }
@@ -83,11 +81,10 @@ export default function MeetingPage() {
         const url = `https://api.videosdk.live/v2/rooms`;
         const options = {
           method: "POST",
-          headers: { Authorization: VIDEOSDK_TOKEN, "Content-Type": "application/json" },
+          headers: { Authorization: process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN, "Content-Type": "application/json" },
         };
         const { roomId } = await fetch(url, options).then(res => res.json());
         if (roomId) {
-          setMeetingId(roomId);
           joinMeeting(roomId);
         }
       } catch (e) {
@@ -97,11 +94,11 @@ export default function MeetingPage() {
   };
 
   const joinMeeting = (id: string) => {
-    if (!VIDEOSDK_TOKEN || VIDEOSDK_TOKEN === "Your_Token_Here") {
+    if (!process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN) {
         toast({
           variant: "destructive",
           title: "VideoSDK Token Missing",
-          description: "Please add your VideoSDK token to src/lib/videosdk-config.ts",
+          description: "Please add your VideoSDK token to a .env file.",
         });
         return;
       }
@@ -110,7 +107,7 @@ export default function MeetingPage() {
         return;
     }
 
-    window.VideoSDK.config(VIDEOSDK_TOKEN);
+    window.VideoSDK.config(process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN);
     const newMeeting = window.VideoSDK.initMeeting({
         meetingId: id,
         name: loggedInUser?.name || 'Guest',
@@ -119,25 +116,24 @@ export default function MeetingPage() {
     });
     newMeeting.join();
 
+    setMeeting(newMeeting);
+    setMeetingId(id);
+
     newMeeting.on("meeting-joined", () => {
-        setMeeting(newMeeting);
-        setLocalParticipant(newMeeting.localParticipant);
-        setParticipants(Array.from(newMeeting.participants.values()));
+        // Now handled by state change, but keep for potential future logic
     });
 
      newMeeting.on("meeting-left", () => {
         setMeeting(null);
         setMeetingId(null);
-        setLocalParticipant(null);
-        setParticipants([]);
     });
 
     newMeeting.on("participant-joined", (participant: any) => {
-        setParticipants(prev => [...prev, participant]);
+        // UI update will be handled by ParticipantView component re-render
     });
 
     newMeeting.on("participant-left", (participant: any) => {
-        setParticipants(prev => prev.filter(p => p.id !== participant.id));
+        // UI update will be handled by ParticipantView component re-render
     });
   };
 
@@ -410,38 +406,62 @@ export default function MeetingPage() {
     const [webcamOn, setWebcamOn] = useState(false);
     
     useEffect(() => {
-      participant.on('stream-enabled', (stream: any) => {
+      const audioStream = Array.from(participant.streams.values()).find((s: any) => s.kind === 'audio');
+      const videoStream = Array.from(participant.streams.values()).find((s: any) => s.kind === 'video');
+
+      if (audioStream) {
+        setMicOn(true);
+        if (micRef.current) {
+          const mediaStream = new MediaStream();
+          mediaStream.addTrack(audioStream.track);
+          micRef.current.srcObject = mediaStream;
+          micRef.current.play().catch(e => console.error("audio play error", e));
+        }
+      }
+
+      if (videoStream) {
+        setWebcamOn(true);
+        if (webcamRef.current) {
+          const mediaStream = new MediaStream();
+          mediaStream.addTrack(videoStream.track);
+          webcamRef.current.srcObject = mediaStream;
+          webcamRef.current.play().catch(e => console.error("video play error", e));
+        }
+      }
+
+      const handleStreamEnabled = (stream: any) => {
         if (stream.kind === 'audio') {
           setMicOn(true);
           if (micRef.current) {
-            micRef.current.srcObject = new MediaStream([stream.track]);
+            const mediaStream = new MediaStream();
+            mediaStream.addTrack(stream.track);
+            micRef.current.srcObject = mediaStream;
             micRef.current.play().catch(e => console.error("audio play error", e));
           }
         }
         if (stream.kind === 'video') {
           setWebcamOn(true);
           if (webcamRef.current) {
-            webcamRef.current.srcObject = new MediaStream([stream.track]);
+            const mediaStream = new MediaStream();
+            mediaStream.addTrack(stream.track);
+            webcamRef.current.srcObject = mediaStream;
             webcamRef.current.play().catch(e => console.error("video play error", e));
           }
         }
-      });
-      participant.on('stream-disabled', (stream: any) => {
+      };
+
+      const handleStreamDisabled = (stream: any) => {
         if (stream.kind === 'audio') setMicOn(false);
         if (stream.kind === 'video') setWebcamOn(false);
-      });
+      };
+
+      participant.on('stream-enabled', handleStreamEnabled);
+      participant.on('stream-disabled', handleStreamDisabled);
       
-      // Set initial state
-      const audioStream = Array.from(participant.streams.values()).find((s: any) => s.kind === 'audio');
-      if (audioStream) {
-          setMicOn(true);
-          if (micRef.current) micRef.current.srcObject = new MediaStream([audioStream.track]);
-      }
-      const videoStream = Array.from(participant.streams.values()).find((s: any) => s.kind === 'video');
-      if (videoStream) {
-          setWebcamOn(true);
-          if (webcamRef.current) webcamRef.current.srcObject = new MediaStream([videoStream.track]);
-      }
+      return () => {
+        participant.off('stream-enabled', handleStreamEnabled);
+        participant.off('stream-disabled', handleStreamDisabled);
+      };
     }, [participant]);
 
     return (
@@ -496,8 +516,8 @@ export default function MeetingPage() {
                             <CardTitle>Meeting ID: {meetingId}</CardTitle>
                         </CardHeader>
                         <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
-                            {localParticipant && <ParticipantView participant={localParticipant} />}
-                            {participants.map(participant => (
+                            {meeting.localParticipant && <ParticipantView participant={meeting.localParticipant} />}
+                            {Array.from(meeting.participants.values()).map((participant: any) => (
                                 <ParticipantView key={participant.id} participant={participant} />
                             ))}
                         </CardContent>
