@@ -697,12 +697,14 @@ export default function MeetingPage() {
                                     {filteredMessages.map(msg => (
                                         <div 
                                             key={msg.id} 
-                                            className={`group relative flex items-start gap-2 ${msg.senderId === loggedInUser?.id ? 'justify-end' : 'flex-row-reverse'}`}
+                                            className={`group relative flex items-start w-full gap-3 ${msg.senderId === loggedInUser?.id ? 'justify-end' : 'justify-start'}`}
                                         >
-                                            <Avatar className="h-8 w-8">
-                                                <AvatarImage src={msg.senderId === loggedInUser?.id ? loggedInUser?.avatar_url || '' : selectedChatUser?.avatar_url || ''} />
-                                                <AvatarFallback>{(msg.senderId === loggedInUser?.id ? loggedInUser?.name : selectedChatUser?.name)?.charAt(0)}</AvatarFallback>
-                                            </Avatar>
+                                            {msg.senderId !== loggedInUser?.id && (
+                                              <Avatar className="h-8 w-8">
+                                                  <AvatarImage src={selectedChatUser?.avatar_url || ''} />
+                                                  <AvatarFallback>{selectedChatUser?.name?.charAt(0)}</AvatarFallback>
+                                              </Avatar>
+                                            )}
                                             <div className={`flex flex-col ${msg.senderId === loggedInUser?.id ? 'items-end' : 'items-start'}`}>
                                                 <div className={`rounded-lg px-3 py-2 max-w-sm break-words ${msg.senderId === loggedInUser?.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                                                     {msg.content}
@@ -711,7 +713,13 @@ export default function MeetingPage() {
                                                     {formatDistanceToNowStrict(new Date(msg.timestamp), { addSuffix: true })}
                                                 </p>
                                             </div>
-                                             <DropdownMenu>
+                                            {msg.senderId === loggedInUser?.id && (
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarImage src={loggedInUser?.avatar_url || ''} />
+                                                    <AvatarFallback>{loggedInUser?.name?.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                            )}
+                                            <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" size="icon" className={`absolute top-0 h-6 w-6 opacity-0 group-hover:opacity-100 ${msg.senderId === loggedInUser?.id ? 'left-0' : 'right-0'}`}>
                                                         <MoreVertical className="h-4 w-4" />
@@ -875,5 +883,3 @@ export default function MeetingPage() {
     </div>
   );
 }
-
-    
