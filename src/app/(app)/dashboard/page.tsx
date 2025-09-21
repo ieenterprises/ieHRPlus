@@ -1,12 +1,11 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift, Download, Search } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift, Download, Search, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type UserRequest, type HRQuery, type Reward } from "@/lib/types";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, onSnapshot } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -56,6 +55,8 @@ export default function DashboardPage() {
   const [requestSearch, setRequestSearch] = useState("");
   const [querySearch, setQuerySearch] = useState("");
   const [rewardSearch, setRewardSearch] = useState("");
+  
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   const { toast } = useToast();
   
@@ -85,6 +86,21 @@ export default function DashboardPage() {
     setMyRewards(rewardsForMe);
 
   }, [allUserRequests, allHrQueries, allRewards, loggedInUser?.id]);
+
+  useEffect(() => {
+    if (!loggedInUser) return;
+    const q = query(
+        collection(db, 'chatMessages'),
+        where('businessId', '==', loggedInUser.businessId),
+        where('receiverId', '==', loggedInUser.id),
+        where('isRead', '==', false)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const uniqueSenders = new Set(snapshot.docs.map(doc => doc.data().senderId));
+        setUnreadChatCount(uniqueSenders.size);
+    });
+    return () => unsubscribe();
+  }, [loggedInUser]);
 
   const filteredMyRequests = useMemo(() => {
       if (!requestSearch) return myRequests;
@@ -359,6 +375,25 @@ export default function DashboardPage() {
                         ))}
                     </TableBody>
                 </Table>
+            </CardContent>
+        </Card>
+      )}
+
+      {unreadChatCount > 0 && (
+        <Card className="border-purple-500">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-purple-600">
+                    <MessageSquare />
+                    You Have Unread Messages
+                </CardTitle>
+                <CardDescription>
+                    You have unread messages from {unreadChatCount} {unreadChatCount > 1 ? 'people' : 'person'}.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Button asChild>
+                    <Link href="/meeting">View Chats ({unreadChatCount})</Link>
+                </Button>
             </CardContent>
         </Card>
       )}
@@ -876,10 +911,4 @@ export default function DashboardPage() {
   );
 }
 
-
-
-
-
-
-
-      
+    
