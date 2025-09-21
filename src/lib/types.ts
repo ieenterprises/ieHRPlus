@@ -99,6 +99,19 @@ export type Business = {
     created_at: string;
 }
 
+export type Call = {
+  id: string;
+  callerId: string;
+  callerName: string;
+  receiverId: string;
+  status: 'dialing' | 'ringing' | 'answered' | 'declined' | 'ended';
+  type: 'audio' | 'video';
+  offer: RTCSessionDescriptionInit | null;
+  answer: RTCSessionDescriptionInit | null;
+  createdAt: string;
+  businessId: string;
+}
+
 export type OfflineAction = {
     id: string; // Document ID to act upon
     collection: string;
@@ -748,6 +761,7 @@ export type Enums<
     
 
     
+
 
 
 
