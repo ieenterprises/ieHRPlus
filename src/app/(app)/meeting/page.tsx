@@ -547,17 +547,13 @@ export default function MeetingPage() {
   };
 
   const handleSelectAllMessages = () => {
-    // Only select messages sent by the logged-in user
-    const userMessageIds = filteredMessages
-      .filter(msg => msg.senderId === loggedInUser?.id)
-      .map(msg => msg.id);
-    setSelectedMessages(userMessageIds);
+    const allMessageIds = filteredMessages.map(msg => msg.id);
+    setSelectedMessages(allMessageIds);
   };
 
   const getIsAllSelected = () => {
-    const userMessageIds = filteredMessages.filter(msg => msg.senderId === loggedInUser?.id).map(msg => msg.id);
-    if (userMessageIds.length === 0) return false;
-    return userMessageIds.every(id => selectedMessages.includes(id));
+    if (filteredMessages.length === 0) return false;
+    return filteredMessages.every(id => selectedMessages.includes(id.id));
   };
   
     const ParticipantView = ({ participant }: { participant: any }) => {
@@ -806,7 +802,7 @@ export default function MeetingPage() {
                                     {isSelectionMode ? (
                                         <>
                                             <Button variant="ghost" onClick={() => setIsSelectionMode(false)}>Cancel</Button>
-                                            <Button variant="outline" onClick={handleSelectAllMessages} disabled={!filteredMessages.some(m => m.senderId === loggedInUser?.id)}>Select All</Button>
+                                            <Button variant="outline" onClick={handleSelectAllMessages} disabled={filteredMessages.length === 0}>Select All</Button>
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
                                                     <Button variant="destructive" disabled={selectedMessages.length === 0}>
@@ -847,7 +843,7 @@ export default function MeetingPage() {
                                             key={msg.id} 
                                             className={`group relative flex items-start w-full gap-3 ${msg.senderId === loggedInUser?.id ? 'justify-end' : 'justify-start'}`}
                                         >
-                                            {isSelectionMode && msg.senderId === loggedInUser?.id && (
+                                            {isSelectionMode && (
                                                 <Checkbox
                                                     checked={selectedMessages.includes(msg.id)}
                                                     onCheckedChange={() => handleToggleMessageSelection(msg.id)}
@@ -1146,3 +1142,6 @@ export default function MeetingPage() {
   );
 }
 
+
+
+    
