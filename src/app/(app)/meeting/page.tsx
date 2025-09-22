@@ -59,6 +59,9 @@ export default function MeetingPage() {
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [meeting, setMeeting] = useState<any | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
+  const [inChatMeeting, setInChatMeeting] = useState(false);
+  const [chatMeetingId, setChatMeetingId] = useState<string | null>(null);
+
 
   // Chat state
   const [userSearch, setUserSearch] = useState('');
@@ -105,8 +108,13 @@ export default function MeetingPage() {
     
     const joinMeetingId = searchParams.get('join');
     if (joinMeetingId) {
-        setActiveTab('video');
-        joinMeeting(joinMeetingId);
+        if (searchParams.get('in-chat')) {
+            setActiveTab('chat');
+            joinMeeting(joinMeetingId, true);
+        } else {
+            setActiveTab('video');
+            joinMeeting(joinMeetingId, false);
+        }
     }
   }, [searchParams]);
 
@@ -126,9 +134,6 @@ export default function MeetingPage() {
           headers: { Authorization: process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN, "Content-Type": "application/json" },
         };
         const { roomId } = await fetch(url, options).then(res => res.json());
-        if (roomId) {
-          joinMeeting(roomId);
-        }
         return roomId;
       } catch (e) {
         console.error(e);
@@ -137,7 +142,7 @@ export default function MeetingPage() {
       }
   };
 
-  const joinMeeting = (id: string) => {
+  const joinMeeting = (id: string, fromChat: boolean) => {
     if (!process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN) {
         toast({
           variant: "destructive",
@@ -160,7 +165,12 @@ export default function MeetingPage() {
     });
     
     setMeeting(newMeeting); // Set meeting object to state
-    setMeetingId(id); // Set meeting ID to state
+    if (fromChat) {
+        setInChatMeeting(true);
+        setChatMeetingId(id);
+    } else {
+        setMeetingId(id);
+    }
     
     newMeeting.join();
 
@@ -171,6 +181,8 @@ export default function MeetingPage() {
      newMeeting.on("meeting-left", () => {
         setMeeting(null);
         setMeetingId(null);
+        setChatMeetingId(null);
+        setInChatMeeting(false);
         setParticipants([]);
     });
 
@@ -181,6 +193,13 @@ export default function MeetingPage() {
     newMeeting.on("participant-left", (participant: any) => {
         setParticipants(prev => prev.filter(p => p.id !== participant.id));
     });
+  };
+  
+  const handleCreateAndJoin = async (fromChat: boolean) => {
+      const newMeetingId = await createMeeting();
+      if (newMeetingId) {
+          joinMeeting(newMeetingId, fromChat);
+      }
   };
 
   const leaveMeeting = () => {
@@ -205,10 +224,10 @@ export default function MeetingPage() {
     setIsWebCamOn(!isWebCamOn);
   };
 
-  const sendMeetingInvite = async (recipientId: string, meetingId: string) => {
-      if (!loggedInUser || !recipientId || !meetingId) return;
+  const sendMeetingInvite = async (recipientId: string, id: string, fromChat: boolean) => {
+      if (!loggedInUser || !recipientId || !id) return;
 
-      const inviteLink = `/meeting?join=${meetingId}`;
+      const inviteLink = `/meeting?join=${id}${fromChat ? '&in-chat=true' : ''}`;
       const inviteMessage = `${loggedInUser.name} is inviting you to a video call. <a href="${inviteLink}" class="text-blue-500 underline">Join Now</a>`;
 
       const messageData: Omit<ChatMessage, 'id'> = {
@@ -230,10 +249,11 @@ export default function MeetingPage() {
 
   const handleStartVideoCall = async () => {
       if (!selectedChatUser) return;
-      setActiveTab('video');
+      
       const newMeetingId = await createMeeting();
       if (newMeetingId) {
-          await sendMeetingInvite(selectedChatUser.id, newMeetingId);
+          joinMeeting(newMeetingId, true);
+          await sendMeetingInvite(selectedChatUser.id, newMeetingId, true);
       }
   };
 
@@ -500,33 +520,20 @@ export default function MeetingPage() {
     };
 
     const handleSendInvites = async () => {
-        if (!meetingId || inviteRecipients.length === 0 || !loggedInUser) return;
+        const currentMeetingId = inChatMeeting ? chatMeetingId : meetingId;
+        if (!currentMeetingId || inviteRecipients.length === 0 || !loggedInUser) return;
 
         const batch = writeBatch(db);
-        const inviteMessage = `${loggedInUser.name} has invited you to a meeting. Meeting ID: ${meetingId}`;
+        const inviteMessage = `${loggedInUser.name} has invited you to a meeting. Meeting ID: ${currentMeetingId}`;
 
         inviteRecipients.forEach(recipientId => {
-            const newMessageRef = doc(collection(db, 'chatMessages'));
-            const messageData: Omit<ChatMessage, 'id'> = {
-                senderId: loggedInUser.id,
-                receiverId: recipientId,
-                content: inviteMessage,
-                timestamp: new Date().toISOString(),
-                isRead: false,
-                businessId: loggedInUser.businessId,
-            };
-            batch.set(newMessageRef, messageData);
+            sendMeetingInvite(recipientId, currentMeetingId, inChatMeeting);
         });
-
-        try {
-            await batch.commit();
-            toast({ title: `Invitation sent to ${inviteRecipients.length} user(s).` });
-            setIsInviteDialogOpen(false);
-            setInviteRecipients([]);
-            setInviteUserSearch('');
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Error sending invitations' });
-        }
+        
+        toast({ title: `Invitation sent to ${inviteRecipients.length} user(s).` });
+        setIsInviteDialogOpen(false);
+        setInviteRecipients([]);
+        setInviteUserSearch('');
     };
 
     const filteredInviteUsers = useMemo(() => {
@@ -625,78 +632,56 @@ export default function MeetingPage() {
     const [webcamOn, setWebcamOn] = useState(false);
     
     useEffect(() => {
-      const audioStream = Array.from(participant.streams.values()).find((s: any) => s.kind === 'audio');
-      const videoStream = Array.from(participant.streams.values()).find((s: any) => s.kind === 'video');
+        let audioStream: MediaStream | null = null;
+        let videoStream: MediaStream | null = null;
+        
+        const audioMediaStream = new MediaStream();
+        const videoMediaStream = new MediaStream();
 
-      if (audioStream) {
-        setMicOn(true);
         if (micRef.current) {
-          const mediaStream = new MediaStream();
-          mediaStream.addTrack(audioStream.track);
-          micRef.current.srcObject = mediaStream;
-          micRef.current.play().catch(e => {
-            if (e.name !== 'AbortError') {
-              console.error("audio play error", e)
-            }
-          });
+            micRef.current.srcObject = audioMediaStream;
+            micRef.current.play().catch(e => { if (e.name !== 'AbortError') console.error("audio play error", e) });
         }
-      }
-
-      if (videoStream) {
-        setWebcamOn(true);
         if (webcamRef.current) {
-          const mediaStream = new MediaStream();
-          mediaStream.addTrack(videoStream.track);
-          webcamRef.current.srcObject = mediaStream;
-          webcamRef.current.play().catch(e => {
-            if (e.name !== 'AbortError') {
-              console.error("video play error", e);
+            webcamRef.current.srcObject = videoMediaStream;
+            webcamRef.current.play().catch(e => { if (e.name !== 'AbortError') console.error("video play error", e) });
+        }
+
+        const handleStreamEnabled = (stream: any) => {
+            if (stream.kind === 'audio') {
+                setMicOn(true);
+                audioStream = stream;
+                audioMediaStream.addTrack(stream.track);
             }
-          });
-        }
-      }
+            if (stream.kind === 'video') {
+                setWebcamOn(true);
+                videoStream = stream;
+                videoMediaStream.addTrack(stream.track);
+            }
+        };
 
-      const handleStreamEnabled = (stream: any) => {
-        if (stream.kind === 'audio') {
-          setMicOn(true);
-          if (micRef.current) {
-            const mediaStream = new MediaStream();
-            mediaStream.addTrack(stream.track);
-            micRef.current.srcObject = mediaStream;
-            micRef.current.play().catch(e => {
-                if (e.name !== 'AbortError') {
-                    console.error("audio play error", e)
-                }
-            });
-          }
-        }
-        if (stream.kind === 'video') {
-          setWebcamOn(true);
-          if (webcamRef.current) {
-            const mediaStream = new MediaStream();
-            mediaStream.addTrack(stream.track);
-            webcamRef.current.srcObject = mediaStream;
-            webcamRef.current.play().catch(e => {
-                if (e.name !== 'AbortError') {
-                    console.error("video play error", e);
-                }
-            });
-          }
-        }
-      };
+        const handleStreamDisabled = (stream: any) => {
+            if (stream.kind === 'audio') {
+                setMicOn(false);
+                if (audioStream) audioMediaStream.removeTrack(audioStream.track);
+                audioStream = null;
+            }
+            if (stream.kind === 'video') {
+                setWebcamOn(false);
+                if (videoStream) videoMediaStream.removeTrack(videoStream.track);
+                videoStream = null;
+            }
+        };
+        
+        Array.from(participant.streams.values()).forEach((s: any) => handleStreamEnabled(s));
 
-      const handleStreamDisabled = (stream: any) => {
-        if (stream.kind === 'audio') setMicOn(false);
-        if (stream.kind === 'video') setWebcamOn(false);
-      };
-
-      participant.on('stream-enabled', handleStreamEnabled);
-      participant.on('stream-disabled', handleStreamDisabled);
-      
-      return () => {
-        participant.off('stream-enabled', handleStreamEnabled);
-        participant.off('stream-disabled', handleStreamDisabled);
-      };
+        participant.on('stream-enabled', handleStreamEnabled);
+        participant.on('stream-disabled', handleStreamDisabled);
+        
+        return () => {
+            participant.off('stream-enabled', handleStreamEnabled);
+            participant.off('stream-disabled', handleStreamDisabled);
+        };
     }, [participant]);
 
     return (
@@ -718,6 +703,49 @@ export default function MeetingPage() {
       </div>
     );
   };
+  
+  const MeetingUI = ({ meetingId, meetingInstance }: { meetingId: string, meetingInstance: any }) => (
+    <div className="h-full flex flex-col">
+        <CardHeader>
+            <CardTitle>Meeting ID: {meetingId}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
+            {meetingInstance.localParticipant && <ParticipantView participant={meetingInstance.localParticipant} />}
+            {participants.map((participant: any) => (
+                <ParticipantView key={participant.id} participant={participant} />
+            ))}
+        </CardContent>
+        <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
+             <Button
+                variant={isMicOn ? 'secondary' : 'destructive'}
+                size="icon"
+                className="rounded-full h-12 w-12"
+                onClick={toggleMic}
+                aria-label={isMicOn ? 'Mute' : 'Unmute'}
+            >
+                {isMicOn ? <Mic /> : <MicOff />}
+            </Button>
+            <Button
+                variant={isWebCamOn ? 'secondary' : 'destructive'}
+                size="icon"
+                className="rounded-full h-12 w-12"
+                onClick={toggleWebcam}
+                aria-label={isWebCamOn ? 'Turn off video' : 'Turn on video'}
+            >
+                {isWebCamOn ? <Video /> : <VideoOff />}
+            </Button>
+             <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
+                <ScreenShare />
+            </Button>
+            <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsInviteDialogOpen(true)}>
+                <UserPlus />
+            </Button>
+             <Button variant="destructive" size="icon" className="rounded-full h-12 w-12 ml-8" onClick={leaveMeeting}>
+                <PhoneOff />
+            </Button>
+        </CardFooter>
+    </div>
+  );
 
 
   return (
@@ -746,55 +774,16 @@ export default function MeetingPage() {
         <TabsContent value="video">
             <Card className="h-[70vh]">
                 {meeting && meetingId ? (
-                    <div className="h-full flex flex-col">
-                        <CardHeader>
-                            <CardTitle>Meeting ID: {meetingId}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
-                            {meeting.localParticipant && <ParticipantView participant={meeting.localParticipant} />}
-                            {participants.map((participant: any) => (
-                                <ParticipantView key={participant.id} participant={participant} />
-                            ))}
-                        </CardContent>
-                        <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
-                             <Button
-                                variant={isMicOn ? 'secondary' : 'destructive'}
-                                size="icon"
-                                className="rounded-full h-12 w-12"
-                                onClick={toggleMic}
-                                aria-label={isMicOn ? 'Mute' : 'Unmute'}
-                            >
-                                {isMicOn ? <Mic /> : <MicOff />}
-                            </Button>
-                            <Button
-                                variant={isWebCamOn ? 'secondary' : 'destructive'}
-                                size="icon"
-                                className="rounded-full h-12 w-12"
-                                onClick={toggleWebcam}
-                                aria-label={isWebCamOn ? 'Turn off video' : 'Turn on video'}
-                            >
-                                {isWebCamOn ? <Video /> : <VideoOff />}
-                            </Button>
-                             <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
-                                <ScreenShare />
-                            </Button>
-                            <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsInviteDialogOpen(true)}>
-                                <UserPlus />
-                            </Button>
-                             <Button variant="destructive" size="icon" className="rounded-full h-12 w-12 ml-8" onClick={leaveMeeting}>
-                                <PhoneOff />
-                            </Button>
-                        </CardFooter>
-                    </div>
+                    <MeetingUI meetingId={meetingId} meetingInstance={meeting} />
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full gap-4">
                         <CardTitle className="text-2xl">Join or Create a Meeting</CardTitle>
                         <div className="flex gap-4">
-                            <Button onClick={() => createMeeting()}>New Meeting</Button>
+                            <Button onClick={() => handleCreateAndJoin(false)}>New Meeting</Button>
                             <span className="flex items-center">OR</span>
                             <div className="flex gap-2">
                                 <Input type="text" id="meetingIdTxt" placeholder="Enter Meeting ID" />
-                                <Button onClick={() => joinMeeting((document.getElementById('meetingIdTxt') as HTMLInputElement).value)}>Join Meeting</Button>
+                                <Button onClick={() => joinMeeting((document.getElementById('meetingIdTxt') as HTMLInputElement).value, false)}>Join Meeting</Button>
                             </div>
                         </div>
                     </div>
@@ -847,7 +836,9 @@ export default function MeetingPage() {
                   </ScrollArea>
               </div>
               <div className="w-2/3 flex flex-col">
-                    {selectedChatUser || activeChatMode === 'group' ? (
+                    {inChatMeeting && meeting && chatMeetingId ? (
+                         <MeetingUI meetingId={chatMeetingId} meetingInstance={meeting} />
+                    ) : selectedChatUser || activeChatMode === 'group' ? (
                         <>
                             <CardHeader className="border-b flex-row items-center justify-between">
                                 <ChatHeaderContent />
@@ -1265,3 +1256,4 @@ export default function MeetingPage() {
     
 
     
+
