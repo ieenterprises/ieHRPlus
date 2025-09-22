@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2 } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -24,11 +24,25 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { VIDEOSDK_TOKEN } from '@/lib/videosdk-config';
 import Link from 'next/link';
 import { AttachmentPreviewer } from '@/components/attachment-previewer';
 
 type ChatMode = 'individual' | 'group';
+
+const EMOJIS = [
+  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+  '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
+  '😋', '😛', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳',
+  '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖',
+  '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯',
+  '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔',
+  '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦',
+  '😧', '😮', '😲', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢',
+  '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '👍', '👎', '❤️'
+];
+
 
 // Reference to the global VideoSDK object from the script
 declare global {
@@ -53,6 +67,7 @@ export default function MeetingPage() {
   const [newMessage, setNewMessage] = useState('');
   const [unreadSenders, setUnreadSenders] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
   const [chatSearch, setChatSearch] = useState('');
   const [deletingMessage, setDeletingMessage] = useState<ChatMessage | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
@@ -365,6 +380,19 @@ export default function MeetingPage() {
 
   const handleRemoveAttachment = (fileName: string) => {
       setAttachments(prev => prev.filter(file => file.name !== fileName));
+  };
+  
+  const handleEmojiSelect = (emoji: string) => {
+    if (chatInputRef.current) {
+        const { selectionStart, selectionEnd, value } = chatInputRef.current;
+        const newText = value.substring(0, selectionStart!) + emoji + value.substring(selectionEnd!);
+        setNewMessage(newText);
+        // Focus and move cursor to after the inserted emoji
+        setTimeout(() => {
+            chatInputRef.current?.focus();
+            chatInputRef.current!.selectionStart = chatInputRef.current!.selectionEnd = selectionStart! + emoji.length;
+        }, 0);
+    }
   };
 
   const filteredMessages = useMemo(() => {
@@ -985,12 +1013,38 @@ export default function MeetingPage() {
                                     </div>
                                 )}
                                 <form onSubmit={handleSendMessage} className="flex w-full items-center gap-2">
-                                    <Input 
-                                        value={newMessage}
-                                        onChange={(e) => setNewMessage(e.target.value)}
-                                        placeholder="Type a message..."
-                                        disabled={isSending}
-                                    />
+                                    <div className="relative flex-1">
+                                        <Input 
+                                            ref={chatInputRef}
+                                            value={newMessage}
+                                            onChange={(e) => setNewMessage(e.target.value)}
+                                            placeholder="Type a message..."
+                                            disabled={isSending}
+                                            className="pr-10"
+                                        />
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8">
+                                                    <Smile className="h-5 w-5" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-2">
+                                                <div className="grid grid-cols-8 gap-1">
+                                                    {EMOJIS.map(emoji => (
+                                                        <Button 
+                                                            key={emoji}
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-xl"
+                                                            onClick={() => handleEmojiSelect(emoji)}
+                                                        >
+                                                            {emoji}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
                                      <Button asChild variant="ghost" size="icon">
                                         <Label htmlFor="chat-attachments">
                                             <Paperclip className="h-5 w-5" />
