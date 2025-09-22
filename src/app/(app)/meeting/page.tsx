@@ -539,6 +539,8 @@ export default function MeetingPage() {
     try {
       await batch.commit();
       toast({ title: `${selectedMessages.length} message(s) deleted.` });
+      // Manually filter the local state to reflect the deletion immediately
+      setMessages(prev => prev.filter(msg => !selectedMessages.includes(msg.id)));
       setIsSelectionMode(false);
       setSelectedMessages([]);
     } catch (error) {
