@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -953,12 +952,7 @@ export default function MeetingPage() {
                                                             <Forward className="mr-2 h-4 w-4"/>
                                                             Forward
                                                         </DropdownMenuItem>
-                                                        {msg.senderId === loggedInUser?.id && (
-                                                            <DropdownMenuItem onClick={() => setDeletingMessage(msg)} className="text-destructive">
-                                                                <Trash2 className="mr-2 h-4 w-4"/>
-                                                                Delete
-                                                            </DropdownMenuItem>
-                                                        )}
+                                                        
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             )}
@@ -1251,9 +1245,4 @@ export default function MeetingPage() {
   );
 }
 
-
-
     
-
-    
-
