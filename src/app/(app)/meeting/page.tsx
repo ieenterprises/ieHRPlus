@@ -20,7 +20,7 @@ import { db } from '@/lib/firebase';
 import type { User, ChatMessage } from '@/lib/types';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { VIDEOSDK_TOKEN } from '@/lib/videosdk-config';
@@ -1145,3 +1145,4 @@ export default function MeetingPage() {
     </div>
   );
 }
+
