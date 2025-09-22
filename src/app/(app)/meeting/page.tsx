@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -62,6 +62,9 @@ export default function MeetingPage() {
   const [activeChatMode, setActiveChatMode] = useState<ChatMode>('individual');
   const [activeGroup, setActiveGroup] = useState<User[]>([]);
   const [replyingToMessage, setReplyingToMessage] = useState<ChatMessage | null>(null);
+
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
 
 
   // Invite state
@@ -396,6 +399,8 @@ export default function MeetingPage() {
     setActiveChatMode('individual');
     setSelectedChatUser(user);
     setActiveGroup([]);
+    setIsSelectionMode(false);
+    setSelectedMessages([]);
   };
 
   const handleToggleGroupRecipient = (user: User) => {
@@ -507,6 +512,52 @@ export default function MeetingPage() {
       );
     }
     return null;
+  };
+
+  const handleToggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode);
+    setSelectedMessages([]); // Clear selections when toggling mode
+  };
+
+  const handleToggleMessageSelection = (messageId: string) => {
+    setSelectedMessages(prev =>
+        prev.includes(messageId)
+            ? prev.filter(id => id !== messageId)
+            : [...prev, messageId]
+    );
+  };
+  
+  const handleDeleteSelectedMessages = async () => {
+    if (selectedMessages.length === 0) return;
+
+    const batch = writeBatch(db);
+    selectedMessages.forEach(msgId => {
+      const msgRef = doc(db, 'chatMessages', msgId);
+      batch.delete(msgRef);
+    });
+
+    try {
+      await batch.commit();
+      toast({ title: `${selectedMessages.length} message(s) deleted.` });
+      setIsSelectionMode(false);
+      setSelectedMessages([]);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error deleting messages' });
+    }
+  };
+
+  const handleSelectAllMessages = () => {
+    // Only select messages sent by the logged-in user
+    const userMessageIds = filteredMessages
+      .filter(msg => msg.senderId === loggedInUser?.id)
+      .map(msg => msg.id);
+    setSelectedMessages(userMessageIds);
+  };
+
+  const getIsAllSelected = () => {
+    const userMessageIds = filteredMessages.filter(msg => msg.senderId === loggedInUser?.id).map(msg => msg.id);
+    if (userMessageIds.length === 0) return false;
+    return userMessageIds.every(id => selectedMessages.includes(id));
   };
   
     const ParticipantView = ({ participant }: { participant: any }) => {
@@ -752,10 +803,40 @@ export default function MeetingPage() {
                                             onChange={(e) => setChatSearch(e.target.value)}
                                         />
                                     </div>
-                                    {activeChatMode === 'individual' && (
-                                      <Button variant="outline" size="icon" onClick={handleStartVideoCall}>
-                                          <Video className="h-5 w-5"/>
-                                      </Button>
+                                    {isSelectionMode ? (
+                                        <>
+                                            <Button variant="ghost" onClick={() => setIsSelectionMode(false)}>Cancel</Button>
+                                            <Button variant="outline" onClick={handleSelectAllMessages} disabled={!filteredMessages.some(m => m.senderId === loggedInUser?.id)}>Select All</Button>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="destructive" disabled={selectedMessages.length === 0}>
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Delete ({selectedMessages.length})
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                        <AlertDialogDescription>This will permanently delete {selectedMessages.length} message(s). This action cannot be undone.</AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={handleDeleteSelectedMessages} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </>
+                                    ) : (
+                                        <>
+                                          <Button variant="outline" size="icon" onClick={handleToggleSelectionMode}>
+                                              <CheckSquare className="h-5 w-5" />
+                                          </Button>
+                                          {activeChatMode === 'individual' && (
+                                            <Button variant="outline" size="icon" onClick={handleStartVideoCall}>
+                                                <Video className="h-5 w-5"/>
+                                            </Button>
+                                          )}
+                                        </>
                                     )}
                                 </div>
                             </CardHeader>
@@ -766,6 +847,13 @@ export default function MeetingPage() {
                                             key={msg.id} 
                                             className={`group relative flex items-start w-full gap-3 ${msg.senderId === loggedInUser?.id ? 'justify-end' : 'justify-start'}`}
                                         >
+                                            {isSelectionMode && msg.senderId === loggedInUser?.id && (
+                                                <Checkbox
+                                                    checked={selectedMessages.includes(msg.id)}
+                                                    onCheckedChange={() => handleToggleMessageSelection(msg.id)}
+                                                    className="mt-1"
+                                                />
+                                            )}
                                             {msg.senderId !== loggedInUser?.id && (
                                               <Avatar className="h-8 w-8">
                                                   <AvatarImage src={users.find(u => u.id === msg.senderId)?.avatar_url || ''} />
@@ -793,29 +881,31 @@ export default function MeetingPage() {
                                                     <AvatarFallback>{loggedInUser?.name?.charAt(0)}</AvatarFallback>
                                                 </Avatar>
                                             )}
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className={`absolute top-0 h-6 w-6 opacity-0 group-hover:opacity-100 ${msg.senderId === loggedInUser?.id ? 'left-0' : 'right-0'}`}>
-                                                        <MoreVertical className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem onClick={() => setReplyingToMessage(msg)}>
-                                                        <MessageCircleReply className="mr-2 h-4 w-4"/>
-                                                        Reply
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => setForwardingMessage(msg)}>
-                                                        <Forward className="mr-2 h-4 w-4"/>
-                                                        Forward
-                                                    </DropdownMenuItem>
-                                                    {msg.senderId === loggedInUser?.id && (
-                                                        <DropdownMenuItem onClick={() => setDeletingMessage(msg)} className="text-destructive">
-                                                            <Trash2 className="mr-2 h-4 w-4"/>
-                                                            Delete
+                                            {!isSelectionMode && (
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className={`absolute top-0 h-6 w-6 opacity-0 group-hover:opacity-100 ${msg.senderId === loggedInUser?.id ? 'left-0' : 'right-0'}`}>
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent>
+                                                        <DropdownMenuItem onClick={() => setReplyingToMessage(msg)}>
+                                                            <MessageCircleReply className="mr-2 h-4 w-4"/>
+                                                            Reply
                                                         </DropdownMenuItem>
-                                                    )}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                                        <DropdownMenuItem onClick={() => setForwardingMessage(msg)}>
+                                                            <Forward className="mr-2 h-4 w-4"/>
+                                                            Forward
+                                                        </DropdownMenuItem>
+                                                        {msg.senderId === loggedInUser?.id && (
+                                                            <DropdownMenuItem onClick={() => setDeletingMessage(msg)} className="text-destructive">
+                                                                <Trash2 className="mr-2 h-4 w-4"/>
+                                                                Delete
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            )}
                                         </div>
                                     )) : (
                                         <div className="text-center text-sm text-muted-foreground pt-10">
@@ -1055,11 +1145,3 @@ export default function MeetingPage() {
     </div>
   );
 }
-
-    
-
-    
-
-
-
-    
