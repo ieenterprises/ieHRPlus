@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { uploadFile, getPublicUrl } from '@/lib/firebase-storage';
 import type { User, ChatMessage } from '@/lib/types';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,6 +26,7 @@ import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogD
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { VIDEOSDK_TOKEN } from '@/lib/videosdk-config';
 import Link from 'next/link';
+import { AttachmentPreviewer } from '@/components/attachment-previewer';
 
 type ChatMode = 'individual' | 'group';
 
@@ -62,6 +64,9 @@ export default function MeetingPage() {
   const [activeChatMode, setActiveChatMode] = useState<ChatMode>('individual');
   const [activeGroup, setActiveGroup] = useState<User[]>([]);
   const [replyingToMessage, setReplyingToMessage] = useState<ChatMessage | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [isSending, setIsSending] = useState(false);
+
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
@@ -307,32 +312,59 @@ export default function MeetingPage() {
   
   const handleSendMessage = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!newMessage.trim() || !loggedInUser || !selectedChatUser) return;
+      if ((!newMessage.trim() && attachments.length === 0) || !loggedInUser || !selectedChatUser) return;
       
-      const messageData: Omit<ChatMessage, 'id'> = {
-          senderId: loggedInUser.id,
-          receiverId: selectedChatUser.id,
-          content: newMessage,
-          timestamp: new Date().toISOString(),
-          isRead: false,
-          businessId: loggedInUser.businessId,
-      };
+      setIsSending(true);
 
-      if (replyingToMessage) {
-        messageData.replyTo = {
-            messageId: replyingToMessage.id,
-            senderName: users.find(u => u.id === replyingToMessage.senderId)?.name || 'Unknown',
-            content: replyingToMessage.content,
-        };
-      }
-      
       try {
+          let attachmentUrls: { name: string, url: string }[] = [];
+          if (attachments.length > 0) {
+              const uploadPromises = attachments.map(async (file) => {
+                  const folder = `chat_attachments/${loggedInUser.id}`;
+                  await uploadFile(loggedInUser.businessId!, folder, file, () => {});
+                  const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
+                  return { name: file.name, url };
+              });
+              attachmentUrls = await Promise.all(uploadPromises);
+          }
+
+          const messageData: Omit<ChatMessage, 'id'> = {
+              senderId: loggedInUser.id,
+              receiverId: selectedChatUser.id,
+              content: newMessage,
+              timestamp: new Date().toISOString(),
+              isRead: false,
+              businessId: loggedInUser.businessId,
+              attachments: attachmentUrls,
+          };
+
+          if (replyingToMessage) {
+            messageData.replyTo = {
+                messageId: replyingToMessage.id,
+                senderName: users.find(u => u.id === replyingToMessage.senderId)?.name || 'Unknown',
+                content: replyingToMessage.content,
+            };
+          }
+          
           await addDoc(collection(db, 'chatMessages'), messageData);
           setNewMessage('');
           setReplyingToMessage(null);
+          setAttachments([]);
       } catch (error) {
           toast({ variant: 'destructive', title: 'Error sending message' });
+      } finally {
+          setIsSending(false);
       }
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (event.target.files) {
+          setAttachments(prev => [...prev, ...Array.from(event.target.files!)]);
+      }
+  };
+
+  const handleRemoveAttachment = (fileName: string) => {
+      setAttachments(prev => prev.filter(file => file.name !== fileName));
   };
 
   const filteredMessages = useMemo(() => {
@@ -858,17 +890,24 @@ export default function MeetingPage() {
                                                   <AvatarFallback>{users.find(u => u.id === msg.senderId)?.name?.charAt(0)}</AvatarFallback>
                                               </Avatar>
                                             )}
-                                            <div className={`flex flex-col ${msg.senderId === loggedInUser?.id ? 'items-end' : 'items-start'}`}>
+                                            <div className={`flex flex-col max-w-sm ${msg.senderId === loggedInUser?.id ? 'items-end' : 'items-start'}`}>
                                                 {msg.replyTo && (
-                                                    <div className="mb-1 rounded-md bg-black/5 dark:bg-white/5 px-2 py-1 text-xs text-muted-foreground max-w-sm w-full">
+                                                    <div className="mb-1 rounded-md bg-black/5 dark:bg-white/5 px-2 py-1 text-xs text-muted-foreground w-full">
                                                         <p className="font-semibold">{msg.replyTo.senderName}</p>
                                                         <p className="truncate">{msg.replyTo.content}</p>
                                                     </div>
                                                 )}
-                                                <div 
-                                                    className={`rounded-lg px-3 py-2 max-w-sm break-words ${msg.senderId === loggedInUser?.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
-                                                    dangerouslySetInnerHTML={{ __html: msg.content.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ') }}
-                                                />
+                                                {msg.content && (
+                                                    <div 
+                                                        className={`rounded-lg px-3 py-2 break-words ${msg.senderId === loggedInUser?.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                                                        dangerouslySetInnerHTML={{ __html: msg.content.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ') }}
+                                                    />
+                                                )}
+                                                {msg.attachments && msg.attachments.length > 0 && (
+                                                  <div className="mt-2 w-full">
+                                                    <AttachmentPreviewer attachments={msg.attachments} />
+                                                  </div>
+                                                )}
                                                 <p className="text-xs text-muted-foreground mt-1">
                                                     {formatDistanceToNowStrict(new Date(msg.timestamp), { addSuffix: true })}
                                                 </p>
@@ -930,14 +969,37 @@ export default function MeetingPage() {
                                         </Button>
                                     </div>
                                 )}
+                                {attachments.length > 0 && (
+                                    <div className="w-full space-y-2">
+                                        <p className="text-sm font-medium">Attachments:</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {attachments.map(file => (
+                                                <div key={file.name} className="flex items-center gap-2 bg-muted p-2 rounded-md text-sm">
+                                                    <span>{file.name}</span>
+                                                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveAttachment(file.name)}>
+                                                        <X className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 <form onSubmit={handleSendMessage} className="flex w-full items-center gap-2">
                                     <Input 
                                         value={newMessage}
                                         onChange={(e) => setNewMessage(e.target.value)}
                                         placeholder="Type a message..."
+                                        disabled={isSending}
                                     />
-                                    <Button type="submit" size="icon">
-                                        <Send className="h-4 w-4" />
+                                     <Button asChild variant="ghost" size="icon">
+                                        <Label htmlFor="chat-attachments">
+                                            <Paperclip className="h-5 w-5" />
+                                            <span className="sr-only">Attach files</span>
+                                        </Label>
+                                    </Button>
+                                    <Input id="chat-attachments" type="file" multiple className="hidden" onChange={handleFileChange} />
+                                    <Button type="submit" size="icon" disabled={isSending}>
+                                        {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                                     </Button>
                                 </form>
                             </CardFooter>
@@ -1145,5 +1207,7 @@ export default function MeetingPage() {
 }
 
 
+
+    
 
     

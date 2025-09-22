@@ -10,6 +10,7 @@ export type ChatMessage = {
   timestamp: string;
   isRead: boolean;
   businessId: string;
+  attachments?: { name: string; url: string }[];
   replyTo?: {
     messageId: string;
     senderName: string;
@@ -762,6 +763,8 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
+
+    
 
     
 
