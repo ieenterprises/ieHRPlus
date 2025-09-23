@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, writeBatch, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, writeBatch, serverTimestamp, orderBy, Unsubscribe } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile, getPublicUrl } from '@/lib/firebase-storage';
 import type { User, ChatMessage, InternalMail, Attachment } from '@/lib/types';
@@ -435,24 +435,26 @@ export default function MeetingPage() {
   }, [loggedInUser]);
 
   useEffect(() => {
-    if (!loggedInUser || !selectedChatUser) {
+    const isReadyForQuery = loggedInUser && (activeChatMode === 'individual' ? selectedChatUser : activeGroup.length > 0);
+    
+    if (!isReadyForQuery) {
         setMessages([]);
         return;
-    };
+    }
 
-    let combinedMessages: ChatMessage[] = [];
     const messageMap = new Map<string, ChatMessage>();
+    const allSubscriptions: Unsubscribe[] = [];
 
     const updateAndSortMessages = () => {
-        combinedMessages = Array.from(messageMap.values());
+        const combinedMessages = Array.from(messageMap.values());
         combinedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         setMessages(combinedMessages);
     }
-
+    
     const markMessagesAsRead = (snapshot: any) => {
         const batch: any[] = [];
         snapshot.docs.forEach((document: any) => {
-            if (document.data().receiverId === loggedInUser.id && !document.data().isRead) {
+            if (document.data().receiverId === loggedInUser!.id && !document.data().isRead) {
                 batch.push(updateDoc(document.ref, { isRead: true }));
             }
         });
@@ -460,38 +462,49 @@ export default function MeetingPage() {
             Promise.all(batch).catch(err => console.error("Error marking messages as read:", err));
         }
     }
-    
-    const q1 = query(
-        collection(db, 'chatMessages'),
-        where('businessId', '==', loggedInUser.businessId),
-        where('senderId', '==', loggedInUser.id),
-        where('receiverId', '==', selectedChatUser.id)
-    );
 
-    const q2 = query(
-        collection(db, 'chatMessages'),
-        where('businessId', '==', loggedInUser.businessId),
-        where('senderId', '==', selectedChatUser.id),
-        where('receiverId', '==', loggedInUser.id)
-    );
+    const subscribeToMessages = (user1Id: string, user2Id: string) => {
+        const q1 = query(
+            collection(db, 'chatMessages'),
+            where('businessId', '==', loggedInUser!.businessId),
+            where('senderId', '==', user1Id),
+            where('receiverId', '==', user2Id)
+        );
+        const q2 = query(
+            collection(db, 'chatMessages'),
+            where('businessId', '==', loggedInUser!.businessId),
+            where('senderId', '==', user2Id),
+            where('receiverId', '==', user1Id)
+        );
 
-    const unsub1 = onSnapshot(q1, (snapshot) => {
-        snapshot.docs.forEach(doc => messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage));
-        updateAndSortMessages();
-    });
+        const unsub1 = onSnapshot(q1, (snapshot) => {
+            snapshot.docs.forEach(doc => messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage));
+            updateAndSortMessages();
+        });
+        const unsub2 = onSnapshot(q2, (snapshot) => {
+            snapshot.docs.forEach(doc => messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage));
+            markMessagesAsRead(snapshot);
+            updateAndSortMessages();
+        });
 
-    const unsub2 = onSnapshot(q2, (snapshot) => {
-        snapshot.docs.forEach(doc => messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage));
-        markMessagesAsRead(snapshot);
-        updateAndSortMessages();
-    });
-
-    return () => {
-        unsub1();
-        unsub2();
+        allSubscriptions.push(unsub1, unsub2);
     };
 
-  }, [loggedInUser, selectedChatUser]);
+    if (activeChatMode === 'individual' && selectedChatUser) {
+        subscribeToMessages(loggedInUser!.id, selectedChatUser.id);
+    } else if (activeChatMode === 'group' && activeGroup.length > 0) {
+        const groupMemberIds = activeGroup.map(u => u.id);
+        groupMemberIds.forEach(memberId => {
+            if (memberId !== loggedInUser!.id) {
+                subscribeToMessages(loggedInUser!.id, memberId);
+            }
+        });
+    }
+
+    return () => {
+        allSubscriptions.forEach(unsub => unsub());
+    };
+  }, [loggedInUser, selectedChatUser, activeChatMode, activeGroup]);
   
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -718,7 +731,7 @@ export default function MeetingPage() {
       return;
     }
     setActiveChatMode('group');
-    setActiveGroup(groupRecipients);
+    setActiveGroup([loggedInUser!, ...groupRecipients]);
     setMessages([]); // Clear messages for new group chat
     setSelectedChatUser(null);
     setIsGroupChatDialogOpen(false);
@@ -2008,6 +2021,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
