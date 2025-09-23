@@ -102,6 +102,7 @@ export default function MeetingPage() {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [viewingMail, setViewingMail] = useState<InternalMail | null>(null);
   const [replyingToMail, setReplyingToMail] = useState<InternalMail | null>(null);
+  const [forwardingMail, setForwardingMail] = useState<InternalMail | null>(null);
   const [activeMailbox, setActiveMailbox] = useState<MailboxView>("inbox");
   const [mailSearch, setMailSearch] = useState("");
 
@@ -143,7 +144,8 @@ export default function MeetingPage() {
       // Filter for mails involving the logged-in user
       const myMails = allMails.filter(mail => 
           mail.senderId === loggedInUser.id || 
-          mail.recipients.some(r => r.id === loggedInUser.id)
+          mail.toRecipients.some(r => r.id === loggedInUser.id) ||
+          mail.ccRecipients.some(r => r.id === loggedInUser.id)
       );
 
       // Sort the mails by timestamp in descending order on the client
@@ -794,14 +796,26 @@ export default function MeetingPage() {
     }
   };
 
-  const handleOpenCompose = (replyTo?: InternalMail) => {
-    setReplyingToMail(replyTo || null);
+  const handleOpenCompose = (options?: { replyTo?: InternalMail, forward?: InternalMail }) => {
+    setReplyingToMail(options?.replyTo || null);
+    setForwardingMail(options?.forward || null);
     setIsComposeOpen(true);
   };
   
-    const inboxMails = useMemo(() => mails.filter(m => m.recipients.some(r => r.id === loggedInUser?.id) && (mailSearch ? (m.subject.toLowerCase().includes(mailSearch.toLowerCase()) || m.senderName.toLowerCase().includes(mailSearch.toLowerCase())) : true)), [mails, loggedInUser, mailSearch]);
-    const sentMails = useMemo(() => mails.filter(m => m.senderId === loggedInUser?.id && (mailSearch ? (m.subject.toLowerCase().includes(mailSearch.toLowerCase()) || m.recipients.some(r => r.name.toLowerCase().includes(mailSearch.toLowerCase()))) : true)), [mails, loggedInUser, mailSearch]);
+    const inboxMails = useMemo(() => mails.filter(m => (m.toRecipients.some(r => r.id === loggedInUser?.id) || m.ccRecipients.some(r => r.id === loggedInUser?.id)) && (mailSearch ? (m.subject.toLowerCase().includes(mailSearch.toLowerCase()) || m.senderName.toLowerCase().includes(mailSearch.toLowerCase())) : true)), [mails, loggedInUser, mailSearch]);
+    const sentMails = useMemo(() => mails.filter(m => m.senderId === loggedInUser?.id && (mailSearch ? (m.subject.toLowerCase().includes(mailSearch.toLowerCase()) || [...m.toRecipients, ...m.ccRecipients].some(r => r.name.toLowerCase().includes(mailSearch.toLowerCase()))) : true)), [mails, loggedInUser, mailSearch]);
     const unreadCount = useMemo(() => inboxMails.filter(m => loggedInUser && !m.readBy[loggedInUser.id]).length, [inboxMails, loggedInUser]);
+
+    const getRecipientString = (mail: InternalMail) => {
+        const to = mail.toRecipients.map(r => r.id === loggedInUser?.id ? "Me" : r.name).join(', ');
+        const cc = mail.ccRecipients.map(r => r.id === loggedInUser?.id ? "Me" : r.name).join(', ');
+        return (
+            <>
+                <p>To: {to}</p>
+                {cc && <p className="text-xs text-muted-foreground">CC: {cc}</p>}
+            </>
+        )
+    };
 
 
   return (
@@ -1140,7 +1154,7 @@ export default function MeetingPage() {
                                 <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">{formatDistanceToNow(new Date(mail.timestamp), { addSuffix: true })}</p>
                               </div>
                               <p className={`truncate ${loggedInUser && !mail.readBy[loggedInUser.id] ? 'font-bold' : ''}`}>{mail.subject}</p>
-                              <p className="text-xs text-muted-foreground truncate">{mail.recipients.map(r => r.name).join(', ')}</p>
+                              <p className="text-xs text-muted-foreground truncate">{[...mail.toRecipients, ...mail.ccRecipients].map(r => r.name).join(', ')}</p>
                             </button>
                           ))}
                         </TabsContent>
@@ -1148,7 +1162,7 @@ export default function MeetingPage() {
                           {sentMails.map(mail => (
                              <button key={mail.id} onClick={() => handleOpenMail(mail)} className={`w-full text-left block p-4 border-b hover:bg-accent ${viewingMail?.id === mail.id ? 'bg-accent' : ''}`}>
                               <div className="flex justify-between items-start">
-                                <p className="font-semibold truncate">To: {mail.recipients.map(r => r.name).join(', ')}</p>
+                                <p className="font-semibold truncate">To: {[...mail.toRecipients, ...mail.ccRecipients].map(r => r.name).join(', ')}</p>
                                 <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">{formatDistanceToNow(new Date(mail.timestamp), { addSuffix: true })}</p>
                               </div>
                               <p className="truncate font-medium">{mail.subject}</p>
@@ -1163,8 +1177,21 @@ export default function MeetingPage() {
                 {viewingMail ? (
                   <div className="flex flex-col h-full">
                     <CardHeader className="border-b">
-                      <CardTitle className="truncate">{viewingMail.subject}</CardTitle>
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="truncate">{viewingMail.subject}</CardTitle>
+                         <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => handleOpenCompose({ replyTo: viewingMail })}>
+                                    <Reply className="mr-2 h-4 w-4" /> Reply
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleOpenCompose({ forward: viewingMail })}>
+                                    <Forward className="mr-2 h-4 w-4" /> Forward
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                            <Avatar className="h-8 w-8">
                                 <AvatarImage src={users.find(u=>u.id === viewingMail.senderId)?.avatar_url || ''} />
@@ -1172,13 +1199,20 @@ export default function MeetingPage() {
                            </Avatar>
                            <div>
                                 <p className="font-semibold">{viewingMail.senderName}</p>
-                                <p>To: {viewingMail.recipients.map(r => r.id === loggedInUser?.id ? "Me" : r.name).join(', ')}</p>
+                                {getRecipientString(viewingMail)}
                            </div>
                         </div>
-                        <p>{format(new Date(viewingMail.timestamp), "MMM d, yyyy 'at' h:mm a")}</p>
                       </div>
+                       <p className="text-xs text-muted-foreground pt-2">{format(new Date(viewingMail.timestamp), "MMM d, yyyy 'at' h:mm a")}</p>
                     </CardHeader>
                     <ScrollArea className="flex-1 p-6">
+                        {viewingMail.forwardedFrom && (
+                            <div className="text-xs text-muted-foreground border-l-2 pl-2 mb-4">
+                                <p>---------- Forwarded message ---------</p>
+                                <p>From: {viewingMail.forwardedFrom.senderName}</p>
+                                <p>Date: {viewingMail.forwardedFrom.date}</p>
+                            </div>
+                        )}
                         <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap">{viewingMail.body}</div>
                         {viewingMail.attachments && viewingMail.attachments.length > 0 && (
                           <div className="mt-6">
@@ -1188,7 +1222,7 @@ export default function MeetingPage() {
                         )}
                     </ScrollArea>
                     <CardFooter className="border-t pt-4">
-                      <Button onClick={() => handleOpenCompose(viewingMail)}>
+                      <Button onClick={() => handleOpenCompose({ replyTo: viewingMail })}>
                         <Reply className="mr-2 h-4 w-4" /> Reply
                       </Button>
                     </CardFooter>
@@ -1381,14 +1415,16 @@ export default function MeetingPage() {
         isOpen={isComposeOpen}
         onClose={() => setIsComposeOpen(false)}
         replyingTo={replyingToMail}
+        forwardingMail={forwardingMail}
     />
     </div>
   );
 }
 
-const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, onClose: () => void, replyingTo: InternalMail | null }) => {
+const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { isOpen: boolean, onClose: () => void, replyingTo: InternalMail | null, forwardingMail: InternalMail | null }) => {
     const { loggedInUser, users } = useSettings();
-    const [selectedRecipients, setSelectedRecipients] = useState<User[]>([]);
+    const [toRecipients, setToRecipients] = useState<User[]>([]);
+    const [ccRecipients, setCcRecipients] = useState<User[]>([]);
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('');
     const [recipientSearch, setRecipientSearch] = useState('');
@@ -1397,30 +1433,41 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
     const { toast } = useToast();
 
     useEffect(() => {
-        if (replyingTo && loggedInUser) {
-            // Pre-fill for reply
-            const otherParticipants = [
+        if (forwardingMail) {
+            setToRecipients([]);
+            setCcRecipients([]);
+            setSubject(forwardingMail.subject.startsWith("Fwd: ") ? forwardingMail.subject : `Fwd: ${forwardingMail.subject}`);
+            const fwdBody = `\n\n\n--- Forwarded message ---\nFrom: ${forwardingMail.senderName}\nDate: ${format(new Date(forwardingMail.timestamp), 'PPpp')}\nSubject: ${forwardingMail.subject}\nTo: ${forwardingMail.toRecipients.map(r => r.name).join(', ')}\n\n${forwardingMail.body}`;
+            setBody(fwdBody);
+            setMailAttachments([]); // Do not forward attachments by default
+        } else if (replyingTo && loggedInUser) {
+            const allParticipants = [
                 {id: replyingTo.senderId, name: replyingTo.senderName}, 
-                ...replyingTo.recipients
+                ...replyingTo.toRecipients,
+                ...replyingTo.ccRecipients,
             ].filter(p => p.id !== loggedInUser.id);
             
-            const uniqueParticipants = Array.from(new Set(otherParticipants.map(p => p.id)))
+            const to = users.find(u => u.id === replyingTo.senderId);
+            const cc = Array.from(new Set(allParticipants.filter(p => p.id !== replyingTo.senderId).map(p => p.id)))
                 .map(id => users.find(u => u.id === id)).filter(Boolean) as User[];
 
-            setSelectedRecipients(uniqueParticipants);
+            setToRecipients(to ? [to] : []);
+            setCcRecipients(cc);
             setSubject(replyingTo.subject.startsWith("Re: ") ? replyingTo.subject : `Re: ${replyingTo.subject}`);
             setBody(`\n\n\n--- On ${format(new Date(replyingTo.timestamp), 'PPpp')}, ${replyingTo.senderName} wrote: ---\n${replyingTo.body}`);
+            setMailAttachments([]);
         } else {
-            // Reset for new mail
-            setSelectedRecipients([]);
+            setToRecipients([]);
+            setCcRecipients([]);
             setSubject('');
             setBody('');
             setMailAttachments([]);
         }
-    }, [replyingTo, isOpen, loggedInUser, users]);
+    }, [replyingTo, forwardingMail, isOpen, loggedInUser, users]);
 
-    const handleToggleRecipient = (user: User) => {
-        setSelectedRecipients(prev => 
+    const handleToggleRecipient = (user: User, list: 'to' | 'cc') => {
+        const setList = list === 'to' ? setToRecipients : setCcRecipients;
+        setList(prev => 
             prev.some(u => u.id === user.id) 
             ? prev.filter(u => u.id !== user.id)
             : [...prev, user]
@@ -1438,7 +1485,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
     };
 
     const handleSendMail = async () => {
-        if (!loggedInUser || selectedRecipients.length === 0 || !subject.trim() || !body.trim()) {
+        if (!loggedInUser || toRecipients.length === 0 || !subject.trim() || !body.trim()) {
             toast({ variant: 'destructive', title: "Missing fields", description: "Please add recipients, a subject, and a message body." });
             return;
         }
@@ -1459,15 +1506,23 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
             const mailData: Omit<InternalMail, 'id'> = {
                 senderId: loggedInUser.id,
                 senderName: loggedInUser.name,
-                recipients: selectedRecipients.map(u => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })),
+                toRecipients: toRecipients.map(u => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })),
+                ccRecipients: ccRecipients.map(u => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })),
                 subject,
                 body,
                 attachments: attachmentUrls,
                 timestamp: new Date().toISOString(),
-                readBy: { [loggedInUser.id]: true }, // Sender has "read" it
+                readBy: { [loggedInUser.id]: true },
                 businessId: loggedInUser.businessId,
-                threadId: replyingTo?.threadId || Math.random().toString(36).substring(2),
+                threadId: replyingTo?.threadId || forwardingMail?.threadId || Math.random().toString(36).substring(2),
             };
+
+            if (forwardingMail) {
+                mailData.forwardedFrom = {
+                    senderName: forwardingMail.senderName,
+                    date: format(new Date(forwardingMail.timestamp), 'PPpp')
+                };
+            }
 
             await addDoc(collection(db, 'internal_mails'), mailData);
             toast({ title: 'Mail Sent!' });
@@ -1489,7 +1544,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-2xl flex flex-col h-[90vh]">
                 <DialogHeader>
-                    <DialogTitle>{replyingTo ? "Reply to Mail" : "Compose New Mail"}</DialogTitle>
+                    <DialogTitle>{replyingTo ? "Reply" : forwardingMail ? "Forward" : "Compose New Mail"}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-[80px_1fr] items-center gap-4">
@@ -1497,30 +1552,26 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
                         <Popover>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" className="w-full justify-start text-left font-normal" type="button">
-                                  {selectedRecipients.length > 0 ? selectedRecipients.map(u => u.name).join(', ') : 'Select recipients...'}
+                                  {toRecipients.length > 0 ? toRecipients.map(u => u.name).join(', ') : 'Select recipients...'}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[400px] p-0" align="start">
-                                <div className="p-2 border-b">
-                                     <Input 
-                                        placeholder="Search users..."
-                                        className="pl-8"
-                                        value={recipientSearch}
-                                        onChange={(e) => setRecipientSearch(e.target.value)}
-                                     />
-                                </div>
-                                <ScrollArea className="h-64">
-                                  {filteredUsers.map(user => (
-                                    <div key={user.id} className="flex items-center p-2 cursor-pointer hover:bg-accent" onClick={() => handleToggleRecipient(user)}>
-                                      <Checkbox className="mr-2" checked={selectedRecipients.some(r => r.id === user.id)} />
-                                      <Avatar className="h-8 w-8 mr-2">
-                                        <AvatarImage src={user.avatar_url || ''} />
-                                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                                      </Avatar>
-                                      <span>{user.name}</span>
-                                    </div>
-                                  ))}
-                                </ScrollArea>
+                                <div className="p-2 border-b"><Input placeholder="Search users..." className="pl-8" value={recipientSearch} onChange={(e) => setRecipientSearch(e.target.value)} /></div>
+                                <ScrollArea className="h-64">{filteredUsers.map(user => (<div key={user.id} className="flex items-center p-2 cursor-pointer hover:bg-accent" onClick={() => handleToggleRecipient(user, 'to')}><Checkbox className="mr-2" checked={toRecipients.some(r => r.id === user.id)} /><span>{user.name}</span></div>))}</ScrollArea>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                     <div className="grid grid-cols-[80px_1fr] items-center gap-4">
+                        <Label htmlFor="cc" className="text-right">CC:</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full justify-start text-left font-normal" type="button">
+                                  {ccRecipients.length > 0 ? ccRecipients.map(u => u.name).join(', ') : 'Select recipients...'}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[400px] p-0" align="start">
+                                <div className="p-2 border-b"><Input placeholder="Search users..." className="pl-8" value={recipientSearch} onChange={(e) => setRecipientSearch(e.target.value)} /></div>
+                                <ScrollArea className="h-64">{filteredUsers.map(user => (<div key={user.id} className="flex items-center p-2 cursor-pointer hover:bg-accent" onClick={() => handleToggleRecipient(user, 'cc')}><Checkbox className="mr-2" checked={ccRecipients.some(r => r.id === user.id)} /><span>{user.name}</span></div>))}</ScrollArea>
                             </PopoverContent>
                         </Popover>
                     </div>
@@ -1570,4 +1621,5 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
     );
 };
     
+
 

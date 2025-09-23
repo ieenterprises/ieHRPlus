@@ -6,7 +6,8 @@ export type InternalMail = {
   id: string;
   senderId: string;
   senderName: string;
-  recipients: { id: string; name: string; avatar_url?: string }[];
+  toRecipients: { id: string; name: string; avatar_url?: string }[];
+  ccRecipients: { id: string; name: string; avatar_url?: string }[];
   subject: string;
   body: string;
   timestamp: string;
@@ -14,6 +15,7 @@ export type InternalMail = {
   businessId: string;
   threadId: string; // To group conversations
   attachments?: { name: string, url: string }[];
+  forwardedFrom?: { senderName: string; date: string; };
 };
 
 export type ChatMessage = {
@@ -789,4 +791,5 @@ export type Enums<
     
 
     
+
 
