@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -106,6 +107,8 @@ export default function MeetingPage() {
   const [forwardingMail, setForwardingMail] = useState<InternalMail | null>(null);
   const [activeMailbox, setActiveMailbox] = useState<MailboxView>("inbox");
   const [mailSearch, setMailSearch] = useState("");
+  const [isMailSelectionMode, setIsMailSelectionMode] = useState(false);
+  const [selectedMailIds, setSelectedMailIds] = useState<string[]>([]);
 
 
   // VideoSDK states
@@ -826,6 +829,44 @@ export default function MeetingPage() {
         )
     };
 
+    const handleToggleMailSelectionMode = () => {
+        setIsMailSelectionMode(prev => !prev);
+        setSelectedMailIds([]);
+    };
+
+    const handleToggleMailSelection = (mailId: string) => {
+        setSelectedMailIds(prev =>
+            prev.includes(mailId)
+                ? prev.filter(id => id !== mailId)
+                : [...prev, mailId]
+        );
+    };
+
+    const handleDeleteSelectedMails = async () => {
+        if (selectedMailIds.length === 0) return;
+
+        const batch = writeBatch(db);
+        selectedMailIds.forEach(mailId => {
+            const mailRef = doc(db, 'internal_mails', mailId);
+            batch.delete(mailRef);
+        });
+
+        try {
+            await batch.commit();
+            toast({ title: `${selectedMailIds.length} mail(s) deleted.` });
+            setMails(prev => prev.filter(mail => !selectedMailIds.includes(mail.id)));
+            setIsMailSelectionMode(false);
+            setSelectedMailIds([]);
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error deleting mails' });
+        }
+    };
+
+    const handleSelectAllMails = () => {
+        const currentMails = activeMailbox === "inbox" ? inboxMails : sentMails;
+        setSelectedMailIds(currentMails.map(m => m.id));
+    };
+
 
   return (
     <div className="space-y-8">
@@ -1142,9 +1183,29 @@ export default function MeetingPage() {
                 <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle>Mailing</CardTitle>
-                      <Button size="sm" onClick={() => handleOpenCompose()}>
-                        <Send className="mr-2 h-4 w-4" /> New Mail
-                      </Button>
+                       {isMailSelectionMode ? (
+                            <div className="flex items-center gap-2">
+                                <Button variant="ghost" size="sm" onClick={handleToggleMailSelectionMode}>Cancel</Button>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" size="sm" disabled={selectedMailIds.length === 0}>
+                                            <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedMailIds.length})
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This action will permanently delete the selected mail(s).</AlertDialogDescription></AlertDialogHeader>
+                                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteSelectedMails} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </div>
+                        ) : (
+                             <div className="flex items-center gap-2">
+                                <Button variant="outline" size="icon" onClick={handleToggleMailSelectionMode}><CheckSquare className="h-4 w-4" /></Button>
+                                <Button size="sm" onClick={() => handleOpenCompose()}>
+                                    <Send className="mr-2 h-4 w-4" /> New Mail
+                                </Button>
+                             </div>
+                        )}
                     </div>
                     <div className="relative mt-2">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1159,26 +1220,36 @@ export default function MeetingPage() {
                     <ScrollArea className="flex-1">
                         <TabsContent value="inbox" className="m-0">
                           {inboxMails.map(mail => (
-                            <button key={mail.id} onClick={() => handleOpenMail(mail)} className={`w-full text-left block p-4 border-b hover:bg-accent ${viewingMail?.id === mail.id ? 'bg-accent' : ''}`}>
-                              <div className="flex justify-between items-start">
-                                <p className={`font-semibold truncate ${loggedInUser && !mail.readBy[loggedInUser.id] ? 'text-primary' : ''}`}>{mail.senderName}</p>
-                                <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">{formatDistanceToNow(new Date(mail.timestamp), { addSuffix: true })}</p>
-                              </div>
-                              <p className={`truncate ${loggedInUser && !mail.readBy[loggedInUser.id] ? 'font-bold' : ''}`}>{mail.subject}</p>
-                              <p className="text-xs text-muted-foreground truncate">{[...(mail.toRecipients || []), ...(mail.ccRecipients || [])].map(r => r.name).join(', ')}</p>
-                            </button>
+                            <div key={mail.id} className={`flex items-center border-b hover:bg-accent ${viewingMail?.id === mail.id ? 'bg-accent' : ''}`}>
+                                {isMailSelectionMode && (
+                                    <div className="p-4"><Checkbox checked={selectedMailIds.includes(mail.id)} onCheckedChange={() => handleToggleMailSelection(mail.id)} /></div>
+                                )}
+                                <button onClick={() => handleOpenMail(mail)} className="w-full text-left block p-4">
+                                  <div className="flex justify-between items-start">
+                                    <p className={`font-semibold truncate ${loggedInUser && !mail.readBy[loggedInUser.id] ? 'text-primary' : ''}`}>{mail.senderName}</p>
+                                    <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">{formatDistanceToNow(new Date(mail.timestamp), { addSuffix: true })}</p>
+                                  </div>
+                                  <p className={`truncate ${loggedInUser && !mail.readBy[loggedInUser.id] ? 'font-bold' : ''}`}>{mail.subject}</p>
+                                  <p className="text-xs text-muted-foreground truncate">{[...(mail.toRecipients || []), ...(mail.ccRecipients || [])].map(r => r.name).join(', ')}</p>
+                                </button>
+                            </div>
                           ))}
                         </TabsContent>
                         <TabsContent value="sent" className="m-0">
                           {sentMails.map(mail => (
-                             <button key={mail.id} onClick={() => handleOpenMail(mail)} className={`w-full text-left block p-4 border-b hover:bg-accent ${viewingMail?.id === mail.id ? 'bg-accent' : ''}`}>
-                              <div className="flex justify-between items-start">
-                                <p className="font-semibold truncate">To: {[...(mail.toRecipients || []), ...(mail.ccRecipients || [])].map(r => r.name).join(', ')}</p>
-                                <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">{formatDistanceToNow(new Date(mail.timestamp), { addSuffix: true })}</p>
-                              </div>
-                              <p className="truncate font-medium">{mail.subject}</p>
-                              <p className="text-xs text-muted-foreground truncate">{mail.body}</p>
-                            </button>
+                            <div key={mail.id} className={`flex items-center border-b hover:bg-accent ${viewingMail?.id === mail.id ? 'bg-accent' : ''}`}>
+                                {isMailSelectionMode && (
+                                    <div className="p-4"><Checkbox checked={selectedMailIds.includes(mail.id)} onCheckedChange={() => handleToggleMailSelection(mail.id)} /></div>
+                                )}
+                                <button onClick={() => handleOpenMail(mail)} className="w-full text-left block p-4">
+                                  <div className="flex justify-between items-start">
+                                    <p className="font-semibold truncate">To: {[...(mail.toRecipients || []), ...(mail.ccRecipients || [])].map(r => r.name).join(', ')}</p>
+                                    <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">{formatDistanceToNow(new Date(mail.timestamp), { addSuffix: true })}</p>
+                                  </div>
+                                  <p className="truncate font-medium">{mail.subject}</p>
+                                  <p className="text-xs text-muted-foreground truncate">{mail.body}</p>
+                                </button>
+                            </div>
                           ))}
                         </TabsContent>
                     </ScrollArea>
@@ -1660,3 +1731,5 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
     
+
+      
