@@ -23,7 +23,7 @@ import { signInWithEmailAndPassword, User as FirebaseAuthUser } from 'firebase/a
 import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch, getDoc, orderBy, limit } from "firebase/firestore";
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import type { User, TimeRecord } from "@/lib/types";
-import { format, startOfDay, endOfDay, setHours, setMinutes, setSeconds, parseISO } from "date-fns";
+import { format, startOfDay, endOfDay, setHours, setMinutes, setSeconds, parseISO, isToday } from "date-fns";
 
 
 export default function SignInPage() {
@@ -51,34 +51,35 @@ export default function SignInPage() {
       const userData = userDoc.data() as User;
       const today = startOfDay(new Date());
 
-      // --- Auto Clock-out Logic ---
-      // Check for any active sessions from a previous day for THIS user.
-      const previousSessionsQuery = query(
+      // --- Auto Clock-out & Active Session Logic ---
+      const activeSessionsQuery = query(
         collection(db, "timeRecords"),
         where("userId", "==", authUser.uid),
         where("status", "in", ["pending", "Clocked In"])
       );
-      const previousSessionsSnapshot = await getDocs(previousSessionsQuery);
+      const activeSessionsSnapshot = await getDocs(activeSessionsQuery);
+      
+      let sessionForTodayExists = false;
       const batch = writeBatch(db);
 
-      previousSessionsSnapshot.forEach(doc => {
+      activeSessionsSnapshot.forEach(doc => {
         const record = doc.data() as TimeRecord;
-        const clockInDate = startOfDay(parseISO(record.clockInTime));
+        const clockInDate = parseISO(record.clockInTime);
 
-        if (clockInDate < today) {
-            // This is an overdue session. Clock it out.
+        if (isToday(clockInDate)) {
+            sessionForTodayExists = true;
+        } else {
+            // This is an overdue session from a previous day. Clock it out.
             let clockOutTime: Date;
             if (userData.defaultClockOutTime) {
                 const [hours, minutes] = userData.defaultClockOutTime.split(':').map(Number);
-                // Set the clock-out time on the SAME DAY the user clocked in.
-                let targetDate = parseISO(record.clockInTime);
+                let targetDate = clockInDate;
                 targetDate = setHours(targetDate, hours);
                 targetDate = setMinutes(targetDate, minutes);
                 targetDate = setSeconds(targetDate, 0);
                 clockOutTime = targetDate;
             } else {
-                // Fallback: clock out at the end of the day they clocked in.
-                clockOutTime = endOfDay(parseISO(record.clockInTime));
+                clockOutTime = endOfDay(clockInDate);
             }
             batch.update(doc.ref, {
                 status: 'Clocked Out',
@@ -86,14 +87,22 @@ export default function SignInPage() {
             });
             toast({
               title: "Auto Clock-Out",
-              description: `Your previous session from ${format(parseISO(record.clockInTime), 'PPP')} was automatically closed.`,
-              variant: "default",
+              description: `Your session from ${format(clockInDate, 'PPP')} was automatically closed.`,
             });
         }
       });
       
       await batch.commit();
-      // --- End of Auto Clock-out Logic ---
+
+      if (sessionForTodayExists) {
+          toast({
+              title: "Welcome Back!",
+              description: "You already have an active session for today.",
+          });
+          router.push("/dashboard");
+          return; // Stop execution to prevent new clock-in
+      }
+      // --- End of Logic ---
 
 
       // Now, proceed with the normal clock-in process for the new day.
