@@ -119,6 +119,9 @@ export default function MeetingPage() {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isHost, setIsHost] = useState(false);
+  const [isRecordingDialogOpen, setIsRecordingDialogOpen] = useState(false);
+  const [lastRecording, setLastRecording] = useState<{ file: File; url: string; meetingId: string; } | null>(null);
+  const [isUploadingRecording, setIsUploadingRecording] = useState(false);
 
 
 
@@ -246,24 +249,17 @@ export default function MeetingPage() {
         setParticipants(prev => prev.filter(p => p.id !== participant.id));
     });
     
-    newMeeting.on('recording-state-changed', async (data: any) => {
-        setIsRecording(data.status === 'RECORDING_STARTED');
-        if (data.status === 'RECORDING_STOPPED' && data.payload?.file) {
-            const recordingFile = data.payload.file;
-            toast({ title: "Recording Stopped", description: "Uploading to your file manager..." });
-            try {
-                if (loggedInUser && loggedInUser.businessId) {
-                    const folderPath = `meeting_recordings`;
-                    const uniqueFileName = `recording_${id}_${new Date().toISOString()}.mp4`;
-                    const fileToUpload = new File([recordingFile.blob], uniqueFileName, { type: 'video/mp4' });
-                    
-                    await uploadFile(loggedInUser.businessId, loggedInUser.id, folderPath, fileToUpload);
-                    toast({ title: "Upload Complete", description: "Recording saved to your 'Meeting Recordings' folder." });
-                }
-            } catch (error) {
-                toast({ variant: 'destructive', title: "Upload Failed", description: "Could not save the recording." });
-            }
-        }
+    newMeeting.on('recording-state-changed', (data: any) => {
+      setIsRecording(data.status === 'RECORDING_STARTED');
+      if (data.status === 'RECORDING_STOPPED' && data.payload?.file) {
+        const file = new File([data.payload.file.blob], `recording_${id}.mp4`, { type: 'video/mp4' });
+        setLastRecording({
+          file: file,
+          url: URL.createObjectURL(file),
+          meetingId: id,
+        });
+        setIsRecordingDialogOpen(true);
+      }
     });
   };
   
@@ -985,6 +981,32 @@ export default function MeetingPage() {
         setSelectedMailIds(currentMails.map(m => m.id));
     };
 
+    const handleUploadRecording = async () => {
+      if (!lastRecording || !loggedInUser?.businessId) return;
+      setIsUploadingRecording(true);
+      try {
+        const folderPath = 'meeting_recordings';
+        await uploadFile(loggedInUser.businessId, loggedInUser.id, folderPath, lastRecording.file);
+        toast({ title: 'Upload Complete', description: 'Recording saved to your "Meeting Recordings" folder.' });
+        setIsRecordingDialogOpen(false);
+        setLastRecording(null);
+      } catch (error) {
+        toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not save the recording.' });
+      } finally {
+        setIsUploadingRecording(false);
+      }
+    };
+  
+    const handleDownloadRecording = () => {
+      if (!lastRecording) return;
+      const a = document.createElement('a');
+      a.href = lastRecording.url;
+      a.download = lastRecording.file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+
 
   return (
     <div className="space-y-8">
@@ -1623,6 +1645,28 @@ export default function MeetingPage() {
         onSelect={(files) => setAttachments(prev => [...prev, ...files])}
         multiple
     />
+     <Dialog open={isRecordingDialogOpen} onOpenChange={(open) => { if (!open) setLastRecording(null); setIsRecordingDialogOpen(open); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Recording Complete</DialogTitle>
+            <DialogDescription>
+              Your meeting recording is ready. You can preview, download, or upload it to your File Manager.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {lastRecording?.url && (
+              <video src={lastRecording.url} controls className="w-full rounded-md" />
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={handleDownloadRecording}>Download</Button>
+            <Button onClick={handleUploadRecording} disabled={isUploadingRecording}>
+              {isUploadingRecording && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Upload to File Manager
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1851,6 +1895,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
