@@ -526,13 +526,12 @@ export default function DashboardPage() {
                   <CardDescription>
                       You have been recognized for your hard work! View your rewards below.
                   </CardDescription>
-              
+              </CardHeader>
               <CardContent>
                   <Button asChild>
                       <Link href="#my-rewards-section">View Rewards ({pendingRewards.length})</Link>
                   </Button>
               </CardContent>
-              </CardHeader>
           </Card>
       )}
 
@@ -614,7 +613,7 @@ export default function DashboardPage() {
                           onChange={(e) => setQuerySearch(e.target.value)}
                       />
                   </div>
-                   {selectedQueryIds.length > 0 && (
+                   {isSeniorStaff && selectedQueryIds.length > 0 && (
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
@@ -628,22 +627,26 @@ export default function DashboardPage() {
                         </AlertDialogContent>
                     </AlertDialog>
                 )}
-                  <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyQueries, 'my_queries')}>
-                      <Download className="mr-2 h-4 w-4" /> Export
-                  </Button>
+                  {isSeniorStaff && (
+                    <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyQueries, 'my_queries')}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  )}
               </div>
           </CardHeader>
           <CardContent>
               <Table>
                   <TableHeader>
                       <TableRow>
-                          <TableHead padding="checkbox">
-                             <Checkbox
-                                checked={filteredMyQueries.length > 0 && selectedQueryIds.length === filteredMyQueries.length}
-                                onCheckedChange={(checked) => setSelectedQueryIds(checked ? filteredMyQueries.map(q => q.id) : [])}
-                                aria-label="Select all queries"
-                            />
-                          </TableHead>
+                          {isSeniorStaff && (
+                            <TableHead padding="checkbox">
+                               <Checkbox
+                                  checked={filteredMyQueries.length > 0 && selectedQueryIds.length === filteredMyQueries.length}
+                                  onCheckedChange={(checked) => setSelectedQueryIds(checked ? filteredMyQueries.map(q => q.id) : [])}
+                                  aria-label="Select all queries"
+                              />
+                            </TableHead>
+                          )}
                           <TableHead>Title</TableHead>
                           <TableHead>From</TableHead>
                           <TableHead>Amount</TableHead>
@@ -656,13 +659,15 @@ export default function DashboardPage() {
                       {filteredMyQueries.length > 0 ? (
                           filteredMyQueries.map(query => (
                               <TableRow key={query.id} data-state={selectedQueryIds.includes(query.id) && "selected"}>
-                                  <TableCell padding="checkbox">
-                                    <Checkbox
-                                        checked={selectedQueryIds.includes(query.id)}
-                                        onCheckedChange={(checked) => setSelectedQueryIds(prev => checked ? [...prev, query.id] : prev.filter(id => id !== query.id))}
-                                        aria-label="Select query"
-                                    />
-                                  </TableCell>
+                                  {isSeniorStaff && (
+                                    <TableCell padding="checkbox">
+                                      <Checkbox
+                                          checked={selectedQueryIds.includes(query.id)}
+                                          onCheckedChange={(checked) => setSelectedQueryIds(prev => checked ? [...prev, query.id] : prev.filter(id => id !== query.id))}
+                                          aria-label="Select query"
+                                      />
+                                    </TableCell>
+                                  )}
                                   <TableCell className="font-medium">{query.title}</TableCell>
                                   <TableCell>{query.requesterName}</TableCell>
                                   <TableCell>
@@ -681,7 +686,7 @@ export default function DashboardPage() {
                           ))
                       ) : (
                          <TableRow>
-                            <TableCell colSpan={7} className="text-center h-24">You have no queries for the selected date range.</TableCell>
+                            <TableCell colSpan={isSeniorStaff ? 7 : 6} className="text-center h-24">You have no queries for the selected date range.</TableCell>
                         </TableRow>
                       )}
                   </TableBody>
@@ -711,7 +716,7 @@ export default function DashboardPage() {
                           onChange={(e) => setRewardSearch(e.target.value)}
                       />
                   </div>
-                    {selectedRewardIds.length > 0 && (
+                    {isSeniorStaff && selectedRewardIds.length > 0 && (
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
@@ -725,22 +730,26 @@ export default function DashboardPage() {
                         </AlertDialogContent>
                     </AlertDialog>
                 )}
-                  <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRewards, 'my_rewards')}>
-                      <Download className="mr-2 h-4 w-4" /> Export
-                  </Button>
+                  {isSeniorStaff && (
+                    <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRewards, 'my_rewards')}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  )}
               </div>
           </CardHeader>
           <CardContent>
               <Table>
                   <TableHeader>
                       <TableRow>
-                          <TableHead padding="checkbox">
-                            <Checkbox
-                                checked={filteredMyRewards.length > 0 && selectedRewardIds.length === filteredMyRewards.length}
-                                onCheckedChange={(checked) => setSelectedRewardIds(checked ? filteredMyRewards.map(r => r.id) : [])}
-                                aria-label="Select all rewards"
-                            />
-                          </TableHead>
+                          {isSeniorStaff && (
+                            <TableHead padding="checkbox">
+                              <Checkbox
+                                  checked={filteredMyRewards.length > 0 && selectedRewardIds.length === filteredMyRewards.length}
+                                  onCheckedChange={(checked) => setSelectedRewardIds(checked ? filteredMyRewards.map(r => r.id) : [])}
+                                  aria-label="Select all rewards"
+                              />
+                            </TableHead>
+                          )}
                           <TableHead>Title</TableHead>
                           <TableHead>From</TableHead>
                           <TableHead>Amount</TableHead>
@@ -753,13 +762,15 @@ export default function DashboardPage() {
                       {filteredMyRewards.length > 0 ? (
                           filteredMyRewards.map(reward => (
                               <TableRow key={reward.id} data-state={selectedRewardIds.includes(reward.id) && "selected"}>
-                                  <TableCell padding="checkbox">
-                                     <Checkbox
-                                        checked={selectedRewardIds.includes(reward.id)}
-                                        onCheckedChange={(checked) => setSelectedRewardIds(prev => checked ? [...prev, reward.id] : prev.filter(id => id !== reward.id))}
-                                        aria-label="Select reward"
-                                    />
-                                  </TableCell>
+                                  {isSeniorStaff && (
+                                    <TableCell padding="checkbox">
+                                       <Checkbox
+                                          checked={selectedRewardIds.includes(reward.id)}
+                                          onCheckedChange={(checked) => setSelectedRewardIds(prev => checked ? [...prev, reward.id] : prev.filter(id => id !== reward.id))}
+                                          aria-label="Select reward"
+                                      />
+                                    </TableCell>
+                                  )}
                                   <TableCell className="font-medium">{reward.title}</TableCell>
                                   <TableCell>{reward.proposerName}</TableCell>
                                    <TableCell>
@@ -778,7 +789,7 @@ export default function DashboardPage() {
                           ))
                       ) : (
                          <TableRow>
-                            <TableCell colSpan={7} className="text-center h-24">You have no rewards for the selected date range.</TableCell>
+                            <TableCell colSpan={isSeniorStaff ? 7 : 6} className="text-center h-24">You have no rewards for the selected date range.</TableCell>
                         </TableRow>
                       )}
                   </TableBody>
@@ -803,7 +814,7 @@ export default function DashboardPage() {
                         onChange={(e) => setRequestSearch(e.target.value)}
                     />
                 </div>
-                 {selectedRequestIds.length > 0 && (
+                 {isSeniorStaff && selectedRequestIds.length > 0 && (
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
@@ -817,9 +828,11 @@ export default function DashboardPage() {
                         </AlertDialogContent>
                     </AlertDialog>
                 )}
-                <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRequests, 'my_requests')}>
-                    <Download className="mr-2 h-4 w-4" /> Export
-                </Button>
+                {isSeniorStaff && (
+                  <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRequests, 'my_requests')}>
+                      <Download className="mr-2 h-4 w-4" /> Export
+                  </Button>
+                )}
                 <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
                     <DialogTrigger asChild>
                         <Button size="sm"><PlusCircle className="mr-2 h-4 w-4" /> New</Button>
@@ -928,13 +941,15 @@ export default function DashboardPage() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead padding="checkbox">
-                                <Checkbox
-                                    checked={filteredMyRequests.length > 0 && selectedRequestIds.length === filteredMyRequests.length}
-                                    onCheckedChange={(checked) => setSelectedRequestIds(checked ? filteredMyRequests.map(r => r.id) : [])}
-                                    aria-label="Select all requests"
-                                />
-                            </TableHead>
+                            {isSeniorStaff && (
+                              <TableHead padding="checkbox">
+                                  <Checkbox
+                                      checked={filteredMyRequests.length > 0 && selectedRequestIds.length === filteredMyRequests.length}
+                                      onCheckedChange={(checked) => setSelectedRequestIds(checked ? filteredMyRequests.map(r => r.id) : [])}
+                                      aria-label="Select all requests"
+                                  />
+                              </TableHead>
+                            )}
                             <TableHead className="w-[200px]">Request Type</TableHead>
                             <TableHead>Description</TableHead>
                             <TableHead>Amount</TableHead>
@@ -947,13 +962,15 @@ export default function DashboardPage() {
                         {filteredMyRequests.length > 0 ? (
                             filteredMyRequests.map(request => (
                                 <TableRow key={request.id} data-state={selectedRequestIds.includes(request.id) && "selected"}>
-                                    <TableCell padding="checkbox">
-                                        <Checkbox
-                                            checked={selectedRequestIds.includes(request.id)}
-                                            onCheckedChange={(checked) => setSelectedRequestIds(prev => checked ? [...prev, request.id] : prev.filter(id => id !== request.id))}
-                                            aria-label="Select request"
-                                        />
-                                    </TableCell>
+                                    {isSeniorStaff && (
+                                      <TableCell padding="checkbox">
+                                          <Checkbox
+                                              checked={selectedRequestIds.includes(request.id)}
+                                              onCheckedChange={(checked) => setSelectedRequestIds(prev => checked ? [...prev, request.id] : prev.filter(id => id !== request.id))}
+                                              aria-label="Select request"
+                                          />
+                                      </TableCell>
+                                    )}
                                     <TableCell className="font-medium">{request.requestType}</TableCell>
                                     <TableCell className="text-muted-foreground truncate max-w-sm">{request.description}</TableCell>
                                     <TableCell>
@@ -972,7 +989,7 @@ export default function DashboardPage() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center h-24">You have not made any requests for the selected date range.</TableCell>
+                                <TableCell colSpan={isSeniorStaff ? 7 : 6} className="text-center h-24">You have not made any requests for the selected date range.</TableCell>
                             </TableRow>
                         )}
                     </TableBody>
@@ -1089,5 +1106,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
