@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift, Download, Search, MessageSquare, Trash2 } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift, Download, Search, MessageSquare, Trash2, Folder, Upload } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { type UserRequest, type HRQuery, type Reward } from "@/lib/types";
+import { type UserRequest, type HRQuery, type Reward, type Attachment } from "@/lib/types";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, updateDoc, doc, query, where, onSnapshot, writeBatch } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
@@ -31,6 +31,7 @@ import { AttachmentPreviewer } from "@/components/attachment-previewer";
 import Papa from "papaparse";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { FileManagerPickerDialog } from "@/components/file-manager-picker";
 
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
@@ -46,8 +47,8 @@ export default function DashboardPage() {
   const [isQueryDialogOpen, setIsQueryDialogOpen] = useState(false);
   const [isRewardDialogOpen, setIsRewardDialogOpen] = useState(false);
   
-  const [attachments, setAttachments] = useState<File[]>([]);
-  const [responseAttachments, setResponseAttachments] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [responseAttachments, setResponseAttachments] = useState<Attachment[]>([]);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -69,6 +70,9 @@ export default function DashboardPage() {
   const [selectedQueryIds, setSelectedQueryIds] = useState<string[]>([]);
   const [selectedRewardIds, setSelectedRewardIds] = useState<string[]>([]);
   const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
+  
+  const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
+  const [isResponseFilePickerOpen, setIsResponseFilePickerOpen] = useState(false);
 
   const { toast } = useToast();
   
@@ -192,24 +196,13 @@ export default function DashboardPage() {
     }
 
     try {
-        let attachmentUrls: { name: string, url: string }[] = [];
-        if (attachments.length > 0) {
-            const uploadPromises = attachments.map(async (file) => {
-                const folder = `request_attachments/${loggedInUser.id}`;
-                await uploadFile(loggedInUser.businessId!, folder, file, () => {});
-                const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
-                return { name: file.name, url };
-            });
-            attachmentUrls = await Promise.all(uploadPromises);
-        }
-
         const newRequest: Partial<UserRequest> & { amount?: number } = {
             userId: loggedInUser.id,
             userName: loggedInUser.name,
             businessId: loggedInUser.businessId,
             requestType,
             description,
-            attachments: attachmentUrls,
+            attachments: attachments,
             assignedToId: assignedToId || null,
             assignedToName: assignedToUser?.name || null,
             status: "Pending",
@@ -255,22 +248,11 @@ export default function DashboardPage() {
     }
 
     try {
-      let attachmentUrls: { name: string, url: string }[] = [];
-      if (responseAttachments.length > 0) {
-        const uploadPromises = responseAttachments.map(async (file) => {
-          const folder = `hr_query_responses/${loggedInUser.id}`;
-          await uploadFile(loggedInUser.businessId!, folder, file, () => {});
-          const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
-          return { name: file.name, url };
-        });
-        attachmentUrls = await Promise.all(uploadPromises);
-      }
-
       const queryRef = doc(db, 'hr_queries', respondingQuery.id);
       await updateDoc(queryRef, {
         status: 'Responded',
         response: response,
-        responseAttachments: attachmentUrls,
+        responseAttachments: responseAttachments,
         respondedAt: new Date().toISOString(),
       });
 
@@ -303,15 +285,31 @@ export default function DashboardPage() {
   };
 
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (event.target.files) {
-          setAttachments(Array.from(event.target.files));
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (event.target.files && loggedInUser?.businessId) {
+          const fileList = Array.from(event.target.files);
+          const uploadPromises = fileList.map(async (file) => {
+                const folder = `request_attachments/${loggedInUser.id}`;
+                await uploadFile(loggedInUser.businessId!, folder, file, () => {});
+                const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
+                return { name: file.name, url };
+          });
+          const newAttachments = await Promise.all(uploadPromises);
+          setAttachments(prev => [...prev, ...newAttachments]);
       }
   };
 
-  const handleResponseFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (event.target.files) {
-          setResponseAttachments(Array.from(event.target.files));
+  const handleResponseFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (event.target.files && loggedInUser?.businessId) {
+          const fileList = Array.from(event.target.files);
+          const uploadPromises = fileList.map(async (file) => {
+              const folder = `hr_query_responses/${loggedInUser.id}`;
+              await uploadFile(loggedInUser.businessId!, folder, file, () => {});
+              const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
+              return { name: file.name, url };
+          });
+          const newAttachments = await Promise.all(uploadPromises);
+          setResponseAttachments(prev => [...prev, ...newAttachments]);
       }
   };
   
@@ -909,19 +907,25 @@ export default function DashboardPage() {
                                     </Select>
                                 </div>
                                 <div className="grid grid-cols-4 items-start gap-4">
-                                    <Label htmlFor="attachments" className="text-right pt-2">Attachments</Label>
+                                    <Label className="text-right pt-2">Attachments</Label>
                                     <div className="col-span-3">
-                                        <Input id="attachments" type="file" multiple onChange={handleFileChange} />
-                                        {attachments.length > 0 && (
-                                            <div className="mt-2 text-sm text-muted-foreground space-y-1">
-                                                {attachments.map(file => (
-                                                    <div key={file.name} className="flex items-center gap-2">
-                                                        <FileIcon item={{ type: 'file', name: file.name, metadata: {size: 0, updated: '', timeCreated: ''} }} />
-                                                        <span>{file.name}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button type="button" variant="outline">Attach Files...</Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <div className="flex flex-col">
+                                                    <Label htmlFor="file-upload-request" className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-t-md">
+                                                        <Upload className="h-4 w-4" /> Upload from Computer
+                                                    </Label>
+                                                    <Input id="file-upload-request" type="file" multiple className="hidden" onChange={handleFileChange} />
+                                                    <button type="button" onClick={() => setIsFilePickerOpen(true)} className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-b-md text-sm">
+                                                        <Folder className="h-4 w-4" /> Choose from File Manager
+                                                    </button>
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+                                        {attachments.length > 0 && <AttachmentPreviewer attachments={attachments} />}
                                     </div>
                                 </div>
                             </div>
@@ -1031,20 +1035,24 @@ export default function DashboardPage() {
                   <Textarea id="response" name="response" className="" required placeholder="Please provide a detailed response..." disabled={respondingQuery.status === 'Responded'} defaultValue={respondingQuery.response || ''} />
                 </div>
                 <div className="grid items-start gap-4">
-                  <Label htmlFor="response-attachments" className="pt-2">Add Attachments</Label>
-                  <div className="">
-                    <Input id="response-attachments" type="file" multiple onChange={handleResponseFileChange} disabled={respondingQuery.status === 'Responded'}/>
-                    {responseAttachments.length > 0 && (
-                      <div className="mt-2 text-sm text-muted-foreground space-y-1">
-                        {responseAttachments.map(file => (
-                          <div key={file.name} className="flex items-center gap-2">
-                            <FileIcon item={{ type: 'file', name: file.name, metadata: {size: 0, updated: '', timeCreated: ''} }} />
-                            <span>{file.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <Label className="pt-2">Add Attachments</Label>
+                   <Popover>
+                        <PopoverTrigger asChild>
+                            <Button type="button" variant="outline" disabled={respondingQuery.status === 'Responded'}>Attach Files...</Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                            <div className="flex flex-col">
+                                <Label htmlFor="file-upload-response" className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-t-md">
+                                    <Upload className="h-4 w-4" /> Upload from Computer
+                                </Label>
+                                <Input id="file-upload-response" type="file" multiple className="hidden" onChange={handleResponseFileChange} disabled={respondingQuery.status === 'Responded'} />
+                                <button type="button" onClick={() => setIsResponseFilePickerOpen(true)} className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-b-md text-sm">
+                                    <Folder className="h-4 w-4" /> Choose from File Manager
+                                </button>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                    {responseAttachments.length > 0 && <AttachmentPreviewer attachments={responseAttachments} />}
                 </div>
                 {respondingQuery.status === 'Responded' && respondingQuery.responseAttachments && respondingQuery.responseAttachments.length > 0 && (
                     <div className="space-y-2">
@@ -1103,6 +1111,18 @@ export default function DashboardPage() {
           )}
         </DialogContent>
       </Dialog>
+      <FileManagerPickerDialog
+        open={isFilePickerOpen}
+        onOpenChange={setIsFilePickerOpen}
+        onSelect={(files) => setAttachments(prev => [...prev, ...files])}
+        multiple
+      />
+      <FileManagerPickerDialog
+        open={isResponseFilePickerOpen}
+        onOpenChange={setIsResponseFilePickerOpen}
+        onSelect={(files) => setResponseAttachments(prev => [...prev, ...files])}
+        multiple
+      />
     </div>
   );
 }

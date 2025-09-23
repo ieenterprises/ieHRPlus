@@ -2,6 +2,11 @@
 
 import type { AnyPermission } from "./permissions";
 
+export type Attachment = {
+  name: string;
+  url: string;
+};
+
 export type InternalMail = {
   id: string;
   senderId: string;
@@ -14,7 +19,7 @@ export type InternalMail = {
   readBy: { [userId: string]: boolean };
   businessId: string;
   threadId: string; // To group conversations
-  attachments?: { name: string, url: string }[];
+  attachments?: Attachment[];
   forwardedFrom?: { senderName: string; date: string; };
 };
 
@@ -26,7 +31,7 @@ export type ChatMessage = {
   timestamp: string;
   isRead: boolean;
   businessId: string;
-  attachments?: { name: string; url: string }[];
+  attachments?: Attachment[];
   replyTo?: {
     messageId: string;
     senderName: string;
@@ -52,7 +57,7 @@ export type Reward = {
   status: 'Proposed' | 'Acknowledged' | 'Closed';
   createdAt: string;
   acknowledgedAt?: string;
-  attachments?: { name: string; url: string }[];
+  attachments?: Attachment[];
   amount?: number;
 };
 
@@ -68,9 +73,9 @@ export type HRQuery = {
   status: 'Sent' | 'Read' | 'Responded' | 'Closed';
   createdAt: string;
   respondedAt?: string;
-  attachments?: { name: string; url: string }[];
+  attachments?: Attachment[];
   response?: string;
-  responseAttachments?: { name: string; url: string }[];
+  responseAttachments?: Attachment[];
   amount?: number;
 };
 
@@ -94,7 +99,7 @@ export type UserRequest = {
   forwardedByName?: string;
   forwardingComments?: string;
   // Field for attachments
-  attachments?: { name: string; url: string }[];
+  attachments?: Attachment[];
   // Fields for date ranges
   startDate?: string;
   endDate?: string;
@@ -783,13 +788,3 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
   ? Database["public"]["Enums"][PublicEnumNameOrOptions]
   : never
-
-    
-
-    
-
-    
-
-    
-
-

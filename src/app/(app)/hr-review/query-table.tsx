@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PlusCircle, Loader2, File as FileIconLucide, X, CheckCircle, Trash2, Download, Search, Calendar as CalendarIcon } from "lucide-react";
+import { PlusCircle, Loader2, X, CheckCircle, Trash2, Download, Search, Calendar as CalendarIcon, Upload, Folder } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { type HRQuery } from "@/lib/types";
+import { type HRQuery, type Attachment } from "@/lib/types";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, updateDoc, writeBatch, deleteDoc } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
@@ -28,6 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
+import { FileManagerPickerDialog } from "@/components/file-manager-picker";
 
 export function HRQueryTable() {
   const { loggedInUser, users, hrQueries, currency } = useSettings();
@@ -35,7 +36,7 @@ export function HRQueryTable() {
   const [isQueryDialogOpen, setIsQueryDialogOpen] = useState(false);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [reviewingQuery, setReviewingQuery] = useState<HRQuery | null>(null);
-  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedQueryIds, setSelectedQueryIds] = useState<string[]>([]);
@@ -43,6 +44,7 @@ export function HRQueryTable() {
     from: startOfDay(new Date()),
     to: endOfDay(new Date()),
   });
+  const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
   const { toast } = useToast();
 
   const allOtherUsers = useMemo(() => users.filter(u => u.id !== loggedInUser?.id), [users, loggedInUser]);
@@ -137,22 +139,24 @@ export function HRQueryTable() {
     }
 
     try {
-        let attachmentUrls: { name: string, url: string }[] = [];
-        if (attachments.length > 0) {
-            const uploadPromises = attachments.map(async (file) => {
-                // Upload to a temporary/general query folder first
+        // Upload any newly selected local files
+        const newAttachments = await Promise.all(
+            (attachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
                 const tempFolder = `hr_query_attachments/${loggedInUser.id}`;
-                await uploadFile(loggedInUser.businessId!, tempFolder, file, () => {});
-                const url = await getPublicUrl(loggedInUser.businessId!, `${tempFolder}/${file.name}`);
+                await uploadFile(loggedInUser.businessId!, tempFolder, attachment.file, () => {});
+                const url = await getPublicUrl(loggedInUser.businessId!, `${tempFolder}/${attachment.file.name}`);
                 
-                // Also upload a copy to the employee's personal documents
                 const personalDocsFolder = `documents`;
-                await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, file, () => {});
+                await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, attachment.file, () => {});
+                return { name: attachment.name, url };
+            })
+        );
+        
+        const finalAttachments = [
+            ...attachments.filter(a => !(a as any).source),
+            ...newAttachments
+        ];
 
-                return { name: file.name, url };
-            });
-            attachmentUrls = await Promise.all(uploadPromises);
-        }
 
         const newQuery: Omit<HRQuery, 'id'> & { amount?: number } = {
             requesterId: loggedInUser.id,
@@ -162,7 +166,7 @@ export function HRQueryTable() {
             businessId: loggedInUser.businessId,
             title,
             description,
-            attachments: attachmentUrls,
+            attachments: finalAttachments,
             status: "Sent",
             createdAt: new Date().toISOString(),
         };
@@ -185,7 +189,13 @@ export function HRQueryTable() {
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       if (event.target.files) {
-          setAttachments(Array.from(event.target.files));
+          const newFiles = Array.from(event.target.files).map(file => ({
+              name: file.name,
+              url: URL.createObjectURL(file), // Temporary URL for preview
+              source: 'local',
+              file: file,
+          }));
+          setAttachments(prev => [...prev, ...newFiles as any]);
       }
   };
   
@@ -340,19 +350,25 @@ export function HRQueryTable() {
                                     <Input id="amount" name="amount" type="number" step="0.01" className="col-span-3" placeholder="e.g., 50.00 for a fine" />
                                 </div>
                                 <div className="grid grid-cols-4 items-start gap-4">
-                                    <Label htmlFor="attachments" className="text-right pt-2">Attachments</Label>
+                                    <Label className="text-right pt-2">Attachments</Label>
                                     <div className="col-span-3">
-                                        <Input id="attachments" type="file" multiple onChange={handleFileChange} />
-                                        {attachments.length > 0 && (
-                                            <div className="mt-2 text-sm text-muted-foreground space-y-1">
-                                                {attachments.map(file => (
-                                                    <div key={file.name} className="flex items-center gap-2">
-                                                        <FileIconLucide className="h-4 w-4" />
-                                                        <span>{file.name}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button type="button" variant="outline">Attach Files...</Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <div className="flex flex-col">
+                                                    <Label htmlFor="file-upload-hr-query" className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-t-md">
+                                                        <Upload className="h-4 w-4" /> Upload from Computer
+                                                    </Label>
+                                                    <Input id="file-upload-hr-query" type="file" multiple className="hidden" onChange={handleFileChange} />
+                                                    <button type="button" onClick={() => setIsFilePickerOpen(true)} className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-b-md text-sm">
+                                                        <Folder className="h-4 w-4" /> Choose from File Manager
+                                                    </button>
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+                                        {attachments.length > 0 && <AttachmentPreviewer attachments={attachments} />}
                                     </div>
                                 </div>
                             </div>
@@ -484,10 +500,12 @@ export function HRQueryTable() {
                 )}
             </DialogContent>
         </Dialog>
+        <FileManagerPickerDialog
+            open={isFilePickerOpen}
+            onOpenChange={setIsFilePickerOpen}
+            onSelect={(files) => setAttachments(prev => [...prev, ...files])}
+            multiple
+        />
     </>
   );
 }
-
-    
-
-    

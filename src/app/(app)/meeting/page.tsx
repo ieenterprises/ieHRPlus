@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, writeBatch, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile, getPublicUrl } from '@/lib/firebase-storage';
-import type { User, ChatMessage, InternalMail } from '@/lib/types';
+import type { User, ChatMessage, InternalMail, Attachment } from '@/lib/types';
 import { format, formatDistanceToNow, formatDistanceToNowStrict } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -31,6 +31,7 @@ import { AttachmentPreviewer } from '@/components/attachment-previewer';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { FileManagerPickerDialog } from '@/components/file-manager-picker';
 
 type ChatMode = 'individual' | 'group';
 type MailboxView = "inbox" | "sent";
@@ -86,11 +87,12 @@ export default function MeetingPage() {
   const [activeChatMode, setActiveChatMode] = useState<ChatMode>('individual');
   const [activeGroup, setActiveGroup] = useState<User[]>([]);
   const [replyingToMessage, setReplyingToMessage] = useState<ChatMessage | null>(null);
-  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isSending, setIsSending] = useState(false);
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
+  const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
 
   // Invite state
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -388,16 +390,19 @@ export default function MeetingPage() {
       setIsSending(true);
 
       try {
-          let attachmentUrls: { name: string, url: string }[] = [];
-          if (attachments.length > 0) {
-              const uploadPromises = attachments.map(async (file) => {
+          const uploadedAttachments = await Promise.all(
+                (attachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
                   const folder = `chat_attachments/${loggedInUser!.id}`;
-                  await uploadFile(loggedInUser!.businessId!, folder, file, () => {});
-                  const url = await getPublicUrl(loggedInUser!.businessId!, `${folder}/${file.name}`);
-                  return { name: file.name, url };
-              });
-              attachmentUrls = await Promise.all(uploadPromises);
-          }
+                  await uploadFile(loggedInUser!.businessId!, folder, attachment.file, () => {});
+                  const url = await getPublicUrl(loggedInUser!.businessId!, `${folder}/${attachment.file.name}`);
+                  return { name: attachment.name, url };
+              })
+          );
+          
+          const finalAttachments = [
+                ...attachments.filter(a => !(a as any).source),
+                ...uploadedAttachments
+          ];
 
           const messageData: Omit<ChatMessage, 'id'> = {
               senderId: loggedInUser.id,
@@ -406,7 +411,7 @@ export default function MeetingPage() {
               timestamp: new Date().toISOString(),
               isRead: false,
               businessId: loggedInUser.businessId,
-              attachments: attachmentUrls,
+              attachments: finalAttachments,
           };
 
           if (replyingToMessage) {
@@ -430,7 +435,13 @@ export default function MeetingPage() {
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       if (event.target.files) {
-          setAttachments(prev => [...prev, ...Array.from(event.target.files!)]);
+          const newFiles = Array.from(event.target.files).map(file => ({
+                name: file.name,
+                url: URL.createObjectURL(file), // for local preview
+                source: 'local', // flag to identify it needs uploading
+                file: file
+          }));
+          setAttachments(prev => [...prev, ...newFiles as any]);
       }
   };
 
@@ -1053,16 +1064,7 @@ export default function MeetingPage() {
                                 {attachments.length > 0 && (
                                     <div className="w-full space-y-2">
                                         <p className="text-sm font-medium">Attachments:</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {attachments.map(file => (
-                                                <div key={file.name} className="flex items-center gap-2 bg-muted p-2 rounded-md text-sm">
-                                                    <span>{file.name}</span>
-                                                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveAttachment(file.name)}>
-                                                        <X className="h-3 w-3" />
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </div>
+                                        <AttachmentPreviewer attachments={attachments} />
                                     </div>
                                 )}
                                 <form onSubmit={handleSendMessage} className="flex w-full items-center gap-2">
@@ -1098,13 +1100,24 @@ export default function MeetingPage() {
                                             </PopoverContent>
                                         </Popover>
                                     </div>
-                                     <Button asChild variant="ghost" size="icon">
-                                        <Label htmlFor="chat-attachments">
-                                            <Paperclip className="h-5 w-5" />
-                                            <span className="sr-only">Attach files</span>
-                                        </Label>
-                                    </Button>
-                                    <Input id="chat-attachments" type="file" multiple className="hidden" onChange={handleFileChange} />
+                                     <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="ghost" size="icon">
+                                                <Paperclip className="h-5 w-5" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                            <div className="flex flex-col">
+                                                <Label htmlFor="chat-attachments" className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-t-md">
+                                                    <Upload className="h-4 w-4" /> Upload from Computer
+                                                </Label>
+                                                <Input id="chat-attachments" type="file" multiple className="hidden" onChange={handleFileChange} />
+                                                <button type="button" onClick={() => setIsFilePickerOpen(true)} className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-b-md text-sm">
+                                                    <Folder className="h-4 w-4" /> Choose from File Manager
+                                                </button>
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                     <Button type="submit" size="icon" disabled={isSending}>
                                         {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                                     </Button>
@@ -1414,6 +1427,12 @@ export default function MeetingPage() {
         replyingTo={replyingToMail}
         forwardingMail={forwardingMail}
     />
+    <FileManagerPickerDialog
+        open={isFilePickerOpen}
+        onOpenChange={setIsFilePickerOpen}
+        onSelect={(files) => setAttachments(prev => [...prev, ...files])}
+        multiple
+    />
     </div>
   );
 }
@@ -1425,8 +1444,9 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('');
     const [recipientSearch, setRecipientSearch] = useState('');
-    const [mailAttachments, setMailAttachments] = useState<File[]>([]);
+    const [mailAttachments, setMailAttachments] = useState<Attachment[]>([]);
     const [isSendingMail, setIsSendingMail] = useState(false);
+    const [isMailFilePickerOpen, setIsMailFilePickerOpen] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -1473,7 +1493,13 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
 
     const handleFileChangeForMail = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files) {
-            setMailAttachments(prev => [...prev, ...Array.from(event.target.files!)]);
+            const newFiles = Array.from(event.target.files).map(file => ({
+                name: file.name,
+                url: URL.createObjectURL(file), // for local preview
+                source: 'local', // flag to identify it needs uploading
+                file: file
+            }));
+            setMailAttachments(prev => [...prev, ...newFiles as any]);
         }
     };
     
@@ -1489,16 +1515,19 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
 
         setIsSendingMail(true);
         try {
-            let attachmentUrls: { name: string; url: string }[] = [];
-            if (mailAttachments.length > 0) {
-                const uploadPromises = mailAttachments.map(async (file) => {
+            const uploadedAttachments = await Promise.all(
+                (mailAttachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
                     const folder = `mail_attachments/${loggedInUser.id}`;
-                    await uploadFile(loggedInUser.businessId!, folder, file, () => {});
-                    const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
-                    return { name: file.name, url };
-                });
-                attachmentUrls = await Promise.all(uploadPromises);
-            }
+                    await uploadFile(loggedInUser.businessId!, folder, attachment.file, () => {});
+                    const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${attachment.file.name}`);
+                    return { name: attachment.name, url };
+                })
+            );
+
+            const finalAttachments = [
+                ...mailAttachments.filter(a => !(a as any).source),
+                ...uploadedAttachments
+            ];
 
             const mailData: Omit<InternalMail, 'id'> = {
                 senderId: loggedInUser.id,
@@ -1507,7 +1536,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
                 ccRecipients: ccRecipients.map(u => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })),
                 subject,
                 body,
-                attachments: attachmentUrls,
+                attachments: finalAttachments,
                 timestamp: new Date().toISOString(),
                 readBy: { [loggedInUser.id]: true },
                 businessId: loggedInUser.businessId,
@@ -1586,26 +1615,30 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
                 {mailAttachments.length > 0 && (
                     <div className="space-y-2 pt-4">
                         <p className="text-sm font-medium">Attachments:</p>
-                        <div className="flex flex-wrap gap-2">
-                            {mailAttachments.map(file => (
-                                <div key={file.name} className="flex items-center gap-2 bg-muted p-2 rounded-md text-sm">
-                                    <span>{file.name}</span>
-                                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveMailAttachment(file.name)}>
-                                        <X className="h-3 w-3" />
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
+                        <AttachmentPreviewer attachments={mailAttachments} />
                     </div>
                 )}
                 <DialogFooter>
-                    <Button asChild variant="ghost">
-                        <Label htmlFor="mail-attachments" className="cursor-pointer">
-                            <Paperclip className="mr-2 h-4 w-4" />
-                            Attach File
-                        </Label>
-                    </Button>
-                    <Input id="mail-attachments" type="file" multiple className="hidden" onChange={handleFileChangeForMail} />
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="ghost">
+                                <Paperclip className="mr-2 h-4 w-4" />
+                                Attach File
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                             <div className="flex flex-col">
+                                <Label htmlFor="mail-attachments" className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-t-md">
+                                    <Upload className="h-4 w-4" /> Upload from Computer
+                                </Label>
+                                <Input id="mail-attachments" type="file" multiple className="hidden" onChange={handleFileChangeForMail} />
+                                <button type="button" onClick={() => setIsMailFilePickerOpen(true)} className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-b-md text-sm">
+                                    <Folder className="h-4 w-4" /> Choose from File Manager
+                                </button>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+
                     <div className="flex-1" />
                     <Button variant="ghost" onClick={onClose}>Cancel</Button>
                     <Button onClick={handleSendMail} disabled={isSendingMail}>
@@ -1613,11 +1646,13 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
                         Send Mail
                     </Button>
                 </DialogFooter>
+                 <FileManagerPickerDialog
+                    open={isMailFilePickerOpen}
+                    onOpenChange={setIsMailFilePickerOpen}
+                    onSelect={(files) => setMailAttachments(prev => [...prev, ...files])}
+                    multiple
+                />
             </DialogContent>
         </Dialog>
     );
 };
-    
-
-
-
