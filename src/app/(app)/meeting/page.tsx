@@ -76,6 +76,7 @@ export default function MeetingPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [unreadSenders, setUnreadSenders] = useState<Set<string>>(new Set());
+  const [unreadGroups, setUnreadGroups] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const [chatSearch, setChatSearch] = useState('');
@@ -159,7 +160,6 @@ export default function MeetingPage() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allMails = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InternalMail));
       
-      // Sort mails on the client side
       allMails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       setMails(allMails);
@@ -417,23 +417,54 @@ export default function MeetingPage() {
       return users.filter(u => u.id !== loggedInUser?.id && u.name.toLowerCase().includes(userSearch.toLowerCase()));
   }, [users, userSearch, loggedInUser]);
 
-  useEffect(() => {
-    if (!loggedInUser) return;
-    const q = query(
-        collection(db, 'chatMessages'),
-        where('businessId', '==', loggedInUser.businessId),
-        where('receiverId', '==', loggedInUser.id),
-        where('isRead', '==', false)
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const newUnread = new Set<string>();
-        snapshot.forEach(doc => {
-            newUnread.add(doc.data().senderId);
+    useEffect(() => {
+        if (!loggedInUser) return;
+        
+        // Listener for individual chats
+        const qIndividual = query(
+            collection(db, 'chatMessages'),
+            where('businessId', '==', loggedInUser.businessId),
+            where('receiverId', '==', loggedInUser.id),
+            where('isRead', '==', false)
+        );
+        const unsubIndividual = onSnapshot(qIndividual, (snapshot) => {
+            const newUnread = new Set<string>();
+            snapshot.forEach(doc => {
+                newUnread.add(doc.data().senderId);
+            });
+            setUnreadSenders(newUnread);
         });
-        setUnreadSenders(newUnread);
-    });
-    return () => unsubscribe();
-  }, [loggedInUser]);
+
+        // Listener for group chats
+        const myGroupIds = groups.filter(g => g.members.some(m => m.id === loggedInUser.id)).map(g => g.id);
+        if (myGroupIds.length === 0) {
+            setUnreadGroups(new Set());
+            return () => unsubIndividual();
+        }
+
+        const qGroups = query(
+            collection(db, 'chatMessages'),
+            where('businessId', '==', loggedInUser.businessId),
+            where('groupId', 'in', myGroupIds)
+        );
+        const unsubGroups = onSnapshot(qGroups, (snapshot) => {
+            const newUnreadGroups = new Set<string>();
+            snapshot.docs.forEach(doc => {
+                const message = doc.data() as ChatMessage;
+                // A message is unread for the user if their ID is not in the readBy map
+                // AND the sender is not the user themselves.
+                if (message.groupId && message.senderId !== loggedInUser.id && !(message as any).readBy?.[loggedInUser.id]) {
+                    newUnreadGroups.add(message.groupId);
+                }
+            });
+            setUnreadGroups(newUnreadGroups);
+        });
+
+        return () => {
+            unsubIndividual();
+            unsubGroups();
+        };
+    }, [loggedInUser, groups]);
 
   useEffect(() => {
     const isReadyForQuery = loggedInUser && (activeChatMode === 'individual' ? selectedChatUser : selectedGroup);
@@ -446,8 +477,6 @@ export default function MeetingPage() {
     let q: any;
 
     if (activeChatMode === 'individual' && selectedChatUser) {
-        // This query requires a composite index on senderId, receiverId, and timestamp.
-        // Or, we can query twice and merge/sort on the client.
         q = query(
             collection(db, 'chatMessages'),
             where('businessId', '==', loggedInUser!.businessId),
@@ -464,13 +493,12 @@ export default function MeetingPage() {
 
     if (!q) return;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
         const newMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage));
         
         if (activeChatMode === 'individual' && selectedChatUser) {
             // Filter out messages that are part of a group chat
             const individualMessages = newMessages.filter(m => !m.groupId && m.senderId !== m.receiverId);
-            // Sort on the client side
             individualMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
             setMessages(individualMessages);
 
@@ -484,12 +512,25 @@ export default function MeetingPage() {
                 }
             });
             if (hasUnread) {
-                batch.commit().catch(err => console.error("Error marking messages as read:", err));
+                await batch.commit().catch(err => console.error("Error marking messages as read:", err));
             }
 
-        } else {
+        } else if (activeChatMode === 'group' && selectedGroup) {
              newMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
              setMessages(newMessages);
+
+             const batch = writeBatch(db);
+             let hasUnread = false;
+             snapshot.docs.forEach(doc => {
+                const message = doc.data() as ChatMessage;
+                if (message.senderId !== loggedInUser!.id && !(message as any).readBy?.[loggedInUser!.id]) {
+                    batch.update(doc.ref, { [`readBy.${loggedInUser!.id}`]: true });
+                    hasUnread = true;
+                }
+             });
+             if (hasUnread) {
+                 await batch.commit().catch(err => console.error("Error marking group messages as read:", err));
+             }
         }
     }, (error) => {
         console.error("Chat message snapshot error: ", error);
@@ -540,7 +581,7 @@ export default function MeetingPage() {
                 ...uploadedAttachments
           ];
 
-          const messageData: Omit<ChatMessage, 'id'> = {
+          const messageData: Omit<ChatMessage, 'id'> & { readBy?: {[key: string]: boolean} } = {
               senderId: loggedInUser.id,
               content: newMessage,
               timestamp: new Date().toISOString(),
@@ -551,6 +592,10 @@ export default function MeetingPage() {
           
           if(targetGroupId) {
               messageData.groupId = targetGroupId;
+              // For group messages, initialize readBy map with the sender
+              messageData.readBy = { [loggedInUser.id]: true };
+              delete messageData.isRead;
+              delete messageData.receiverId;
           } else {
               messageData.receiverId = targetRecipientId;
           }
@@ -684,15 +729,15 @@ export default function MeetingPage() {
   };
 
   const handleCreateGroupChat = async () => {
-    if (!loggedInUser || groupRecipients.length === 0) {
-      toast({ variant: 'destructive', title: "Not enough users", description: "Please select at least one other user for a group chat." });
+    if (!loggedInUser || groupRecipients.length < 1 || !groupName.trim()) {
+      toast({ variant: 'destructive', title: "Missing Information", description: "Please provide a group name and select at least one other user." });
       return;
     }
     
     const allMembers = [loggedInUser, ...groupRecipients];
 
     const newGroup: Omit<Group, 'id'> = {
-        name: groupName || allMembers.map(u => u.name).join(', '),
+        name: groupName.trim(),
         members: allMembers.map(u => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })),
         creatorId: loggedInUser.id,
         businessId: loggedInUser.businessId,
@@ -1152,7 +1197,7 @@ export default function MeetingPage() {
           </TabsTrigger>
           <TabsTrigger value="chat">
             <MessageSquare className="mr-2 h-4 w-4" />
-            Chat {unreadSenders.size > 0 && <Badge className="ml-2">{unreadSenders.size}</Badge>}
+            Chat {(unreadSenders.size + unreadGroups.size) > 0 && <Badge className="ml-2">{unreadSenders.size + unreadGroups.size}</Badge>}
           </TabsTrigger>
           <TabsTrigger value="mail">
             <Mail className="mr-2 h-4 w-4" />
@@ -1211,10 +1256,13 @@ export default function MeetingPage() {
                                   <Avatar>
                                       <AvatarFallback><Users className="h-5 w-5"/></AvatarFallback>
                                   </Avatar>
-                                  <div className="flex-1">
+                                  <div className="flex-1 truncate">
                                       <p className="font-semibold truncate">{group.name}</p>
                                       <p className="text-xs text-muted-foreground">{group.members.length} members</p>
                                   </div>
+                                  {unreadGroups.has(group.id) && (
+                                    <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+                                  )}
                               </div>
                           </button>
                       ))}
@@ -1701,12 +1749,13 @@ export default function MeetingPage() {
             <DialogDescription>Select users to start a temporary group chat.</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-            <Label htmlFor="group-name">Group Name (Optional)</Label>
+            <Label htmlFor="group-name">Group Name</Label>
             <Input 
                 id="group-name"
                 placeholder="e.g., Project Alpha Team"
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
+                required
             />
         </div>
         <div className="relative mt-2">
@@ -1746,7 +1795,7 @@ export default function MeetingPage() {
         </ScrollArea>
         <DialogFooter>
               <Button variant="ghost" onClick={() => setIsGroupChatDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateGroupChat} disabled={groupRecipients.length < 1}>
+            <Button onClick={handleCreateGroupChat} disabled={groupRecipients.length < 1 || !groupName.trim()}>
                 <MessageSquare className="mr-2 h-4 w-4" />
                 Start Chat ({groupRecipients.length})
             </Button>
@@ -2066,6 +2115,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 

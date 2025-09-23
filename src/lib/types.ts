@@ -47,6 +47,7 @@ export type ChatMessage = {
     senderName: string;
     content: string;
   };
+  readBy?: { [key: string]: boolean };
 };
 
 export type Department = {
