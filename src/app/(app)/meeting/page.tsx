@@ -437,32 +437,39 @@ export default function MeetingPage() {
 
         // Listener for group chats
         const myGroupIds = groups.filter(g => g.members.some(m => m.id === loggedInUser.id)).map(g => g.id);
-        if (myGroupIds.length === 0) {
-            setUnreadGroups(new Set());
-            return () => unsubIndividual();
-        }
+        const groupUnsubs: Unsubscribe[] = [];
 
-        const qGroups = query(
-            collection(db, 'chatMessages'),
-            where('businessId', '==', loggedInUser.businessId),
-            where('groupId', 'in', myGroupIds)
-        );
-        const unsubGroups = onSnapshot(qGroups, (snapshot) => {
-            const newUnreadGroups = new Set<string>();
-            snapshot.docs.forEach(doc => {
-                const message = doc.data() as ChatMessage;
-                // A message is unread for the user if their ID is not in the readBy map
-                // AND the sender is not the user themselves.
-                if (message.groupId && message.senderId !== loggedInUser.id && !(message as any).readBy?.[loggedInUser.id]) {
-                    newUnreadGroups.add(message.groupId);
-                }
+        myGroupIds.forEach(groupId => {
+            const qGroup = query(
+                collection(db, 'chatMessages'),
+                where('businessId', '==', loggedInUser.businessId),
+                where('groupId', '==', groupId)
+            );
+            const unsub = onSnapshot(qGroup, (snapshot) => {
+                let isUnread = false;
+                snapshot.forEach(doc => {
+                    const message = doc.data() as ChatMessage;
+                    if (message.senderId !== loggedInUser.id && !(message as any).readBy?.[loggedInUser.id!]) {
+                        isUnread = true;
+                    }
+                });
+                setUnreadGroups(prev => {
+                    const newSet = new Set(prev);
+                    if (isUnread) {
+                        newSet.add(groupId);
+                    } else {
+                        newSet.delete(groupId);
+                    }
+                    return newSet;
+                });
             });
-            setUnreadGroups(newUnreadGroups);
+            groupUnsubs.push(unsub);
         });
+
 
         return () => {
             unsubIndividual();
-            unsubGroups();
+            groupUnsubs.forEach(unsub => unsub());
         };
     }, [loggedInUser, groups]);
 
@@ -2115,6 +2122,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
