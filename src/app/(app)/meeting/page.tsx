@@ -148,8 +148,6 @@ export default function MeetingPage() {
           (mail.ccRecipients || []).some(r => r.id === loggedInUser.id)
       );
 
-      myMails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
       setMails(myMails);
     });
 
@@ -841,7 +839,7 @@ export default function MeetingPage() {
           </TabsTrigger>
           <TabsTrigger value="chat">
             <MessageSquare className="mr-2 h-4 w-4" />
-            Chat
+            Chat {unreadSenders.size > 0 && <Badge className="ml-2">{unreadSenders.size}</Badge>}
           </TabsTrigger>
           <TabsTrigger value="mail">
             <Mail className="mr-2 h-4 w-4" />
@@ -1656,3 +1654,6 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
         </Dialog>
     );
 };
+
+
+    
