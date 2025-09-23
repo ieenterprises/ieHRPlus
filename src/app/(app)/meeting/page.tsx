@@ -458,8 +458,7 @@ export default function MeetingPage() {
         q = query(
             collection(db, 'chatMessages'),
             where('businessId', '==', loggedInUser!.businessId),
-            where('groupId', '==', selectedGroup.id),
-            orderBy('timestamp', 'asc')
+            where('groupId', '==', selectedGroup.id)
         );
     }
 
@@ -489,6 +488,7 @@ export default function MeetingPage() {
             }
 
         } else {
+             newMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
              setMessages(newMessages);
         }
     }, (error) => {
@@ -2066,6 +2066,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
