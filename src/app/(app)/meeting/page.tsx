@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -136,8 +135,8 @@ export default function MeetingPage() {
     
     const q = query(
       collection(db, 'internal_mails'),
-      where('businessId', '==', loggedInUser.businessId),
-      orderBy('timestamp', 'desc')
+      where('businessId', '==', loggedInUser.businessId)
+      // Removed: orderBy('timestamp', 'desc') - this was causing the index error
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -148,6 +147,9 @@ export default function MeetingPage() {
           (mail.toRecipients || []).some(r => r.id === loggedInUser.id) ||
           (mail.ccRecipients || []).some(r => r.id === loggedInUser.id)
       );
+
+      // Sort mails on the client side
+      myMails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       setMails(myMails);
     });
@@ -1655,6 +1657,6 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
         </Dialog>
     );
 };
-
+    
 
     
