@@ -49,7 +49,8 @@ export default function PortfolioPage() {
   const { users, currency, loggedInUser } = useSettings();
   const [searchTerm, setSearchTerm] = useState("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isPhotoUploading, setIsPhotoUploading] = useState(false);
+  const [isDocumentUploading, setIsDocumentUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [userFiles, setUserFiles] = useState<{name: string, url: string}[]>([]);
   const [documentSearchTerm, setDocumentSearchTerm] = useState("");
@@ -112,7 +113,7 @@ export default function PortfolioPage() {
       return;
     }
 
-    setIsUploading(true);
+    setIsPhotoUploading(true);
     try {
       const folder = `profile_pictures`;
       const fileName = `${editingUser.id}_${Date.now()}.${file.name.split('.').pop()}`;
@@ -128,14 +129,14 @@ export default function PortfolioPage() {
     } catch (error: any) {
       toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
     } finally {
-      setIsUploading(false);
+      setIsPhotoUploading(false);
     }
   };
 
     const handleDeletePhoto = async () => {
         if (!editingUser?.avatar_url || !loggedInUser?.businessId) return;
 
-        setIsUploading(true); // Reuse uploading state to disable buttons
+        setIsPhotoUploading(true); // Reuse uploading state to disable buttons
         try {
             // 1. Delete from Firebase Storage
             const fileRef = ref(storage, editingUser.avatar_url);
@@ -159,7 +160,7 @@ export default function PortfolioPage() {
                 toast({ title: "Deletion Failed", description: error.message, variant: "destructive" });
             }
         } finally {
-            setIsUploading(false);
+            setIsPhotoUploading(false);
         }
     };
 
@@ -169,7 +170,7 @@ export default function PortfolioPage() {
     
     const file = event.target.files[0];
 
-    setIsUploading(true);
+    setIsDocumentUploading(true);
     try {
       await uploadFile(loggedInUser.businessId, editingUser.id, 'documents', file, () => {});
       toast({ title: "Document Uploaded", description: `${file.name} has been added to the employee's portfolio.` });
@@ -178,7 +179,7 @@ export default function PortfolioPage() {
     } catch (error: any) {
       toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
     } finally {
-      setIsUploading(false);
+      setIsDocumentUploading(false);
     }
   };
   
@@ -318,14 +319,14 @@ export default function PortfolioPage() {
                                     </div>
                                     <div className="flex flex-col gap-2">
                                         <Label htmlFor="photo-upload" className={
-                                            `inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 cursor-pointer ${isUploading ? 'bg-secondary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`
+                                            `inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 cursor-pointer ${isPhotoUploading ? 'bg-secondary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`
                                         }>
-                                            {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UploadCloud className="mr-2 h-4 w-4" />}
+                                            {isPhotoUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UploadCloud className="mr-2 h-4 w-4" />}
                                             Upload Photo
                                         </Label>
-                                        <Input id="photo-upload" type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={isUploading}/>
+                                        <Input id="photo-upload" type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={isPhotoUploading}/>
                                         {editingUser.avatar_url && (
-                                            <Button variant="destructive" size="sm" type="button" onClick={handleDeletePhoto} disabled={isUploading}>
+                                            <Button variant="destructive" size="sm" type="button" onClick={handleDeletePhoto} disabled={isPhotoUploading}>
                                                 <Trash2 className="mr-2 h-4 w-4" />
                                                 Delete Photo
                                             </Button>
@@ -353,12 +354,13 @@ export default function PortfolioPage() {
                            <CardHeader>
                                <div className="flex items-center justify-between">
                                  <CardTitle>Personal Documents</CardTitle>
-                                 <Button asChild variant="outline" size="sm">
+                                 <Button asChild variant="outline" size="sm" disabled={isDocumentUploading}>
                                      <Label htmlFor="doc-upload" className="cursor-pointer">
-                                        <UploadCloud className="mr-2 h-4 w-4" /> Upload
+                                        {isDocumentUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UploadCloud className="mr-2 h-4 w-4" />}
+                                        Upload
                                      </Label>
                                  </Button>
-                                 <Input id="doc-upload" type="file" className="hidden" onChange={handleDocumentUpload} disabled={isUploading} />
+                                 <Input id="doc-upload" type="file" className="hidden" onChange={handleDocumentUpload} disabled={isDocumentUploading} />
                                </div>
                            </CardHeader>
                            <CardContent className="flex-1 min-h-0 flex flex-col gap-4">
