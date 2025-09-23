@@ -1392,6 +1392,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('');
     const [recipientSearch, setRecipientSearch] = useState('');
+    const [mailAttachments, setMailAttachments] = useState<File[]>([]);
     const [isSendingMail, setIsSendingMail] = useState(false);
     const { toast } = useToast();
 
@@ -1414,6 +1415,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
             setSelectedRecipients([]);
             setSubject('');
             setBody('');
+            setMailAttachments([]);
         }
     }, [replyingTo, isOpen, loggedInUser, users]);
 
@@ -1425,6 +1427,16 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
         );
     };
 
+    const handleFileChangeForMail = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files) {
+            setMailAttachments(prev => [...prev, ...Array.from(event.target.files!)]);
+        }
+    };
+    
+    const handleRemoveMailAttachment = (fileName: string) => {
+        setMailAttachments(prev => prev.filter(file => file.name !== fileName));
+    };
+
     const handleSendMail = async () => {
         if (!loggedInUser || selectedRecipients.length === 0 || !subject.trim() || !body.trim()) {
             toast({ variant: 'destructive', title: "Missing fields", description: "Please add recipients, a subject, and a message body." });
@@ -1433,12 +1445,24 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
 
         setIsSendingMail(true);
         try {
+            let attachmentUrls: { name: string; url: string }[] = [];
+            if (mailAttachments.length > 0) {
+                const uploadPromises = mailAttachments.map(async (file) => {
+                    const folder = `mail_attachments/${loggedInUser.id}`;
+                    await uploadFile(loggedInUser.businessId!, folder, file, () => {});
+                    const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
+                    return { name: file.name, url };
+                });
+                attachmentUrls = await Promise.all(uploadPromises);
+            }
+
             const mailData: Omit<InternalMail, 'id'> = {
                 senderId: loggedInUser.id,
                 senderName: loggedInUser.name,
                 recipients: selectedRecipients.map(u => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })),
                 subject,
                 body,
+                attachments: attachmentUrls,
                 timestamp: new Date().toISOString(),
                 readBy: { [loggedInUser.id]: true }, // Sender has "read" it
                 businessId: loggedInUser.businessId,
@@ -1511,7 +1535,30 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
                 />
+                {mailAttachments.length > 0 && (
+                    <div className="space-y-2 pt-4">
+                        <p className="text-sm font-medium">Attachments:</p>
+                        <div className="flex flex-wrap gap-2">
+                            {mailAttachments.map(file => (
+                                <div key={file.name} className="flex items-center gap-2 bg-muted p-2 rounded-md text-sm">
+                                    <span>{file.name}</span>
+                                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveMailAttachment(file.name)}>
+                                        <X className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <DialogFooter>
+                    <Button asChild variant="ghost">
+                        <Label htmlFor="mail-attachments" className="cursor-pointer">
+                            <Paperclip className="mr-2 h-4 w-4" />
+                            Attach File
+                        </Label>
+                    </Button>
+                    <Input id="mail-attachments" type="file" multiple className="hidden" onChange={handleFileChangeForMail} />
+                    <div className="flex-1" />
                     <Button variant="ghost" onClick={onClose}>Cancel</Button>
                     <Button onClick={handleSendMail} disabled={isSendingMail}>
                         {isSendingMail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1523,3 +1570,4 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, o
     );
 };
     
+
