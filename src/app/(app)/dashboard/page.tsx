@@ -73,6 +73,8 @@ export default function DashboardPage() {
   
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
   const [isResponseFilePickerOpen, setIsResponseFilePickerOpen] = useState(false);
+  
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   const { toast } = useToast();
   
@@ -80,6 +82,12 @@ export default function DashboardPage() {
 
   const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role)), [users]);
   
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!loggedInUser?.id) return;
@@ -576,14 +584,14 @@ export default function DashboardPage() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">
-                        My Leave Balance
+                        Digital Clock
                     </CardTitle>
-                    <CalendarCheck2 className="h-4 w-4 text-muted-foreground" />
+                    <Clock className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">...</div>
+                    <div className="text-2xl font-bold font-mono">{format(currentTime, 'HH:mm:ss')}</div>
                     <p className="text-xs text-muted-foreground">
-                        Your available vacation and sick days.
+                        {format(currentTime, 'eeee, MMMM do, yyyy')}
                     </p>
                 </CardContent>
             </Card>
