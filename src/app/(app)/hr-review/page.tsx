@@ -45,7 +45,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
-import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
+import { format, startOfDay, endOfDay, isWithinInterval, addDays } from "date-fns";
 import { Video, Download, Calendar as CalendarIcon, Trash2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
@@ -55,6 +55,7 @@ import { cn } from "@/lib/utils";
 import Papa from "papaparse";
 import { HRQueryTable } from "./query-table";
 import { RewardTable } from "./reward-table";
+import type { DateRange } from "react-day-picker";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
@@ -63,7 +64,10 @@ export default function HrReviewPage() {
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfDay(new Date()),
+    to: endOfDay(new Date()),
+  });
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
@@ -85,8 +89,8 @@ export default function HrReviewPage() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
       
-      const start = startOfDay(selectedDate);
-      const end = endOfDay(selectedDate);
+      const start = dateRange?.from ? startOfDay(dateRange.from) : startOfDay(new Date());
+      const end = dateRange?.to ? endOfDay(dateRange.to) : endOfDay(new Date());
       
       const filteredRecords = allRecords.filter(record => {
         const clockInDate = new Date(record.clockInTime);
@@ -104,11 +108,11 @@ export default function HrReviewPage() {
     });
 
     return () => unsubscribe();
-  }, [loggedInUser?.businessId, selectedDate, toast]);
+  }, [loggedInUser?.businessId, dateRange, toast]);
   
   useEffect(() => {
       setSelectedRecordIds([]);
-  }, [selectedDate, timeRecords]);
+  }, [dateRange, timeRecords]);
   
   const filteredRecords = useMemo(() => {
     const lowercasedTerm = searchTerm.toLowerCase();
@@ -137,7 +141,7 @@ export default function HrReviewPage() {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `${tableType}_records_${format(selectedDate, 'yyyy-MM-dd')}.csv`);
+    link.setAttribute("download", `${tableType}_records_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -261,26 +265,40 @@ export default function HrReviewPage() {
   const DatePicker = () => (
      <Popover>
         <PopoverTrigger asChild>
-            <Button
+          <Button
+            id="date"
             variant={"outline"}
             className={cn(
-                "w-[280px] justify-start text-left font-normal",
-                !selectedDate && "text-muted-foreground"
+              "w-[300px] justify-start text-left font-normal",
+              !dateRange && "text-muted-foreground"
             )}
-            >
+          >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-            </Button>
+            {dateRange?.from ? (
+              dateRange.to ? (
+                <>
+                  {format(dateRange.from, "LLL dd, y")} -{" "}
+                  {format(dateRange.to, "LLL dd, y")}
+                </>
+              ) : (
+                format(dateRange.from, "LLL dd, y")
+              )
+            ) : (
+              <span>Pick a date range</span>
+            )}
+          </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0">
-            <Calendar
-            mode="single"
-            selected={selectedDate}
-            onSelect={(date) => date && setSelectedDate(date)}
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
             initialFocus
-            />
+            mode="range"
+            defaultMonth={dateRange?.from}
+            selected={dateRange}
+            onSelect={setDateRange}
+            numberOfMonths={2}
+          />
         </PopoverContent>
-    </Popover>
+      </Popover>
   );
 
 
@@ -307,7 +325,7 @@ export default function HrReviewPage() {
           <div>
             <CardTitle>Pending Submissions</CardTitle>
             <CardDescription>
-              Approve or reject clock-in records for {format(selectedDate, "PPP")}.
+              Approve or reject clock-in records.
             </CardDescription>
           </div>
           {isSeniorStaff && (
@@ -404,7 +422,7 @@ export default function HrReviewPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={isSeniorStaff ? 6 : 5} className="h-24 text-center">
-                      No pending submissions for {format(selectedDate, "PPP")}.
+                      No pending submissions for the selected date range.
                     </TableCell>
                   </TableRow>
                 )}
@@ -443,7 +461,7 @@ export default function HrReviewPage() {
           <div>
             <CardTitle>Time Clock History</CardTitle>
             <CardDescription>
-              Log of all employee events for {format(selectedDate, "PPP")}.
+              Log of all employee events.
             </CardDescription>
           </div>
           {isSeniorStaff && (
@@ -540,7 +558,7 @@ export default function HrReviewPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={isSeniorStaff ? 7 : 6} className="h-24 text-center">
-                      No historical records found for {format(selectedDate, "PPP")}.
+                      No historical records found for the selected date range.
                     </TableCell>
                   </TableRow>
                 )}
@@ -574,7 +592,5 @@ export default function HrReviewPage() {
     </div>
   );
 }
-
-    
 
     

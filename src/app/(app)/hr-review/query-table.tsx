@@ -27,6 +27,7 @@ import Papa from "papaparse";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
 
 export function HRQueryTable() {
   const { loggedInUser, users, hrQueries, currency } = useSettings();
@@ -38,7 +39,10 @@ export function HRQueryTable() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedQueryIds, setSelectedQueryIds] = useState<string[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfDay(new Date()),
+    to: endOfDay(new Date()),
+  });
   const { toast } = useToast();
 
   const allOtherUsers = useMemo(() => users.filter(u => u.id !== loggedInUser?.id), [users, loggedInUser]);
@@ -46,8 +50,8 @@ export function HRQueryTable() {
   useEffect(() => {
     if (!loggedInUser?.id) return;
 
-    const start = startOfDay(selectedDate);
-    const end = endOfDay(selectedDate);
+    const start = dateRange?.from ? startOfDay(dateRange.from) : startOfDay(new Date());
+    const end = dateRange?.to ? endOfDay(dateRange.to) : endOfDay(new Date());
     
     const sentByMe = hrQueries.filter(q => 
         q.requesterId === loggedInUser.id &&
@@ -57,7 +61,7 @@ export function HRQueryTable() {
     sentByMe.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     setMySentQueries(sentByMe);
 
-  }, [hrQueries, loggedInUser?.id, selectedDate]);
+  }, [hrQueries, loggedInUser?.id, dateRange]);
   
   useEffect(() => {
     setSelectedQueryIds([]);
@@ -230,26 +234,40 @@ export function HRQueryTable() {
   const DatePicker = () => (
      <Popover>
         <PopoverTrigger asChild>
-            <Button
+          <Button
+            id="date"
             variant={"outline"}
             className={cn(
-                "w-[280px] justify-start text-left font-normal",
-                !selectedDate && "text-muted-foreground"
+              "w-[300px] justify-start text-left font-normal",
+              !dateRange && "text-muted-foreground"
             )}
-            >
+          >
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-            </Button>
+            {dateRange?.from ? (
+              dateRange.to ? (
+                <>
+                  {format(dateRange.from, "LLL dd, y")} -{" "}
+                  {format(dateRange.to, "LLL dd, y")}
+                </>
+              ) : (
+                format(dateRange.from, "LLL dd, y")
+              )
+            ) : (
+              <span>Pick a date range</span>
+            )}
+          </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0">
-            <Calendar
-            mode="single"
-            selected={selectedDate}
-            onSelect={(date) => date && setSelectedDate(date)}
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
             initialFocus
-            />
+            mode="range"
+            defaultMonth={dateRange?.from}
+            selected={dateRange}
+            onSelect={setDateRange}
+            numberOfMonths={2}
+          />
         </PopoverContent>
-    </Popover>
+      </Popover>
   );
 
   return (
@@ -399,7 +417,7 @@ export function HRQueryTable() {
                         ))
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={8} className="text-center h-24">You have no queries for {format(selectedDate, "PPP")}.</TableCell>
+                            <TableCell colSpan={8} className="text-center h-24">You have no queries for the selected date range.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -469,7 +487,5 @@ export function HRQueryTable() {
     </>
   );
 }
-
-    
 
     
