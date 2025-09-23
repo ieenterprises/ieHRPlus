@@ -32,6 +32,8 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { FileManagerPickerDialog } from '@/components/file-manager-picker';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 type ChatMode = 'individual' | 'group';
 type MailboxView = "inbox" | "sent";
@@ -116,6 +118,8 @@ export default function MeetingPage() {
   const [isWebCamOn, setIsWebCamOn] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isHost, setIsHost] = useState(false);
+
 
 
   useEffect(() => {
@@ -128,10 +132,10 @@ export default function MeetingPage() {
     if (joinMeetingId) {
         if (searchParams.get('in-chat')) {
             setActiveTab('chat');
-            joinMeeting(joinMeetingId, true);
+            joinMeeting(joinMeetingId, true, false);
         } else {
             setActiveTab('video');
-            joinMeeting(joinMeetingId, false);
+            joinMeeting(joinMeetingId, false, false);
         }
     }
   }, [searchParams]);
@@ -163,7 +167,7 @@ export default function MeetingPage() {
   }, [loggedInUser?.businessId, activeTab]);
 
   const createMeeting = async (): Promise<string | null> => {
-      if (!process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN) {
+      if (!VIDEOSDK_TOKEN || VIDEOSDK_TOKEN === "Your_Token_Here") {
         toast({
           variant: "destructive",
           title: "VideoSDK Token Missing",
@@ -175,7 +179,7 @@ export default function MeetingPage() {
         const url = `https://api.videosdk.live/v2/rooms`;
         const options = {
           method: "POST",
-          headers: { Authorization: process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN, "Content-Type": "application/json" },
+          headers: { Authorization: VIDEOSDK_TOKEN, "Content-Type": "application/json" },
         };
         const { roomId } = await fetch(url, options).then(res => res.json());
         return roomId;
@@ -186,8 +190,8 @@ export default function MeetingPage() {
       }
   };
 
-  const joinMeeting = (id: string, fromChat: boolean) => {
-    if (!process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN || !loggedInUser) {
+  const joinMeeting = (id: string, fromChat: boolean, isInitiator: boolean) => {
+    if (!VIDEOSDK_TOKEN || VIDEOSDK_TOKEN === "Your_Token_Here" || !loggedInUser) {
         toast({
           variant: "destructive",
           title: "Configuration Error",
@@ -200,7 +204,9 @@ export default function MeetingPage() {
         return;
     }
 
-    window.VideoSDK.config(process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN);
+    setIsHost(isInitiator);
+    
+    window.VideoSDK.config(VIDEOSDK_TOKEN);
     const newMeeting = window.VideoSDK.initMeeting({
         meetingId: id,
         name: loggedInUser?.name || 'Guest',
@@ -228,6 +234,8 @@ export default function MeetingPage() {
         setChatMeetingId(null);
         setInChatMeeting(false);
         setParticipants([]);
+        setIsHost(false);
+        setIsRecording(false);
     });
 
     newMeeting.on("participant-joined", (participant: any) => {
@@ -245,7 +253,11 @@ export default function MeetingPage() {
             toast({ title: "Recording Stopped", description: "Uploading to your file manager..." });
             try {
                 if (loggedInUser && loggedInUser.businessId) {
-                    await uploadFile(loggedInUser.businessId, loggedInUser.id, 'meeting_recordings', recordingFile);
+                    const folderPath = `meeting_recordings`;
+                    const uniqueFileName = `recording_${id}_${new Date().toISOString()}.mp4`;
+                    const fileToUpload = new File([recordingFile.blob], uniqueFileName, { type: 'video/mp4' });
+                    
+                    await uploadFile(loggedInUser.businessId, loggedInUser.id, folderPath, fileToUpload);
                     toast({ title: "Upload Complete", description: "Recording saved to your 'Meeting Recordings' folder." });
                 }
             } catch (error) {
@@ -258,12 +270,26 @@ export default function MeetingPage() {
   const handleCreateAndJoin = async (fromChat: boolean) => {
       const newMeetingId = await createMeeting();
       if (newMeetingId) {
-          joinMeeting(newMeetingId, fromChat);
+          joinMeeting(newMeetingId, fromChat, true);
       }
   };
 
-  const leaveMeeting = () => {
-    meeting?.leave();
+  const leaveOrEndMeeting = () => {
+    if (!meeting) return;
+
+    if (isHost) {
+        if (isRecording) {
+            toast({
+                title: "Recording in Progress",
+                description: "You must stop the recording before ending the meeting.",
+                variant: "destructive",
+            });
+            return;
+        }
+        meeting.end(); // Ends meeting for all participants
+    } else {
+        meeting.leave(); // Leaves meeting for the current participant
+    }
   };
 
   const toggleMic = () => {
@@ -329,7 +355,7 @@ export default function MeetingPage() {
       
       const newMeetingId = await createMeeting();
       if (newMeetingId) {
-          joinMeeting(newMeetingId, true);
+          joinMeeting(newMeetingId, true, true);
           await sendMeetingInvite(selectedChatUser.id, newMeetingId, true);
       }
   };
@@ -812,68 +838,82 @@ export default function MeetingPage() {
     );
   };
   
-  const MeetingUI = ({ meetingId, meetingInstance }: { meetingId: string, meetingInstance: any }) => (
-    <div className="h-full flex flex-col">
-        <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Meeting ID: {meetingId}</CardTitle>
-            {isRecording && (
-                <div className="flex items-center gap-2 text-red-500 animate-pulse">
-                    <Circle className="h-3 w-3 fill-current" />
-                    <span className="font-medium text-sm">REC</span>
-                </div>
-            )}
-        </CardHeader>
-        <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
-            {meetingInstance.localParticipant && <ParticipantView participant={meetingInstance.localParticipant} />}
-            {participants.map((participant: any) => (
-                <ParticipantView key={participant.id} participant={participant} />
-            ))}
-        </CardContent>
-        <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
-             <Button
-                variant={isMicOn ? 'secondary' : 'destructive'}
-                size="icon"
-                className="rounded-full h-12 w-12"
-                onClick={toggleMic}
-                aria-label={isMicOn ? 'Mute' : 'Unmute'}
-            >
-                {isMicOn ? <Mic /> : <MicOff />}
-            </Button>
-            <Button
-                variant={isWebCamOn ? 'secondary' : 'destructive'}
-                size="icon"
-                className="rounded-full h-12 w-12"
-                onClick={toggleWebcam}
-                aria-label={isWebCamOn ? 'Turn off video' : 'Turn on video'}
-            >
-                {isWebCamOn ? <Video /> : <VideoOff />}
-            </Button>
-             <Button 
-                variant={isScreenSharing ? 'default' : 'secondary'} 
-                size="icon" 
-                className="rounded-full h-12 w-12"
-                onClick={toggleScreenShare}
-             >
-                {isScreenSharing ? <ScreenShareOff /> : <ScreenShare />}
-            </Button>
-            <Button
-                variant={isRecording ? 'destructive' : 'secondary'}
-                size="icon"
-                className="rounded-full h-12 w-12"
-                onClick={toggleRecording}
-                aria-label={isRecording ? 'Stop recording' : 'Start recording'}
-            >
-                <Circle className={`h-6 w-6 ${isRecording ? 'fill-white' : 'fill-red-500'}`} />
-            </Button>
-            <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsInviteDialogOpen(true)}>
-                <UserPlus />
-            </Button>
-             <Button variant="destructive" size="icon" className="rounded-full h-12 w-12 ml-8" onClick={leaveMeeting}>
-                <PhoneOff />
-            </Button>
-        </CardFooter>
-    </div>
-  );
+  const MeetingUI = ({ meetingId, meetingInstance }: { meetingId: string, meetingInstance: any }) => {
+    const endButtonIsDisabled = isHost && isRecording;
+    return (
+        <div className="h-full flex flex-col">
+            <CardHeader className="flex-row items-center justify-between">
+                <CardTitle>Meeting ID: {meetingId}</CardTitle>
+                {isRecording && (
+                    <div className="flex items-center gap-2 text-red-500 animate-pulse">
+                        <Circle className="h-3 w-3 fill-current" />
+                        <span className="font-medium text-sm">REC</span>
+                    </div>
+                )}
+            </CardHeader>
+            <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
+                {meetingInstance.localParticipant && <ParticipantView participant={meetingInstance.localParticipant} />}
+                {participants.map((participant: any) => (
+                    <ParticipantView key={participant.id} participant={participant} />
+                ))}
+            </CardContent>
+            <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
+                 <Button
+                    variant={isMicOn ? 'secondary' : 'destructive'}
+                    size="icon"
+                    className="rounded-full h-12 w-12"
+                    onClick={toggleMic}
+                    aria-label={isMicOn ? 'Mute' : 'Unmute'}
+                >
+                    {isMicOn ? <Mic /> : <MicOff />}
+                </Button>
+                <Button
+                    variant={isWebCamOn ? 'secondary' : 'destructive'}
+                    size="icon"
+                    className="rounded-full h-12 w-12"
+                    onClick={toggleWebcam}
+                    aria-label={isWebCamOn ? 'Turn off video' : 'Turn on video'}
+                >
+                    {isWebCamOn ? <Video /> : <VideoOff />}
+                </Button>
+                 <Button 
+                    variant={isScreenSharing ? 'default' : 'secondary'} 
+                    size="icon" 
+                    className="rounded-full h-12 w-12"
+                    onClick={toggleScreenShare}
+                 >
+                    {isScreenSharing ? <ScreenShareOff /> : <ScreenShare />}
+                </Button>
+                <Button
+                    variant={isRecording ? 'destructive' : 'secondary'}
+                    size="icon"
+                    className="rounded-full h-12 w-12"
+                    onClick={toggleRecording}
+                    aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+                >
+                    <Circle className={`h-6 w-6 ${isRecording ? 'fill-white' : 'fill-red-500'}`} />
+                </Button>
+                <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsInviteDialogOpen(true)}>
+                    <UserPlus />
+                </Button>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div className="ml-8">
+                             <Button variant="destructive" size="icon" className="rounded-full h-12 w-12" onClick={leaveOrEndMeeting} disabled={endButtonIsDisabled}>
+                                <PhoneOff />
+                            </Button>
+                        </div>
+                    </TooltipTrigger>
+                    {endButtonIsDisabled && (
+                        <TooltipContent>
+                            <p>Stop recording before ending the meeting.</p>
+                        </TooltipContent>
+                    )}
+                </Tooltip>
+            </CardFooter>
+        </div>
+    )
+  };
 
   const handleOpenMail = async (mail: InternalMail) => {
     setViewingMail(mail);
@@ -934,6 +974,7 @@ export default function MeetingPage() {
             setMails(prev => prev.filter(mail => !selectedMailIds.includes(mail.id)));
             setIsMailSelectionMode(false);
             setSelectedMailIds([]);
+            setViewingMail(null);
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error deleting mails' });
         }
@@ -980,7 +1021,7 @@ export default function MeetingPage() {
                             <span className="flex items-center">OR</span>
                             <div className="flex gap-2">
                                 <Input type="text" id="meetingIdTxt" placeholder="Enter Meeting ID" />
-                                <Button onClick={() => joinMeeting((document.getElementById('meetingIdTxt') as HTMLInputElement).value, false)}>Join Meeting</Button>
+                                <Button onClick={() => joinMeeting((document.getElementById('meetingIdTxt') as HTMLInputElement).value, false, false)}>Join Meeting</Button>
                             </div>
                         </div>
                     </div>
@@ -1810,5 +1851,6 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
