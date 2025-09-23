@@ -5,7 +5,7 @@
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc, limit, orderBy } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, BranchType, PosDeviceType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode, OfflineAction, TimeRecord, UserRequest, HRQuery, Reward, Department } from '@/lib/types';
+import type { User, BranchType, PosDeviceType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode, OfflineAction, TimeRecord, UserRequest, HRQuery, Reward, Department, Group } from '@/lib/types';
 import { fileManagementPermissions, teamManagementPermissions, settingsPermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
@@ -50,6 +50,7 @@ type SettingsContextType = {
     userRequests: UserRequest[];
     hrQueries: HRQuery[];
     rewards: Reward[];
+    groups: Group[];
     
     // Data setters (now write to DB)
     setFeatureSettings: (value: React.SetStateAction<FeatureSettings>) => void;
@@ -169,6 +170,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [userRequests, setUserRequestsState] = useState<UserRequest[]>([]);
     const [hrQueries, setHrQueriesState] = useState<HRQuery[]>([]);
     const [rewards, setRewardsState] = useState<Reward[]>([]);
+    const [groups, setGroupsState] = useState<Group[]>([]);
     const [currency, setCurrencyState] = useState<string>('$');
     const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
     
@@ -279,6 +281,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         userRequests: setUserRequestsState,
                         hr_queries: setHrQueriesState,
                         rewards: setRewardsState,
+                        groups: setGroupsState,
                     };
 
                     Object.entries(collections).forEach(([name, setter]) => {
@@ -307,7 +310,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setRolesState, setDepartmentsState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setBranches, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes, setUserRequestsState, setHrQueriesState, setRewardsState];
+                const collections = [setUsersState, setRolesState, setDepartmentsState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setBranches, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes, setUserRequestsState, setHrQueriesState, setRewardsState, setGroupsState];
                 collections.forEach(setter => setter([]));
             }
         });
@@ -640,6 +643,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         userRequests,
         hrQueries,
         rewards,
+        groups,
         accessCodes,
         generateAccessCode,
         validateAndUseAccessCode,
@@ -676,6 +680,7 @@ export function useSettings() {
 }
 
     
+
 
 
 

@@ -15,9 +15,9 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, writeBatch, serverTimestamp, orderBy, Unsubscribe } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, writeBatch, serverTimestamp, orderBy, Unsubscribe, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { User, ChatMessage, InternalMail, Attachment } from '@/lib/types';
+import type { User, ChatMessage, InternalMail, Attachment, Group } from '@/lib/types';
 import { format, formatDistanceToNow, formatDistanceToNowStrict } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -36,11 +36,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 type ChatMode = 'individual' | 'group';
 type MailboxView = "inbox" | "sent";
-type ActiveGroup = {
-  name: string;
-  users: User[];
-};
-
 
 const EMOJIS = [
   '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
@@ -64,7 +59,7 @@ declare global {
 
 export default function MeetingPage() {
   const { toast } = useToast();
-  const { loggedInUser, users } = useSettings();
+  const { loggedInUser, users, groups } = useSettings();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('video');
   const [meetingId, setMeetingId] = useState<string | null>(null);
@@ -77,6 +72,7 @@ export default function MeetingPage() {
   // Chat state
   const [userSearch, setUserSearch] = useState('');
   const [selectedChatUser, setSelectedChatUser] = useState<User | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [unreadSenders, setUnreadSenders] = useState<Set<string>>(new Set());
@@ -92,7 +88,6 @@ export default function MeetingPage() {
   const [groupUserSearch, setGroupUserSearch] = useState('');
   const [groupName, setGroupName] = useState('');
   const [activeChatMode, setActiveChatMode] = useState<ChatMode>('individual');
-  const [activeGroup, setActiveGroup] = useState<ActiveGroup | null>(null);
   const [replyingToMessage, setReplyingToMessage] = useState<ChatMessage | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isSending, setIsSending] = useState(false);
@@ -100,6 +95,7 @@ export default function MeetingPage() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
 
   // Invite state
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -440,76 +436,62 @@ export default function MeetingPage() {
   }, [loggedInUser]);
 
   useEffect(() => {
-    const isReadyForQuery = loggedInUser && (activeChatMode === 'individual' ? selectedChatUser : activeGroup);
-    
+    const isReadyForQuery = loggedInUser && (activeChatMode === 'individual' ? selectedChatUser : selectedGroup);
+
     if (!isReadyForQuery) {
-        setMessages([]);
-        return;
-    }
-
-    const messageMap = new Map<string, ChatMessage>();
-    const allSubscriptions: Unsubscribe[] = [];
-
-    const processAndSortMessages = () => {
-        const combinedMessages = Array.from(messageMap.values());
-        combinedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-        setMessages(combinedMessages);
+      setMessages([]);
+      return;
     }
     
-    const markMessagesAsRead = (snapshot: any) => {
-        const batch = writeBatch(db);
-        snapshot.docs.forEach((document: any) => {
-            const data = document.data();
-            if (data.receiverId === loggedInUser!.id && !data.isRead) {
-                batch.update(document.ref, { isRead: true });
-            }
-        });
-        if (batch.size > 0) {
-            batch.commit().catch(err => console.error("Error marking messages as read:", err));
-        }
-    }
-
-    const createSubscription = (q: any) => {
-        return onSnapshot(q, (snapshot) => {
-            snapshot.docs.forEach((doc: any) => {
-                messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage);
-            });
-            processAndSortMessages();
-            if(q.toString().includes(loggedInUser!.id)) markMessagesAsRead(snapshot);
-        });
-    };
+    let q: any;
 
     if (activeChatMode === 'individual' && selectedChatUser) {
-        const q1 = query(collection(db, 'chatMessages'), where('senderId', '==', loggedInUser!.id), where('receiverId', '==', selectedChatUser.id));
-        const q2 = query(collection(db, 'chatMessages'), where('senderId', '==', selectedChatUser.id), where('receiverId', '==', loggedInUser!.id));
-        allSubscriptions.push(createSubscription(q1));
-        allSubscriptions.push(createSubscription(q2));
-    } else if (activeChatMode === 'group' && activeGroup) {
-        const allMemberIds = activeGroup.users.map(u => u.id);
-        
-        // Messages you sent to any group member
-        const qSent = query(
+        q = query(
             collection(db, 'chatMessages'),
             where('businessId', '==', loggedInUser!.businessId),
-            where('senderId', '==', loggedInUser!.id),
-            where('receiverId', 'in', allMemberIds)
+            where('senderId', 'in', [loggedInUser!.id, selectedChatUser.id]),
+            where('receiverId', 'in', [loggedInUser!.id, selectedChatUser.id]),
+            orderBy('timestamp', 'asc')
         );
-        allSubscriptions.push(createSubscription(qSent));
-
-        // Messages any group member sent to you
-        const qReceived = query(
+    } else if (activeChatMode === 'group' && selectedGroup) {
+        q = query(
             collection(db, 'chatMessages'),
             where('businessId', '==', loggedInUser!.businessId),
-            where('receiverId', '==', loggedInUser!.id),
-            where('senderId', 'in', allMemberIds)
+            where('groupId', '==', selectedGroup.id),
+            orderBy('timestamp', 'asc')
         );
-        allSubscriptions.push(createSubscription(qReceived));
     }
 
-    return () => {
-        allSubscriptions.forEach(unsub => unsub());
-    };
-}, [loggedInUser, selectedChatUser, activeChatMode, activeGroup]);
+    if (!q) return;
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const newMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage));
+        
+        if (activeChatMode === 'individual' && selectedChatUser) {
+            // Filter out messages that are part of a group chat
+            setMessages(newMessages.filter(m => !m.groupId && m.senderId !== m.receiverId));
+
+            const batch = writeBatch(db);
+            let hasUnread = false;
+            snapshot.docs.forEach(doc => {
+                const data = doc.data();
+                if (data.receiverId === loggedInUser!.id && !data.isRead) {
+                    batch.update(doc.ref, { isRead: true });
+                    hasUnread = true;
+                }
+            });
+            if (hasUnread) {
+                batch.commit().catch(err => console.error("Error marking messages as read:", err));
+            }
+
+        } else {
+             setMessages(newMessages);
+        }
+    });
+
+    return () => unsubscribe();
+
+}, [loggedInUser, selectedChatUser, activeChatMode, selectedGroup]);
   
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -517,8 +499,19 @@ export default function MeetingPage() {
   
   const handleSendMessage = async (e: React.FormEvent) => {
       e.preventDefault();
-      if ((!newMessage.trim() && attachments.length === 0) || !loggedInUser || !selectedChatUser) return;
+      if ((!newMessage.trim() && attachments.length === 0) || !loggedInUser) return;
       
+      let targetRecipientId: string | undefined;
+      let targetGroupId: string | undefined;
+
+      if (activeChatMode === 'individual' && selectedChatUser) {
+          targetRecipientId = selectedChatUser.id;
+      } else if (activeChatMode === 'group' && selectedGroup) {
+          targetGroupId = selectedGroup.id;
+      } else {
+          return;
+      }
+
       setIsSending(true);
 
       try {
@@ -538,13 +531,18 @@ export default function MeetingPage() {
 
           const messageData: Omit<ChatMessage, 'id'> = {
               senderId: loggedInUser.id,
-              receiverId: selectedChatUser.id,
               content: newMessage,
               timestamp: new Date().toISOString(),
               isRead: false,
               businessId: loggedInUser.businessId,
               attachments: finalAttachments,
           };
+          
+          if(targetGroupId) {
+              messageData.groupId = targetGroupId;
+          } else {
+              messageData.receiverId = targetRecipientId;
+          }
 
           if (replyingToMessage) {
             messageData.replyTo = {
@@ -565,66 +563,6 @@ export default function MeetingPage() {
       }
   };
 
-  const handleSendGroupMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if ((!newMessage.trim() && attachments.length === 0) || !loggedInUser || !activeGroup) return;
-
-    setIsSending(true);
-
-    try {
-        const uploadedAttachments = await Promise.all(
-            (attachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
-                const folder = `chat_attachments/${loggedInUser!.id}`;
-                await uploadFile(loggedInUser!.businessId!, folder, attachment.file);
-                const url = await getPublicUrl(loggedInUser!.businessId!, `${folder}/${attachment.file.name}`);
-                return { name: attachment.name, url };
-            })
-        );
-        
-        const finalAttachments = [
-            ...attachments.filter(a => !(a as any).source),
-            ...uploadedAttachments
-        ];
-
-        const batch = writeBatch(db);
-
-        activeGroup.users.forEach(recipient => {
-            if (recipient.id === loggedInUser!.id) return; // Don't send to self
-
-            const messageRef = doc(collection(db, 'chatMessages'));
-            const messageData: Omit<ChatMessage, 'id'> = {
-                senderId: loggedInUser!.id,
-                receiverId: recipient.id,
-                content: newMessage,
-                timestamp: new Date().toISOString(),
-                isRead: false,
-                businessId: loggedInUser!.businessId,
-                attachments: finalAttachments,
-                // You might want to add a group identifier here in the future
-            };
-             if (replyingToMessage) {
-                messageData.replyTo = {
-                    messageId: replyingToMessage.id,
-                    senderName: users.find(u => u.id === replyingToMessage.senderId)?.name || 'Unknown',
-                    content: replyingToMessage.content,
-                };
-            }
-            batch.set(messageRef, messageData);
-        });
-
-        await batch.commit();
-
-        setNewMessage('');
-        setReplyingToMessage(null);
-        setAttachments([]);
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Error sending group message' });
-    } finally {
-        setIsSending(false);
-    }
-  };
-
-
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       if (event.target.files) {
           const newFiles = Array.from(event.target.files).map(file => ({
@@ -635,10 +573,6 @@ export default function MeetingPage() {
           }));
           setAttachments(prev => [...prev, ...newFiles as any]);
       }
-  };
-
-  const handleRemoveAttachment = (fileName: string) => {
-      setAttachments(prev => prev.filter(file => file.name !== fileName));
   };
   
   const handleEmojiSelect = (emoji: string) => {
@@ -717,7 +651,15 @@ export default function MeetingPage() {
   const handleSelectIndividualChat = (user: User) => {
     setActiveChatMode('individual');
     setSelectedChatUser(user);
-    setActiveGroup(null);
+    setSelectedGroup(null);
+    setIsSelectionMode(false);
+    setSelectedMessages([]);
+  };
+
+  const handleSelectGroupChat = (group: Group) => {
+    setActiveChatMode('group');
+    setSelectedGroup(group);
+    setSelectedChatUser(null);
     setIsSelectionMode(false);
     setSelectedMessages([]);
   };
@@ -730,22 +672,63 @@ export default function MeetingPage() {
     );
   };
 
-  const handleStartGroupChat = () => {
-    if (groupRecipients.length < 1) {
-      toast({ variant: 'destructive', title: "Not enough users", description: "Please select at least one user for a group chat." });
+  const handleCreateGroupChat = async () => {
+    if (!loggedInUser || groupRecipients.length === 0) {
+      toast({ variant: 'destructive', title: "Not enough users", description: "Please select at least one other user for a group chat." });
       return;
     }
-    setActiveChatMode('group');
-    setActiveGroup({
-      name: groupName || [loggedInUser!, ...groupRecipients].map(u => u.name).join(', '),
-      users: [loggedInUser!, ...groupRecipients]
-    });
-    setMessages([]); // Clear messages for new group chat
-    setSelectedChatUser(null);
-    setIsGroupChatDialogOpen(false);
-    setGroupRecipients([]);
-    setGroupUserSearch('');
-    setGroupName('');
+    
+    const allMembers = [loggedInUser, ...groupRecipients];
+
+    const newGroup: Omit<Group, 'id'> = {
+        name: groupName || allMembers.map(u => u.name).join(', '),
+        members: allMembers.map(u => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })),
+        creatorId: loggedInUser.id,
+        businessId: loggedInUser.businessId,
+        createdAt: new Date().toISOString(),
+    };
+
+    try {
+        const docRef = await addDoc(collection(db, 'groups'), newGroup);
+        const createdGroup = { ...newGroup, id: docRef.id };
+        
+        handleSelectGroupChat(createdGroup);
+
+        setIsGroupChatDialogOpen(false);
+        setGroupRecipients([]);
+        setGroupUserSearch('');
+        setGroupName('');
+
+        toast({ title: "Group Created!", description: `You can now chat in "${createdGroup.name}".`});
+
+    } catch (error) {
+        toast({ variant: 'destructive', title: "Error Creating Group" });
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+      if (!selectedGroup) return;
+      setIsDeletingGroup(true);
+      try {
+          const batch = writeBatch(db);
+          // Delete the group document
+          batch.delete(doc(db, 'groups', selectedGroup.id));
+
+          // Find and delete all messages associated with the group
+          const messagesQuery = query(collection(db, 'chatMessages'), where('groupId', '==', selectedGroup.id));
+          const messagesSnapshot = await getDocs(messagesQuery);
+          messagesSnapshot.forEach(doc => batch.delete(doc.ref));
+
+          await batch.commit();
+
+          toast({ title: 'Group Deleted' });
+          setSelectedGroup(null);
+          setMessages([]);
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error Deleting Group' });
+      } finally {
+        setIsDeletingGroup(false);
+      }
   };
 
   const filteredGroupUsers = useMemo(() => {
@@ -787,11 +770,11 @@ export default function MeetingPage() {
 
 
   const ChatHeaderContent = () => {
-    if (activeChatMode === 'group' && activeGroup) {
+    if (activeChatMode === 'group' && selectedGroup) {
       return (
         <CardTitle className="flex items-center gap-3">
           <div className="flex -space-x-4">
-            {activeGroup.users.slice(0, 3).map(user => (
+            {selectedGroup.members.slice(0, 3).map(user => (
               <Avatar key={user.id} className="h-9 w-9 border-2 border-background">
                 <AvatarImage src={user.avatar_url || ''} />
                 <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
@@ -799,14 +782,14 @@ export default function MeetingPage() {
             ))}
           </div>
           <div className="truncate">
-             <p className="truncate">{activeGroup.name}</p>
-             <p className="text-sm font-normal text-muted-foreground">Group Chat ({activeGroup.users.length})</p>
+             <p className="truncate">{selectedGroup.name}</p>
+             <p className="text-sm font-normal text-muted-foreground">Group Chat ({selectedGroup.members.length})</p>
           </div>
         </CardTitle>
       );
     }
 
-    if (selectedChatUser) {
+    if (activeChatMode === 'individual' && selectedChatUser) {
       return (
         <CardTitle className="flex items-center gap-3">
           <Avatar>
@@ -1141,6 +1124,7 @@ export default function MeetingPage() {
       document.body.removeChild(a);
     };
 
+    const myGroups = useMemo(() => groups.filter(g => g.members.some(m => m.id === loggedInUser?.id)), [groups, loggedInUser]);
 
   return (
     <div className="space-y-8">
@@ -1198,7 +1182,7 @@ export default function MeetingPage() {
                       <div className="relative mt-2">
                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                            <Input 
-                                placeholder="Search users..."
+                                placeholder="Search users or groups..."
                                 className="pl-9"
                                 value={userSearch}
                                 onChange={(e) => setUserSearch(e.target.value)}
@@ -1206,6 +1190,23 @@ export default function MeetingPage() {
                       </div>
                   </CardHeader>
                   <ScrollArea className="flex-1">
+                      {myGroups.filter(g => g.name.toLowerCase().includes(userSearch.toLowerCase())).map(group => (
+                          <button 
+                            key={group.id} 
+                            className={`w-full text-left p-3 hover:bg-accent ${selectedGroup?.id === group.id && activeChatMode === 'group' ? 'bg-accent' : ''}`}
+                            onClick={() => handleSelectGroupChat(group)}
+                          >
+                              <div className="flex items-center gap-3">
+                                  <Avatar>
+                                      <AvatarFallback><Users className="h-5 w-5"/></AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex-1">
+                                      <p className="font-semibold truncate">{group.name}</p>
+                                      <p className="text-xs text-muted-foreground">{group.members.length} members</p>
+                                  </div>
+                              </div>
+                          </button>
+                      ))}
                       {filteredUsers.map(user => (
                           <button 
                             key={user.id} 
@@ -1232,7 +1233,7 @@ export default function MeetingPage() {
               <div className="w-2/3 flex flex-col">
                     {inChatMeeting && meeting && chatMeetingId ? (
                          <MeetingUI meetingId={chatMeetingId} meetingInstance={meeting} />
-                    ) : selectedChatUser || (activeChatMode === 'group' && activeGroup) ? (
+                    ) : selectedChatUser || selectedGroup ? (
                         <>
                             <CardHeader className="border-b flex-row items-center justify-between">
                                 <ChatHeaderContent />
@@ -1274,6 +1275,19 @@ export default function MeetingPage() {
                                           <Button variant="outline" size="icon" onClick={handleToggleSelectionMode}>
                                               <CheckSquare className="h-5 w-5" />
                                           </Button>
+                                          {activeChatMode === 'group' && selectedGroup?.creatorId === loggedInUser?.id && (
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="destructive" size="icon" disabled={isDeletingGroup}>
+                                                          {isDeletingGroup ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4" />}
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader><AlertDialogTitle>Delete Group?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the group and all its messages. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                                                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteGroup} className="bg-destructive hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                          )}
                                           {activeChatMode === 'individual' && (
                                             <Button variant="outline" size="icon" onClick={handleStartVideoCall}>
                                                 <Video className="h-5 w-5"/>
@@ -1304,6 +1318,9 @@ export default function MeetingPage() {
                                               </Avatar>
                                             )}
                                             <div className={`flex flex-col max-w-sm ${msg.senderId === loggedInUser?.id ? 'items-end' : 'items-start'}`}>
+                                                {activeChatMode === 'group' && msg.senderId !== loggedInUser?.id && (
+                                                    <p className="text-xs text-muted-foreground mb-1 ml-1">{users.find(u => u.id === msg.senderId)?.name}</p>
+                                                )}
                                                 {msg.replyTo && (
                                                     <div className="mb-1 rounded-md bg-black/5 dark:bg-white/5 px-2 py-1 text-xs text-muted-foreground w-full">
                                                         <p className="font-semibold">{msg.replyTo.senderName}</p>
@@ -1383,7 +1400,7 @@ export default function MeetingPage() {
                                         <AttachmentPreviewer attachments={attachments} />
                                     </div>
                                 )}
-                                <form onSubmit={activeChatMode === 'group' ? handleSendGroupMessage : handleSendMessage} className="flex w-full items-center gap-2">
+                                <form onSubmit={handleSendMessage} className="flex w-full items-center gap-2">
                                     <div className="relative flex-1">
                                         <Input 
                                             ref={chatInputRef}
@@ -1443,8 +1460,8 @@ export default function MeetingPage() {
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground">
                             <MessageSquare className="h-16 w-16 mb-4" />
-                            <h3 className="text-lg font-semibold">Select a user to start chatting</h3>
-                            <p className="max-w-xs">Or, start a new group chat using the icon in the top left.</p>
+                            <h3 className="text-lg font-semibold">Select a conversation</h3>
+                            <p className="max-w-xs">Choose a user or a group to start chatting.</p>
                         </div>
                     )}
               </div>
@@ -1718,7 +1735,7 @@ export default function MeetingPage() {
         </ScrollArea>
         <DialogFooter>
               <Button variant="ghost" onClick={() => setIsGroupChatDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleStartGroupChat} disabled={groupRecipients.length < 1}>
+            <Button onClick={handleCreateGroupChat} disabled={groupRecipients.length < 1}>
                 <MessageSquare className="mr-2 h-4 w-4" />
                 Start Chat ({groupRecipients.length})
             </Button>
@@ -2038,6 +2055,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
