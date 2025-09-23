@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift, Download, Search, MessageSquare } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift, Download, Search, MessageSquare, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type UserRequest, type HRQuery, type Reward } from "@/lib/types";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, updateDoc, doc, query, where, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, onSnapshot, writeBatch } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
@@ -29,6 +29,9 @@ import type { DateRange } from "react-day-picker";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AttachmentPreviewer } from "@/components/attachment-previewer";
 import Papa from "papaparse";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
@@ -62,6 +65,10 @@ export default function DashboardPage() {
   const [rewardSearch, setRewardSearch] = useState("");
   
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+
+  const [selectedQueryIds, setSelectedQueryIds] = useState<string[]>([]);
+  const [selectedRewardIds, setSelectedRewardIds] = useState<string[]>([]);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
 
   const { toast } = useToast();
   
@@ -358,6 +365,28 @@ export default function DashboardPage() {
     setIsRewardDialogOpen(false);
   };
   
+  const handleDeleteSelected = async (collectionName: 'hr_queries' | 'rewards' | 'userRequests', selectedIds: string[], onComplete: () => void) => {
+    const batch = writeBatch(db);
+    selectedIds.forEach(id => {
+      batch.delete(doc(db, collectionName, id));
+    });
+
+    try {
+      await batch.commit();
+      toast({
+        title: `${selectedIds.length} Item(s) Deleted`,
+        description: `The selected items have been permanently removed from ${collectionName}.`,
+      });
+      onComplete();
+    } catch (error: any) {
+      toast({
+        title: "Deletion Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+  
   const DatePicker = ({ dateRange, setDateRange }: { dateRange: DateRange | undefined, setDateRange: (range: DateRange | undefined) => void }) => (
      <Popover>
         <PopoverTrigger asChild>
@@ -497,12 +526,13 @@ export default function DashboardPage() {
                   <CardDescription>
                       You have been recognized for your hard work! View your rewards below.
                   </CardDescription>
-              </CardHeader>
+              
               <CardContent>
                   <Button asChild>
                       <Link href="#my-rewards-section">View Rewards ({pendingRewards.length})</Link>
                   </Button>
               </CardContent>
+              </CardHeader>
           </Card>
       )}
 
@@ -584,6 +614,20 @@ export default function DashboardPage() {
                           onChange={(e) => setQuerySearch(e.target.value)}
                       />
                   </div>
+                   {selectedQueryIds.length > 0 && (
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete ({selectedQueryIds.length})
+                            </Button>
+                        </AlertDialogTrigger>
+                         <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected queries.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteSelected('hr_queries', selectedQueryIds, () => setSelectedQueryIds([]))} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
                   <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyQueries, 'my_queries')}>
                       <Download className="mr-2 h-4 w-4" /> Export
                   </Button>
@@ -593,6 +637,13 @@ export default function DashboardPage() {
               <Table>
                   <TableHeader>
                       <TableRow>
+                          <TableHead padding="checkbox">
+                             <Checkbox
+                                checked={filteredMyQueries.length > 0 && selectedQueryIds.length === filteredMyQueries.length}
+                                onCheckedChange={(checked) => setSelectedQueryIds(checked ? filteredMyQueries.map(q => q.id) : [])}
+                                aria-label="Select all queries"
+                            />
+                          </TableHead>
                           <TableHead>Title</TableHead>
                           <TableHead>From</TableHead>
                           <TableHead>Amount</TableHead>
@@ -604,7 +655,14 @@ export default function DashboardPage() {
                   <TableBody>
                       {filteredMyQueries.length > 0 ? (
                           filteredMyQueries.map(query => (
-                              <TableRow key={query.id}>
+                              <TableRow key={query.id} data-state={selectedQueryIds.includes(query.id) && "selected"}>
+                                  <TableCell padding="checkbox">
+                                    <Checkbox
+                                        checked={selectedQueryIds.includes(query.id)}
+                                        onCheckedChange={(checked) => setSelectedQueryIds(prev => checked ? [...prev, query.id] : prev.filter(id => id !== query.id))}
+                                        aria-label="Select query"
+                                    />
+                                  </TableCell>
                                   <TableCell className="font-medium">{query.title}</TableCell>
                                   <TableCell>{query.requesterName}</TableCell>
                                   <TableCell>
@@ -623,7 +681,7 @@ export default function DashboardPage() {
                           ))
                       ) : (
                          <TableRow>
-                            <TableCell colSpan={6} className="text-center h-24">You have no queries for the selected date range.</TableCell>
+                            <TableCell colSpan={7} className="text-center h-24">You have no queries for the selected date range.</TableCell>
                         </TableRow>
                       )}
                   </TableBody>
@@ -653,6 +711,20 @@ export default function DashboardPage() {
                           onChange={(e) => setRewardSearch(e.target.value)}
                       />
                   </div>
+                    {selectedRewardIds.length > 0 && (
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete ({selectedRewardIds.length})
+                            </Button>
+                        </AlertDialogTrigger>
+                         <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the selected rewards.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteSelected('rewards', selectedRewardIds, () => setSelectedRewardIds([]))} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
                   <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRewards, 'my_rewards')}>
                       <Download className="mr-2 h-4 w-4" /> Export
                   </Button>
@@ -662,6 +734,13 @@ export default function DashboardPage() {
               <Table>
                   <TableHeader>
                       <TableRow>
+                          <TableHead padding="checkbox">
+                            <Checkbox
+                                checked={filteredMyRewards.length > 0 && selectedRewardIds.length === filteredMyRewards.length}
+                                onCheckedChange={(checked) => setSelectedRewardIds(checked ? filteredMyRewards.map(r => r.id) : [])}
+                                aria-label="Select all rewards"
+                            />
+                          </TableHead>
                           <TableHead>Title</TableHead>
                           <TableHead>From</TableHead>
                           <TableHead>Amount</TableHead>
@@ -673,7 +752,14 @@ export default function DashboardPage() {
                   <TableBody>
                       {filteredMyRewards.length > 0 ? (
                           filteredMyRewards.map(reward => (
-                              <TableRow key={reward.id}>
+                              <TableRow key={reward.id} data-state={selectedRewardIds.includes(reward.id) && "selected"}>
+                                  <TableCell padding="checkbox">
+                                     <Checkbox
+                                        checked={selectedRewardIds.includes(reward.id)}
+                                        onCheckedChange={(checked) => setSelectedRewardIds(prev => checked ? [...prev, reward.id] : prev.filter(id => id !== reward.id))}
+                                        aria-label="Select reward"
+                                    />
+                                  </TableCell>
                                   <TableCell className="font-medium">{reward.title}</TableCell>
                                   <TableCell>{reward.proposerName}</TableCell>
                                    <TableCell>
@@ -692,7 +778,7 @@ export default function DashboardPage() {
                           ))
                       ) : (
                          <TableRow>
-                            <TableCell colSpan={6} className="text-center h-24">You have no rewards for the selected date range.</TableCell>
+                            <TableCell colSpan={7} className="text-center h-24">You have no rewards for the selected date range.</TableCell>
                         </TableRow>
                       )}
                   </TableBody>
@@ -717,6 +803,20 @@ export default function DashboardPage() {
                         onChange={(e) => setRequestSearch(e.target.value)}
                     />
                 </div>
+                 {selectedRequestIds.length > 0 && (
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete ({selectedRequestIds.length})
+                            </Button>
+                        </AlertDialogTrigger>
+                         <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete your selected requests.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteSelected('userRequests', selectedRequestIds, () => setSelectedRequestIds([]))} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
                 <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRequests, 'my_requests')}>
                     <Download className="mr-2 h-4 w-4" /> Export
                 </Button>
@@ -828,6 +928,13 @@ export default function DashboardPage() {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead padding="checkbox">
+                                <Checkbox
+                                    checked={filteredMyRequests.length > 0 && selectedRequestIds.length === filteredMyRequests.length}
+                                    onCheckedChange={(checked) => setSelectedRequestIds(checked ? filteredMyRequests.map(r => r.id) : [])}
+                                    aria-label="Select all requests"
+                                />
+                            </TableHead>
                             <TableHead className="w-[200px]">Request Type</TableHead>
                             <TableHead>Description</TableHead>
                             <TableHead>Amount</TableHead>
@@ -839,7 +946,14 @@ export default function DashboardPage() {
                     <TableBody>
                         {filteredMyRequests.length > 0 ? (
                             filteredMyRequests.map(request => (
-                                <TableRow key={request.id}>
+                                <TableRow key={request.id} data-state={selectedRequestIds.includes(request.id) && "selected"}>
+                                    <TableCell padding="checkbox">
+                                        <Checkbox
+                                            checked={selectedRequestIds.includes(request.id)}
+                                            onCheckedChange={(checked) => setSelectedRequestIds(prev => checked ? [...prev, request.id] : prev.filter(id => id !== request.id))}
+                                            aria-label="Select request"
+                                        />
+                                    </TableCell>
                                     <TableCell className="font-medium">{request.requestType}</TableCell>
                                     <TableCell className="text-muted-foreground truncate max-w-sm">{request.description}</TableCell>
                                     <TableCell>
@@ -858,7 +972,7 @@ export default function DashboardPage() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center h-24">You have not made any requests for the selected date range.</TableCell>
+                                <TableCell colSpan={7} className="text-center h-24">You have not made any requests for the selected date range.</TableCell>
                             </TableRow>
                         )}
                     </TableBody>
