@@ -202,6 +202,8 @@ export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissio
     departmentId?: string;
     departmentName?: string;
     remuneration?: number;
+    defaultClockInTime?: string;
+    defaultClockOutTime?: string;
 }
 export type Customer = Database['public']['Tables']['customers']['Row'] & { businessId: string };
 export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 'payment_methods'> & {

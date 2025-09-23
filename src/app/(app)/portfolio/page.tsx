@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
@@ -147,7 +148,7 @@ export default function PortfolioPage() {
       const folder = `profile_pictures`;
       const fileName = `${editingUser.id}_${Date.now()}.${file.name.split('.').pop()}`;
       
-      await uploadFile(loggedInUser.businessId, editingUser.id, folder, new File([file], fileName), () => {});
+      await uploadFile(loggedInUser.businessId, editingUser.id, folder, new File([file], fileName));
       const publicUrl = await getPublicUrl(loggedInUser.businessId, [loggedInUser.businessId, 'user_files', editingUser.id, folder, fileName].join('/'));
 
       await updateDoc(doc(db, "users", editingUser.id), { avatar_url: publicUrl });
@@ -201,7 +202,7 @@ export default function PortfolioPage() {
 
     setIsDocumentUploading(true);
     try {
-      await uploadFile(loggedInUser.businessId, editingUser.id, 'documents', file, () => {});
+      await uploadFile(loggedInUser.businessId, editingUser.id, 'documents', file);
       toast({ title: "Document Uploaded", description: `${file.name} has been added to the employee's portfolio.` });
       await fetchUserFiles(editingUser); // Refresh file list
 
@@ -218,6 +219,8 @@ export default function PortfolioPage() {
     
     const formData = new FormData(event.currentTarget);
     const newRemuneration = parseFloat(formData.get("remuneration") as string);
+    const clockInTime = formData.get("defaultClockInTime") as string;
+    const clockOutTime = formData.get("defaultClockOutTime") as string;
     
     if (isNaN(newRemuneration)) {
         toast({ title: "Invalid Input", description: "Please enter a valid number for remuneration.", variant: "destructive" });
@@ -226,8 +229,16 @@ export default function PortfolioPage() {
 
     setIsSaving(true);
     try {
-        await updateDoc(doc(db, "users", editingUser.id), { remuneration: newRemuneration });
-        setEditingUser(prev => prev ? { ...prev, remuneration: newRemuneration } : null);
+        const updateData: Partial<User> = {
+            remuneration: newRemuneration,
+            defaultClockInTime: clockInTime,
+            defaultClockOutTime: clockOutTime,
+        };
+
+        await updateDoc(doc(db, "users", editingUser.id), updateData);
+        
+        setEditingUser(prev => prev ? { ...prev, ...updateData } : null);
+        
         toast({ title: "Portfolio Updated" });
     } catch (error: any) {
         toast({ title: "Save Failed", description: error.message, variant: "destructive" });
@@ -285,6 +296,8 @@ export default function PortfolioPage() {
                   <TableHead>Employee</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Remuneration</TableHead>
+                  <TableHead>Default Clock In</TableHead>
+                  <TableHead>Default Clock Out</TableHead>
                   <TableHead>Query Count</TableHead>
                   <TableHead>Query Amount</TableHead>
                   <TableHead>Reward Count</TableHead>
@@ -312,6 +325,8 @@ export default function PortfolioPage() {
                       <TableCell>
                         {user.remuneration != null ? `${currency}${user.remuneration.toFixed(2)}` : 'N/A'}
                       </TableCell>
+                      <TableCell>{user.defaultClockInTime || 'N/A'}</TableCell>
+                      <TableCell>{user.defaultClockOutTime || 'N/A'}</TableCell>
                       <TableCell>{userAggregates[user.id]?.queryCount || 0}</TableCell>
                       <TableCell>{currency}{(userAggregates[user.id]?.queryAmount || 0).toFixed(2)}</TableCell>
                       <TableCell>{userAggregates[user.id]?.rewardCount || 0}</TableCell>
@@ -325,7 +340,7 @@ export default function PortfolioPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">
+                    <TableCell colSpan={10} className="h-24 text-center">
                       No users found.
                     </TableCell>
                   </TableRow>
@@ -378,6 +393,16 @@ export default function PortfolioPage() {
                                         <div className="flex items-center gap-2">
                                             <span className="text-muted-foreground">{currency}</span>
                                             <Input id="remuneration" name="remuneration" type="number" step="0.01" defaultValue={editingUser.remuneration} className="w-32" />
+                                        </div>
+                                    </div>
+                                     <div className="grid grid-cols-2 gap-4 pt-2">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="defaultClockInTime">Default Clock In</Label>
+                                            <Input id="defaultClockInTime" name="defaultClockInTime" type="time" defaultValue={editingUser.defaultClockInTime} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="defaultClockOutTime">Default Clock Out</Label>
+                                            <Input id="defaultClockOutTime" name="defaultClockOutTime" type="time" defaultValue={editingUser.defaultClockOutTime} />
                                         </div>
                                     </div>
                                 </div>
