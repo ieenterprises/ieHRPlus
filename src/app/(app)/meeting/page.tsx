@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff, Circle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -115,6 +115,7 @@ export default function MeetingPage() {
   const [isMicOn, setIsMicOn] = useState(true);
   const [isWebCamOn, setIsWebCamOn] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
 
   useEffect(() => {
@@ -236,6 +237,10 @@ export default function MeetingPage() {
     newMeeting.on("participant-left", (participant: any) => {
         setParticipants(prev => prev.filter(p => p.id !== participant.id));
     });
+    
+    newMeeting.on('recording-state-changed', (data: any) => {
+        setIsRecording(data.status === 'RECORDING_STARTED');
+    });
   };
   
   const handleCreateAndJoin = async (fromChat: boolean) => {
@@ -274,6 +279,14 @@ export default function MeetingPage() {
         meeting?.enableScreenShare();
       }
       setIsScreenSharing(!isScreenSharing);
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      meeting?.stopRecording();
+    } else {
+      meeting?.startRecording();
+    }
   };
 
   const sendMeetingInvite = async (recipientId: string, id: string, fromChat: boolean) => {
@@ -407,7 +420,7 @@ export default function MeetingPage() {
           const uploadedAttachments = await Promise.all(
                 (attachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
                   const folder = `chat_attachments/${loggedInUser!.id}`;
-                  await uploadFile(loggedInUser!.businessId!, folder, attachment.file, () => {});
+                  await uploadFile(loggedInUser!.businessId!, folder, attachment.file);
                   const url = await getPublicUrl(loggedInUser!.businessId!, `${folder}/${attachment.file.name}`);
                   return { name: attachment.name, url };
               })
@@ -789,8 +802,14 @@ export default function MeetingPage() {
   
   const MeetingUI = ({ meetingId, meetingInstance }: { meetingId: string, meetingInstance: any }) => (
     <div className="h-full flex flex-col">
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Meeting ID: {meetingId}</CardTitle>
+            {isRecording && (
+                <div className="flex items-center gap-2 text-red-500 animate-pulse">
+                    <Circle className="h-3 w-3 fill-current" />
+                    <span className="font-medium text-sm">REC</span>
+                </div>
+            )}
         </CardHeader>
         <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
             {meetingInstance.localParticipant && <ParticipantView participant={meetingInstance.localParticipant} />}
@@ -824,6 +843,15 @@ export default function MeetingPage() {
                 onClick={toggleScreenShare}
              >
                 {isScreenSharing ? <ScreenShareOff /> : <ScreenShare />}
+            </Button>
+            <Button
+                variant={isRecording ? 'destructive' : 'secondary'}
+                size="icon"
+                className="rounded-full h-12 w-12"
+                onClick={toggleRecording}
+                aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+            >
+                <Circle className={`h-6 w-6 ${isRecording ? 'fill-white' : 'fill-red-500'}`} />
             </Button>
             <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsInviteDialogOpen(true)}>
                 <UserPlus />
@@ -1627,7 +1655,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
             const uploadedAttachments = await Promise.all(
                 (mailAttachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
                     const folder = `mail_attachments/${loggedInUser.id}`;
-                    await uploadFile(loggedInUser.businessId!, folder, attachment.file, () => {});
+                    await uploadFile(loggedInUser.businessId!, folder, attachment.file);
                     const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${attachment.file.name}`);
                     return { name: attachment.name, url };
                 })
@@ -1770,3 +1798,4 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
