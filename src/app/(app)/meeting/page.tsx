@@ -187,11 +187,11 @@ export default function MeetingPage() {
   };
 
   const joinMeeting = (id: string, fromChat: boolean) => {
-    if (!process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN) {
+    if (!process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN || !loggedInUser) {
         toast({
           variant: "destructive",
-          title: "VideoSDK Token Missing",
-          description: "Please add your VideoSDK token to a .env file.",
+          title: "Configuration Error",
+          description: "VideoSDK token or user information is missing.",
         });
         return;
       }
@@ -238,8 +238,20 @@ export default function MeetingPage() {
         setParticipants(prev => prev.filter(p => p.id !== participant.id));
     });
     
-    newMeeting.on('recording-state-changed', (data: any) => {
+    newMeeting.on('recording-state-changed', async (data: any) => {
         setIsRecording(data.status === 'RECORDING_STARTED');
+        if (data.status === 'RECORDING_STOPPED' && data.payload?.file) {
+            const recordingFile = data.payload.file;
+            toast({ title: "Recording Stopped", description: "Uploading to your file manager..." });
+            try {
+                if (loggedInUser && loggedInUser.businessId) {
+                    await uploadFile(loggedInUser.businessId, loggedInUser.id, 'meeting_recordings', recordingFile);
+                    toast({ title: "Upload Complete", description: "Recording saved to your 'Meeting Recordings' folder." });
+                }
+            } catch (error) {
+                toast({ variant: 'destructive', title: "Upload Failed", description: "Could not save the recording." });
+            }
+        }
     });
   };
   
@@ -1798,4 +1810,5 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
