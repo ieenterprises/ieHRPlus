@@ -131,15 +131,24 @@ export default function MeetingPage() {
   useEffect(() => {
     if (!loggedInUser?.businessId || activeTab !== 'mail') return;
     
+    // The query now only filters by businessId. Sorting will be done client-side.
     const q = query(
       collection(db, 'internal_mails'),
-      where('businessId', '==', loggedInUser.businessId),
-      orderBy('timestamp', 'desc')
+      where('businessId', '==', loggedInUser.businessId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allMails = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InternalMail));
-      const myMails = allMails.filter(mail => mail.senderId === loggedInUser.id || mail.recipients.some(r => r.id === loggedInUser.id));
+      
+      // Filter for mails involving the logged-in user
+      const myMails = allMails.filter(mail => 
+          mail.senderId === loggedInUser.id || 
+          mail.recipients.some(r => r.id === loggedInUser.id)
+      );
+
+      // Sort the mails by timestamp in descending order on the client
+      myMails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
       setMails(myMails);
     });
 
