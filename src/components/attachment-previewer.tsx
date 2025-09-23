@@ -33,10 +33,7 @@ const PreviewContent = ({ fileUrl, fileName }: { fileUrl: string, fileName: stri
     if (isAudio) {
         return <audio controls src={fileUrl} className="w-full" />;
     }
-     if (isPdf) {
-        return <iframe src={fileUrl} className="w-full h-full border-0" title="PDF Preview" />;
-    }
-    if (isOfficeDoc) {
+    if (isPdf || isOfficeDoc) {
         const googleDocsUrl = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
         return <iframe src={googleDocsUrl} className="w-full h-full border-0" title="Document Preview" />;
     }

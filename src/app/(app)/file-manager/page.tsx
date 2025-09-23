@@ -27,7 +27,11 @@ type ClipboardData = {
 };
 
 const PreviewContent = ({ fileUrl, fileType }: { fileUrl: string, fileType: string }) => {
-    const isOfficeDoc = fileType.includes('officedocument') || fileType.includes('msword') || fileType.includes('mspowerpoint') || fileType.includes('msexcel');
+    const isOfficeDocOrPdf = fileType.includes('officedocument') ||
+                           fileType.includes('msword') ||
+                           fileType.includes('mspowerpoint') ||
+                           fileType.includes('msexcel') ||
+                           fileType === 'application/pdf';
 
     if (fileType.startsWith('image/')) {
         return <img src={fileUrl} alt="File preview" className="max-w-full max-h-[80vh] mx-auto" />;
@@ -38,10 +42,7 @@ const PreviewContent = ({ fileUrl, fileType }: { fileUrl: string, fileType: stri
     if (fileType.startsWith('audio/')) {
         return <audio controls src={fileUrl} className="w-full" />;
     }
-     if (fileType === 'application/pdf') {
-        return <iframe src={fileUrl} className="w-full h-full border-0" title="PDF Preview" />;
-    }
-    if (isOfficeDoc) {
+    if (isOfficeDocOrPdf) {
         const googleDocsUrl = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
         return <iframe src={googleDocsUrl} className="w-full h-full border-0" title="Document Preview" />;
     }
