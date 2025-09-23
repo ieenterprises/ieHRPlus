@@ -123,6 +123,10 @@ export default function MeetingPage() {
   const [lastRecording, setLastRecording] = useState<{ file: File; url: string; meetingId: string; } | null>(null);
   const [isUploadingRecording, setIsUploadingRecording] = useState(false);
 
+  // Local screen recording refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const screenStreamRef = useRef<MediaStream | null>(null);
 
 
   useEffect(() => {
@@ -154,16 +158,10 @@ export default function MeetingPage() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allMails = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InternalMail));
       
-      const myMails = allMails.filter(mail => 
-          mail.senderId === loggedInUser.id || 
-          (mail.toRecipients || []).some(r => r.id === loggedInUser.id) ||
-          (mail.ccRecipients || []).some(r => r.id === loggedInUser.id)
-      );
-
       // Sort mails on the client side
-      myMails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      allMails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-      setMails(myMails);
+      setMails(allMails);
     });
 
     return () => unsubscribe();
@@ -248,19 +246,6 @@ export default function MeetingPage() {
     newMeeting.on("participant-left", (participant: any) => {
         setParticipants(prev => prev.filter(p => p.id !== participant.id));
     });
-    
-    newMeeting.on('recording-state-changed', (data: any) => {
-      setIsRecording(data.status === 'RECORDING_STARTED');
-      if (data.status === 'RECORDING_STOPPED' && data.payload?.file) {
-        const file = new File([data.payload.file.blob], `recording_${id}.mp4`, { type: 'video/mp4' });
-        setLastRecording({
-          file: file,
-          url: URL.createObjectURL(file),
-          meetingId: id,
-        });
-        setIsRecordingDialogOpen(true);
-      }
-    });
   };
   
   const handleCreateAndJoin = async (fromChat: boolean) => {
@@ -315,11 +300,79 @@ export default function MeetingPage() {
       setIsScreenSharing(!isScreenSharing);
   };
 
+  const startLocalRecording = async () => {
+    try {
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        
+        const combinedStream = new MediaStream([
+            ...displayStream.getTracks(),
+            ...audioStream.getAudioTracks()
+        ]);
+        screenStreamRef.current = combinedStream;
+
+        mediaRecorderRef.current = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+        
+        mediaRecorderRef.current.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunksRef.current.push(event.data);
+            }
+        };
+
+        mediaRecorderRef.current.onstop = () => {
+            const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+            const currentMeetingId = meetingId || chatMeetingId || 'local_recording';
+            setLastRecording({
+                file: new File([blob], `recording_${currentMeetingId}.webm`, { type: 'video/webm' }),
+                url: URL.createObjectURL(blob),
+                meetingId: currentMeetingId,
+            });
+            setIsRecordingDialogOpen(true);
+            recordedChunksRef.current = [];
+            stopLocalRecordingStream();
+        };
+
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+        
+        displayStream.getVideoTracks()[0].onended = () => {
+             // Stop recording if user clicks "Stop sharing" in browser UI
+             if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                 stopLocalRecording();
+             }
+        };
+
+    } catch (err) {
+        console.error("Error starting screen recording:", err);
+        toast({
+            variant: "destructive",
+            title: "Screen Recording Failed",
+            description: "Could not start screen recording. Please ensure you have granted permissions."
+        });
+        stopLocalRecordingStream(); // Clean up if failed
+    }
+  };
+
+  const stopLocalRecordingStream = () => {
+    if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => track.stop());
+        screenStreamRef.current = null;
+    }
+  };
+
+  const stopLocalRecording = () => {
+      if (mediaRecorderRef.current) {
+          mediaRecorderRef.current.stop();
+          setIsRecording(false);
+      }
+  };
+
+
   const toggleRecording = () => {
     if (isRecording) {
-      meeting?.stopRecording();
+      stopLocalRecording();
     } else {
-      meeting?.startRecording();
+      startLocalRecording();
     }
   };
 
@@ -1895,6 +1948,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
