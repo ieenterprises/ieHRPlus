@@ -17,7 +17,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, writeBatch, serverTimestamp, orderBy, Unsubscribe } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { uploadFile, getPublicUrl } from '@/lib/firebase-storage';
 import type { User, ChatMessage, InternalMail, Attachment } from '@/lib/types';
 import { format, formatDistanceToNow, formatDistanceToNowStrict } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -463,6 +462,13 @@ export default function MeetingPage() {
         }
     }
 
+    const processSnapshot = (snapshot: any) => {
+        snapshot.docs.forEach((doc: any) => {
+            messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage);
+        });
+        updateAndSortMessages();
+    };
+
     const subscribeToMessages = (user1Id: string, user2Id: string) => {
         const q1 = query(
             collection(db, 'chatMessages'),
@@ -477,14 +483,10 @@ export default function MeetingPage() {
             where('receiverId', '==', user1Id)
         );
 
-        const unsub1 = onSnapshot(q1, (snapshot) => {
-            snapshot.docs.forEach(doc => messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage));
-            updateAndSortMessages();
-        });
+        const unsub1 = onSnapshot(q1, processSnapshot);
         const unsub2 = onSnapshot(q2, (snapshot) => {
-            snapshot.docs.forEach(doc => messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage));
+            processSnapshot(snapshot);
             markMessagesAsRead(snapshot);
-            updateAndSortMessages();
         });
 
         allSubscriptions.push(unsub1, unsub2);
@@ -493,12 +495,28 @@ export default function MeetingPage() {
     if (activeChatMode === 'individual' && selectedChatUser) {
         subscribeToMessages(loggedInUser!.id, selectedChatUser.id);
     } else if (activeChatMode === 'group' && activeGroup.length > 0) {
-        const groupMemberIds = activeGroup.map(u => u.id);
-        groupMemberIds.forEach(memberId => {
-            if (memberId !== loggedInUser!.id) {
-                subscribeToMessages(loggedInUser!.id, memberId);
-            }
-        });
+        const allGroupIds = activeGroup.map(u => u.id);
+        
+        // Listen for messages you send to anyone in the group
+        const qSent = query(
+            collection(db, 'chatMessages'),
+            where('businessId', '==', loggedInUser!.businessId),
+            where('senderId', '==', loggedInUser!.id),
+            where('receiverId', 'in', allGroupIds)
+        );
+        allSubscriptions.push(onSnapshot(qSent, processSnapshot));
+
+        // Listen for messages anyone in the group sends to you
+        const qReceived = query(
+            collection(db, 'chatMessages'),
+            where('businessId', '==', loggedInUser!.businessId),
+            where('receiverId', '==', loggedInUser!.id),
+            where('senderId', 'in', allGroupIds)
+        );
+        allSubscriptions.push(onSnapshot(qReceived, (snapshot) => {
+            processSnapshot(snapshot);
+            markMessagesAsRead(snapshot);
+        }));
     }
 
     return () => {
@@ -2021,6 +2039,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
