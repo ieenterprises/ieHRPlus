@@ -81,7 +81,7 @@ export function uploadFile(
     userId: string,
     path: string,
     file: File,
-    onProgress: (progress: number) => void
+    onProgress?: (progress: number) => void
 ): Promise<void> {
     return new Promise((resolve, reject) => {
         const fullPath = [businessId, 'user_files', userId, path, file.name].filter(Boolean).join('/');
@@ -91,7 +91,9 @@ export function uploadFile(
         uploadTask.on('state_changed',
             (snapshot) => {
                 const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                onProgress(progress);
+                if (onProgress) {
+                    onProgress(progress);
+                }
             },
             (error) => {
                 console.error("Upload failed:", error);
