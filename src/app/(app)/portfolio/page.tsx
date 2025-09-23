@@ -47,6 +47,7 @@ export default function PortfolioPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [userFiles, setUserFiles] = useState<FileItem[]>([]);
   const { toast } = useToast();
 
@@ -94,10 +95,9 @@ export default function PortfolioPage() {
     try {
       const folder = `profile_pictures`;
       const fileName = `${editingUser.id}_${Date.now()}.${file.name.split('.').pop()}`;
-      const fullPath = `${loggedInUser.businessId}/user_files/${editingUser.id}/${folder}/${fileName}`;
       
       await uploadFile(loggedInUser.businessId, editingUser.id, folder, new File([file], fileName), () => {});
-      const publicUrl = await getPublicUrl(loggedInUser.businessId, fullPath);
+      const publicUrl = await getPublicUrl(loggedInUser.businessId, [loggedInUser.businessId, 'user_files', editingUser.id, folder, fileName].join('/'));
 
       await updateDoc(doc(db, "users", editingUser.id), { avatar_url: publicUrl });
 
@@ -126,6 +126,30 @@ export default function PortfolioPage() {
       toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
     } finally {
       setIsUploading(false);
+    }
+  };
+  
+  const handleSaveChanges = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingUser) return;
+    
+    const formData = new FormData(event.currentTarget);
+    const newRemuneration = parseFloat(formData.get("remuneration") as string);
+    
+    if (isNaN(newRemuneration)) {
+        toast({ title: "Invalid Input", description: "Please enter a valid number for remuneration.", variant: "destructive" });
+        return;
+    }
+
+    setIsSaving(true);
+    try {
+        await updateDoc(doc(db, "users", editingUser.id), { remuneration: newRemuneration });
+        setEditingUser(prev => prev ? { ...prev, remuneration: newRemuneration } : null);
+        toast({ title: "Portfolio Updated" });
+    } catch (error: any) {
+        toast({ title: "Save Failed", description: error.message, variant: "destructive" });
+    } finally {
+        setIsSaving(false);
     }
   };
 
@@ -220,6 +244,7 @@ export default function PortfolioPage() {
                 <DialogDescription>View and manage this employee's details and documents.</DialogDescription>
             </DialogHeader>
             {editingUser && (
+              <form onSubmit={handleSaveChanges} className="flex-1 min-h-0 flex flex-col">
                 <div className="grid md:grid-cols-2 gap-8 py-4 flex-1 min-h-0">
                     {/* Left Column: Details & Photo */}
                     <div className="space-y-6">
@@ -243,7 +268,13 @@ export default function PortfolioPage() {
                                 <div className="text-sm space-y-2">
                                     <p><strong>Role:</strong> {editingUser.role}</p>
                                     <p><strong>Department:</strong> {editingUser.departmentName || 'N/A'}</p>
-                                    <p><strong>Remuneration:</strong> {editingUser.remuneration != null ? `${currency}${editingUser.remuneration.toFixed(2)}` : 'N/A'}</p>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="remuneration" className="font-bold">Remuneration</Label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-muted-foreground">{currency}</span>
+                                            <Input id="remuneration" name="remuneration" type="number" step="0.01" defaultValue={editingUser.remuneration} className="w-32" />
+                                        </div>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>
@@ -277,10 +308,15 @@ export default function PortfolioPage() {
                        </Card>
                     </div>
                 </div>
+                 <DialogFooter>
+                    <Button variant="outline" type="button" onClick={handleCloseDialog}>Close</Button>
+                    <Button type="submit" disabled={isSaving}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Changes
+                    </Button>
+                </DialogFooter>
+              </form>
             )}
-             <DialogFooter>
-                <Button variant="outline" onClick={handleCloseDialog}>Close</Button>
-            </DialogFooter>
           </DialogContent>
       </Dialog>
     </div>
