@@ -12,11 +12,13 @@ import Link from 'next/link';
 interface Attachment {
     name: string;
     url: string;
-    // The contentType would be ideal here, but it's not stored in the request/query models.
-    // We will have to make assumptions or fetch it, but for now, we'll work with what we have.
 }
 
 const PreviewContent = ({ fileUrl, fileName }: { fileUrl: string, fileName: string }) => {
+    // A malformed URL from a private file will cause a Google Docs error.
+    // We check if the URL is valid. A simple check for the token is a good heuristic.
+    const isPrivateOrMalformedUrl = !fileUrl.includes('?');
+
     const fileType = fileName.split('.').pop()?.toLowerCase() || '';
     const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType);
     const isVideo = ['mp4', 'webm', 'ogg'].includes(fileType);
@@ -33,6 +35,24 @@ const PreviewContent = ({ fileUrl, fileName }: { fileUrl: string, fileName: stri
     if (isAudio) {
         return <audio controls src={fileUrl} className="w-full" />;
     }
+    
+    // For private files, we can't use the Google Docs Viewer.
+    // Instead of showing an error, we direct them to download.
+    if (isPrivateOrMalformedUrl && (isPdf || isOfficeDoc)) {
+         return (
+            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                <FileIcon item={{ type: 'file', name: fileName, metadata: { size: 0, updated: '', timeCreated: '' } }} className="h-16 w-16 text-muted-foreground mb-4" />
+                <p className="text-lg font-semibold mb-4">This is a private document.</p>
+                <p className="text-muted-foreground mb-6">For security, live preview is disabled. Please download the file to view it.</p>
+                 <Button asChild>
+                    <a href={fileUrl} download={fileName}>
+                        <Download className="mr-2 h-4 w-4" /> Download File
+                    </a>
+                </Button>
+            </div>
+        );
+    }
+
     if (isPdf || isOfficeDoc) {
         const googleDocsUrl = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
         return <iframe src={googleDocsUrl} className="w-full h-full border-0" title="Document Preview" />;

@@ -50,7 +50,7 @@ export default function PortfolioPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [userFiles, setUserFiles] = useState<FileItem[]>([]);
+  const [userFiles, setUserFiles] = useState<{name: string, url: string}[]>([]);
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -68,7 +68,14 @@ export default function PortfolioPage() {
     if (!user?.id || !loggedInUser?.businessId) return;
     try {
         const files = await listItems(loggedInUser.businessId, user.id, 'documents');
-        setUserFiles(files);
+        const filesWithUrls = await Promise.all(
+            files.map(async (file) => {
+                const path = [loggedInUser.businessId, 'user_files', user.id, 'documents', file.name].join('/');
+                const url = await getPublicUrl(loggedInUser.businessId, path);
+                return { name: file.name, url };
+            })
+        );
+        setUserFiles(filesWithUrls);
     } catch(e) {
         console.error("Could not fetch user documents: ", e);
         setUserFiles([]);
@@ -188,10 +195,18 @@ export default function PortfolioPage() {
     }
   };
 
-  const handleDeleteDocument = async (file: FileItem) => {
+  const handleDeleteDocument = async (file: {name: string, url: string}) => {
     if (!editingUser || !loggedInUser?.businessId) return;
+    
+    // The FileItem type is needed for the deleteItem function
+    const fileItemToDelete: FileItem = {
+        name: file.name,
+        type: 'file',
+        metadata: { size: 0, updated: '', timeCreated: '' } // Dummy metadata
+    };
+
     try {
-        await deleteItem(loggedInUser.businessId, editingUser.id, file, 'documents');
+        await deleteItem(loggedInUser.businessId, editingUser.id, fileItemToDelete, 'documents');
         toast({ title: "Document Deleted" });
         await fetchUserFiles(editingUser); // Refresh file list
     } catch(e: any) {
@@ -338,7 +353,7 @@ export default function PortfolioPage() {
                            <CardContent className="flex-1 min-h-0">
                                 <ScrollArea className="h-full">
                                     {userFiles.length > 0 ? (
-                                        <AttachmentPreviewer attachments={userFiles.map(f => ({ name: f.name, url: ''}))} />
+                                        <AttachmentPreviewer attachments={userFiles} />
                                     ) : (
                                         <div className="flex items-center justify-center h-full text-center text-muted-foreground text-sm">
                                             <p>No documents uploaded for this employee.</p>
