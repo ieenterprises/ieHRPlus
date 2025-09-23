@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -73,7 +72,7 @@ export function RewardTable() {
     
     const assigneeUser = users.find(u => u.id === assigneeId);
 
-    if (!title || !description || !assigneeId) {
+    if (!title || !description || !assigneeId || !assigneeUser) {
         toast({ title: "Missing Information", description: "Please fill out all fields.", variant: "destructive" });
         setIsSubmitting(false);
         return;
@@ -83,9 +82,15 @@ export function RewardTable() {
         let attachmentUrls: { name: string, url: string }[] = [];
         if (attachments.length > 0) {
             const uploadPromises = attachments.map(async (file) => {
-                const folder = `reward_attachments/${loggedInUser.id}`;
-                await uploadFile(loggedInUser.businessId!, folder, file, () => {});
-                const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
+                // Upload to a temporary/general folder first
+                const tempFolder = `reward_attachments/${loggedInUser.id}`;
+                await uploadFile(loggedInUser.businessId!, tempFolder, file, () => {});
+                const url = await getPublicUrl(loggedInUser.businessId!, `${tempFolder}/${file.name}`);
+
+                // Also upload a copy to the employee's personal documents
+                const personalDocsFolder = `documents`;
+                await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, file, () => {});
+
                 return { name: file.name, url };
             });
             attachmentUrls = await Promise.all(uploadPromises);
@@ -288,3 +293,5 @@ export function RewardTable() {
     </>
   );
 }
+
+    

@@ -46,7 +46,7 @@ import { FileIcon } from "@/components/file-icon";
 
 
 export default function PortfolioPage() {
-  const { users, currency, loggedInUser } = useSettings();
+  const { users, currency, loggedInUser, hrQueries, rewards } = useSettings();
   const [searchTerm, setSearchTerm] = useState("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
@@ -56,6 +56,35 @@ export default function PortfolioPage() {
   const [documentSearchTerm, setDocumentSearchTerm] = useState("");
   const { toast } = useToast();
   const storage = getStorage();
+
+  const userAggregates = useMemo(() => {
+    const aggregates: Record<string, { queryCount: number, queryAmount: number, rewardCount: number, rewardAmount: number }> = {};
+
+    users.forEach(user => {
+      aggregates[user.id] = {
+        queryCount: 0,
+        queryAmount: 0,
+        rewardCount: 0,
+        rewardAmount: 0,
+      };
+    });
+
+    hrQueries.forEach(query => {
+      if (aggregates[query.assigneeId]) {
+        aggregates[query.assigneeId].queryCount += 1;
+        aggregates[query.assigneeId].queryAmount += query.amount || 0;
+      }
+    });
+
+    rewards.forEach(reward => {
+      if (aggregates[reward.assigneeId]) {
+        aggregates[reward.assigneeId].rewardCount += 1;
+        aggregates[reward.assigneeId].rewardAmount += reward.amount || 0;
+      }
+    });
+
+    return aggregates;
+  }, [users, hrQueries, rewards]);
 
   const filteredUsers = useMemo(() => {
     if (!searchTerm) return users;
@@ -256,6 +285,10 @@ export default function PortfolioPage() {
                   <TableHead>Employee</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Remuneration</TableHead>
+                  <TableHead>Query Count</TableHead>
+                  <TableHead>Query Amount</TableHead>
+                  <TableHead>Reward Count</TableHead>
+                  <TableHead>Reward Amount</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -279,6 +312,10 @@ export default function PortfolioPage() {
                       <TableCell>
                         {user.remuneration != null ? `${currency}${user.remuneration.toFixed(2)}` : 'N/A'}
                       </TableCell>
+                      <TableCell>{userAggregates[user.id]?.queryCount || 0}</TableCell>
+                      <TableCell>{currency}{(userAggregates[user.id]?.queryAmount || 0).toFixed(2)}</TableCell>
+                      <TableCell>{userAggregates[user.id]?.rewardCount || 0}</TableCell>
+                      <TableCell>{currency}{(userAggregates[user.id]?.rewardAmount || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" onClick={() => handleOpenDialog(user)}>
                           <Edit className="mr-2 h-4 w-4" /> Open
@@ -288,7 +325,7 @@ export default function PortfolioPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                       No users found.
                     </TableCell>
                   </TableRow>
