@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -36,6 +36,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 type ChatMode = 'individual' | 'group';
 type MailboxView = "inbox" | "sent";
+type ActiveGroup = {
+  name: string;
+  users: User[];
+};
+
 
 const EMOJIS = [
   '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
@@ -85,8 +90,9 @@ export default function MeetingPage() {
   const [isGroupChatDialogOpen, setIsGroupChatDialogOpen] = useState(false);
   const [groupRecipients, setGroupRecipients] = useState<User[]>([]);
   const [groupUserSearch, setGroupUserSearch] = useState('');
+  const [groupName, setGroupName] = useState('');
   const [activeChatMode, setActiveChatMode] = useState<ChatMode>('individual');
-  const [activeGroup, setActiveGroup] = useState<User[]>([]);
+  const [activeGroup, setActiveGroup] = useState<ActiveGroup | null>(null);
   const [replyingToMessage, setReplyingToMessage] = useState<ChatMessage | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isSending, setIsSending] = useState(false);
@@ -434,7 +440,7 @@ export default function MeetingPage() {
   }, [loggedInUser]);
 
   useEffect(() => {
-    const isReadyForQuery = loggedInUser && (activeChatMode === 'individual' ? selectedChatUser : activeGroup.length > 0);
+    const isReadyForQuery = loggedInUser && (activeChatMode === 'individual' ? selectedChatUser : activeGroup);
     
     if (!isReadyForQuery) {
         setMessages([]);
@@ -444,85 +450,66 @@ export default function MeetingPage() {
     const messageMap = new Map<string, ChatMessage>();
     const allSubscriptions: Unsubscribe[] = [];
 
-    const updateAndSortMessages = () => {
+    const processAndSortMessages = () => {
         const combinedMessages = Array.from(messageMap.values());
         combinedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         setMessages(combinedMessages);
     }
     
     const markMessagesAsRead = (snapshot: any) => {
-        const batch: any[] = [];
+        const batch = writeBatch(db);
         snapshot.docs.forEach((document: any) => {
-            if (document.data().receiverId === loggedInUser!.id && !document.data().isRead) {
-                batch.push(updateDoc(document.ref, { isRead: true }));
+            const data = document.data();
+            if (data.receiverId === loggedInUser!.id && !data.isRead) {
+                batch.update(document.ref, { isRead: true });
             }
         });
-        if (batch.length > 0) {
-            Promise.all(batch).catch(err => console.error("Error marking messages as read:", err));
+        if (batch.size > 0) {
+            batch.commit().catch(err => console.error("Error marking messages as read:", err));
         }
     }
 
-    const processSnapshot = (snapshot: any) => {
-        snapshot.docs.forEach((doc: any) => {
-            messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage);
+    const createSubscription = (q: any) => {
+        return onSnapshot(q, (snapshot) => {
+            snapshot.docs.forEach((doc: any) => {
+                messageMap.set(doc.id, { id: doc.id, ...doc.data() } as ChatMessage);
+            });
+            processAndSortMessages();
+            if(q.toString().includes(loggedInUser!.id)) markMessagesAsRead(snapshot);
         });
-        updateAndSortMessages();
-    };
-
-    const subscribeToMessages = (user1Id: string, user2Id: string) => {
-        const q1 = query(
-            collection(db, 'chatMessages'),
-            where('businessId', '==', loggedInUser!.businessId),
-            where('senderId', '==', user1Id),
-            where('receiverId', '==', user2Id)
-        );
-        const q2 = query(
-            collection(db, 'chatMessages'),
-            where('businessId', '==', loggedInUser!.businessId),
-            where('senderId', '==', user2Id),
-            where('receiverId', '==', user1Id)
-        );
-
-        const unsub1 = onSnapshot(q1, processSnapshot);
-        const unsub2 = onSnapshot(q2, (snapshot) => {
-            processSnapshot(snapshot);
-            markMessagesAsRead(snapshot);
-        });
-
-        allSubscriptions.push(unsub1, unsub2);
     };
 
     if (activeChatMode === 'individual' && selectedChatUser) {
-        subscribeToMessages(loggedInUser!.id, selectedChatUser.id);
-    } else if (activeChatMode === 'group' && activeGroup.length > 0) {
-        const allGroupIds = activeGroup.map(u => u.id);
+        const q1 = query(collection(db, 'chatMessages'), where('senderId', '==', loggedInUser!.id), where('receiverId', '==', selectedChatUser.id));
+        const q2 = query(collection(db, 'chatMessages'), where('senderId', '==', selectedChatUser.id), where('receiverId', '==', loggedInUser!.id));
+        allSubscriptions.push(createSubscription(q1));
+        allSubscriptions.push(createSubscription(q2));
+    } else if (activeChatMode === 'group' && activeGroup) {
+        const allMemberIds = activeGroup.users.map(u => u.id);
         
-        // Listen for messages you send to anyone in the group
+        // Messages you sent to any group member
         const qSent = query(
             collection(db, 'chatMessages'),
             where('businessId', '==', loggedInUser!.businessId),
             where('senderId', '==', loggedInUser!.id),
-            where('receiverId', 'in', allGroupIds)
+            where('receiverId', 'in', allMemberIds)
         );
-        allSubscriptions.push(onSnapshot(qSent, processSnapshot));
+        allSubscriptions.push(createSubscription(qSent));
 
-        // Listen for messages anyone in the group sends to you
+        // Messages any group member sent to you
         const qReceived = query(
             collection(db, 'chatMessages'),
             where('businessId', '==', loggedInUser!.businessId),
             where('receiverId', '==', loggedInUser!.id),
-            where('senderId', 'in', allGroupIds)
+            where('senderId', 'in', allMemberIds)
         );
-        allSubscriptions.push(onSnapshot(qReceived, (snapshot) => {
-            processSnapshot(snapshot);
-            markMessagesAsRead(snapshot);
-        }));
+        allSubscriptions.push(createSubscription(qReceived));
     }
 
     return () => {
         allSubscriptions.forEach(unsub => unsub());
     };
-  }, [loggedInUser, selectedChatUser, activeChatMode, activeGroup]);
+}, [loggedInUser, selectedChatUser, activeChatMode, activeGroup]);
   
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -580,7 +567,7 @@ export default function MeetingPage() {
 
   const handleSendGroupMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!newMessage.trim() && attachments.length === 0) || !loggedInUser || activeGroup.length === 0) return;
+    if ((!newMessage.trim() && attachments.length === 0) || !loggedInUser || !activeGroup) return;
 
     setIsSending(true);
 
@@ -601,17 +588,17 @@ export default function MeetingPage() {
 
         const batch = writeBatch(db);
 
-        activeGroup.forEach(recipient => {
-            if (recipient.id === loggedInUser.id) return; // Don't send to self
+        activeGroup.users.forEach(recipient => {
+            if (recipient.id === loggedInUser!.id) return; // Don't send to self
 
             const messageRef = doc(collection(db, 'chatMessages'));
             const messageData: Omit<ChatMessage, 'id'> = {
-                senderId: loggedInUser.id,
+                senderId: loggedInUser!.id,
                 receiverId: recipient.id,
                 content: newMessage,
                 timestamp: new Date().toISOString(),
                 isRead: false,
-                businessId: loggedInUser.businessId,
+                businessId: loggedInUser!.businessId,
                 attachments: finalAttachments,
                 // You might want to add a group identifier here in the future
             };
@@ -730,7 +717,7 @@ export default function MeetingPage() {
   const handleSelectIndividualChat = (user: User) => {
     setActiveChatMode('individual');
     setSelectedChatUser(user);
-    setActiveGroup([]);
+    setActiveGroup(null);
     setIsSelectionMode(false);
     setSelectedMessages([]);
   };
@@ -744,17 +731,21 @@ export default function MeetingPage() {
   };
 
   const handleStartGroupChat = () => {
-    if (groupRecipients.length < 2) {
-      toast({ variant: 'destructive', title: "Not enough users", description: "Please select at least two users for a group chat." });
+    if (groupRecipients.length < 1) {
+      toast({ variant: 'destructive', title: "Not enough users", description: "Please select at least one user for a group chat." });
       return;
     }
     setActiveChatMode('group');
-    setActiveGroup([loggedInUser!, ...groupRecipients]);
+    setActiveGroup({
+      name: groupName || [loggedInUser!, ...groupRecipients].map(u => u.name).join(', '),
+      users: [loggedInUser!, ...groupRecipients]
+    });
     setMessages([]); // Clear messages for new group chat
     setSelectedChatUser(null);
     setIsGroupChatDialogOpen(false);
     setGroupRecipients([]);
     setGroupUserSearch('');
+    setGroupName('');
   };
 
   const filteredGroupUsers = useMemo(() => {
@@ -796,12 +787,11 @@ export default function MeetingPage() {
 
 
   const ChatHeaderContent = () => {
-    if (activeChatMode === 'group') {
-      const participantNames = activeGroup.map(u => u.name).join(', ');
+    if (activeChatMode === 'group' && activeGroup) {
       return (
         <CardTitle className="flex items-center gap-3">
           <div className="flex -space-x-4">
-            {activeGroup.slice(0, 3).map(user => (
+            {activeGroup.users.slice(0, 3).map(user => (
               <Avatar key={user.id} className="h-9 w-9 border-2 border-background">
                 <AvatarImage src={user.avatar_url || ''} />
                 <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
@@ -809,8 +799,8 @@ export default function MeetingPage() {
             ))}
           </div>
           <div className="truncate">
-             <p className="truncate">{participantNames}</p>
-             <p className="text-sm font-normal text-muted-foreground">Group Chat</p>
+             <p className="truncate">{activeGroup.name}</p>
+             <p className="text-sm font-normal text-muted-foreground">Group Chat ({activeGroup.users.length})</p>
           </div>
         </CardTitle>
       );
@@ -1242,7 +1232,7 @@ export default function MeetingPage() {
               <div className="w-2/3 flex flex-col">
                     {inChatMeeting && meeting && chatMeetingId ? (
                          <MeetingUI meetingId={chatMeetingId} meetingInstance={meeting} />
-                    ) : selectedChatUser || activeChatMode === 'group' ? (
+                    ) : selectedChatUser || (activeChatMode === 'group' && activeGroup) ? (
                         <>
                             <CardHeader className="border-b flex-row items-center justify-between">
                                 <ChatHeaderContent />
@@ -1680,8 +1670,17 @@ export default function MeetingPage() {
       <DialogContent className="flex flex-col h-[80vh]">
         <DialogHeader>
             <DialogTitle>New Group Chat</DialogTitle>
-            <DialogDescription>Select two or more users to start a temporary group chat.</DialogDescription>
+            <DialogDescription>Select users to start a temporary group chat.</DialogDescription>
         </DialogHeader>
+        <div className="space-y-2">
+            <Label htmlFor="group-name">Group Name (Optional)</Label>
+            <Input 
+                id="group-name"
+                placeholder="e.g., Project Alpha Team"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+            />
+        </div>
         <div className="relative mt-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
@@ -1719,7 +1718,7 @@ export default function MeetingPage() {
         </ScrollArea>
         <DialogFooter>
               <Button variant="ghost" onClick={() => setIsGroupChatDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleStartGroupChat} disabled={groupRecipients.length < 2}>
+            <Button onClick={handleStartGroupChat} disabled={groupRecipients.length < 1}>
                 <MessageSquare className="mr-2 h-4 w-4" />
                 Start Chat ({groupRecipients.length})
             </Button>
@@ -2039,6 +2038,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
