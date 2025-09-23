@@ -180,6 +180,7 @@ export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissio
     temp_access_given?: boolean;
     departmentId?: string;
     departmentName?: string;
+    remuneration?: number;
 }
 export type Customer = Database['public']['Tables']['customers']['Row'] & { businessId: string };
 export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 'payment_methods'> & {
@@ -631,6 +632,7 @@ export type Database = {
           temp_access_given?: boolean | null,
           departmentId?: string | null,
           departmentName?: string | null,
+          remuneration?: number | null,
         }
         Insert: {
           avatar_url?: string | null
@@ -644,6 +646,7 @@ export type Database = {
           temp_access_given?: boolean | null,
           departmentId?: string | null,
           departmentName?: string | null,
+          remuneration?: number | null,
         }
         Update: {
           avatar_url?: string | null
@@ -657,6 +660,7 @@ export type Database = {
           temp_access_given?: boolean | null,
           departmentId?: string | null,
           departmentName?: string | null,
+          remuneration?: number | null,
         }
         Relationships: [
           {

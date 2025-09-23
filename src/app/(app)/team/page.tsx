@@ -70,6 +70,7 @@ const EMPTY_USER: Partial<User> = {
   avatar_url: "https://placehold.co/100x100.png",
   permissions: [],
   temp_access_given: false,
+  remuneration: 0,
 };
 
 const EMPTY_ROLE: Partial<Role> = {
@@ -180,6 +181,7 @@ export default function TeamPage() {
         temp_access_given: editingUser.temp_access_given || false,
         departmentId: department?.id,
         departmentName: department?.name,
+        remuneration: parseFloat(formData.get("remuneration") as string) || 0,
     };
 
     try {
@@ -653,6 +655,10 @@ export default function TeamPage() {
                           {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </Button>
                       </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="remuneration">Remuneration</Label>
+                    <Input id="remuneration" name="remuneration" type="number" step="0.01" defaultValue={editingUser?.remuneration || 0} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2"><Label htmlFor="role">Role</Label>
