@@ -136,7 +136,8 @@ export default function MeetingPage() {
     
     const q = query(
       collection(db, 'internal_mails'),
-      where('businessId', '==', loggedInUser.businessId)
+      where('businessId', '==', loggedInUser.businessId),
+      orderBy('timestamp', 'desc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
