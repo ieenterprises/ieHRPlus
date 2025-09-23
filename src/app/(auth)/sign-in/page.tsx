@@ -23,6 +23,8 @@ import { signInWithEmailAndPassword, User as FirebaseAuthUser } from 'firebase/a
 import { collection, addDoc, doc, updateDoc, query, where, getDocs, writeBatch, getDoc, orderBy, limit } from "firebase/firestore";
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import type { User, TimeRecord } from "@/lib/types";
+import { format, startOfDay, endOfDay, setHours, setMinutes, setSeconds, parseISO } from "date-fns";
+
 
 export default function SignInPage() {
   const router = useRouter();
@@ -47,45 +49,73 @@ export default function SignInPage() {
         throw new Error("User profile not found in database.");
       }
       const userData = userDoc.data() as User;
+      const today = startOfDay(new Date());
 
-      // Check for an existing active time record
-      const timeRecordsQuery = query(
-        collection(db, 'timeRecords'),
-        where('userId', '==', authUser.uid),
-        where('status', 'in', ['pending', 'Clocked In'])
+      // --- Auto Clock-out Logic ---
+      // Check for any active sessions from a previous day for THIS user.
+      const previousSessionsQuery = query(
+        collection(db, "timeRecords"),
+        where("userId", "==", authUser.uid),
+        where("status", "in", ["pending", "Clocked In"])
       );
-      const activeRecordsSnapshot = await getDocs(timeRecordsQuery);
+      const previousSessionsSnapshot = await getDocs(previousSessionsQuery);
+      const batch = writeBatch(db);
 
-      if (activeRecordsSnapshot.empty) {
-        // --- This is a new Clock-In ---
-        const timeRecordRef = await addDoc(collection(db, "timeRecords"), {
-          userId: authUser.uid,
-          userName: userData.name,
-          userEmail: userData.email,
-          clockInTime: new Date().toISOString(),
-          clockOutTime: null,
-          status: 'pending', // Start as pending for HR review
-          businessId: userData.businessId,
-          videoUrl: null,
-        } as Omit<TimeRecord, 'id'>);
-        
-        sessionStorage.setItem('latestTimeRecordId', timeRecordRef.id);
+      previousSessionsSnapshot.forEach(doc => {
+        const record = doc.data() as TimeRecord;
+        const clockInDate = startOfDay(parseISO(record.clockInTime));
 
-        toast({
-            title: "Signed In Successfully",
-            description: `Proceeding to video verification.`,
-        });
-        
-        router.push("/video-verification");
+        if (clockInDate < today) {
+            // This is an overdue session. Clock it out.
+            let clockOutTime: Date;
+            if (userData.defaultClockOutTime) {
+                const [hours, minutes] = userData.defaultClockOutTime.split(':').map(Number);
+                // Set the clock-out time on the SAME DAY the user clocked in.
+                let targetDate = parseISO(record.clockInTime);
+                targetDate = setHours(targetDate, hours);
+                targetDate = setMinutes(targetDate, minutes);
+                targetDate = setSeconds(targetDate, 0);
+                clockOutTime = targetDate;
+            } else {
+                // Fallback: clock out at the end of the day they clocked in.
+                clockOutTime = endOfDay(parseISO(record.clockInTime));
+            }
+            batch.update(doc.ref, {
+                status: 'Clocked Out',
+                clockOutTime: clockOutTime.toISOString(),
+            });
+            toast({
+              title: "Auto Clock-Out",
+              description: `Your previous session from ${format(parseISO(record.clockInTime), 'PPP')} was automatically closed.`,
+              variant: "default",
+            });
+        }
+      });
+      
+      await batch.commit();
+      // --- End of Auto Clock-out Logic ---
 
-      } else {
-        // --- User is just regaining access to their dashboard ---
-        toast({
-            title: "Welcome Back!",
-            description: `Redirecting to your dashboard.`,
-        });
-        router.push("/dashboard");
-      }
+
+      // Now, proceed with the normal clock-in process for the new day.
+      const timeRecordRef = await addDoc(collection(db, "timeRecords"), {
+        userId: authUser.uid,
+        userName: userData.name,
+        userEmail: userData.email,
+        clockInTime: new Date().toISOString(),
+        clockOutTime: null,
+        status: 'pending', // Start as pending for HR review
+        businessId: userData.businessId,
+        videoUrl: null,
+      } as Omit<TimeRecord, 'id'>);
+      
+      sessionStorage.setItem('latestTimeRecordId', timeRecordRef.id);
+
+      toast({
+          title: "Signed In Successfully",
+          description: `Proceeding to video verification.`,
+      });
+      
+      router.push("/video-verification");
 
     } catch (error: any) {
       setIsLoading(false);
