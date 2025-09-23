@@ -81,13 +81,14 @@ export default function FileManagerPage() {
     const { toast } = useToast();
     const { loggedInUser, loadingUser } = useSettings();
     const businessId = loggedInUser?.businessId;
+    const userId = loggedInUser?.id;
 
     const fetchItems = useCallback(async () => {
-        if (!businessId) return;
+        if (!businessId || !userId) return;
         setIsLoading(true);
         setError(null);
         try {
-            const fetchedItems = await listItems(businessId, path);
+            const fetchedItems = await listItems(businessId, userId, path);
             setItems(fetchedItems);
         } catch (err: any) {
             setError(err.message);
@@ -95,18 +96,18 @@ export default function FileManagerPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [path, toast, businessId]);
+    }, [path, toast, businessId, userId]);
 
     useEffect(() => {
-        if (!loadingUser && businessId) {
+        if (!loadingUser && businessId && userId) {
             fetchItems();
         }
-    }, [fetchItems, loadingUser, businessId]);
+    }, [fetchItems, loadingUser, businessId, userId]);
 
     const handleCreateFolder = async () => {
-        if (!createFolderName || !businessId) return;
+        if (!createFolderName || !businessId || !userId) return;
         try {
-            await createFolder(businessId, `${path ? path + '/' : ''}${createFolderName}`);
+            await createFolder(businessId, userId, `${path ? path + '/' : ''}${createFolderName}`);
             toast({ title: 'Folder created', description: `Successfully created "${createFolderName}".` });
             setCreateFolderName('');
             setDialogOpen({ ...dialogOpen, create: false });
@@ -117,12 +118,13 @@ export default function FileManagerPage() {
     };
 
     const handleUploadFile = async () => {
-        if (!uploadFileObj || !businessId) return;
+        if (!uploadFileObj || !businessId || !userId) return;
         setIsUploading(true);
         setUploadProgress(0);
         try {
             await uploadFile(
                 businessId,
+                userId,
                 path,
                 uploadFileObj,
                 (progress) => setUploadProgress(progress)
@@ -139,9 +141,9 @@ export default function FileManagerPage() {
     };
 
     const handleDelete = async (item: FileItem) => {
-        if (!businessId) return;
+        if (!businessId || !userId) return;
         try {
-            await deleteItem(businessId, item, path);
+            await deleteItem(businessId, userId, item, path);
             toast({ title: 'Item deleted', description: `Successfully deleted "${item.name}".` });
             fetchItems();
         } catch (err: any) {
@@ -150,7 +152,7 @@ export default function FileManagerPage() {
     };
 
     const handleRename = async () => {
-        if (!renameData || !businessId) return;
+        if (!renameData || !businessId || !userId) return;
         const { item, newName } = renameData;
         if (!newName || newName === item.name) {
             setRenameData(null);
@@ -158,7 +160,7 @@ export default function FileManagerPage() {
         }
 
         try {
-            await renameItem(businessId, item, newName, path);
+            await renameItem(businessId, userId, item, newName, path);
             toast({ title: 'Item renamed', description: `Successfully renamed "${item.name}" to "${newName}".` });
             setRenameData(null);
             fetchItems();
@@ -176,9 +178,9 @@ export default function FileManagerPage() {
     };
 
     const handlePreview = async (item: FileItem) => {
-        if (!businessId) return;
+        if (!businessId || !userId) return;
         try {
-            const itemPath = `${path ? path + '/' : ''}${item.name}`;
+            const itemPath = [businessId, 'user_files', userId, path, item.name].filter(Boolean).join('/');
             const url = await getPublicUrl(businessId, itemPath);
             setPreviewFile({ item, url });
             setDialogOpen({ ...dialogOpen, preview: true });
@@ -188,9 +190,9 @@ export default function FileManagerPage() {
     };
 
     const handleDownload = async (item: FileItem) => {
-        if (!businessId) return;
+        if (!businessId || !userId) return;
         try {
-            const itemPath = `${path ? path + '/' : ''}${item.name}`;
+            const itemPath = [businessId, 'user_files', userId, path, item.name].filter(Boolean).join('/');
             const url = await getPublicUrl(businessId, itemPath);
             const a = document.createElement('a');
             a.href = url;
@@ -209,11 +211,11 @@ export default function FileManagerPage() {
     };
 
     const handlePaste = async () => {
-        if (!clipboard || !businessId) return;
+        if (!clipboard || !businessId || !userId) return;
         const { item, operation, sourcePath } = clipboard;
 
-        const fromPath = `${sourcePath ? sourcePath + '/' : ''}${item.name}`;
-        const toPath = `${path ? path + '/' : ''}${item.name}`;
+        const fromPath = [businessId, 'user_files', userId, sourcePath, item.name].filter(Boolean).join('/');
+        const toPath = [businessId, 'user_files', userId, path, item.name].filter(Boolean).join('/');
 
         if (fromPath === toPath && operation === 'move') {
             toast({ variant: 'destructive', title: 'Cannot move item', description: 'Source and destination are the same.' });
@@ -222,10 +224,10 @@ export default function FileManagerPage() {
 
         try {
             if (operation === 'copy') {
-                await copyItem(businessId, fromPath, toPath, item.type === 'folder');
+                await copyItem(businessId, userId, fromPath, toPath, item.type === 'folder');
                 toast({ title: 'Item copied', description: `Successfully copied "${item.name}" to the current folder.` });
             } else if (operation === 'move') {
-                await moveItem(businessId, fromPath, toPath, item.type === 'folder');
+                await moveItem(businessId, userId, fromPath, toPath, item.type === 'folder');
                 toast({ title: 'Item moved', description: `Successfully moved "${item.name}" to the current folder.` });
             }
             setClipboard(null);
@@ -259,8 +261,8 @@ export default function FileManagerPage() {
             <Card className="w-full max-w-7xl mx-auto shadow-lg flex-1 flex flex-col">
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                        <CardTitle className="text-2xl font-bold flex items-center gap-2">File Manager</CardTitle>
-                        <CardDescription>Your organization's cloud storage powered by Firebase.</CardDescription>
+                        <CardTitle className="text-2xl font-bold flex items-center gap-2">My Files</CardTitle>
+                        <CardDescription>Your personal cloud storage.</CardDescription>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         <div className="relative">
@@ -281,7 +283,7 @@ export default function FileManagerPage() {
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4 overflow-x-auto whitespace-nowrap">
-                        <button onClick={() => setPath('')} className="flex items-center gap-1 hover:text-primary" disabled={showLoading}><Home className="h-4 w-4" /></button>
+                        <button onClick={() => setPath('')} className="flex items-center gap-1 hover:text-primary" disabled={showLoading}><Home className="h-4 w-4" />My Files</button>
                         {pathSegments.length > 0 && <ChevronRight className="h-4 w-4 flex-shrink-0" />}
                         {pathSegments.map((segment, index) => (
                             <div key={segment.path} className="flex items-center gap-2">

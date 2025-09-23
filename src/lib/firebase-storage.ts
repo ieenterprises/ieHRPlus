@@ -18,8 +18,8 @@ async function listAllRecursive(folderRef: any): Promise<any[]> {
 }
 
 // 1. List items in a specific path
-export async function listItems(businessId: string, path: string): Promise<FileItem[]> {
-    const fullPath = [businessId, path].filter(Boolean).join('/');
+export async function listItems(businessId: string, userId: string, path: string): Promise<FileItem[]> {
+    const fullPath = [businessId, 'user_files', userId, path].filter(Boolean).join('/');
     const listRef = ref(storage, fullPath);
 
     try {
@@ -69,8 +69,8 @@ export async function listItems(businessId: string, path: string): Promise<FileI
 }
 
 // 2. Create a new folder
-export async function createFolder(businessId: string, path: string) {
-    const fullPath = `${businessId}/${path}/.emptyFolderPlaceholder`;
+export async function createFolder(businessId: string, userId: string, path: string) {
+    const fullPath = [businessId, 'user_files', userId, path, '.emptyFolderPlaceholder'].filter(Boolean).join('/');
     const folderRef = ref(storage, fullPath);
     await uploadBytesResumable(folderRef, new Blob(['']));
 }
@@ -78,12 +78,13 @@ export async function createFolder(businessId: string, path: string) {
 // 3. Upload a file
 export function uploadFile(
     businessId: string,
+    userId: string,
     path: string,
     file: File,
     onProgress: (progress: number) => void
 ): Promise<void> {
     return new Promise((resolve, reject) => {
-        const fullPath = [businessId, path, file.name].filter(Boolean).join('/');
+        const fullPath = [businessId, 'user_files', userId, path, file.name].filter(Boolean).join('/');
         const storageRef = ref(storage, fullPath);
         const uploadTask: UploadTask = uploadBytesResumable(storageRef, file);
 
@@ -104,8 +105,8 @@ export function uploadFile(
 }
 
 // 4. Delete an item (file or folder)
-export async function deleteItem(businessId: string, item: FileItem, currentPath: string) {
-    const itemPath = [businessId, currentPath, item.name].filter(Boolean).join('/');
+export async function deleteItem(businessId: string, userId: string, item: FileItem, currentPath: string) {
+    const itemPath = [businessId, 'user_files', userId, currentPath, item.name].filter(Boolean).join('/');
     const itemRef = ref(storage, itemPath);
 
     if (item.type === 'folder') {
@@ -132,30 +133,31 @@ async function copyFile(fromRef: any, toRef: any) {
 }
 
 // 5. Rename an item
-export async function renameItem(businessId: string, item: FileItem, newName: string, currentPath: string) {
-    const fromPath = [businessId, currentPath, item.name].filter(Boolean).join('/');
-    const toPath = [businessId, currentPath, newName].filter(Boolean).join('/');
+export async function renameItem(businessId: string, userId: string, item: FileItem, newName: string, currentPath: string) {
+    const fromPath = [businessId, 'user_files', userId, currentPath, item.name].filter(Boolean).join('/');
+    const toPath = [businessId, 'user_files', userId, currentPath, newName].filter(Boolean).join('/');
 
     if (item.type === 'folder') {
         // Move folder contents
-        await moveItem(businessId, fromPath, toPath, true);
+        await moveItem(businessId, userId, fromPath, toPath, true);
     } else {
         // Move a single file
-        await moveItem(businessId, fromPath, toPath, false);
+        await moveItem(businessId, userId, fromPath, toPath, false);
     }
 }
 
 
 // 6. Get public URL for a file
 export async function getPublicUrl(businessId: string, path: string): Promise<string> {
-    const fullPath = [businessId, path].filter(Boolean).join('/');
-    const fileRef = ref(storage, fullPath);
+    // This function remains unchanged as it's used for general access via URL, 
+    // assuming the calling function constructs the full, correct path.
+    const fileRef = ref(storage, path);
     return getDownloadURL(fileRef);
 }
 
 
 // 7. Move an item
-export async function moveItem(businessId: string, fromPath: string, toPath: string, isFolder: boolean) {
+export async function moveItem(businessId: string, userId: string, fromPath: string, toPath: string, isFolder: boolean) {
     const fromRef = ref(storage, fromPath);
     
     if (!isFolder) {
@@ -183,7 +185,7 @@ export async function moveItem(businessId: string, fromPath: string, toPath: str
 }
 
 // 8. Copy an item
-export async function copyItem(businessId: string, fromPath: string, toPath: string, isFolder: boolean) {
+export async function copyItem(businessId: string, userId: string, fromPath: string, toPath: string, isFolder: boolean) {
     const fromRef = ref(storage, fromPath);
 
     if (!isFolder) {
