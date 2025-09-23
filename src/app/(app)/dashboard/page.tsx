@@ -20,7 +20,7 @@ import { db } from "@/lib/firebase";
 import { collection, addDoc, updateDoc, doc, query, where, onSnapshot } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -47,7 +47,12 @@ export default function DashboardPage() {
   const [responseAttachments, setResponseAttachments] = useState<File[]>([]);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  
+  const [requestDateRange, setRequestDateRange] = useState<DateRange | undefined>();
+  const [queryDateRange, setQueryDateRange] = useState<DateRange | undefined>();
+  const [rewardDateRange, setRewardDateRange] = useState<DateRange | undefined>();
+  const [newRequestDateRange, setNewRequestDateRange] = useState<DateRange | undefined>();
+
   
   const [respondingQuery, setRespondingQuery] = useState<HRQuery | null>(null);
   const [viewingReward, setViewingReward] = useState<Reward | null>(null);
@@ -63,29 +68,52 @@ export default function DashboardPage() {
   const isSeniorStaff = useMemo(() => loggedInUser && seniorRoles.includes(loggedInUser.role), [loggedInUser]);
 
   const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role)), [users]);
-  const pendingQueries = useMemo(() => myQueries.filter(q => q.status === 'Sent' || q.status === 'Read'), [myQueries]);
-  const pendingRewards = useMemo(() => myRewards.filter(r => r.status === 'Proposed'), [myRewards]);
+  
 
   useEffect(() => {
     if (!loggedInUser?.id) return;
-
-    const mySubmittedRequests = allUserRequests.filter(req => req.userId === loggedInUser.id);
-    mySubmittedRequests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    setMyRequests(mySubmittedRequests);
     
+    // Filter and sort requests
+    const filteredUserRequests = allUserRequests.filter(req => {
+        const reqDate = new Date(req.createdAt);
+        const withinRange = requestDateRange?.from && requestDateRange.to 
+            ? isWithinInterval(reqDate, { start: startOfDay(requestDateRange.from), end: endOfDay(requestDateRange.to) })
+            : true;
+        return req.userId === loggedInUser.id && withinRange;
+    });
+    filteredUserRequests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setMyRequests(filteredUserRequests);
+
     const assignedToMe = allUserRequests.filter(req => req.assignedToId === loggedInUser.id && (req.status === 'Forwarded' || req.status === 'Pending'));
     assignedToMe.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     setAssignedRequests(assignedToMe);
 
-    const queriesForMe = allHrQueries.filter(q => q.assigneeId === loggedInUser.id);
-    queriesForMe.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    setMyQueries(queriesForMe);
-    
-    const rewardsForMe = allRewards.filter(r => r.assigneeId === loggedInUser.id);
-    rewardsForMe.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    setMyRewards(rewardsForMe);
+    // Filter and sort queries
+    const filteredHrQueries = allHrQueries.filter(q => {
+        const queryDate = new Date(q.createdAt);
+        const withinRange = queryDateRange?.from && queryDateRange.to 
+            ? isWithinInterval(queryDate, { start: startOfDay(queryDateRange.from), end: endOfDay(queryDateRange.to) })
+            : true;
+        return q.assigneeId === loggedInUser.id && withinRange;
+    });
+    filteredHrQueries.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setMyQueries(filteredHrQueries);
 
-  }, [allUserRequests, allHrQueries, allRewards, loggedInUser?.id]);
+    // Filter and sort rewards
+    const filteredRewards = allRewards.filter(r => {
+        const rewardDate = new Date(r.createdAt);
+        const withinRange = rewardDateRange?.from && rewardDateRange.to
+            ? isWithinInterval(rewardDate, { start: startOfDay(rewardDateRange.from), end: endOfDay(rewardDateRange.to) })
+            : true;
+        return r.assigneeId === loggedInUser.id && withinRange;
+    });
+    filteredRewards.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setMyRewards(filteredRewards);
+
+  }, [allUserRequests, allHrQueries, allRewards, loggedInUser?.id, requestDateRange, queryDateRange, rewardDateRange]);
+
+  const pendingQueries = useMemo(() => myQueries.filter(q => q.status === 'Sent' || q.status === 'Read'), [myQueries]);
+  const pendingRewards = useMemo(() => myRewards.filter(r => r.status === 'Proposed'), [myRewards]);
 
   useEffect(() => {
     if (!loggedInUser) return;
@@ -185,11 +213,11 @@ export default function DashboardPage() {
             newRequest.amount = parseFloat(amount);
         }
 
-        if (dateRange?.from) {
-            newRequest.startDate = dateRange.from.toISOString();
+        if (newRequestDateRange?.from) {
+            newRequest.startDate = newRequestDateRange.from.toISOString();
         }
-        if (dateRange?.to) {
-            newRequest.endDate = dateRange.to.toISOString();
+        if (newRequestDateRange?.to) {
+            newRequest.endDate = newRequestDateRange.to.toISOString();
         }
 
         await addDoc(collection(db, "userRequests"), newRequest);
@@ -197,7 +225,7 @@ export default function DashboardPage() {
         toast({ title: "Request Submitted", description: "Your request has been sent for review." });
         setIsRequestDialogOpen(false);
         setAttachments([]);
-        setDateRange(undefined);
+        setNewRequestDateRange(undefined);
     } catch (error: any) {
         toast({ title: "Submission Failed", description: error.message, variant: "destructive" });
     } finally {
@@ -329,6 +357,45 @@ export default function DashboardPage() {
     setViewingReward(null);
     setIsRewardDialogOpen(false);
   };
+  
+  const DatePicker = ({ dateRange, setDateRange }: { dateRange: DateRange | undefined, setDateRange: (range: DateRange | undefined) => void }) => (
+     <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            id="date"
+            variant={"outline"}
+            className={cn(
+              "w-[300px] justify-start text-left font-normal",
+              !dateRange && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {dateRange?.from ? (
+              dateRange.to ? (
+                <>
+                  {format(dateRange.from, "LLL dd, y")} -{" "}
+                  {format(dateRange.to, "LLL dd, y")}
+                </>
+              ) : (
+                format(dateRange.from, "LLL dd, y")
+              )
+            ) : (
+              <span>Pick a date range</span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            initialFocus
+            mode="range"
+            defaultMonth={dateRange?.from}
+            selected={dateRange}
+            onSelect={setDateRange}
+            numberOfMonths={2}
+          />
+        </PopoverContent>
+      </Popover>
+  );
 
   return (
     <div className="space-y-8">
@@ -506,22 +573,21 @@ export default function DashboardPage() {
                       These are requests for information sent to you by HR or management.
                   </CardDescription>
               </div>
-              {isSeniorStaff && (
-                  <div className="flex w-full sm:w-auto items-center gap-2">
-                      <div className="relative flex-1 sm:flex-initial">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input 
-                              placeholder="Search queries..."
-                              className="pl-9"
-                              value={querySearch}
-                              onChange={(e) => setQuerySearch(e.target.value)}
-                          />
-                      </div>
-                      <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyQueries, 'my_queries')}>
-                          <Download className="mr-2 h-4 w-4" /> Export
-                      </Button>
+              <div className="flex w-full sm:w-auto items-center gap-2">
+                  <DatePicker dateRange={queryDateRange} setDateRange={setQueryDateRange} />
+                  <div className="relative flex-1 sm:flex-initial">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                          placeholder="Search queries..."
+                          className="pl-9"
+                          value={querySearch}
+                          onChange={(e) => setQuerySearch(e.target.value)}
+                      />
                   </div>
-              )}
+                  <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyQueries, 'my_queries')}>
+                      <Download className="mr-2 h-4 w-4" /> Export
+                  </Button>
+              </div>
           </CardHeader>
           <CardContent>
               <Table>
@@ -557,7 +623,7 @@ export default function DashboardPage() {
                           ))
                       ) : (
                          <TableRow>
-                            <TableCell colSpan={6} className="text-center h-24">You have no queries.</TableCell>
+                            <TableCell colSpan={6} className="text-center h-24">You have no queries for the selected date range.</TableCell>
                         </TableRow>
                       )}
                   </TableBody>
@@ -576,22 +642,21 @@ export default function DashboardPage() {
                       A log of all rewards and recognitions you have received.
                   </CardDescription>
               </div>
-              {isSeniorStaff && (
-                  <div className="flex w-full sm:w-auto items-center gap-2">
-                      <div className="relative flex-1 sm:flex-initial">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input 
-                              placeholder="Search rewards..."
-                              className="pl-9"
-                              value={rewardSearch}
-                              onChange={(e) => setRewardSearch(e.target.value)}
-                          />
-                      </div>
-                      <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRewards, 'my_rewards')}>
-                          <Download className="mr-2 h-4 w-4" /> Export
-                      </Button>
+              <div className="flex w-full sm:w-auto items-center gap-2">
+                  <DatePicker dateRange={rewardDateRange} setDateRange={setRewardDateRange} />
+                  <div className="relative flex-1 sm:flex-initial">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                          placeholder="Search rewards..."
+                          className="pl-9"
+                          value={rewardSearch}
+                          onChange={(e) => setRewardSearch(e.target.value)}
+                      />
                   </div>
-              )}
+                  <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRewards, 'my_rewards')}>
+                      <Download className="mr-2 h-4 w-4" /> Export
+                  </Button>
+              </div>
           </CardHeader>
           <CardContent>
               <Table>
@@ -627,7 +692,7 @@ export default function DashboardPage() {
                           ))
                       ) : (
                          <TableRow>
-                            <TableCell colSpan={6} className="text-center h-24">You have no rewards.</TableCell>
+                            <TableCell colSpan={6} className="text-center h-24">You have no rewards for the selected date range.</TableCell>
                         </TableRow>
                       )}
                   </TableBody>
@@ -642,22 +707,19 @@ export default function DashboardPage() {
                 <CardDescription>Submit and track requests for leave, salary, and more.</CardDescription>
             </div>
              <div className="flex w-full sm:w-auto items-center gap-2 self-start sm:self-center">
-                {isSeniorStaff && (
-                    <>
-                        <div className="relative flex-1 sm:flex-initial">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                                placeholder="Search requests..."
-                                className="pl-9"
-                                value={requestSearch}
-                                onChange={(e) => setRequestSearch(e.target.value)}
-                            />
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRequests, 'my_requests')}>
-                            <Download className="mr-2 h-4 w-4" /> Export
-                        </Button>
-                    </>
-                )}
+                <DatePicker dateRange={requestDateRange} setDateRange={setRequestDateRange} />
+                <div className="relative flex-1 sm:flex-initial">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Search requests..."
+                        className="pl-9"
+                        value={requestSearch}
+                        onChange={(e) => setRequestSearch(e.target.value)}
+                    />
+                </div>
+                <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRequests, 'my_requests')}>
+                    <Download className="mr-2 h-4 w-4" /> Export
+                </Button>
                 <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
                     <DialogTrigger asChild>
                         <Button size="sm"><PlusCircle className="mr-2 h-4 w-4" /> New</Button>
@@ -690,18 +752,18 @@ export default function DashboardPage() {
                                             variant={"outline"}
                                             className={cn(
                                             "col-span-3 justify-start text-left font-normal",
-                                            !dateRange && "text-muted-foreground"
+                                            !newRequestDateRange && "text-muted-foreground"
                                             )}
                                         >
                                             <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {dateRange?.from ? (
-                                            dateRange.to ? (
+                                            {newRequestDateRange?.from ? (
+                                            newRequestDateRange.to ? (
                                                 <>
-                                                {format(dateRange.from, "LLL dd, y")} -{" "}
-                                                {format(dateRange.to, "LLL dd, y")}
+                                                {format(newRequestDateRange.from, "LLL dd, y")} -{" "}
+                                                {format(newRequestDateRange.to, "LLL dd, y")}
                                                 </>
                                             ) : (
-                                                format(dateRange.from, "LLL dd, y")
+                                                format(newRequestDateRange.from, "LLL dd, y")
                                             )
                                             ) : (
                                             <span>Pick a date range</span>
@@ -712,9 +774,9 @@ export default function DashboardPage() {
                                         <Calendar
                                             initialFocus
                                             mode="range"
-                                            defaultMonth={dateRange?.from}
-                                            selected={dateRange}
-                                            onSelect={setDateRange}
+                                            defaultMonth={newRequestDateRange?.from}
+                                            selected={newRequestDateRange}
+                                            onSelect={setNewRequestDateRange}
                                             numberOfMonths={2}
                                         />
                                         </PopoverContent>
@@ -796,7 +858,7 @@ export default function DashboardPage() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center h-24">You have not made any requests yet.</TableCell>
+                                <TableCell colSpan={6} className="text-center h-24">You have not made any requests for the selected date range.</TableCell>
                             </TableRow>
                         )}
                     </TableBody>
@@ -913,3 +975,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
