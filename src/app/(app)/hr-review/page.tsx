@@ -269,7 +269,7 @@ export default function HrReviewPage() {
             id="date"
             variant={"outline"}
             className={cn(
-              "w-[300px] justify-start text-left font-normal",
+              "w-full sm:w-[300px] justify-start text-left font-normal",
               !dateRange && "text-muted-foreground"
             )}
           >
@@ -307,21 +307,9 @@ export default function HrReviewPage() {
       <div className="flex items-center justify-between">
         <PageHeader title="HR Review" description="Review and manage employee clock-in/out records." />
       </div>
-      
-      {isSeniorStaff && (
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-                placeholder="Search by name, email, or status..."
-                className="pl-9"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-      )}
 
       <Card>
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <CardTitle>Pending Submissions</CardTitle>
             <CardDescription>
@@ -329,7 +317,16 @@ export default function HrReviewPage() {
             </CardDescription>
           </div>
           {isSeniorStaff && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-auto">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Search records..."
+                        className="pl-9 w-full"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
                 <DatePicker />
                 {selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length > 0 && (
                     <AlertDialog>
@@ -457,7 +454,7 @@ export default function HrReviewPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <CardTitle>Time Clock History</CardTitle>
             <CardDescription>
@@ -465,7 +462,16 @@ export default function HrReviewPage() {
             </CardDescription>
           </div>
           {isSeniorStaff && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-auto">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Search records..."
+                        className="pl-9 w-full"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
                 <DatePicker />
                 {selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length > 0 && (
                     <AlertDialog>
