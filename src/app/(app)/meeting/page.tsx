@@ -132,7 +132,6 @@ export default function MeetingPage() {
   useEffect(() => {
     if (!loggedInUser?.businessId || activeTab !== 'mail') return;
     
-    // The query now only filters by businessId. Sorting will be done client-side.
     const q = query(
       collection(db, 'internal_mails'),
       where('businessId', '==', loggedInUser.businessId)
@@ -141,14 +140,12 @@ export default function MeetingPage() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allMails = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InternalMail));
       
-      // Filter for mails involving the logged-in user
       const myMails = allMails.filter(mail => 
           mail.senderId === loggedInUser.id || 
-          mail.toRecipients.some(r => r.id === loggedInUser.id) ||
-          mail.ccRecipients.some(r => r.id === loggedInUser.id)
+          (mail.toRecipients || []).some(r => r.id === loggedInUser.id) ||
+          (mail.ccRecipients || []).some(r => r.id === loggedInUser.id)
       );
 
-      // Sort the mails by timestamp in descending order on the client
       myMails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       setMails(myMails);
@@ -394,9 +391,9 @@ export default function MeetingPage() {
           let attachmentUrls: { name: string, url: string }[] = [];
           if (attachments.length > 0) {
               const uploadPromises = attachments.map(async (file) => {
-                  const folder = `chat_attachments/${loggedInUser.id}`;
-                  await uploadFile(loggedInUser.businessId!, folder, file, () => {});
-                  const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
+                  const folder = `chat_attachments/${loggedInUser!.id}`;
+                  await uploadFile(loggedInUser!.businessId!, folder, file, () => {});
+                  const url = await getPublicUrl(loggedInUser!.businessId!, `${folder}/${file.name}`);
                   return { name: file.name, url };
               });
               attachmentUrls = await Promise.all(uploadPromises);
@@ -802,13 +799,13 @@ export default function MeetingPage() {
     setIsComposeOpen(true);
   };
   
-    const inboxMails = useMemo(() => mails.filter(m => (m.toRecipients.some(r => r.id === loggedInUser?.id) || m.ccRecipients.some(r => r.id === loggedInUser?.id)) && (mailSearch ? (m.subject.toLowerCase().includes(mailSearch.toLowerCase()) || m.senderName.toLowerCase().includes(mailSearch.toLowerCase())) : true)), [mails, loggedInUser, mailSearch]);
-    const sentMails = useMemo(() => mails.filter(m => m.senderId === loggedInUser?.id && (mailSearch ? (m.subject.toLowerCase().includes(mailSearch.toLowerCase()) || [...m.toRecipients, ...m.ccRecipients].some(r => r.name.toLowerCase().includes(mailSearch.toLowerCase()))) : true)), [mails, loggedInUser, mailSearch]);
+    const inboxMails = useMemo(() => mails.filter(m => ((m.toRecipients || []).some(r => r.id === loggedInUser?.id) || (m.ccRecipients || []).some(r => r.id === loggedInUser?.id)) && (mailSearch ? (m.subject.toLowerCase().includes(mailSearch.toLowerCase()) || m.senderName.toLowerCase().includes(mailSearch.toLowerCase())) : true)), [mails, loggedInUser, mailSearch]);
+    const sentMails = useMemo(() => mails.filter(m => m.senderId === loggedInUser?.id && (mailSearch ? (m.subject.toLowerCase().includes(mailSearch.toLowerCase()) || [...(m.toRecipients || []), ...(m.ccRecipients || [])].some(r => r.name.toLowerCase().includes(mailSearch.toLowerCase()))) : true)), [mails, loggedInUser, mailSearch]);
     const unreadCount = useMemo(() => inboxMails.filter(m => loggedInUser && !m.readBy[loggedInUser.id]).length, [inboxMails, loggedInUser]);
 
     const getRecipientString = (mail: InternalMail) => {
-        const to = mail.toRecipients.map(r => r.id === loggedInUser?.id ? "Me" : r.name).join(', ');
-        const cc = mail.ccRecipients.map(r => r.id === loggedInUser?.id ? "Me" : r.name).join(', ');
+        const to = (mail.toRecipients || []).map(r => r.id === loggedInUser?.id ? "Me" : r.name).join(', ');
+        const cc = (mail.ccRecipients || []).map(r => r.id === loggedInUser?.id ? "Me" : r.name).join(', ');
         return (
             <>
                 <p>To: {to}</p>
@@ -1154,7 +1151,7 @@ export default function MeetingPage() {
                                 <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">{formatDistanceToNow(new Date(mail.timestamp), { addSuffix: true })}</p>
                               </div>
                               <p className={`truncate ${loggedInUser && !mail.readBy[loggedInUser.id] ? 'font-bold' : ''}`}>{mail.subject}</p>
-                              <p className="text-xs text-muted-foreground truncate">{[...mail.toRecipients, ...mail.ccRecipients].map(r => r.name).join(', ')}</p>
+                              <p className="text-xs text-muted-foreground truncate">{[...(mail.toRecipients || []), ...(mail.ccRecipients || [])].map(r => r.name).join(', ')}</p>
                             </button>
                           ))}
                         </TabsContent>
@@ -1162,7 +1159,7 @@ export default function MeetingPage() {
                           {sentMails.map(mail => (
                              <button key={mail.id} onClick={() => handleOpenMail(mail)} className={`w-full text-left block p-4 border-b hover:bg-accent ${viewingMail?.id === mail.id ? 'bg-accent' : ''}`}>
                               <div className="flex justify-between items-start">
-                                <p className="font-semibold truncate">To: {[...mail.toRecipients, ...mail.ccRecipients].map(r => r.name).join(', ')}</p>
+                                <p className="font-semibold truncate">To: {[...(mail.toRecipients || []), ...(mail.ccRecipients || [])].map(r => r.name).join(', ')}</p>
                                 <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">{formatDistanceToNow(new Date(mail.timestamp), { addSuffix: true })}</p>
                               </div>
                               <p className="truncate font-medium">{mail.subject}</p>
@@ -1437,14 +1434,14 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
             setToRecipients([]);
             setCcRecipients([]);
             setSubject(forwardingMail.subject.startsWith("Fwd: ") ? forwardingMail.subject : `Fwd: ${forwardingMail.subject}`);
-            const fwdBody = `\n\n\n--- Forwarded message ---\nFrom: ${forwardingMail.senderName}\nDate: ${format(new Date(forwardingMail.timestamp), 'PPpp')}\nSubject: ${forwardingMail.subject}\nTo: ${forwardingMail.toRecipients.map(r => r.name).join(', ')}\n\n${forwardingMail.body}`;
+            const fwdBody = `\n\n\n--- Forwarded message ---\nFrom: ${forwardingMail.senderName}\nDate: ${format(new Date(forwardingMail.timestamp), 'PPpp')}\nSubject: ${forwardingMail.subject}\nTo: ${(forwardingMail.toRecipients || []).map(r => r.name).join(', ')}\n\n${forwardingMail.body}`;
             setBody(fwdBody);
             setMailAttachments([]); // Do not forward attachments by default
         } else if (replyingTo && loggedInUser) {
             const allParticipants = [
                 {id: replyingTo.senderId, name: replyingTo.senderName}, 
-                ...replyingTo.toRecipients,
-                ...replyingTo.ccRecipients,
+                ...(replyingTo.toRecipients || []),
+                ...(replyingTo.ccRecipients || []),
             ].filter(p => p.id !== loggedInUser.id);
             
             const to = users.find(u => u.id === replyingTo.senderId);
@@ -1621,5 +1618,6 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     );
 };
     
+
 
 
