@@ -446,12 +446,13 @@ export default function MeetingPage() {
     let q: any;
 
     if (activeChatMode === 'individual' && selectedChatUser) {
+        // This query requires a composite index on senderId, receiverId, and timestamp.
+        // Or, we can query twice and merge/sort on the client.
         q = query(
             collection(db, 'chatMessages'),
             where('businessId', '==', loggedInUser!.businessId),
             where('senderId', 'in', [loggedInUser!.id, selectedChatUser.id]),
-            where('receiverId', 'in', [loggedInUser!.id, selectedChatUser.id]),
-            orderBy('timestamp', 'asc')
+            where('receiverId', 'in', [loggedInUser!.id, selectedChatUser.id])
         );
     } else if (activeChatMode === 'group' && selectedGroup) {
         q = query(
@@ -469,7 +470,10 @@ export default function MeetingPage() {
         
         if (activeChatMode === 'individual' && selectedChatUser) {
             // Filter out messages that are part of a group chat
-            setMessages(newMessages.filter(m => !m.groupId && m.senderId !== m.receiverId));
+            const individualMessages = newMessages.filter(m => !m.groupId && m.senderId !== m.receiverId);
+            // Sort on the client side
+            individualMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+            setMessages(individualMessages);
 
             const batch = writeBatch(db);
             let hasUnread = false;
@@ -487,11 +491,18 @@ export default function MeetingPage() {
         } else {
              setMessages(newMessages);
         }
+    }, (error) => {
+        console.error("Chat message snapshot error: ", error);
+        toast({
+            title: "Chat Error",
+            description: "Could not load messages. The query might be too complex or requires a database index.",
+            variant: "destructive"
+        });
     });
 
     return () => unsubscribe();
 
-}, [loggedInUser, selectedChatUser, activeChatMode, selectedGroup]);
+}, [loggedInUser, selectedChatUser, activeChatMode, selectedGroup, toast]);
   
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -2055,6 +2066,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
