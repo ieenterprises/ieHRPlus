@@ -118,7 +118,7 @@ export default function VideoVerificationPage() {
   }, [isRecording]);
 
   const handleUpload = async () => {
-    if (!recordedVideo || !loggedInUser?.businessId) return;
+    if (!recordedVideo || !loggedInUser?.businessId || !loggedInUser?.id) return;
 
     setIsUploading(true);
     try {
@@ -127,12 +127,11 @@ export default function VideoVerificationPage() {
       const videoFile = new File([recordedVideo], fileName, { type: "video/webm" });
       
       // 1. Upload the file using the existing function
-      await uploadFile(loggedInUser.businessId, videoFolder, videoFile, (progress) => {
-        // You could display upload progress if you want
-      });
+      await uploadFile(loggedInUser.businessId, loggedInUser.id, videoFolder, videoFile);
 
       // 2. Get the public URL of the uploaded file
-      const videoUrl = await getPublicUrl(loggedInUser.businessId, `${videoFolder}/${fileName}`);
+      const fullPath = [loggedInUser.businessId, 'user_files', loggedInUser.id, videoFolder, fileName].join('/');
+      const videoUrl = await getPublicUrl(loggedInUser.businessId, fullPath);
       
       // 3. Update the TimeRecord in Firestore
       const timeRecordId = sessionStorage.getItem('latestTimeRecordId');
