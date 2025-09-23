@@ -286,7 +286,7 @@ export default function SessionsPage() {
                 )}
                 <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={filteredSessions.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
-                    Download CSV
+                    Export
                 </Button>
             </div>
           )}
@@ -429,5 +429,7 @@ export default function SessionsPage() {
     </div>
   );
 }
+
+    
 
     

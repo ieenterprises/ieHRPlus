@@ -344,7 +344,7 @@ export default function HrReviewPage() {
                 )}
                 <Button variant="outline" size="sm" onClick={() => handleExportCSV(pendingRecords, 'pending')} disabled={pendingRecords.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
-                    Download CSV
+                    Export
                 </Button>
             </div>
           )}
@@ -489,7 +489,7 @@ export default function HrReviewPage() {
                 )}
                 <Button variant="outline" size="sm" onClick={() => handleExportCSV(historicalRecords, 'history')} disabled={historicalRecords.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
-                    Download CSV
+                    Export
                 </Button>
             </div>
           )}
@@ -598,5 +598,7 @@ export default function HrReviewPage() {
     </div>
   );
 }
+
+    
 
     
