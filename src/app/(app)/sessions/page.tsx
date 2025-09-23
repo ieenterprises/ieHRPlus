@@ -56,6 +56,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import Papa from "papaparse";
 import { Badge } from "@/components/ui/badge";
+import type { DateRange } from "react-day-picker";
 
 type ActiveSession = TimeRecord & {
     user: User | undefined;
@@ -71,7 +72,10 @@ export default function SessionsPage() {
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfDay(new Date()),
+    to: endOfDay(new Date()),
+  });
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
@@ -95,8 +99,8 @@ export default function SessionsPage() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
 
-      const start = startOfDay(selectedDate);
-      const end = endOfDay(selectedDate);
+      const start = dateRange?.from ? startOfDay(dateRange.from) : startOfDay(new Date());
+      const end = dateRange?.to ? endOfDay(dateRange.to) : endOfDay(new Date());
       
       const filteredRecords = allRecords.filter(record => {
         const clockInDate = new Date(record.clockInTime);
@@ -120,11 +124,11 @@ export default function SessionsPage() {
     });
 
     return () => unsubscribe();
-  }, [loggedInUser?.businessId, selectedDate, users]);
+  }, [loggedInUser?.businessId, dateRange, users]);
 
   useEffect(() => {
       setSelectedRecordIds([]);
-  }, [selectedDate, sessions]);
+  }, [dateRange, sessions]);
   
   const filteredSessions = useMemo(() => {
     const lowercasedTerm = searchTerm.toLowerCase();
@@ -188,7 +192,13 @@ export default function SessionsPage() {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `sessions_report_${format(selectedDate, 'yyyy-MM-dd')}.csv`);
+    const datePart = dateRange?.from 
+        ? dateRange.to 
+            ? `${format(dateRange.from, 'yyyy-MM-dd')}_to_${format(dateRange.to, 'yyyy-MM-dd')}` 
+            : format(dateRange.from, 'yyyy-MM-dd')
+        : 'all_time';
+
+    link.setAttribute("download", `sessions_report_${datePart}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -227,6 +237,44 @@ export default function SessionsPage() {
     );
   };
   
+  const DatePicker = () => (
+     <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            id="date"
+            variant={"outline"}
+            className={cn(
+              "w-full sm:w-[300px] justify-start text-left font-normal",
+              !dateRange && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {dateRange?.from ? (
+              dateRange.to ? (
+                <>
+                  {format(dateRange.from, "LLL dd, y")} -{" "}
+                  {format(dateRange.to, "LLL dd, y")}
+                </>
+              ) : (
+                format(dateRange.from, "LLL dd, y")
+              )
+            ) : (
+              <span>Pick a date range</span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            initialFocus
+            mode="range"
+            defaultMonth={dateRange?.from}
+            selected={dateRange}
+            onSelect={setDateRange}
+            numberOfMonths={2}
+          />
+        </PopoverContent>
+      </Popover>
+  );
 
   return (
     <div className="space-y-8">
@@ -235,33 +283,9 @@ export default function SessionsPage() {
           title="Active Sessions"
           description="Manage sessions for users who are clocked in but not currently active on this device."
         />
-        {isSeniorStaff && (
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button
-                    variant={"outline"}
-                    className={cn(
-                        "w-[280px] justify-start text-left font-normal",
-                        !selectedDate && "text-muted-foreground"
-                    )}
-                    >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                    <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={(date) => date && setSelectedDate(date)}
-                    initialFocus
-                    />
-                </PopoverContent>
-            </Popover>
-        )}
       </div>
       <Card>
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <CardTitle>Clocked-In Users</CardTitle>
             <CardDescription>
@@ -269,7 +293,17 @@ export default function SessionsPage() {
             </CardDescription>
           </div>
           {isSeniorStaff && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-auto">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                          placeholder="Search by name or email..."
+                          className="pl-9 w-full"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                  </div>
+                <DatePicker />
                 {selectedRecordIds.length > 0 && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -292,19 +326,6 @@ export default function SessionsPage() {
           )}
         </CardHeader>
         <CardContent>
-          {isSeniorStaff && (
-              <div className="mb-4">
-                  <div className="relative w-full max-w-sm">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input 
-                          placeholder="Search by name or email..."
-                          className="pl-9"
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                      />
-                  </div>
-              </div>
-          )}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -379,7 +400,7 @@ export default function SessionsPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={isSeniorStaff ? 5 : 4} className="h-24 text-center">
-                      No sessions found for {format(selectedDate, "PPP")}.
+                      No sessions found for the selected date range.
                     </TableCell>
                   </TableRow>
                 )}
@@ -429,7 +450,5 @@ export default function SessionsPage() {
     </div>
   );
 }
-
-    
 
     
