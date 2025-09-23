@@ -33,7 +33,7 @@ const PreviewContent = ({ fileUrl, fileName }: { fileUrl: string, fileName: stri
     if (isAudio) {
         return <audio controls src={fileUrl} className="w-full" />;
     }
-    if (isPdf) {
+     if (isPdf) {
         return <iframe src={fileUrl} className="w-full h-full border-0" title="PDF Preview" />;
     }
     if (isOfficeDoc) {
