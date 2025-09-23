@@ -2,6 +2,20 @@
 
 import type { AnyPermission } from "./permissions";
 
+export type InternalMail = {
+  id: string;
+  senderId: string;
+  senderName: string;
+  recipients: { id: string; name: string; avatar_url?: string }[];
+  subject: string;
+  body: string;
+  timestamp: string;
+  readBy: { [userId: string]: boolean };
+  businessId: string;
+  threadId: string; // To group conversations
+  attachments?: { name: string, url: string }[];
+};
+
 export type ChatMessage = {
   id: string;
   senderId: string;

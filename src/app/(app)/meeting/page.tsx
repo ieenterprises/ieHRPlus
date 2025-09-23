@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -6,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -14,11 +15,11 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, writeBatch, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile, getPublicUrl } from '@/lib/firebase-storage';
-import type { User, ChatMessage } from '@/lib/types';
-import { formatDistanceToNowStrict } from 'date-fns';
+import type { User, ChatMessage, InternalMail } from '@/lib/types';
+import { format, formatDistanceToNow, formatDistanceToNowStrict } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -27,8 +28,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { VIDEOSDK_TOKEN } from '@/lib/videosdk-config';
 import Link from 'next/link';
 import { AttachmentPreviewer } from '@/components/attachment-previewer';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 
 type ChatMode = 'individual' | 'group';
+type MailboxView = "inbox" | "sent";
 
 const EMOJIS = [
   '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
@@ -84,15 +89,21 @@ export default function MeetingPage() {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isSending, setIsSending] = useState(false);
 
-
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
-
 
   // Invite state
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteRecipients, setInviteRecipients] = useState<string[]>([]);
   const [inviteUserSearch, setInviteUserSearch] = useState('');
+
+  // Mailing state
+  const [mails, setMails] = useState<InternalMail[]>([]);
+  const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [viewingMail, setViewingMail] = useState<InternalMail | null>(null);
+  const [replyingToMail, setReplyingToMail] = useState<InternalMail | null>(null);
+  const [activeMailbox, setActiveMailbox] = useState<MailboxView>("inbox");
+  const [mailSearch, setMailSearch] = useState("");
 
 
   // VideoSDK states
@@ -116,6 +127,24 @@ export default function MeetingPage() {
         }
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!loggedInUser?.businessId || activeTab !== 'mail') return;
+    
+    const q = query(
+      collection(db, 'internal_mails'),
+      where('businessId', '==', loggedInUser.businessId),
+      orderBy('timestamp', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const allMails = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InternalMail));
+      const myMails = allMails.filter(mail => mail.senderId === loggedInUser.id || mail.recipients.some(r => r.id === loggedInUser.id));
+      setMails(myMails);
+    });
+
+    return () => unsubscribe();
+  }, [loggedInUser?.businessId, activeTab]);
 
   const createMeeting = async (): Promise<string | null> => {
       if (!process.env.NEXT_PUBLIC_VIDEOSDK_TOKEN) {
@@ -746,6 +775,25 @@ export default function MeetingPage() {
     </div>
   );
 
+  const handleOpenMail = async (mail: InternalMail) => {
+    setViewingMail(mail);
+    if (loggedInUser && !mail.readBy[loggedInUser.id]) {
+      const mailRef = doc(db, 'internal_mails', mail.id);
+      await updateDoc(mailRef, {
+        [`readBy.${loggedInUser.id}`]: true,
+      });
+    }
+  };
+
+  const handleOpenCompose = (replyTo?: InternalMail) => {
+    setReplyingToMail(replyTo || null);
+    setIsComposeOpen(true);
+  };
+  
+    const inboxMails = useMemo(() => mails.filter(m => m.recipients.some(r => r.id === loggedInUser?.id) && (mailSearch ? (m.subject.toLowerCase().includes(mailSearch.toLowerCase()) || m.senderName.toLowerCase().includes(mailSearch.toLowerCase())) : true)), [mails, loggedInUser, mailSearch]);
+    const sentMails = useMemo(() => mails.filter(m => m.senderId === loggedInUser?.id && (mailSearch ? (m.subject.toLowerCase().includes(mailSearch.toLowerCase()) || m.recipients.some(r => r.name.toLowerCase().includes(mailSearch.toLowerCase()))) : true)), [mails, loggedInUser, mailSearch]);
+    const unreadCount = useMemo(() => inboxMails.filter(m => loggedInUser && !m.readBy[loggedInUser.id]).length, [inboxMails, loggedInUser]);
+
 
   return (
     <div className="space-y-8">
@@ -766,7 +814,7 @@ export default function MeetingPage() {
           </TabsTrigger>
           <TabsTrigger value="mail">
             <Mail className="mr-2 h-4 w-4" />
-            Mailing
+            Mailing {unreadCount > 0 && <Badge className="ml-2">{unreadCount}</Badge>}
           </TabsTrigger>
         </TabsList>
         
@@ -1055,16 +1103,95 @@ export default function MeetingPage() {
         </TabsContent>
 
         <TabsContent value="mail">
-           <Card>
-              <CardHeader>
-                <CardTitle>Internal Mailing</CardTitle>
-              </CardHeader>
-              <CardContent className="min-h-[60vh] flex items-center justify-center">
-                  <div className="text-center text-muted-foreground">
-                    <Mail className="mx-auto h-12 w-12 mb-4" />
-                    <p>Internal mailing system to be implemented.</p>
+           <Card className="h-[70vh] flex">
+             <div className="w-1/3 max-w-sm border-r flex flex-col">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Mailing</CardTitle>
+                      <Button size="sm" onClick={() => handleOpenCompose()}>
+                        <Send className="mr-2 h-4 w-4" /> New Mail
+                      </Button>
+                    </div>
+                    <div className="relative mt-2">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="Search mail..." className="pl-9" value={mailSearch} onChange={(e) => setMailSearch(e.target.value)} />
+                    </div>
+                </CardHeader>
+                <Tabs value={activeMailbox} onValueChange={(v) => setActiveMailbox(v as MailboxView)} className="flex-1 flex flex-col min-h-0">
+                    <TabsList className="mx-4">
+                        <TabsTrigger value="inbox" className="w-full">Inbox {unreadCount > 0 && <Badge className="ml-2">{unreadCount}</Badge>}</TabsTrigger>
+                        <TabsTrigger value="sent" className="w-full">Sent</TabsTrigger>
+                    </TabsList>
+                    <ScrollArea className="flex-1">
+                        <TabsContent value="inbox" className="m-0">
+                          {inboxMails.map(mail => (
+                            <button key={mail.id} onClick={() => handleOpenMail(mail)} className={`w-full text-left block p-4 border-b hover:bg-accent ${viewingMail?.id === mail.id ? 'bg-accent' : ''}`}>
+                              <div className="flex justify-between items-start">
+                                <p className={`font-semibold truncate ${loggedInUser && !mail.readBy[loggedInUser.id] ? 'text-primary' : ''}`}>{mail.senderName}</p>
+                                <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">{formatDistanceToNow(new Date(mail.timestamp), { addSuffix: true })}</p>
+                              </div>
+                              <p className={`truncate ${loggedInUser && !mail.readBy[loggedInUser.id] ? 'font-bold' : ''}`}>{mail.subject}</p>
+                              <p className="text-xs text-muted-foreground truncate">{mail.recipients.map(r => r.name).join(', ')}</p>
+                            </button>
+                          ))}
+                        </TabsContent>
+                        <TabsContent value="sent" className="m-0">
+                          {sentMails.map(mail => (
+                             <button key={mail.id} onClick={() => handleOpenMail(mail)} className={`w-full text-left block p-4 border-b hover:bg-accent ${viewingMail?.id === mail.id ? 'bg-accent' : ''}`}>
+                              <div className="flex justify-between items-start">
+                                <p className="font-semibold truncate">To: {mail.recipients.map(r => r.name).join(', ')}</p>
+                                <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">{formatDistanceToNow(new Date(mail.timestamp), { addSuffix: true })}</p>
+                              </div>
+                              <p className="truncate font-medium">{mail.subject}</p>
+                              <p className="text-xs text-muted-foreground truncate">{mail.body}</p>
+                            </button>
+                          ))}
+                        </TabsContent>
+                    </ScrollArea>
+                </Tabs>
+             </div>
+             <div className="w-2/3 flex flex-col">
+                {viewingMail ? (
+                  <div className="flex flex-col h-full">
+                    <CardHeader className="border-b">
+                      <CardTitle className="truncate">{viewingMail.subject}</CardTitle>
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                           <Avatar className="h-8 w-8">
+                                <AvatarImage src={users.find(u=>u.id === viewingMail.senderId)?.avatar_url || ''} />
+                                <AvatarFallback>{viewingMail.senderName.charAt(0)}</AvatarFallback>
+                           </Avatar>
+                           <div>
+                                <p className="font-semibold">{viewingMail.senderName}</p>
+                                <p>To: {viewingMail.recipients.map(r => r.id === loggedInUser?.id ? "Me" : r.name).join(', ')}</p>
+                           </div>
+                        </div>
+                        <p>{format(new Date(viewingMail.timestamp), "MMM d, yyyy 'at' h:mm a")}</p>
+                      </div>
+                    </CardHeader>
+                    <ScrollArea className="flex-1 p-6">
+                        <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap">{viewingMail.body}</div>
+                        {viewingMail.attachments && viewingMail.attachments.length > 0 && (
+                          <div className="mt-6">
+                            <h4 className="font-semibold mb-2">Attachments</h4>
+                            <AttachmentPreviewer attachments={viewingMail.attachments} />
+                          </div>
+                        )}
+                    </ScrollArea>
+                    <CardFooter className="border-t pt-4">
+                      <Button onClick={() => handleOpenCompose(viewingMail)}>
+                        <Reply className="mr-2 h-4 w-4" /> Reply
+                      </Button>
+                    </CardFooter>
                   </div>
-              </CardContent>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground">
+                    <Inbox className="h-16 w-16 mb-4" />
+                    <h3 className="text-lg font-semibold">Select an item to read</h3>
+                    <p className="max-w-xs">Nothing is selected.</p>
+                  </div>
+                )}
+             </div>
            </Card>
         </TabsContent>
       </Tabs>
@@ -1241,8 +1368,149 @@ export default function MeetingPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <ComposeMailDialog
+        isOpen={isComposeOpen}
+        onClose={() => setIsComposeOpen(false)}
+        replyingTo={replyingToMail}
+    />
     </div>
   );
 }
 
+const ComposeMailDialog = ({ isOpen, onClose, replyingTo }: { isOpen: boolean, onClose: () => void, replyingTo: InternalMail | null }) => {
+    const { loggedInUser, users } = useSettings();
+    const [selectedRecipients, setSelectedRecipients] = useState<User[]>([]);
+    const [subject, setSubject] = useState('');
+    const [body, setBody] = useState('');
+    const [recipientSearch, setRecipientSearch] = useState('');
+    const [isSendingMail, setIsSendingMail] = useState(false);
+    const { toast } = useToast();
+
+    useEffect(() => {
+        if (replyingTo && loggedInUser) {
+            // Pre-fill for reply
+            const otherParticipants = [
+                {id: replyingTo.senderId, name: replyingTo.senderName}, 
+                ...replyingTo.recipients
+            ].filter(p => p.id !== loggedInUser.id);
+            
+            const uniqueParticipants = Array.from(new Set(otherParticipants.map(p => p.id)))
+                .map(id => users.find(u => u.id === id)).filter(Boolean) as User[];
+
+            setSelectedRecipients(uniqueParticipants);
+            setSubject(replyingTo.subject.startsWith("Re: ") ? replyingTo.subject : `Re: ${replyingTo.subject}`);
+            setBody(`\n\n\n--- On ${format(new Date(replyingTo.timestamp), 'PPpp')}, ${replyingTo.senderName} wrote: ---\n${replyingTo.body}`);
+        } else {
+            // Reset for new mail
+            setSelectedRecipients([]);
+            setSubject('');
+            setBody('');
+        }
+    }, [replyingTo, isOpen, loggedInUser, users]);
+
+    const handleToggleRecipient = (user: User) => {
+        setSelectedRecipients(prev => 
+            prev.some(u => u.id === user.id) 
+            ? prev.filter(u => u.id !== user.id)
+            : [...prev, user]
+        );
+    };
+
+    const handleSendMail = async () => {
+        if (!loggedInUser || selectedRecipients.length === 0 || !subject.trim() || !body.trim()) {
+            toast({ variant: 'destructive', title: "Missing fields", description: "Please add recipients, a subject, and a message body." });
+            return;
+        }
+
+        setIsSendingMail(true);
+        try {
+            const mailData: Omit<InternalMail, 'id'> = {
+                senderId: loggedInUser.id,
+                senderName: loggedInUser.name,
+                recipients: selectedRecipients.map(u => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })),
+                subject,
+                body,
+                timestamp: new Date().toISOString(),
+                readBy: { [loggedInUser.id]: true }, // Sender has "read" it
+                businessId: loggedInUser.businessId,
+                threadId: replyingTo?.threadId || Math.random().toString(36).substring(2),
+            };
+
+            await addDoc(collection(db, 'internal_mails'), mailData);
+            toast({ title: 'Mail Sent!' });
+            onClose();
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: "Error sending mail", description: error.message });
+        } finally {
+            setIsSendingMail(false);
+        }
+    };
+    
+    const filteredUsers = useMemo(() => {
+      const allOtherUsers = users.filter(u => u.id !== loggedInUser?.id);
+      if (!recipientSearch) return allOtherUsers;
+      return allOtherUsers.filter(u => u.name.toLowerCase().includes(recipientSearch.toLowerCase()));
+    }, [users, recipientSearch, loggedInUser]);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-2xl flex flex-col h-[90vh]">
+                <DialogHeader>
+                    <DialogTitle>{replyingTo ? "Reply to Mail" : "Compose New Mail"}</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-[80px_1fr] items-center gap-4">
+                        <Label htmlFor="to" className="text-right">To:</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full justify-start text-left font-normal" type="button">
+                                  {selectedRecipients.length > 0 ? selectedRecipients.map(u => u.name).join(', ') : 'Select recipients...'}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[400px] p-0" align="start">
+                                <div className="p-2 border-b">
+                                     <Input 
+                                        placeholder="Search users..."
+                                        className="pl-8"
+                                        value={recipientSearch}
+                                        onChange={(e) => setRecipientSearch(e.target.value)}
+                                     />
+                                </div>
+                                <ScrollArea className="h-64">
+                                  {filteredUsers.map(user => (
+                                    <div key={user.id} className="flex items-center p-2 cursor-pointer hover:bg-accent" onClick={() => handleToggleRecipient(user)}>
+                                      <Checkbox className="mr-2" checked={selectedRecipients.some(r => r.id === user.id)} />
+                                      <Avatar className="h-8 w-8 mr-2">
+                                        <AvatarImage src={user.avatar_url || ''} />
+                                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                      </Avatar>
+                                      <span>{user.name}</span>
+                                    </div>
+                                  ))}
+                                </ScrollArea>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                     <div className="grid grid-cols-[80px_1fr] items-center gap-4">
+                        <Label htmlFor="subject" className="text-right">Subject:</Label>
+                        <Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
+                    </div>
+                </div>
+                <Textarea 
+                    placeholder="Write your message here..."
+                    className="flex-1"
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                />
+                <DialogFooter>
+                    <Button variant="ghost" onClick={onClose}>Cancel</Button>
+                    <Button onClick={handleSendMail} disabled={isSendingMail}>
+                        {isSendingMail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Send Mail
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
     
