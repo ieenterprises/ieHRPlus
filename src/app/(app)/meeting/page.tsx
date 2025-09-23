@@ -547,6 +547,66 @@ export default function MeetingPage() {
       }
   };
 
+  const handleSendGroupMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if ((!newMessage.trim() && attachments.length === 0) || !loggedInUser || activeGroup.length === 0) return;
+
+    setIsSending(true);
+
+    try {
+        const uploadedAttachments = await Promise.all(
+            (attachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
+                const folder = `chat_attachments/${loggedInUser!.id}`;
+                await uploadFile(loggedInUser!.businessId!, folder, attachment.file);
+                const url = await getPublicUrl(loggedInUser!.businessId!, `${folder}/${attachment.file.name}`);
+                return { name: attachment.name, url };
+            })
+        );
+        
+        const finalAttachments = [
+            ...attachments.filter(a => !(a as any).source),
+            ...uploadedAttachments
+        ];
+
+        const batch = writeBatch(db);
+
+        activeGroup.forEach(recipient => {
+            if (recipient.id === loggedInUser.id) return; // Don't send to self
+
+            const messageRef = doc(collection(db, 'chatMessages'));
+            const messageData: Omit<ChatMessage, 'id'> = {
+                senderId: loggedInUser.id,
+                receiverId: recipient.id,
+                content: newMessage,
+                timestamp: new Date().toISOString(),
+                isRead: false,
+                businessId: loggedInUser.businessId,
+                attachments: finalAttachments,
+                // You might want to add a group identifier here in the future
+            };
+             if (replyingToMessage) {
+                messageData.replyTo = {
+                    messageId: replyingToMessage.id,
+                    senderName: users.find(u => u.id === replyingToMessage.senderId)?.name || 'Unknown',
+                    content: replyingToMessage.content,
+                };
+            }
+            batch.set(messageRef, messageData);
+        });
+
+        await batch.commit();
+
+        setNewMessage('');
+        setReplyingToMessage(null);
+        setAttachments([]);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error sending group message' });
+    } finally {
+        setIsSending(false);
+    }
+  };
+
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       if (event.target.files) {
           const newFiles = Array.from(event.target.files).map(file => ({
@@ -1302,7 +1362,7 @@ export default function MeetingPage() {
                                         <AttachmentPreviewer attachments={attachments} />
                                     </div>
                                 )}
-                                <form onSubmit={handleSendMessage} className="flex w-full items-center gap-2">
+                                <form onSubmit={activeChatMode === 'group' ? handleSendGroupMessage : handleSendMessage} className="flex w-full items-center gap-2">
                                     <div className="relative flex-1">
                                         <Input 
                                             ref={chatInputRef}
@@ -1948,6 +2008,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
