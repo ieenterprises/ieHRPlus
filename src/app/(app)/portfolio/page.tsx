@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/card";
 import { type User, type FileItem } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, UploadCloud, Edit, Loader2 } from "lucide-react";
+import { Search, UploadCloud, Edit, Loader2, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +41,8 @@ import { db } from "@/lib/firebase";
 import { AttachmentPreviewer } from "@/components/attachment-previewer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Image from "next/image";
+import { getStorage, ref, deleteObject } from "firebase/storage";
+
 
 export default function PortfolioPage() {
   const { users, currency, loggedInUser } = useSettings();
@@ -50,6 +52,7 @@ export default function PortfolioPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [userFiles, setUserFiles] = useState<FileItem[]>([]);
   const { toast } = useToast();
+  const storage = getStorage();
 
   const filteredUsers = useMemo(() => {
     if (!searchTerm) return users;
@@ -110,6 +113,38 @@ export default function PortfolioPage() {
       setIsUploading(false);
     }
   };
+
+    const handleDeletePhoto = async () => {
+        if (!editingUser?.avatar_url || !loggedInUser?.businessId) return;
+
+        setIsUploading(true); // Reuse uploading state to disable buttons
+        try {
+            // 1. Delete from Firebase Storage
+            const fileRef = ref(storage, editingUser.avatar_url);
+            await deleteObject(fileRef);
+        
+            // 2. Update Firestore
+            await updateDoc(doc(db, "users", editingUser.id), { avatar_url: "" });
+
+            // 3. Update local state
+            setEditingUser(prev => prev ? { ...prev, avatar_url: "" } : null);
+            toast({ title: "Profile Photo Deleted" });
+
+        } catch (error: any) {
+            console.error("Error deleting photo:", error);
+            if (error.code === 'storage/object-not-found') {
+                 // If file is not in storage, just clear it from DB
+                 await updateDoc(doc(db, "users", editingUser.id), { avatar_url: "" });
+                 setEditingUser(prev => prev ? { ...prev, avatar_url: "" } : null);
+                 toast({ title: "Profile Photo Removed", description: "The photo link was broken and has been cleared." });
+            } else {
+                toast({ title: "Deletion Failed", description: error.message, variant: "destructive" });
+            }
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
 
   const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || !editingUser || !loggedInUser?.businessId) return;
@@ -253,16 +288,22 @@ export default function PortfolioPage() {
                             <CardContent className="space-y-4">
                                 <div className="flex items-center gap-4">
                                     <div className="relative w-24 h-24">
-                                        <Image src={editingUser.avatar_url || ''} alt={editingUser.name} fill className="rounded-full object-cover" data-ai-hint="person portrait" />
+                                        <Image src={editingUser.avatar_url || 'https://placehold.co/100x100.png'} alt={editingUser.name} fill className="rounded-full object-cover" data-ai-hint="person portrait" />
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="flex flex-col gap-2">
                                         <Label htmlFor="photo-upload" className={
-                                            `inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 ${isUploading ? 'bg-secondary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`
+                                            `inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 cursor-pointer ${isUploading ? 'bg-secondary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`
                                         }>
                                             {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UploadCloud className="mr-2 h-4 w-4" />}
                                             Upload Photo
                                         </Label>
                                         <Input id="photo-upload" type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={isUploading}/>
+                                        {editingUser.avatar_url && (
+                                            <Button variant="destructive" size="sm" type="button" onClick={handleDeletePhoto} disabled={isUploading}>
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Delete Photo
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="text-sm space-y-2">
@@ -322,3 +363,6 @@ export default function PortfolioPage() {
     </div>
   );
 }
+
+
+    
