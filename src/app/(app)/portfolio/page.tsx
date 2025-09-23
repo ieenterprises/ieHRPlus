@@ -42,6 +42,7 @@ import { AttachmentPreviewer } from "@/components/attachment-previewer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Image from "next/image";
 import { getStorage, ref, deleteObject } from "firebase/storage";
+import { FileIcon } from "@/components/file-icon";
 
 
 export default function PortfolioPage() {
@@ -51,6 +52,7 @@ export default function PortfolioPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [userFiles, setUserFiles] = useState<{name: string, url: string}[]>([]);
+  const [documentSearchTerm, setDocumentSearchTerm] = useState("");
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -63,6 +65,14 @@ export default function PortfolioPage() {
       user.departmentName?.toLowerCase().includes(lowercasedTerm)
     );
   }, [users, searchTerm]);
+  
+  const filteredDocuments = useMemo(() => {
+    if (!documentSearchTerm) return userFiles;
+    const lowercasedTerm = documentSearchTerm.toLowerCase();
+    return userFiles.filter(file =>
+        file.name.toLowerCase().includes(lowercasedTerm)
+    );
+  }, [userFiles, documentSearchTerm]);
 
   const fetchUserFiles = useCallback(async (user: User) => {
     if (!user?.id || !loggedInUser?.businessId) return;
@@ -90,6 +100,7 @@ export default function PortfolioPage() {
   const handleCloseDialog = () => {
     setEditingUser(null);
     setUserFiles([]);
+    setDocumentSearchTerm("");
   };
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -350,13 +361,34 @@ export default function PortfolioPage() {
                                  <Input id="doc-upload" type="file" className="hidden" onChange={handleDocumentUpload} disabled={isUploading} />
                                </div>
                            </CardHeader>
-                           <CardContent className="flex-1 min-h-0">
-                                <ScrollArea className="h-full">
-                                    {userFiles.length > 0 ? (
-                                        <AttachmentPreviewer attachments={userFiles} />
+                           <CardContent className="flex-1 min-h-0 flex flex-col gap-4">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search documents..."
+                                        className="pl-9"
+                                        value={documentSearchTerm}
+                                        onChange={(e) => setDocumentSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                                <ScrollArea className="flex-1 -mx-6 px-6">
+                                    {filteredDocuments.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {filteredDocuments.map((file, index) => (
+                                                <div key={index} className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-accent/50">
+                                                    <a href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline flex-1 truncate">
+                                                        <FileIcon item={{ type: 'file', name: file.name, metadata: { size: 0, updated: '', timeCreated: '' } }} className="h-4 w-4 flex-shrink-0" />
+                                                        <span className="truncate">{file.name}</span>
+                                                    </a>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteDocument(file)}>
+                                                        <Trash2 className="h-4 w-4 text-destructive"/>
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
                                     ) : (
                                         <div className="flex items-center justify-center h-full text-center text-muted-foreground text-sm">
-                                            <p>No documents uploaded for this employee.</p>
+                                            <p>{documentSearchTerm ? 'No documents match your search.' : 'No documents uploaded for this employee.'}</p>
                                         </div>
                                     )}
                                 </ScrollArea>
@@ -378,6 +410,5 @@ export default function PortfolioPage() {
     </div>
   );
 }
-
 
     
