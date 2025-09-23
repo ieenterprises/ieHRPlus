@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
-import { PlusCircle, Loader2, File as FileIconLucide, CheckCircle, Trash2, Download, Search } from "lucide-react";
+import { PlusCircle, Loader2, File as FileIconLucide, CheckCircle, Trash2, Download, Search, Calendar as CalendarIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,12 +17,15 @@ import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, updateDoc, writeBatch, deleteDoc } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AttachmentPreviewer } from "@/components/attachment-previewer";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import Papa from "papaparse";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 
 export function RewardTable() {
   const { loggedInUser, users, rewards, currency } = useSettings();
@@ -34,6 +37,7 @@ export function RewardTable() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRewardIds, setSelectedRewardIds] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const { toast } = useToast();
 
   const allOtherUsers = useMemo(() => users.filter(u => u.id !== loggedInUser?.id), [users, loggedInUser]);
@@ -41,11 +45,18 @@ export function RewardTable() {
   useEffect(() => {
     if (!loggedInUser?.id) return;
 
-    const sentByMe = rewards.filter(r => r.proposerId === loggedInUser.id);
+    const start = startOfDay(selectedDate);
+    const end = endOfDay(selectedDate);
+    
+    const sentByMe = rewards.filter(r => 
+        r.proposerId === loggedInUser.id &&
+        isWithinInterval(new Date(r.createdAt), { start, end })
+    );
+
     sentByMe.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     setMySentRewards(sentByMe);
 
-  }, [rewards, loggedInUser?.id]);
+  }, [rewards, loggedInUser?.id, selectedDate]);
   
   useEffect(() => {
     setSelectedRewardIds([]);
@@ -213,20 +224,48 @@ export function RewardTable() {
         checked ? [...prev, id] : prev.filter(pId => pId !== id)
     );
   };
+  
+  const DatePicker = () => (
+     <Popover>
+        <PopoverTrigger asChild>
+            <Button
+            variant={"outline"}
+            className={cn(
+                "w-[280px] justify-start text-left font-normal",
+                !selectedDate && "text-muted-foreground"
+            )}
+            >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+            </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0">
+            <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={(date) => date && setSelectedDate(date)}
+            initialFocus
+            />
+        </PopoverContent>
+    </Popover>
+  );
 
   return (
     <>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-             <div className="relative w-full sm:w-auto max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                    placeholder="Search by name, title, status..."
-                    className="pl-9"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+             <div className="flex w-full sm:w-auto items-center gap-2">
+                <div className="relative flex-1 sm:flex-initial">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Search by name, title, status..."
+                        className="pl-9"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <DatePicker />
             </div>
-            <div className="flex w-full sm:w-auto items-center gap-2">
+            <div className="flex w-full sm:w-auto items-center gap-2 self-end sm:self-center">
                 {selectedRewardIds.length > 0 && (
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -358,7 +397,7 @@ export function RewardTable() {
                         ))
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={8} className="text-center h-24">You have not proposed any rewards.</TableCell>
+                            <TableCell colSpan={8} className="text-center h-24">You have no proposed rewards for {format(selectedDate, "PPP")}.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -409,5 +448,7 @@ export function RewardTable() {
     </>
   );
 }
+
+    
 
     

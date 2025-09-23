@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PlusCircle, Loader2, File as FileIconLucide, X, CheckCircle, Trash2, Download, Search } from "lucide-react";
+import { PlusCircle, Loader2, File as FileIconLucide, X, CheckCircle, Trash2, Download, Search, Calendar as CalendarIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,12 +18,15 @@ import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, updateDoc, writeBatch, deleteDoc } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AttachmentPreviewer } from "@/components/attachment-previewer";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import Papa from "papaparse";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 
 export function HRQueryTable() {
   const { loggedInUser, users, hrQueries, currency } = useSettings();
@@ -35,6 +38,7 @@ export function HRQueryTable() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedQueryIds, setSelectedQueryIds] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const { toast } = useToast();
 
   const allOtherUsers = useMemo(() => users.filter(u => u.id !== loggedInUser?.id), [users, loggedInUser]);
@@ -42,11 +46,18 @@ export function HRQueryTable() {
   useEffect(() => {
     if (!loggedInUser?.id) return;
 
-    const sentByMe = hrQueries.filter(q => q.requesterId === loggedInUser.id);
+    const start = startOfDay(selectedDate);
+    const end = endOfDay(selectedDate);
+    
+    const sentByMe = hrQueries.filter(q => 
+        q.requesterId === loggedInUser.id &&
+        isWithinInterval(new Date(q.createdAt), { start, end })
+    );
+
     sentByMe.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     setMySentQueries(sentByMe);
 
-  }, [hrQueries, loggedInUser?.id]);
+  }, [hrQueries, loggedInUser?.id, selectedDate]);
   
   useEffect(() => {
     setSelectedQueryIds([]);
@@ -215,20 +226,48 @@ export function HRQueryTable() {
         checked ? [...prev, id] : prev.filter(pId => pId !== id)
     );
   };
+  
+  const DatePicker = () => (
+     <Popover>
+        <PopoverTrigger asChild>
+            <Button
+            variant={"outline"}
+            className={cn(
+                "w-[280px] justify-start text-left font-normal",
+                !selectedDate && "text-muted-foreground"
+            )}
+            >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+            </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0">
+            <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={(date) => date && setSelectedDate(date)}
+            initialFocus
+            />
+        </PopoverContent>
+    </Popover>
+  );
 
   return (
     <>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-            <div className="relative w-full sm:w-auto max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                    placeholder="Search by name, title, status..."
-                    className="pl-9"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+             <div className="flex w-full sm:w-auto items-center gap-2">
+                <div className="relative flex-1 sm:flex-initial">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Search by name, title, status..."
+                        className="pl-9"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <DatePicker />
             </div>
-            <div className="flex w-full sm:w-auto items-center gap-2">
+            <div className="flex w-full sm:w-auto items-center gap-2 self-end sm:self-center">
                 {selectedQueryIds.length > 0 && (
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -360,7 +399,7 @@ export function HRQueryTable() {
                         ))
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={8} className="text-center h-24">You have not sent any queries.</TableCell>
+                            <TableCell colSpan={8} className="text-center h-24">You have no queries for {format(selectedDate, "PPP")}.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -430,5 +469,7 @@ export function HRQueryTable() {
     </>
   );
 }
+
+    
 
     
