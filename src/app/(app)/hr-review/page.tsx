@@ -258,35 +258,36 @@ export default function HrReviewPage() {
     );
   };
 
+  const DatePicker = () => (
+     <Popover>
+        <PopoverTrigger asChild>
+            <Button
+            variant={"outline"}
+            className={cn(
+                "w-[280px] justify-start text-left font-normal",
+                !selectedDate && "text-muted-foreground"
+            )}
+            >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+            </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0">
+            <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={(date) => date && setSelectedDate(date)}
+            initialFocus
+            />
+        </PopoverContent>
+    </Popover>
+  );
+
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <PageHeader title="HR Review" description="Review and manage employee clock-in/out records." />
-        {isSeniorStaff && (
-          <Popover>
-              <PopoverTrigger asChild>
-                  <Button
-                  variant={"outline"}
-                  className={cn(
-                      "w-[280px] justify-start text-left font-normal",
-                      !selectedDate && "text-muted-foreground"
-                  )}
-                  >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                  <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => date && setSelectedDate(date)}
-                  initialFocus
-                  />
-              </PopoverContent>
-          </Popover>
-        )}
       </div>
       
       {isSeniorStaff && (
@@ -306,11 +307,12 @@ export default function HrReviewPage() {
           <div>
             <CardTitle>Pending Submissions</CardTitle>
             <CardDescription>
-              Approve or reject clock-in records after video verification.
+              Approve or reject clock-in records for {format(selectedDate, "PPP")}.
             </CardDescription>
           </div>
           {isSeniorStaff && (
             <div className="flex items-center gap-2">
+                <DatePicker />
                 {selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length > 0 && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -441,11 +443,12 @@ export default function HrReviewPage() {
           <div>
             <CardTitle>Time Clock History</CardTitle>
             <CardDescription>
-              This is a log of all employee clock-in and clock-out events for the selected day.
+              Log of all employee events for {format(selectedDate, "PPP")}.
             </CardDescription>
           </div>
           {isSeniorStaff && (
             <div className="flex items-center gap-2">
+                <DatePicker />
                 {selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length > 0 && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -571,5 +574,7 @@ export default function HrReviewPage() {
     </div>
   );
 }
+
+    
 
     
