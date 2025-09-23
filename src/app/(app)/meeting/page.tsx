@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -114,6 +114,8 @@ export default function MeetingPage() {
   // VideoSDK states
   const [isMicOn, setIsMicOn] = useState(true);
   const [isWebCamOn, setIsWebCamOn] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
@@ -139,7 +141,6 @@ export default function MeetingPage() {
     const q = query(
       collection(db, 'internal_mails'),
       where('businessId', '==', loggedInUser.businessId)
-      // Removed: orderBy('timestamp', 'desc') - this was causing the index error
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -264,6 +265,15 @@ export default function MeetingPage() {
       meeting?.enableWebcam();
     }
     setIsWebCamOn(!isWebCamOn);
+  };
+
+  const toggleScreenShare = () => {
+      if (isScreenSharing) {
+        meeting?.disableScreenShare();
+      } else {
+        meeting?.enableScreenShare();
+      }
+      setIsScreenSharing(!isScreenSharing);
   };
 
   const sendMeetingInvite = async (recipientId: string, id: string, fromChat: boolean) => {
@@ -676,18 +686,24 @@ export default function MeetingPage() {
     return filteredMessages.every(id => selectedMessages.includes(id.id));
   };
   
-    const ParticipantView = ({ participant }: { participant: any }) => {
+  const ParticipantView = ({ participant }: { participant: any }) => {
     const micRef = useRef<HTMLAudioElement>(null);
     const webcamRef = useRef<HTMLVideoElement>(null);
+    const screenShareRef = useRef<HTMLVideoElement>(null);
+
     const [micOn, setMicOn] = useState(false);
     const [webcamOn, setWebcamOn] = useState(false);
+    const [screenShareOn, setScreenShareOn] = useState(false);
     
     useEffect(() => {
         let audioStream: MediaStream | null = null;
         let videoStream: MediaStream | null = null;
+        let screenShareStream: MediaStream | null = null;
         
         const audioMediaStream = new MediaStream();
         const videoMediaStream = new MediaStream();
+        const screenShareMediaStream = new MediaStream();
+
 
         if (micRef.current) {
             micRef.current.srcObject = audioMediaStream;
@@ -696,6 +712,10 @@ export default function MeetingPage() {
         if (webcamRef.current) {
             webcamRef.current.srcObject = videoMediaStream;
             webcamRef.current.play().catch(e => { if (e.name !== 'AbortError') console.error("video play error", e) });
+        }
+        if (screenShareRef.current) {
+            screenShareRef.current.srcObject = screenShareMediaStream;
+            screenShareRef.current.play().catch(e => { if (e.name !== 'AbortError') console.error("screenshare play error", e) });
         }
 
         const handleStreamEnabled = (stream: any) => {
@@ -709,6 +729,11 @@ export default function MeetingPage() {
                 videoStream = stream;
                 videoMediaStream.addTrack(stream.track);
             }
+            if (stream.kind === 'share') {
+                setScreenShareOn(true);
+                screenShareStream = stream;
+                screenShareMediaStream.addTrack(stream.track);
+            }
         };
 
         const handleStreamDisabled = (stream: any) => {
@@ -721,6 +746,11 @@ export default function MeetingPage() {
                 setWebcamOn(false);
                 if (videoStream) videoMediaStream.removeTrack(videoStream.track);
                 videoStream = null;
+            }
+             if (stream.kind === 'share') {
+                setScreenShareOn(false);
+                if (screenShareStream) screenShareMediaStream.removeTrack(screenShareStream.track);
+                screenShareStream = null;
             }
         };
         
@@ -738,8 +768,10 @@ export default function MeetingPage() {
     return (
       <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
         <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
-        <video ref={webcamRef} autoPlay playsInline className="h-full w-full object-cover" />
-        {!webcamOn && (
+        <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
+        <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
+        
+        {!webcamOn && !screenShareOn && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70">
             <div className="text-center text-white">
               <VideoOff className="h-10 w-10 mx-auto mb-2" />
@@ -785,8 +817,13 @@ export default function MeetingPage() {
             >
                 {isWebCamOn ? <Video /> : <VideoOff />}
             </Button>
-             <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" disabled>
-                <ScreenShare />
+             <Button 
+                variant={isScreenSharing ? 'default' : 'secondary'} 
+                size="icon" 
+                className="rounded-full h-12 w-12"
+                onClick={toggleScreenShare}
+             >
+                {isScreenSharing ? <ScreenShareOff /> : <ScreenShare />}
             </Button>
             <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsInviteDialogOpen(true)}>
                 <UserPlus />
