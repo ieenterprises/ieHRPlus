@@ -149,13 +149,11 @@ export default function HrReviewPage() {
         if (tableType === 'history') {
             const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes');
             const latenessMinutes = calculateLateness(record.user, record.clockInTime, 'minutes');
-            const extraTimeMinutes = calculateExtraTime(record.user, record.clockOutTime, 'minutes');
 
             return {
                 ...baseData,
                 "Duration": formatMinutes(durationMinutes),
                 "Lateness": formatMinutes(latenessMinutes),
-                "Overtime": formatMinutes(extraTimeMinutes),
             }
         }
         return baseData;
@@ -369,23 +367,6 @@ export default function HrReviewPage() {
     return returnAs === 'minutes' ? latenessMinutes : formatMinutes(latenessMinutes);
   };
 
-  const calculateExtraTime = (user: User | undefined, clockOutTime: string | null, returnAs: 'string' | 'minutes' = 'string'): number | string => {
-    if (!clockOutTime || !user?.defaultClockOutTime) return returnAs === 'minutes' ? 0 : "0h 0m";
-
-    const actualClockOut = new Date(clockOutTime);
-    const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
-    const defaultClockOut = new Date(actualClockOut);
-    defaultClockOut.setHours(hours, minutes, 0, 0);
-
-    const overtimeMilliseconds = actualClockOut > defaultClockOut
-        ? differenceInMilliseconds(actualClockOut, defaultClockOut)
-        : 0;
-
-    const overtimeMinutes = Math.floor(overtimeMilliseconds / 60000);
-    
-    return returnAs === 'minutes' ? overtimeMinutes : formatMinutes(overtimeMinutes);
-  };
-  
     const latenessSummary = useMemo(() => {
         const summary = new Map<string, { user: User; totalLatenessMs: number }>();
         
@@ -418,39 +399,6 @@ export default function HrReviewPage() {
 
         return result.filter(s => s.totalLatenessMinutes > 0);
 
-    }, [users, timeRecords]);
-
-    const overtimeSummary = useMemo(() => {
-        const summary = new Map<string, { user: User; totalOvertimeMs: number }>();
-
-        users.forEach(user => {
-            summary.set(user.id, { user, totalOvertimeMs: 0 });
-        });
-
-        timeRecords.forEach(record => {
-            const user = users.find(u => u.id === record.userId);
-            if (user && user.defaultClockOutTime && record.clockOutTime) {
-                const actualClockOut = new Date(record.clockOutTime);
-                const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
-                const defaultClockOut = new Date(actualClockOut);
-                defaultClockOut.setHours(hours, minutes, 0, 0);
-
-                if (actualClockOut > defaultClockOut) {
-                    const overtimeMs = differenceInMilliseconds(actualClockOut, defaultClockOut);
-                    const userSummary = summary.get(user.id);
-                    if (userSummary) {
-                        userSummary.totalOvertimeMs += overtimeMs;
-                    }
-                }
-            }
-        });
-        
-        const result = Array.from(summary.values()).map(s => ({
-            user: s.user,
-            totalOvertimeMinutes: Math.floor(s.totalOvertimeMs / 60000)
-        }));
-
-        return result.filter(s => s.totalOvertimeMinutes > 0);
     }, [users, timeRecords]);
 
   const DatePicker = () => (
@@ -645,7 +593,7 @@ export default function HrReviewPage() {
           </CardContent>
       </Card>
       
-      <div className="grid md:grid-cols-2 gap-8">
+      <div className="grid md:grid-cols-1 gap-8">
         <Card>
             <CardHeader>
                 <CardTitle>Lateness Summary</CardTitle>
@@ -670,36 +618,6 @@ export default function HrReviewPage() {
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={2} className="h-24 text-center">No lateness recorded for this period.</TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
-        <Card>
-            <CardHeader>
-                <CardTitle>Overtime Summary</CardTitle>
-                <CardDescription>Total overtime per employee for the selected period.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Employee</TableHead>
-                            <TableHead className="text-right">Total Overtime</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                         {overtimeSummary.length > 0 ? (
-                            overtimeSummary.map(({ user, totalOvertimeMinutes }) => (
-                                <TableRow key={user.id}>
-                                    <TableCell className="font-medium">{user.name}</TableCell>
-                                    <TableCell className="text-right text-green-600">{formatMinutes(totalOvertimeMinutes)}</TableCell>
-                                </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={2} className="h-24 text-center">No overtime recorded for this period.</TableCell>
                             </TableRow>
                         )}
                     </TableBody>
@@ -769,7 +687,6 @@ export default function HrReviewPage() {
                   <TableHead>Duration</TableHead>
                   <TableHead>Expected Duration</TableHead>
                   <TableHead>Lateness</TableHead>
-                  <TableHead>Overtime</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
                    {isSeniorStaff && <TableHead className="text-right">Actions</TableHead>}
@@ -778,7 +695,7 @@ export default function HrReviewPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 11 : 10} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 10 : 9} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
@@ -786,7 +703,6 @@ export default function HrReviewPage() {
                   historicalRecords.map((record) => {
                     const durationValue = calculateDuration(record.clockInTime, record.clockOutTime, 'string') as string;
                     const latenessValue = calculateLateness(record.user, record.clockInTime, 'string') as string;
-                    const extraTimeValue = calculateExtraTime(record.user, record.clockOutTime, 'string') as string;
 
                     return (
                         <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
@@ -811,7 +727,6 @@ export default function HrReviewPage() {
                         <TableCell>{durationValue}</TableCell>
                         <TableCell>{calculateExpectedDuration(record.user)}</TableCell>
                         <TableCell className={latenessValue !== "0h 0m" ? "text-destructive" : ""}>{latenessValue}</TableCell>
-                        <TableCell className={extraTimeValue !== "0h 0m" ? "text-green-600" : ""}>{extraTimeValue}</TableCell>
                         <TableCell>
                             {record.videoUrl ? (
                                 <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
@@ -838,7 +753,7 @@ export default function HrReviewPage() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 11 : 10} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 10 : 9} className="h-24 text-center">
                       No historical records found for the selected date range.
                     </TableCell>
                   </TableRow>
@@ -913,7 +828,3 @@ export default function HrReviewPage() {
     </div>
   );
 }
-
-    
-
-    
