@@ -82,18 +82,6 @@ export default function PayrollPage() {
             
             const remunerationPerDay = (user.monthlyWorkingDays || 0) > 0 ? (user.remuneration || 0) / (user.monthlyWorkingDays || 1) : 0;
             const remunerationPerHour = expectedMonthlyHours > 0 ? (user.remuneration || 0) / expectedMonthlyHours : 0;
-
-            const calculateLateness = (user: User, clockInTime: string): number => {
-                if (!user?.defaultClockInTime) return 0;
-                const actualClockIn = new Date(clockInTime);
-                const [hours, minutes] = user.defaultClockInTime.split(':').map(Number);
-                const defaultClockIn = new Date(actualClockIn);
-                defaultClockIn.setHours(hours, minutes, 0, 0);
-                if (actualClockIn > defaultClockIn) {
-                    return differenceInMilliseconds(actualClockIn, defaultClockIn) / (1000 * 60 * 60);
-                }
-                return 0;
-            };
             
             const calculateDuration = (startTime: string, endTime: string | null): number => {
                 if (!endTime) return 0;
@@ -124,7 +112,21 @@ export default function PayrollPage() {
                 return overtime / 60;
             };
 
-            const totalLatenessHours = userTimeRecords.reduce((acc, record) => acc + calculateLateness(user, record.clockInTime), 0);
+            const totalLatenessMilliseconds = userTimeRecords.reduce((acc, record) => {
+              if (!user?.defaultClockInTime) return acc;
+              const actualClockIn = new Date(record.clockInTime);
+              const [hours, minutes] = user.defaultClockInTime.split(':').map(Number);
+              const defaultClockIn = new Date(actualClockIn);
+              defaultClockIn.setHours(hours, minutes, 0, 0);
+
+              if (actualClockIn > defaultClockIn) {
+                  return acc + differenceInMilliseconds(actualClockIn, defaultClockIn);
+              }
+              return acc;
+            }, 0);
+            
+            const totalLatenessHours = totalLatenessMilliseconds / (1000 * 60 * 60);
+
             const totalDurationHours = userTimeRecords.reduce((acc, record) => acc + calculateDuration(record.clockInTime, record.clockOutTime), 0);
             const overtimeHours = userTimeRecords.reduce((acc, record) => acc + calculateOvertimeForRecord(record, user), 0);
             
@@ -153,6 +155,12 @@ export default function PayrollPage() {
         });
     }, [selectedMonth, users, timeRecords, rewards, hrQueries]);
 
+    const formatHoursAndMinutes = (totalHours: number) => {
+        const hours = Math.floor(totalHours);
+        const minutes = Math.round((totalHours - hours) * 60);
+        return `${hours}h ${minutes}m`;
+    };
+
     const handleExportCSV = () => {
         const dataToExport = payrollData.map(p => ({
             "Employee": p.user.name,
@@ -160,10 +168,10 @@ export default function PayrollPage() {
             "Base Salary": `${currency}${p.user.remuneration?.toFixed(2)}`,
             "Rate/Day": `${currency}${p.remunerationPerDay.toFixed(2)}`,
             "Rate/Hour": `${currency}${p.remunerationPerHour.toFixed(2)}`,
-            "Expected Hours": p.expectedMonthlyHours.toFixed(2),
-            "Sum of Duration (H)": p.totalDurationHours.toFixed(2),
-            "Sum of Lateness (H)": p.totalLatenessHours.toFixed(2),
-            "Sum of Overtime (H)": p.overtimeHours.toFixed(2),
+            "Expected Hours": formatHoursAndMinutes(p.expectedMonthlyHours),
+            "Sum of Duration (H)": formatHoursAndMinutes(p.totalDurationHours),
+            "Sum of Lateness": formatHoursAndMinutes(p.totalLatenessHours),
+            "Sum of Overtime": formatHoursAndMinutes(p.overtimeHours),
             "Salary Amount": `${currency}${p.salaryAmount.toFixed(2)}`,
             "Query Count": p.queryCount,
             "Query Deductions": `${currency}${p.queryAmount.toFixed(2)}`,
@@ -252,10 +260,10 @@ export default function PayrollPage() {
                                         <TableCell>{currency}{user.remuneration?.toFixed(2) ?? '0.00'}</TableCell>
                                         <TableCell>{currency}{data.remunerationPerDay.toFixed(2)}</TableCell>
                                         <TableCell>{currency}{data.remunerationPerHour.toFixed(2)}</TableCell>
-                                        <TableCell>{data.expectedMonthlyHours.toFixed(2)}</TableCell>
-                                        <TableCell>{data.totalDurationHours.toFixed(2)}</TableCell>
-                                        <TableCell className="text-destructive">{data.totalLatenessHours.toFixed(2)}</TableCell>
-                                        <TableCell className="text-green-600">{data.overtimeHours.toFixed(2)}</TableCell>
+                                        <TableCell>{formatHoursAndMinutes(data.expectedMonthlyHours)}</TableCell>
+                                        <TableCell>{formatHoursAndMinutes(data.totalDurationHours)}</TableCell>
+                                        <TableCell className="text-destructive">{formatHoursAndMinutes(data.totalLatenessHours)}</TableCell>
+                                        <TableCell className="text-green-600">{formatHoursAndMinutes(data.overtimeHours)}</TableCell>
                                         <TableCell>{currency}{data.salaryAmount.toFixed(2)}</TableCell>
                                         <TableCell>{data.queryCount}</TableCell>
                                         <TableCell className="text-destructive">{currency}{data.queryAmount.toFixed(2)}</TableCell>
@@ -271,16 +279,7 @@ export default function PayrollPage() {
             </Card>
         </div>
     );
+}
 
-    
-
-
-    
-
-    
-
-
-
-    
 
     
