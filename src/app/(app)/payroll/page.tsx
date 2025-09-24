@@ -230,7 +230,7 @@ export default function PayrollPage() {
                                     <TableHead>Expected Hours</TableHead>
                                     <TableHead>Sum of Duration Hours</TableHead>
                                     <TableHead>Lateness (H)</TableHead>
-                                    <TableHead>Overtime (H)</TableHead>
+                                    <TableHead>Sum of Overtime</TableHead>
                                     <TableHead>Salary Amount</TableHead>
                                     <TableHead>Query Count</TableHead>
                                     <TableHead>Query Amt</TableHead>
