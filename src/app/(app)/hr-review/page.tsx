@@ -625,7 +625,7 @@ export default function HrReviewPage() {
                   <TableHead>Clock Out</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Expected Duration</TableHead>
-                  <TableHead>Lateness</TableHead>
+                  <TableHead>Sum of Lateness</TableHead>
                   <TableHead>Overtime</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>

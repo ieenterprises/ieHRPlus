@@ -11,7 +11,7 @@ import { Calendar as CalendarIcon, Download } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format, startOfMonth, endOfMonth, getDaysInMonth, isWithinInterval, differenceInMilliseconds } from 'date-fns';
+import { format, startOfMonth, endOfMonth, getDaysInMonth, isWithinInterval, differenceInMilliseconds, getDay } from 'date-fns';
 import type { User, TimeRecord, HRQuery, Reward } from '@/lib/types';
 import Papa from "papaparse";
 import { useToast } from '@/hooks/use-toast';
@@ -33,8 +33,6 @@ type PayrollData = {
     rewardAmount: number;
     netSalary: number;
 };
-
-const WORKING_HOURS_PER_DAY = 8; // A standard assumption
 
 export default function PayrollPage() {
     const { users, rewards, hrQueries, currency, loggedInUser } = useSettings();
@@ -72,17 +70,17 @@ export default function PayrollPage() {
             const userQueries = hrQueries.filter(q => q.assigneeId === user.id && isWithinInterval(new Date(q.createdAt), { start: monthStart, end: monthEnd }));
             
             const getExpectedWorkMinutes = (user: User): number => {
-                if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return WORKING_HOURS_PER_DAY * 60;
+                if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return 0;
                 const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
                 const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
                 let diff = (outHours * 60 + outMinutes) - (inHours * 60 + inMinutes);
                 if (diff < 0) diff += 24 * 60;
-                return diff > 0 ? diff : WORKING_HOURS_PER_DAY * 60;
+                return diff;
             };
 
             const expectedWorkMinutesPerDay = getExpectedWorkMinutes(user);
             const expectedWorkHoursPerDay = expectedWorkMinutesPerDay / 60;
-            const expectedMonthlyHours = expectedWorkHoursPerDay * daysInMonth;
+            const expectedMonthlyHours = expectedWorkHoursPerDay * (user.monthlyWorkingDays || daysInMonth);
             
             const remunerationPerDay = (user.remuneration || 0) / (user.monthlyWorkingDays || daysInMonth);
             const remunerationPerHour = remunerationPerDay / 24;
@@ -104,24 +102,33 @@ export default function PayrollPage() {
                 const start = new Date(startTime);
                 const end = new Date(endTime);
                 
-                if (end < start) {
-                    // This handles cases where a shift might be incorrectly recorded across midnight in a way that makes end < start
-                    return 0;
-                }
+                if (end < start) return 0;
                 
                 const diffMs = end.getTime() - start.getTime();
                 return diffMs / (1000 * 60 * 60); // convert milliseconds to hours
             };
+
+            const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             
-            const calculateOvertimeForRecord = (record: TimeRecord, expectedMinutes: number): number => {
-                const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime) * 60;
+            const calculateOvertimeForRecord = (record: TimeRecord, user: User): number => {
+                const clockInDate = new Date(record.clockInTime);
+                const dayOfWeek = daysOfWeek[getDay(clockInDate)];
+                const isScheduledWorkday = user.workingDays?.includes(dayOfWeek) ?? true; // Default to true if not specified
+                const durationHours = calculateDuration(record.clockInTime, record.clockOutTime);
+                
+                if (!isScheduledWorkday) {
+                    return durationHours; // Entire shift is overtime
+                }
+                
+                const expectedMinutes = getExpectedWorkMinutes(user);
+                const durationMinutes = durationHours * 60;
                 const overtime = Math.max(0, durationMinutes - expectedMinutes);
                 return overtime / 60; // return in hours
             };
 
             const totalLatenessHours = userTimeRecords.reduce((acc, record) => acc + calculateLateness(user, record.clockInTime), 0);
             const totalDurationHours = userTimeRecords.reduce((acc, record) => acc + calculateDuration(record.clockInTime, record.clockOutTime), 0);
-            const overtimeHours = userTimeRecords.reduce((acc, record) => acc + calculateOvertimeForRecord(record, expectedWorkMinutesPerDay), 0);
+            const overtimeHours = userTimeRecords.reduce((acc, record) => acc + calculateOvertimeForRecord(record, user), 0);
             
             const queryAmount = userQueries.reduce((acc, q) => acc + (q.amount || 0), 0);
             const rewardAmount = userRewards.reduce((acc, r) => acc + (r.amount || 0), 0);
@@ -188,7 +195,7 @@ export default function PayrollPage() {
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
                             <CardTitle>Payroll</CardTitle>
-                            <CardDescription>Calculate and review salaries for all employees.</CardDescription>
+                            <CardDescription>Review salaries for all employees.</CardDescription>
                         </div>
                         <div className="flex items-center gap-2 self-end">
                             <Popover>
@@ -229,7 +236,7 @@ export default function PayrollPage() {
                                     <TableHead>Rate/Hour</TableHead>
                                     <TableHead>Expected Hours</TableHead>
                                     <TableHead>Sum of Duration Hours</TableHead>
-                                    <TableHead>Lateness (H)</TableHead>
+                                    <TableHead>Sum of Lateness</TableHead>
                                     <TableHead>Sum of Overtime</TableHead>
                                     <TableHead>Salary Amount</TableHead>
                                     <TableHead>Query Count</TableHead>
@@ -273,3 +280,4 @@ export default function PayrollPage() {
     
 
     
+
