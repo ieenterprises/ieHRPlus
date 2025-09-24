@@ -37,7 +37,7 @@ const WORKING_HOURS_PER_DAY = 8; // A standard assumption
 
 export default function PayrollPage() {
     const { users, rewards, hrQueries, currency, loggedInUser } = useSettings();
-    const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]); // This will be fetched or passed
+    const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
     const [selectedMonth, setSelectedMonth] = useState<Date>(startOfMonth(new Date()));
     const { toast } = useToast();
 
@@ -69,8 +69,6 @@ export default function PayrollPage() {
             const userTimeRecords = timeRecords.filter(tr => tr.userId === user.id && isWithinInterval(new Date(tr.clockInTime), { start: monthStart, end: monthEnd }));
             const userRewards = rewards.filter(r => r.assigneeId === user.id && isWithinInterval(new Date(r.createdAt), { start: monthStart, end: monthEnd }));
             const userQueries = hrQueries.filter(q => q.assigneeId === user.id && isWithinInterval(new Date(q.createdAt), { start: monthStart, end: monthEnd }));
-
-            const remunerationPerDay = (user.remuneration || 0) / daysInMonth;
             
             const getExpectedWorkMinutes = (user: User): number => {
                 if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return WORKING_HOURS_PER_DAY * 60;
@@ -83,11 +81,12 @@ export default function PayrollPage() {
             
             const expectedWorkMinutesPerDay = getExpectedWorkMinutes(user);
             const expectedWorkHoursPerDay = expectedWorkMinutesPerDay / 60;
+            const expectedMonthlyHours = expectedWorkHoursPerDay * daysInMonth;
 
-            const remunerationPerHour = user.remuneration && expectedWorkHoursPerDay > 0
-                ? (user.remuneration / (expectedWorkHoursPerDay * daysInMonth))
-                : (user.remuneration || 0) / (WORKING_HOURS_PER_DAY * daysInMonth);
-
+            const remunerationPerDay = (user.remuneration || 0) / daysInMonth;
+            const remunerationPerHour = expectedWorkHoursPerDay > 0 
+                ? (user.remuneration || 0) / (expectedWorkHoursPerDay * daysInMonth) 
+                : 0;
 
             const calculateLateness = (user: User, clockInTime: string): number => {
                 if (!user?.defaultClockInTime) return 0;
@@ -106,7 +105,8 @@ export default function PayrollPage() {
                 const start = new Date(startTime);
                 const end = new Date(endTime);
                 if (end < start) return 0;
-                return differenceInMilliseconds(end, start) / (1000 * 60 * 60);
+                const diffMs = end.getTime() - start.getTime();
+                return diffMs / (1000 * 60 * 60); // convert milliseconds to hours
             };
 
             const totalLatenessHours = userTimeRecords.reduce((acc, record) => acc + calculateLateness(user, record.clockInTime), 0);
@@ -114,8 +114,6 @@ export default function PayrollPage() {
             
             const queryAmount = userQueries.reduce((acc, q) => acc + (q.amount || 0), 0);
             const rewardAmount = userRewards.reduce((acc, r) => acc + (r.amount || 0), 0);
-            
-            const expectedMonthlyHours = expectedWorkHoursPerDay * daysInMonth;
 
             const overtimeHours = Math.max(0, totalDurationHours - expectedMonthlyHours);
             const overtimePay = overtimeHours * remunerationPerHour;
@@ -148,8 +146,8 @@ export default function PayrollPage() {
             "Remuneration/Hour": `${currency}${p.remunerationPerHour.toFixed(2)}`,
             "Expected Hours": p.expectedMonthlyHours.toFixed(2),
             "Sum of Duration (H)": p.totalDurationHours.toFixed(2),
-            "Total Lateness (H)": p.totalLatenessHours.toFixed(2),
-            "Overtime (H)": p.overtimeHours.toFixed(2),
+            "Sum of Lateness (H)": p.totalLatenessHours.toFixed(2),
+            "Sum of Overtime (H)": p.overtimeHours.toFixed(2),
             "Query Count": p.queryCount,
             "Query Deductions": `${currency}${p.queryAmount.toFixed(2)}`,
             "Reward Count": p.rewardCount,
