@@ -82,11 +82,12 @@ export default function PayrollPage() {
             const expectedWorkMinutesPerDay = getExpectedWorkMinutes(user);
             const expectedWorkHoursPerDay = expectedWorkMinutesPerDay / 60;
             const expectedMonthlyHours = expectedWorkHoursPerDay * daysInMonth;
+            
+            const remunerationPerHour = expectedMonthlyHours > 0 
+                ? (user.remuneration || 0) / expectedMonthlyHours
+                : (user.remuneration || 0) / (WORKING_HOURS_PER_DAY * daysInMonth);
 
-            const remunerationPerDay = (user.remuneration || 0) / daysInMonth;
-            const remunerationPerHour = expectedWorkHoursPerDay > 0 
-                ? (user.remuneration || 0) / (expectedWorkHoursPerDay * daysInMonth) 
-                : 0;
+            const remunerationPerDay = remunerationPerHour * expectedWorkHoursPerDay;
 
             const calculateLateness = (user: User, clockInTime: string): number => {
                 if (!user?.defaultClockInTime) return 0;
@@ -108,14 +109,20 @@ export default function PayrollPage() {
                 const diffMs = end.getTime() - start.getTime();
                 return diffMs / (1000 * 60 * 60); // convert milliseconds to hours
             };
+            
+            const calculateOvertimeForRecord = (record: TimeRecord, expectedMinutes: number): number => {
+                const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime) * 60;
+                const overtime = Math.max(0, durationMinutes - expectedMinutes);
+                return overtime / 60; // return in hours
+            };
 
             const totalLatenessHours = userTimeRecords.reduce((acc, record) => acc + calculateLateness(user, record.clockInTime), 0);
             const totalDurationHours = userTimeRecords.reduce((acc, record) => acc + calculateDuration(record.clockInTime, record.clockOutTime), 0);
+            const overtimeHours = userTimeRecords.reduce((acc, record) => acc + calculateOvertimeForRecord(record, expectedWorkMinutesPerDay), 0);
             
             const queryAmount = userQueries.reduce((acc, q) => acc + (q.amount || 0), 0);
             const rewardAmount = userRewards.reduce((acc, r) => acc + (r.amount || 0), 0);
 
-            const overtimeHours = Math.max(0, totalDurationHours - expectedMonthlyHours);
             const overtimePay = overtimeHours * remunerationPerHour;
             
             const netSalary = (user.remuneration || 0) + rewardAmount + overtimePay - queryAmount;
@@ -256,3 +263,4 @@ export default function PayrollPage() {
     
 
     
+
