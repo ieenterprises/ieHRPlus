@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -961,7 +960,7 @@ export default function MeetingPage() {
             if (stream.kind === 'audio') {
                 setMicOn(true);
                 audioStream = stream;
-                audioMediaStream.addTrack(stream.track);
+                if (!participant.isLocal) audioMediaStream.addTrack(stream.track);
             }
             if (stream.kind === 'video') {
                 setWebcamOn(true);
@@ -978,7 +977,7 @@ export default function MeetingPage() {
         const handleStreamDisabled = (stream: any) => {
             if (stream.kind === 'audio') {
                 setMicOn(false);
-                if (audioStream) audioMediaStream.removeTrack(audioStream.track);
+                if (audioStream && !participant.isLocal) audioMediaStream.removeTrack(audioStream.track);
                 audioStream = null;
             }
             if (stream.kind === 'video') {
@@ -1006,7 +1005,7 @@ export default function MeetingPage() {
 
     return (
       <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
-        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
+        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline />}
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -2154,5 +2153,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
 
 
     
+
+
 
 
