@@ -79,9 +79,9 @@ export default function PayrollPage() {
             };
 
             const expectedDailyHours = getExpectedWorkMinutes(user) / 60;
-            const expectedMonthlyHours = expectedDailyHours * (user.monthlyWorkingDays || daysInMonth);
+            const expectedMonthlyHours = expectedDailyHours * (user.monthlyWorkingDays || 0);
             
-            const remunerationPerDay = (user.remuneration || 0) / (user.monthlyWorkingDays || daysInMonth);
+            const remunerationPerDay = (user.monthlyWorkingDays || 0) > 0 ? (user.remuneration || 0) / (user.monthlyWorkingDays || 1) : 0;
             const remunerationPerHour = expectedMonthlyHours > 0 ? (user.remuneration || 0) / expectedMonthlyHours : 0;
 
             const calculateLateness = (user: User, clockInTime: string): number => {
