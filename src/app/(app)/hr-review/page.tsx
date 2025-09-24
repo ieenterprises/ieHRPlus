@@ -40,13 +40,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
-import { format, startOfDay, endOfDay, isWithinInterval, addDays } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon, Trash2, Search } from "lucide-react";
+import { format, startOfDay, endOfDay, isWithinInterval, addDays, parseISO } from "date-fns";
+import { Video, Download, Calendar as CalendarIcon, Trash2, Search, Edit, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -64,6 +65,8 @@ export default function HrReviewPage() {
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
+  const [editingRecord, setEditingRecord] = useState<TimeRecord | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfDay(new Date()),
     to: endOfDay(new Date()),
@@ -219,6 +222,36 @@ export default function HrReviewPage() {
     }
   };
   
+  const handleUpdateRecordTime = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingRecord) return;
+
+    setIsUpdating(true);
+
+    const formData = new FormData(event.currentTarget);
+    const clockInDate = formData.get('clockInDate') as string;
+    const clockInTime = formData.get('clockInTime') as string;
+    const clockOutDate = formData.get('clockOutDate') as string;
+    const clockOutTime = formData.get('clockOutTime') as string;
+
+    const newClockInTime = new Date(`${clockInDate}T${clockInTime}`);
+    const newClockOutTime = clockOutDate && clockOutTime ? new Date(`${clockOutDate}T${clockOutTime}`) : null;
+
+    try {
+        const recordRef = doc(db, "timeRecords", editingRecord.id);
+        await updateDoc(recordRef, {
+            clockInTime: newClockInTime.toISOString(),
+            clockOutTime: newClockOutTime ? newClockOutTime.toISOString() : null,
+        });
+        toast({ title: "Record Updated", description: "The clock-in/out times have been successfully modified." });
+        setEditingRecord(null);
+    } catch (error: any) {
+        toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+    } finally {
+        setIsUpdating(false);
+    }
+  };
+
   const getBadgeVariant = (status: TimeRecord['status']) => {
     switch (status) {
       case 'pending':
@@ -409,6 +442,7 @@ export default function HrReviewPage() {
                       </TableCell>
                       {isSeniorStaff && (
                         <TableCell className="text-right space-x-2">
+                            <Button size="sm" variant="outline" onClick={() => setEditingRecord(record)}><Edit className="h-4 w-4" /></Button>
                             <Button size="sm" onClick={() => handleStatusUpdate(record.id, 'Clocked In')} disabled={!record.videoUrl}>Approve</Button>
                             <Button size="sm" variant="destructive" onClick={() => handleStatusUpdate(record.id, 'rejected')}>Reject</Button>
                             <Button size="sm" variant="ghost" onClick={() => handleDelete(record)}>Delete</Button>
@@ -514,12 +548,13 @@ export default function HrReviewPage() {
                   <TableHead>Clock Out Time</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
+                   {isSeniorStaff && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 7 : 6} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 8 : 7} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
@@ -559,11 +594,18 @@ export default function HrReviewPage() {
                           {record.status}
                         </Badge>
                       </TableCell>
+                      {isSeniorStaff && (
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="outline" onClick={() => setEditingRecord(record)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 7 : 6} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 8 : 7} className="h-24 text-center">
                       No historical records found for the selected date range.
                     </TableCell>
                   </TableRow>
@@ -594,11 +636,49 @@ export default function HrReviewPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <Dialog open={!!editingRecord} onOpenChange={(open) => !open && setEditingRecord(null)}>
+        <DialogContent>
+            <form onSubmit={handleUpdateRecordTime}>
+                <DialogHeader>
+                    <DialogTitle>Edit Time Record for {editingRecord?.userName}</DialogTitle>
+                    <DialogDescription>Manually adjust the clock-in and clock-out times.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="clockInDate">Clock-In Date</Label>
+                            <Input id="clockInDate" name="clockInDate" type="date" defaultValue={editingRecord ? format(parseISO(editingRecord.clockInTime), 'yyyy-MM-dd') : ''} required />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="clockInTime">Clock-In Time</Label>
+                            <Input id="clockInTime" name="clockInTime" type="time" defaultValue={editingRecord ? format(parseISO(editingRecord.clockInTime), 'HH:mm') : ''} required />
+                        </div>
+                    </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="clockOutDate">Clock-Out Date</Label>
+                            <Input id="clockOutDate" name="clockOutDate" type="date" defaultValue={editingRecord && editingRecord.clockOutTime ? format(parseISO(editingRecord.clockOutTime), 'yyyy-MM-dd') : ''} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="clockOutTime">Clock-Out Time</Label>
+                            <Input id="clockOutTime" name="clockOutTime" type="time" defaultValue={editingRecord && editingRecord.clockOutTime ? format(parseISO(editingRecord.clockOutTime), 'HH:mm') : ''} />
+                        </div>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={() => setEditingRecord(null)}>Cancel</Button>
+                    <Button type="submit" disabled={isUpdating}>
+                        {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Changes
+                    </Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
 }
-
-    
 
     
