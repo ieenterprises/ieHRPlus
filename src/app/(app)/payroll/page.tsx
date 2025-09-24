@@ -78,10 +78,11 @@ export default function PayrollPage() {
                 return diff;
             };
 
-            const expectedMonthlyHours = 24 * (user.monthlyWorkingDays || daysInMonth);
+            const expectedDailyHours = getExpectedWorkMinutes(user) / 60;
+            const expectedMonthlyHours = expectedDailyHours * (user.monthlyWorkingDays || daysInMonth);
             
             const remunerationPerDay = (user.remuneration || 0) / (user.monthlyWorkingDays || daysInMonth);
-            const remunerationPerHour = remunerationPerDay / 24;
+            const remunerationPerHour = expectedMonthlyHours > 0 ? (user.remuneration || 0) / expectedMonthlyHours : 0;
 
             const calculateLateness = (user: User, clockInTime: string): number => {
                 if (!user?.defaultClockInTime) return 0;
