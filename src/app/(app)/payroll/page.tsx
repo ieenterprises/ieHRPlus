@@ -78,9 +78,7 @@ export default function PayrollPage() {
                 return diff;
             };
 
-            const expectedWorkMinutesPerDay = getExpectedWorkMinutes(user);
-            const expectedWorkHoursPerDay = expectedWorkMinutesPerDay / 60;
-            const expectedMonthlyHours = expectedWorkHoursPerDay * (user.monthlyWorkingDays || daysInMonth);
+            const expectedMonthlyHours = 24 * (user.monthlyWorkingDays || daysInMonth);
             
             const remunerationPerDay = (user.remuneration || 0) / (user.monthlyWorkingDays || daysInMonth);
             const remunerationPerHour = remunerationPerDay / 24;
@@ -282,5 +280,7 @@ export default function PayrollPage() {
     
 
 
+
+    
 
     
