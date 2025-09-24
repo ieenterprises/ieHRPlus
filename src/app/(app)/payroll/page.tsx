@@ -85,7 +85,7 @@ export default function PayrollPage() {
             const expectedMonthlyHours = expectedWorkHoursPerDay * daysInMonth;
             
             const remunerationPerDay = (user.remuneration || 0) / (user.monthlyWorkingDays || daysInMonth);
-            const remunerationPerHour = remunerationPerDay / (expectedWorkHoursPerDay || WORKING_HOURS_PER_DAY);
+            const remunerationPerHour = remunerationPerDay / 24;
 
             const calculateLateness = (user: User, clockInTime: string): number => {
                 if (!user?.defaultClockInTime) return 0;
