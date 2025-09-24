@@ -149,7 +149,7 @@ export default function HrReviewPage() {
         if (tableType === 'history') {
             const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes');
             const latenessMinutes = calculateLateness(record.user, record.clockInTime, 'minutes');
-            const extraTimeMinutes = calculateExtraTime(record.user, durationMinutes);
+            const extraTimeMinutes = calculateExtraTime(record, record.user, durationMinutes);
 
             return {
                 ...baseData,
@@ -369,67 +369,65 @@ export default function HrReviewPage() {
     return returnAs === 'minutes' ? latenessMinutes : formatMinutes(latenessMinutes);
   };
 
-  const calculateExtraTime = (user: User | undefined, durationInMinutes: number): number => {
+  const calculateExtraTime = (record: TimeRecord, user: User | undefined, durationInMinutes: number): number => {
     if (!user) return 0;
-    const expectedMinutes = getExpectedWorkMinutes(user);
-    const clockInDate = new Date(); // Mock date, we only need the day
+    
+    const clockInDate = new Date(record.clockInTime);
     const dayOfWeekName = daysOfWeek[getDay(clockInDate)];
     const isWorkday = user.workingDays?.includes(dayOfWeekName) ?? true;
-
-    if (!isWorkday) return durationInMinutes; // Entire duration is overtime
-
+    
+    if (!isWorkday) {
+        return durationInMinutes; // Entire duration is overtime on a non-workday
+    }
+    
+    const expectedMinutes = getExpectedWorkMinutes(user);
     const extraMinutes = durationInMinutes - expectedMinutes;
+
     return extraMinutes > 0 ? extraMinutes : 0;
   };
   
     const latenessSummary = useMemo(() => {
-        const summary = users.map(user => {
-            const userRecords = timeRecords.filter(tr => tr.userId === user.id);
-            const totalLatenessMs = userRecords.reduce((total, record) => {
-                if (!user?.defaultClockInTime) return total;
-                const actualClockIn = new Date(record.clockInTime);
-                const [hours, minutes] = user.defaultClockInTime.split(':').map(Number);
-                const defaultClockIn = new Date(actualClockIn);
-                defaultClockIn.setHours(hours, minutes, 0, 0);
-                if (actualClockIn > defaultClockIn) {
-                    return total + differenceInMilliseconds(actualClockIn, defaultClockIn);
-                }
-                return total;
-            }, 0);
-            return {
-                user,
-                totalLatenessMinutes: Math.floor(totalLatenessMs / 60000)
-            };
+        const summary = new Map<string, { user: User; totalLatenessMinutes: number }>();
+        
+        users.forEach(user => {
+            summary.set(user.id, { user, totalLatenessMinutes: 0 });
         });
-        return summary.filter(s => s.totalLatenessMinutes > 0);
+
+        timeRecords.forEach(record => {
+            const user = users.find(u => u.id === record.userId);
+            if (user) {
+                const latenessMinutes = calculateLateness(user, record.clockInTime, 'minutes') as number;
+                const userSummary = summary.get(user.id);
+                if (userSummary) {
+                    userSummary.totalLatenessMinutes += latenessMinutes;
+                }
+            }
+        });
+
+        return Array.from(summary.values()).filter(s => s.totalLatenessMinutes > 0);
     }, [users, timeRecords]);
 
     const overtimeSummary = useMemo(() => {
-        const summary = users.map(user => {
-            const userRecords = timeRecords.filter(tr => tr.userId === user.id);
-            const expectedDailyMinutes = getExpectedWorkMinutes(user);
-
-            const totalOvertimeMs = userRecords.reduce((total, record) => {
-                const clockInDate = new Date(record.clockInTime);
-                const dayOfWeekName = daysOfWeek[getDay(clockInDate)];
-                const isWorkday = user.workingDays?.includes(dayOfWeekName) ?? true;
-                const durationMs = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes') as number * 60000;
-
-                if (!isWorkday) {
-                    return total + durationMs;
-                }
-
-                const expectedMs = expectedDailyMinutes * 60000;
-                const overtime = Math.max(0, durationMs - expectedMs);
-                return total + overtime;
-            }, 0);
-
-            return {
-                user,
-                totalOvertimeMinutes: Math.floor(totalOvertimeMs / 60000)
-            };
+        const summary = new Map<string, { user: User; totalOvertimeMinutes: number }>();
+        
+        users.forEach(user => {
+            summary.set(user.id, { user, totalOvertimeMinutes: 0 });
         });
-        return summary.filter(s => s.totalOvertimeMinutes > 0);
+
+        timeRecords.forEach(record => {
+            const user = users.find(u => u.id === record.userId);
+            if (user && record.clockOutTime) {
+                const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes') as number;
+                const overtimeMinutes = calculateExtraTime(record, user, durationMinutes);
+                
+                const userSummary = summary.get(user.id);
+                if (userSummary) {
+                    userSummary.totalOvertimeMinutes += overtimeMinutes;
+                }
+            }
+        });
+
+        return Array.from(summary.values()).filter(s => s.totalOvertimeMinutes > 0);
     }, [users, timeRecords]);
 
   const DatePicker = () => (
@@ -765,7 +763,7 @@ export default function HrReviewPage() {
                   historicalRecords.map((record) => {
                     const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes') as number;
                     const latenessValue = calculateLateness(record.user, record.clockInTime, 'string') as string;
-                    const extraTimeMinutes = calculateExtraTime(record.user, durationMinutes);
+                    const extraTimeMinutes = calculateExtraTime(record, record.user, durationMinutes);
 
                     return (
                         <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
@@ -892,3 +890,5 @@ export default function HrReviewPage() {
     </div>
   );
 }
+
+    
