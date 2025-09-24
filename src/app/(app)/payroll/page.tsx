@@ -15,6 +15,8 @@ import { format, startOfMonth, endOfMonth, getDaysInMonth, isWithinInterval, dif
 import type { User, TimeRecord, HRQuery, Reward } from '@/lib/types';
 import Papa from "papaparse";
 import { useToast } from '@/hooks/use-toast';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 type PayrollData = {
     user: User;
@@ -34,14 +36,29 @@ type PayrollData = {
 const WORKING_HOURS_PER_DAY = 8; // A standard assumption
 
 export default function PayrollPage() {
-    const { users, rewards, hrQueries, currency } = useSettings();
+    const { users, rewards, hrQueries, currency, loggedInUser } = useSettings();
     const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]); // This will be fetched or passed
     const [selectedMonth, setSelectedMonth] = useState<Date>(startOfMonth(new Date()));
     const { toast } = useToast();
 
-    // In a real app, you'd fetch time records for the selected month.
-    // For this example, we'll assume they are passed via context or fetched here.
-    // Let's use the rewards and hrQueries from context.
+    useEffect(() => {
+        if (!loggedInUser?.businessId) return;
+
+        const q = query(
+          collection(db, "timeRecords"),
+          where("businessId", "==", loggedInUser.businessId)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
+            setTimeRecords(allRecords);
+        }, (error) => {
+            console.error("Error fetching time records for payroll:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch time records.' });
+        });
+
+        return () => unsubscribe();
+    }, [loggedInUser?.businessId, toast]);
 
     const payrollData = useMemo(() => {
         const monthStart = startOfMonth(selectedMonth);
@@ -89,7 +106,7 @@ export default function PayrollPage() {
             const actualOvertimeHours = Math.max(0, totalOvertimeHours - totalLatenessHours);
 
             const overtimePay = actualOvertimeHours * remunerationPerHour;
-            const latenessDeduction = (totalLatenessHours - (totalOvertimeHours > totalLatenessHours ? totalLatenessHours : totalOvertimeHours)) * remunerationPerHour;
+            const latenessDeduction = (totalLatenessHours > totalOvertimeHours ? totalLatenessHours - totalOvertimeHours : 0) * remunerationPerHour;
 
             const netSalary = (user.remuneration || 0) + rewardAmount + overtimePay - queryAmount - latenessDeduction;
 
@@ -226,4 +243,3 @@ export default function PayrollPage() {
         </div>
     );
 }
-
