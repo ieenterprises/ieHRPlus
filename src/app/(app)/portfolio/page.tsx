@@ -441,21 +441,7 @@ export default function PortfolioPage() {
                                             <Input id="defaultClockOutTime" name="defaultClockOutTime" type="time" defaultValue={editingUser.defaultClockOutTime} />
                                         </div>
                                     </div>
-                                    <div className="space-y-2 pt-2">
-                                        <Label className="font-bold">Working Days</Label>
-                                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                                            {daysOfWeek.map(day => (
-                                                <div key={day} className="flex items-center space-x-2">
-                                                    <Checkbox
-                                                        id={`day-${day}`}
-                                                        name={day}
-                                                        defaultChecked={editingUser.workingDays?.includes(day)}
-                                                    />
-                                                    <Label htmlFor={`day-${day}`} className="text-sm font-normal">{day}</Label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
+                                    
                                 </div>
                             </CardContent>
                         </Card>
