@@ -146,11 +146,16 @@ export default function HrReviewPage() {
           "Status": record.status,
         };
         if (tableType === 'history') {
+            const latenessMinutes = calculateLateness(record.user, record.clockInTime, 'minutes');
+            const extraTimeMinutes = calculateExtraTime(record.user, record.clockOutTime, 'minutes');
+            const overtimeMinutes = Math.max(0, extraTimeMinutes - latenessMinutes);
+
             return {
                 ...baseData,
                 "Duration": calculateDuration(record.clockInTime, record.clockOutTime),
-                "Lateness": calculateLateness(record.user, record.clockInTime),
-                "Overtime": calculateOvertime(record.user, record.clockOutTime),
+                "Lateness": `${Math.floor(latenessMinutes / 60)}h ${latenessMinutes % 60}m`,
+                "Extra Time": `${Math.floor(extraTimeMinutes / 60)}h ${extraTimeMinutes % 60}m`,
+                "Overtime": `${Math.floor(overtimeMinutes / 60)}h ${overtimeMinutes % 60}m`,
             }
         }
         return baseData;
@@ -342,8 +347,8 @@ export default function HrReviewPage() {
     return `${duration.hours || 0}h ${duration.minutes || 0}m`;
   };
 
-  const calculateLateness = (user: User | undefined, clockInTime: string) => {
-    if (!user?.defaultClockInTime) return "-";
+  const calculateLateness = (user: User | undefined, clockInTime: string, formatAs: 'string' | 'minutes' = 'string'): number | string => {
+    if (!user?.defaultClockInTime) return formatAs === 'string' ? "-" : 0;
     
     const actualClockIn = new Date(clockInTime);
     const [hours, minutes] = user.defaultClockInTime.split(':').map(Number);
@@ -351,16 +356,19 @@ export default function HrReviewPage() {
     defaultClockIn.setHours(hours, minutes, 0, 0);
 
     if (actualClockIn > defaultClockIn) {
-      const diff = differenceInMilliseconds(actualClockIn, defaultClockIn);
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
+      const diffMs = differenceInMilliseconds(actualClockIn, defaultClockIn);
+      if (formatAs === 'minutes') {
+        return Math.floor(diffMs / 60000);
+      }
+      const h = Math.floor(diffMs / 3600000);
+      const m = Math.floor((diffMs % 3600000) / 60000);
       return `${h}h ${m}m`;
     }
-    return "0h 0m";
+    return formatAs === 'string' ? "0h 0m" : 0;
   };
 
-  const calculateOvertime = (user: User | undefined, clockOutTime: string | null) => {
-    if (!user?.defaultClockOutTime || !clockOutTime) return "-";
+  const calculateExtraTime = (user: User | undefined, clockOutTime: string | null, formatAs: 'string' | 'minutes' = 'string'): number | string => {
+    if (!user?.defaultClockOutTime || !clockOutTime) return formatAs === 'string' ? "-" : 0;
 
     const actualClockOut = new Date(clockOutTime);
     const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
@@ -368,12 +376,24 @@ export default function HrReviewPage() {
     defaultClockOut.setHours(hours, minutes, 0, 0);
 
     if (actualClockOut > defaultClockOut) {
-      const diff = differenceInMilliseconds(actualClockOut, defaultClockOut);
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
+      const diffMs = differenceInMilliseconds(actualClockOut, defaultClockOut);
+       if (formatAs === 'minutes') {
+        return Math.floor(diffMs / 60000);
+      }
+      const h = Math.floor(diffMs / 3600000);
+      const m = Math.floor((diffMs % 3600000) / 60000);
       return `${h}h ${m}m`;
     }
-    return "0h 0m";
+    return formatAs === 'string' ? "0h 0m" : 0;
+  };
+
+  const calculatePayableOvertime = (latenessMinutes: number, extraTimeMinutes: number): string => {
+      const netMinutes = Math.max(0, extraTimeMinutes - latenessMinutes);
+      if (netMinutes === 0) return "0h 0m";
+      
+      const h = Math.floor(netMinutes / 60);
+      const m = netMinutes % 60;
+      return `${h}h ${m}m`;
   };
 
   const DatePicker = () => (
@@ -629,6 +649,7 @@ export default function HrReviewPage() {
                   <TableHead>Duration</TableHead>
                   <TableHead>Expected Duration</TableHead>
                   <TableHead>Lateness</TableHead>
+                  <TableHead>Extra Time</TableHead>
                   <TableHead>Overtime</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
@@ -638,61 +659,68 @@ export default function HrReviewPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 11 : 10} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 12 : 11} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
                 ) : historicalRecords.length > 0 ? (
-                  historicalRecords.map((record) => (
-                    <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
-                       {isSeniorStaff && (
-                          <TableCell padding="checkbox">
-                              <Checkbox
-                                  checked={selectedRecordIds.includes(record.id)}
-                                  onCheckedChange={(checked) => handleSelectRecord(record.id, !!checked)}
-                                  aria-label="Select record"
-                              />
-                          </TableCell>
-                       )}
-                      <TableCell className="font-medium">{record.userName}</TableCell>
-                      <TableCell>
-                        {format(new Date(record.clockInTime), "MMM d, h:mm a")}
-                      </TableCell>
-                      <TableCell>
-                        {record.clockOutTime
-                          ? format(new Date(record.clockOutTime), "MMM d, h:mm a")
-                          : "-"}
-                      </TableCell>
-                      <TableCell>{calculateDuration(record.clockInTime, record.clockOutTime)}</TableCell>
-                      <TableCell>{calculateExpectedDuration(record.user)}</TableCell>
-                      <TableCell>{calculateLateness(record.user, record.clockInTime)}</TableCell>
-                      <TableCell>{calculateOvertime(record.user, record.clockOutTime)}</TableCell>
-                      <TableCell>
-                        {record.videoUrl ? (
-                            <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
-                                <Video className="mr-2 h-4 w-4" /> View
-                            </Button>
-                        ) : (
-                            "N/A"
+                  historicalRecords.map((record) => {
+                    const latenessMinutes = calculateLateness(record.user, record.clockInTime, 'minutes') as number;
+                    const extraTimeMinutes = calculateExtraTime(record.user, record.clockOutTime, 'minutes') as number;
+                    const payableOvertime = calculatePayableOvertime(latenessMinutes, extraTimeMinutes);
+
+                    return (
+                        <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
+                        {isSeniorStaff && (
+                            <TableCell padding="checkbox">
+                                <Checkbox
+                                    checked={selectedRecordIds.includes(record.id)}
+                                    onCheckedChange={(checked) => handleSelectRecord(record.id, !!checked)}
+                                    aria-label="Select record"
+                                />
+                            </TableCell>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getBadgeVariant(record.status)}>
-                          {record.status}
-                        </Badge>
-                      </TableCell>
-                      {isSeniorStaff && (
-                        <TableCell className="text-right">
-                          <Button size="sm" variant="outline" onClick={() => setEditingRecord(record)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                        <TableCell className="font-medium">{record.userName}</TableCell>
+                        <TableCell>
+                            {format(new Date(record.clockInTime), "MMM d, h:mm a")}
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))
+                        <TableCell>
+                            {record.clockOutTime
+                            ? format(new Date(record.clockOutTime), "MMM d, h:mm a")
+                            : "-"}
+                        </TableCell>
+                        <TableCell>{calculateDuration(record.clockInTime, record.clockOutTime)}</TableCell>
+                        <TableCell>{calculateExpectedDuration(record.user)}</TableCell>
+                        <TableCell>{`${Math.floor(latenessMinutes / 60)}h ${latenessMinutes % 60}m`}</TableCell>
+                        <TableCell>{`${Math.floor(extraTimeMinutes / 60)}h ${extraTimeMinutes % 60}m`}</TableCell>
+                        <TableCell>{payableOvertime}</TableCell>
+                        <TableCell>
+                            {record.videoUrl ? (
+                                <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
+                                    <Video className="mr-2 h-4 w-4" /> View
+                                </Button>
+                            ) : (
+                                "N/A"
+                            )}
+                        </TableCell>
+                        <TableCell>
+                            <Badge variant={getBadgeVariant(record.status)}>
+                            {record.status}
+                            </Badge>
+                        </TableCell>
+                        {isSeniorStaff && (
+                            <TableCell className="text-right">
+                            <Button size="sm" variant="outline" onClick={() => setEditingRecord(record)}>
+                                <Edit className="h-4 w-4" />
+                            </Button>
+                            </TableCell>
+                        )}
+                        </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 11 : 10} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 12 : 11} className="h-24 text-center">
                       No historical records found for the selected date range.
                     </TableCell>
                   </TableRow>
