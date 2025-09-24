@@ -304,7 +304,14 @@ export default function MeetingPage() {
   const startLocalRecording = async () => {
     try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const audioStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+            },
+            video: false 
+        });
         
         const combinedStream = new MediaStream([
             ...displayStream.getTracks(),
@@ -994,7 +1001,7 @@ export default function MeetingPage() {
 
     return (
       <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
-        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal ? true : false} />
+        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -2122,6 +2129,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
