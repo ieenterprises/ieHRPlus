@@ -327,6 +327,9 @@ export default function PortfolioPage() {
                   <TableHead>Employee</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Remuneration</TableHead>
+                  <TableHead>Monthly Working Days</TableHead>
+                  <TableHead>Default Clock In</TableHead>
+                  <TableHead>Default Clock Out</TableHead>
                   <TableHead>Expected Work Hours</TableHead>
                   <TableHead>Query Count</TableHead>
                   <TableHead>Query Amount</TableHead>
@@ -355,6 +358,9 @@ export default function PortfolioPage() {
                       <TableCell>
                         {user.remuneration != null ? `${currency}${user.remuneration.toFixed(2)}` : 'N/A'}
                       </TableCell>
+                       <TableCell>{user.monthlyWorkingDays || 'N/A'}</TableCell>
+                       <TableCell>{user.defaultClockInTime || 'N/A'}</TableCell>
+                       <TableCell>{user.defaultClockOutTime || 'N/A'}</TableCell>
                       <TableCell>{calculateExpectedWorkHours(user)}</TableCell>
                       <TableCell>{userAggregates[user.id]?.queryCount || 0}</TableCell>
                       <TableCell>{currency}{(userAggregates[user.id]?.queryAmount || 0).toFixed(2)}</TableCell>
@@ -369,7 +375,7 @@ export default function PortfolioPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center">
+                    <TableCell colSpan={12} className="h-24 text-center">
                       No users found.
                     </TableCell>
                   </TableRow>
@@ -511,3 +517,4 @@ export default function PortfolioPage() {
     </div>
   );
 }
+
