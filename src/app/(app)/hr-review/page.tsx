@@ -149,7 +149,7 @@ export default function HrReviewPage() {
         if (tableType === 'history') {
             const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes');
             const latenessMinutes = calculateLateness(record.user, record.clockInTime, 'minutes');
-            const extraTimeMinutes = calculateExtraTime(record, record.user, durationMinutes);
+            const extraTimeMinutes = calculateExtraTime(record.user, record.clockOutTime, 'minutes');
 
             return {
                 ...baseData,
@@ -317,8 +317,8 @@ export default function HrReviewPage() {
     );
   };
 
-  const formatMinutes = (minutes: number) => {
-    if (minutes < 0) minutes = 0;
+  const formatMinutes = (minutes: number): string => {
+    if (minutes <= 0) return "0h 0m";
     const h = Math.floor(minutes / 60);
     const m = Math.round(minutes % 60);
     return `${h}h ${m}m`;
@@ -369,65 +369,88 @@ export default function HrReviewPage() {
     return returnAs === 'minutes' ? latenessMinutes : formatMinutes(latenessMinutes);
   };
 
-  const calculateExtraTime = (record: TimeRecord, user: User | undefined, durationInMinutes: number): number => {
-    if (!user) return 0;
-    
-    const clockInDate = new Date(record.clockInTime);
-    const dayOfWeekName = daysOfWeek[getDay(clockInDate)];
-    const isWorkday = user.workingDays?.includes(dayOfWeekName) ?? true;
-    
-    if (!isWorkday) {
-        return durationInMinutes; // Entire duration is overtime on a non-workday
-    }
-    
-    const expectedMinutes = getExpectedWorkMinutes(user);
-    const extraMinutes = durationInMinutes - expectedMinutes;
+  const calculateExtraTime = (user: User | undefined, clockOutTime: string | null, returnAs: 'string' | 'minutes' = 'string'): number | string => {
+    if (!clockOutTime || !user?.defaultClockOutTime) return returnAs === 'minutes' ? 0 : "0h 0m";
 
-    return extraMinutes > 0 ? extraMinutes : 0;
+    const actualClockOut = new Date(clockOutTime);
+    const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
+    const defaultClockOut = new Date(actualClockOut);
+    defaultClockOut.setHours(hours, minutes, 0, 0);
+
+    const overtimeMilliseconds = actualClockOut > defaultClockOut 
+        ? differenceInMilliseconds(actualClockOut, defaultClockOut)
+        : 0;
+
+    const overtimeMinutes = Math.floor(overtimeMilliseconds / 60000);
+    
+    return returnAs === 'minutes' ? overtimeMinutes : formatMinutes(overtimeMinutes);
   };
   
     const latenessSummary = useMemo(() => {
-        const summary = new Map<string, { user: User; totalLatenessMinutes: number }>();
+        const summary = new Map<string, { user: User; totalLatenessMs: number }>();
         
         users.forEach(user => {
-            summary.set(user.id, { user, totalLatenessMinutes: 0 });
+            summary.set(user.id, { user, totalLatenessMs: 0 });
         });
 
         timeRecords.forEach(record => {
             const user = users.find(u => u.id === record.userId);
-            if (user) {
-                const latenessMinutes = calculateLateness(user, record.clockInTime, 'minutes') as number;
-                const userSummary = summary.get(user.id);
-                if (userSummary) {
-                    userSummary.totalLatenessMinutes += latenessMinutes;
+            if (user && user.defaultClockInTime) {
+                const actualClockIn = new Date(record.clockInTime);
+                const [hours, minutes] = user.defaultClockInTime.split(':').map(Number);
+                const defaultClockIn = new Date(actualClockIn);
+                defaultClockIn.setHours(hours, minutes, 0, 0);
+
+                if (actualClockIn > defaultClockIn) {
+                    const latenessMs = differenceInMilliseconds(actualClockIn, defaultClockIn);
+                    const userSummary = summary.get(user.id);
+                    if (userSummary) {
+                        userSummary.totalLatenessMs += latenessMs;
+                    }
                 }
             }
         });
+        
+        const result = Array.from(summary.values()).map(s => ({
+            user: s.user,
+            totalLatenessMinutes: Math.floor(s.totalLatenessMs / 60000)
+        }));
 
-        return Array.from(summary.values()).filter(s => s.totalLatenessMinutes > 0);
+        return result.filter(s => s.totalLatenessMinutes > 0);
+
     }, [users, timeRecords]);
 
     const overtimeSummary = useMemo(() => {
-        const summary = new Map<string, { user: User; totalOvertimeMinutes: number }>();
-        
+        const summary = new Map<string, { user: User; totalOvertimeMs: number }>();
+
         users.forEach(user => {
-            summary.set(user.id, { user, totalOvertimeMinutes: 0 });
+            summary.set(user.id, { user, totalOvertimeMs: 0 });
         });
 
         timeRecords.forEach(record => {
             const user = users.find(u => u.id === record.userId);
-            if (user && record.clockOutTime) {
-                const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes') as number;
-                const overtimeMinutes = calculateExtraTime(record, user, durationMinutes);
-                
-                const userSummary = summary.get(user.id);
-                if (userSummary) {
-                    userSummary.totalOvertimeMinutes += overtimeMinutes;
+            if (user && user.defaultClockOutTime && record.clockOutTime) {
+                const actualClockOut = new Date(record.clockOutTime);
+                const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
+                const defaultClockOut = new Date(actualClockOut);
+                defaultClockOut.setHours(hours, minutes, 0, 0);
+
+                if (actualClockOut > defaultClockOut) {
+                    const overtimeMs = differenceInMilliseconds(actualClockOut, defaultClockOut);
+                    const userSummary = summary.get(user.id);
+                    if (userSummary) {
+                        userSummary.totalOvertimeMs += overtimeMs;
+                    }
                 }
             }
         });
+        
+        const result = Array.from(summary.values()).map(s => ({
+            user: s.user,
+            totalOvertimeMinutes: Math.floor(s.totalOvertimeMs / 60000)
+        }));
 
-        return Array.from(summary.values()).filter(s => s.totalOvertimeMinutes > 0);
+        return result.filter(s => s.totalOvertimeMinutes > 0);
     }, [users, timeRecords]);
 
   const DatePicker = () => (
@@ -761,9 +784,9 @@ export default function HrReviewPage() {
                   </TableRow>
                 ) : historicalRecords.length > 0 ? (
                   historicalRecords.map((record) => {
-                    const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes') as number;
+                    const durationValue = calculateDuration(record.clockInTime, record.clockOutTime, 'string') as string;
                     const latenessValue = calculateLateness(record.user, record.clockInTime, 'string') as string;
-                    const extraTimeMinutes = calculateExtraTime(record, record.user, durationMinutes);
+                    const extraTimeValue = calculateExtraTime(record.user, record.clockOutTime, 'string') as string;
 
                     return (
                         <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
@@ -785,10 +808,10 @@ export default function HrReviewPage() {
                             ? format(new Date(record.clockOutTime), "MMM d, h:mm a")
                             : "-"}
                         </TableCell>
-                        <TableCell>{formatMinutes(durationMinutes)}</TableCell>
+                        <TableCell>{durationValue}</TableCell>
                         <TableCell>{calculateExpectedDuration(record.user)}</TableCell>
                         <TableCell className={latenessValue !== "0h 0m" ? "text-destructive" : ""}>{latenessValue}</TableCell>
-                        <TableCell className={extraTimeMinutes > 0 ? "text-green-600" : ""}>{formatMinutes(extraTimeMinutes)}</TableCell>
+                        <TableCell className={extraTimeValue !== "0h 0m" ? "text-green-600" : ""}>{extraTimeValue}</TableCell>
                         <TableCell>
                             {record.videoUrl ? (
                                 <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
@@ -890,3 +913,5 @@ export default function HrReviewPage() {
     </div>
   );
 }
+
+    
