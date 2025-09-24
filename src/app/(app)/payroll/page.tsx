@@ -82,7 +82,12 @@ export default function PayrollPage() {
             };
             
             const expectedWorkMinutesPerDay = getExpectedWorkMinutes(user);
-            const remunerationPerHour = (user.remuneration || 0) / ((expectedWorkMinutesPerDay / 60) * daysInMonth);
+            const expectedWorkHoursPerDay = expectedWorkMinutesPerDay / 60;
+
+            const remunerationPerHour = user.remuneration && expectedWorkHoursPerDay > 0
+                ? (user.remuneration / (expectedWorkHoursPerDay * daysInMonth))
+                : (user.remuneration || 0) / (WORKING_HOURS_PER_DAY * daysInMonth);
+
 
             const calculateLateness = (user: User, clockInTime: string): number => {
                 if (!user?.defaultClockInTime) return 0;
@@ -110,7 +115,7 @@ export default function PayrollPage() {
             const queryAmount = userQueries.reduce((acc, q) => acc + (q.amount || 0), 0);
             const rewardAmount = userRewards.reduce((acc, r) => acc + (r.amount || 0), 0);
             
-            const expectedMonthlyHours = (expectedWorkMinutesPerDay / 60) * daysInMonth;
+            const expectedMonthlyHours = expectedWorkHoursPerDay * daysInMonth;
 
             const overtimeHours = Math.max(0, totalDurationHours - expectedMonthlyHours);
             const overtimePay = overtimeHours * remunerationPerHour;
@@ -142,7 +147,7 @@ export default function PayrollPage() {
             "Remuneration/Day": `${currency}${p.remunerationPerDay.toFixed(2)}`,
             "Remuneration/Hour": `${currency}${p.remunerationPerHour.toFixed(2)}`,
             "Expected Hours": p.expectedMonthlyHours.toFixed(2),
-            "Total Duration (H)": p.totalDurationHours.toFixed(2),
+            "Sum of Duration (H)": p.totalDurationHours.toFixed(2),
             "Total Lateness (H)": p.totalLatenessHours.toFixed(2),
             "Overtime (H)": p.overtimeHours.toFixed(2),
             "Query Count": p.queryCount,
@@ -251,6 +256,5 @@ export default function PayrollPage() {
     );
 
     
-}
 
     
