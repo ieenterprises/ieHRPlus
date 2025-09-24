@@ -46,7 +46,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord, User } from "@/lib/types";
-import { format, startOfDay, endOfDay, isWithinInterval, addDays, parseISO, intervalToDuration, differenceInMilliseconds } from "date-fns";
+import { format, startOfDay, endOfDay, isWithinInterval, addDays, parseISO, intervalToDuration, differenceInMilliseconds, getDay } from "date-fns";
 import { Video, Download, Calendar as CalendarIcon, Trash2, Search, Edit, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
@@ -59,6 +59,7 @@ import { RewardTable } from "./reward-table";
 import type { DateRange } from "react-day-picker";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
+const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function HrReviewPage() {
   const { loggedInUser, users } = useSettings();
@@ -359,9 +360,11 @@ export default function HrReviewPage() {
     const defaultClockIn = new Date(actualClockIn);
     defaultClockIn.setHours(hours, minutes, 0, 0);
 
-    const latenessMinutes = actualClockIn > defaultClockIn 
-        ? Math.floor(differenceInMilliseconds(actualClockIn, defaultClockIn) / 60000)
+    const latenessMilliseconds = actualClockIn > defaultClockIn 
+        ? differenceInMilliseconds(actualClockIn, defaultClockIn)
         : 0;
+    
+    const latenessMinutes = Math.floor(latenessMilliseconds / 60000);
     
     return returnAs === 'minutes' ? latenessMinutes : formatMinutes(latenessMinutes);
   };
@@ -369,9 +372,65 @@ export default function HrReviewPage() {
   const calculateExtraTime = (user: User | undefined, durationInMinutes: number): number => {
     if (!user) return 0;
     const expectedMinutes = getExpectedWorkMinutes(user);
+    const clockInDate = new Date(); // Mock date, we only need the day
+    const dayOfWeekName = daysOfWeek[getDay(clockInDate)];
+    const isWorkday = user.workingDays?.includes(dayOfWeekName) ?? true;
+
+    if (!isWorkday) return durationInMinutes; // Entire duration is overtime
+
     const extraMinutes = durationInMinutes - expectedMinutes;
     return extraMinutes > 0 ? extraMinutes : 0;
   };
+  
+    const latenessSummary = useMemo(() => {
+        const summary = users.map(user => {
+            const userRecords = timeRecords.filter(tr => tr.userId === user.id);
+            const totalLatenessMs = userRecords.reduce((total, record) => {
+                if (!user?.defaultClockInTime) return total;
+                const actualClockIn = new Date(record.clockInTime);
+                const [hours, minutes] = user.defaultClockInTime.split(':').map(Number);
+                const defaultClockIn = new Date(actualClockIn);
+                defaultClockIn.setHours(hours, minutes, 0, 0);
+                if (actualClockIn > defaultClockIn) {
+                    return total + differenceInMilliseconds(actualClockIn, defaultClockIn);
+                }
+                return total;
+            }, 0);
+            return {
+                user,
+                totalLatenessMinutes: Math.floor(totalLatenessMs / 60000)
+            };
+        });
+        return summary.filter(s => s.totalLatenessMinutes > 0);
+    }, [users, timeRecords]);
+
+    const overtimeSummary = useMemo(() => {
+        const summary = users.map(user => {
+            const userRecords = timeRecords.filter(tr => tr.userId === user.id);
+            const expectedDailyMinutes = getExpectedWorkMinutes(user);
+
+            const totalOvertimeMs = userRecords.reduce((total, record) => {
+                const clockInDate = new Date(record.clockInTime);
+                const dayOfWeekName = daysOfWeek[getDay(clockInDate)];
+                const isWorkday = user.workingDays?.includes(dayOfWeekName) ?? true;
+                const durationMs = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes') as number * 60000;
+
+                if (!isWorkday) {
+                    return total + durationMs;
+                }
+
+                const expectedMs = expectedDailyMinutes * 60000;
+                const overtime = Math.max(0, durationMs - expectedMs);
+                return total + overtime;
+            }, 0);
+
+            return {
+                user,
+                totalOvertimeMinutes: Math.floor(totalOvertimeMs / 60000)
+            };
+        });
+        return summary.filter(s => s.totalOvertimeMinutes > 0);
+    }, [users, timeRecords]);
 
   const DatePicker = () => (
      <Popover>
@@ -564,6 +623,69 @@ export default function HrReviewPage() {
               <RewardTable />
           </CardContent>
       </Card>
+      
+      <div className="grid md:grid-cols-2 gap-8">
+        <Card>
+            <CardHeader>
+                <CardTitle>Lateness Summary</CardTitle>
+                <CardDescription>Total lateness per employee for the selected period.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Employee</TableHead>
+                            <TableHead className="text-right">Total Lateness</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {latenessSummary.length > 0 ? (
+                            latenessSummary.map(({ user, totalLatenessMinutes }) => (
+                                <TableRow key={user.id}>
+                                    <TableCell className="font-medium">{user.name}</TableCell>
+                                    <TableCell className="text-right text-destructive">{formatMinutes(totalLatenessMinutes)}</TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={2} className="h-24 text-center">No lateness recorded for this period.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+        <Card>
+            <CardHeader>
+                <CardTitle>Overtime Summary</CardTitle>
+                <CardDescription>Total overtime per employee for the selected period.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Employee</TableHead>
+                            <TableHead className="text-right">Total Overtime</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                         {overtimeSummary.length > 0 ? (
+                            overtimeSummary.map(({ user, totalOvertimeMinutes }) => (
+                                <TableRow key={user.id}>
+                                    <TableCell className="font-medium">{user.name}</TableCell>
+                                    <TableCell className="text-right text-green-600">{formatMinutes(totalOvertimeMinutes)}</TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={2} className="h-24 text-center">No overtime recorded for this period.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -642,7 +764,7 @@ export default function HrReviewPage() {
                 ) : historicalRecords.length > 0 ? (
                   historicalRecords.map((record) => {
                     const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes') as number;
-                    const latenessMinutes = calculateLateness(record.user, record.clockInTime, 'minutes') as number;
+                    const latenessValue = calculateLateness(record.user, record.clockInTime, 'string') as string;
                     const extraTimeMinutes = calculateExtraTime(record.user, durationMinutes);
 
                     return (
@@ -667,8 +789,8 @@ export default function HrReviewPage() {
                         </TableCell>
                         <TableCell>{formatMinutes(durationMinutes)}</TableCell>
                         <TableCell>{calculateExpectedDuration(record.user)}</TableCell>
-                        <TableCell>{formatMinutes(latenessMinutes)}</TableCell>
-                        <TableCell>{formatMinutes(extraTimeMinutes)}</TableCell>
+                        <TableCell className={latenessValue !== "0h 0m" ? "text-destructive" : ""}>{latenessValue}</TableCell>
+                        <TableCell className={extraTimeMinutes > 0 ? "text-green-600" : ""}>{formatMinutes(extraTimeMinutes)}</TableCell>
                         <TableCell>
                             {record.videoUrl ? (
                                 <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
@@ -769,8 +891,4 @@ export default function HrReviewPage() {
 
     </div>
   );
-
-    
-
-    
-
+}
