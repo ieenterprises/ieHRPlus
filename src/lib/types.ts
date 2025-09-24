@@ -216,6 +216,7 @@ export type User = Omit<Database['public']['Tables']['users']['Row'], 'permissio
     defaultClockInTime?: string;
     defaultClockOutTime?: string;
     workingDays?: string[];
+    monthlyWorkingDays?: number;
 }
 export type Customer = Database['public']['Tables']['customers']['Row'] & { businessId: string };
 export type Sale = Omit<Database['public']['Tables']['sales']['Row'], 'items' | 'payment_methods'> & {
@@ -669,6 +670,7 @@ export type Database = {
           departmentName?: string | null,
           remuneration?: number | null,
           workingDays?: string[] | null,
+          monthlyWorkingDays?: number | null,
         }
         Insert: {
           avatar_url?: string | null
@@ -684,6 +686,7 @@ export type Database = {
           departmentName?: string | null,
           remuneration?: number | null,
           workingDays?: string[] | null,
+          monthlyWorkingDays?: number | null,
         }
         Update: {
           avatar_url?: string | null
@@ -699,6 +702,7 @@ export type Database = {
           departmentName?: string | null,
           remuneration?: number | null,
           workingDays?: string[] | null,
+          monthlyWorkingDays?: number | null,
         }
         Relationships: [
           {

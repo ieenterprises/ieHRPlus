@@ -223,6 +223,7 @@ export default function PortfolioPage() {
     
     const formData = new FormData(event.currentTarget);
     const newRemuneration = parseFloat(formData.get("remuneration") as string);
+    const monthlyWorkingDays = parseFloat(formData.get("monthlyWorkingDays") as string);
     const clockInTime = formData.get("defaultClockInTime") as string;
     const clockOutTime = formData.get("defaultClockOutTime") as string;
     const workingDays = daysOfWeek.filter(day => formData.get(day));
@@ -231,11 +232,16 @@ export default function PortfolioPage() {
         toast({ title: "Invalid Input", description: "Please enter a valid number for remuneration.", variant: "destructive" });
         return;
     }
+     if (isNaN(monthlyWorkingDays)) {
+        toast({ title: "Invalid Input", description: "Please enter a valid number for monthly working days.", variant: "destructive" });
+        return;
+    }
 
     setIsSaving(true);
     try {
         const updateData: Partial<User> = {
             remuneration: newRemuneration,
+            monthlyWorkingDays: monthlyWorkingDays,
             defaultClockInTime: clockInTime,
             defaultClockOutTime: clockOutTime,
             workingDays: workingDays,
@@ -290,26 +296,6 @@ export default function PortfolioPage() {
     const duration = intervalToDuration({ start: clockInDate, end: clockOutDate });
     return `${duration.hours || 0}h ${duration.minutes || 0}m`;
   };
-
-  const workingDaysInMonth = useMemo(() => {
-    if (!editingUser?.workingDays || editingUser.workingDays.length === 0) {
-        return 0;
-    }
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const daysInMonth = getDaysInMonth(today);
-    
-    let count = 0;
-    for (let day = 1; day <= daysInMonth; day++) {
-        const currentDate = new Date(year, month, day);
-        const dayName = format(currentDate, 'EEEE'); // e.g., "Monday"
-        if (editingUser.workingDays.includes(dayName)) {
-            count++;
-        }
-    }
-    return count;
-  }, [editingUser]);
 
 
   return (
@@ -438,7 +424,13 @@ export default function PortfolioPage() {
                                             <Input id="remuneration" name="remuneration" type="number" step="0.01" defaultValue={editingUser.remuneration} className="w-32" />
                                         </div>
                                     </div>
-                                    <p><strong>Working Days This Month:</strong> {workingDaysInMonth}</p>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="monthlyWorkingDays" className="font-bold">Monthly Working Days</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input id="monthlyWorkingDays" name="monthlyWorkingDays" type="number" step="1" defaultValue={editingUser.monthlyWorkingDays} className="w-32" />
+                                            <span className="text-muted-foreground">days</span>
+                                        </div>
+                                    </div>
                                      <div className="grid grid-cols-2 gap-4 pt-2">
                                         <div className="space-y-2">
                                             <Label htmlFor="defaultClockInTime">Default Clock In</Label>
@@ -533,4 +525,3 @@ export default function PortfolioPage() {
     </div>
   );
 }
-
