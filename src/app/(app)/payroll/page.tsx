@@ -62,6 +62,7 @@ export default function PayrollPage() {
     const payrollData = useMemo((): PayrollData[] => {
         const monthStart = startOfMonth(selectedMonth);
         const monthEnd = endOfMonth(selectedMonth);
+        const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
         return users.map(user => {
             const userTimeRecords = timeRecords.filter(tr => tr.userId === user.id && isWithinInterval(new Date(tr.clockInTime), { start: monthStart, end: monthEnd }));
@@ -69,17 +70,17 @@ export default function PayrollPage() {
             const userQueries = hrQueries.filter(q => q.assigneeId === user.id && isWithinInterval(new Date(q.createdAt), { start: monthStart, end: monthEnd }));
             
             const getExpectedWorkMinutes = (user: User): number => {
-                if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return 0;
+                if (!user.defaultClockInTime || !user.defaultClockOutTime) return 0;
                 const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
                 const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
                 let diff = (outHours * 60 + outMinutes) - (inHours * 60 + inMinutes);
-                if (diff < 0) diff += 24 * 60;
+                if (diff < 0) diff += 24 * 60; // Handle overnight
                 return diff;
             };
 
-            const expectedDailyHours = getExpectedWorkMinutes(user) / 60;
-            const expectedMonthlyHours = expectedDailyHours * (user.monthlyWorkingDays || 0);
-            
+            const expectedDailyMinutes = getExpectedWorkMinutes(user);
+            const expectedMonthlyHours = (expectedDailyMinutes / 60) * (user.monthlyWorkingDays || 0);
+
             const remunerationPerDay = (user.monthlyWorkingDays || 0) > 0 ? (user.remuneration || 0) / (user.monthlyWorkingDays || 1) : 0;
             const remunerationPerHour = expectedMonthlyHours > 0 ? (user.remuneration || 0) / expectedMonthlyHours : 0;
             
@@ -87,30 +88,12 @@ export default function PayrollPage() {
                 if (!endTime) return 0;
                 const start = new Date(startTime);
                 const end = new Date(endTime);
-                
                 if (end < start) return 0;
-                
-                const diffMs = end.getTime() - start.getTime();
-                return diffMs / (1000 * 60 * 60); // convert milliseconds to hours
+                return (end.getTime() - start.getTime()); // return milliseconds
             };
 
-            const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-            
-            const calculateOvertimeForRecord = (record: TimeRecord, user: User): number => {
-                const clockInDate = new Date(record.clockInTime);
-                const dayOfWeek = daysOfWeek[getDay(clockInDate)];
-                const isScheduledWorkday = user.workingDays?.includes(dayOfWeek) ?? true;
-                const durationHours = calculateDuration(record.clockInTime, record.clockOutTime);
-                
-                if (!isScheduledWorkday) {
-                    return durationHours;
-                }
-                
-                const expectedMinutes = getExpectedWorkMinutes(user);
-                const durationMinutes = durationHours * 60;
-                const overtime = Math.max(0, durationMinutes - expectedMinutes);
-                return overtime / 60;
-            };
+            const totalDurationMs = userTimeRecords.reduce((acc, record) => acc + calculateDuration(record.clockInTime, record.clockOutTime), 0);
+            const totalDurationHours = totalDurationMs / (1000 * 60 * 60);
 
             const totalLatenessMilliseconds = userTimeRecords.reduce((acc, record) => {
               if (!user?.defaultClockInTime) return acc;
@@ -127,8 +110,22 @@ export default function PayrollPage() {
             
             const totalLatenessHours = totalLatenessMilliseconds / (1000 * 60 * 60);
 
-            const totalDurationHours = userTimeRecords.reduce((acc, record) => acc + calculateDuration(record.clockInTime, record.clockOutTime), 0);
-            const overtimeHours = userTimeRecords.reduce((acc, record) => acc + calculateOvertimeForRecord(record, user), 0);
+            const overtimeMs = userTimeRecords.reduce((total, record) => {
+                const clockInDate = new Date(record.clockInTime);
+                const dayOfWeekName = daysOfWeek[getDay(clockInDate)];
+                const isWorkday = user.workingDays?.includes(dayOfWeekName) ?? true;
+                const durationMs = calculateDuration(record.clockInTime, record.clockOutTime);
+
+                if (!isWorkday) {
+                    return total + durationMs; // Entire shift is overtime
+                }
+
+                const expectedMs = expectedDailyMinutes * 60 * 1000;
+                const overtime = Math.max(0, durationMs - expectedMs);
+                return total + overtime;
+            }, 0);
+
+            const overtimeHours = overtimeMs / (1000 * 60 * 60);
             
             const queryAmount = userQueries.reduce((acc, q) => acc + (q.amount || 0), 0);
             const rewardAmount = userRewards.reduce((acc, r) => acc + (r.amount || 0), 0);
@@ -281,5 +278,7 @@ export default function PayrollPage() {
     );
 }
 
+
+    
 
     
