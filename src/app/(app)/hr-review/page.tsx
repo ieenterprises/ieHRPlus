@@ -323,6 +323,25 @@ export default function HrReviewPage() {
     return `${duration.hours || 0}h ${duration.minutes || 0}m`;
   };
 
+  const calculateExpectedDuration = (user: User | undefined) => {
+    if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return "-";
+    const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
+    const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
+    
+    const clockInDate = new Date();
+    clockInDate.setHours(inHours, inMinutes, 0, 0);
+
+    const clockOutDate = new Date();
+    clockOutDate.setHours(outHours, outMinutes, 0, 0);
+
+    if (clockOutDate < clockInDate) { // Handles overnight shifts
+        clockOutDate.setDate(clockOutDate.getDate() + 1);
+    }
+    
+    const duration = intervalToDuration({ start: clockInDate, end: clockOutDate });
+    return `${duration.hours || 0}h ${duration.minutes || 0}m`;
+  };
+
   const calculateLateness = (user: User | undefined, clockInTime: string) => {
     if (!user?.defaultClockInTime) return "-";
     
@@ -608,6 +627,7 @@ export default function HrReviewPage() {
                   <TableHead>Clock In</TableHead>
                   <TableHead>Clock Out</TableHead>
                   <TableHead>Duration</TableHead>
+                  <TableHead>Expected Duration</TableHead>
                   <TableHead>Lateness</TableHead>
                   <TableHead>Overtime</TableHead>
                   <TableHead>Video</TableHead>
@@ -618,7 +638,7 @@ export default function HrReviewPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 10 : 9} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 11 : 10} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
@@ -644,6 +664,7 @@ export default function HrReviewPage() {
                           : "-"}
                       </TableCell>
                       <TableCell>{calculateDuration(record.clockInTime, record.clockOutTime)}</TableCell>
+                      <TableCell>{calculateExpectedDuration(record.user)}</TableCell>
                       <TableCell>{calculateLateness(record.user, record.clockInTime)}</TableCell>
                       <TableCell>{calculateOvertime(record.user, record.clockOutTime)}</TableCell>
                       <TableCell>
@@ -671,7 +692,7 @@ export default function HrReviewPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 10 : 9} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 11 : 10} className="h-24 text-center">
                       No historical records found for the selected date range.
                     </TableCell>
                   </TableRow>

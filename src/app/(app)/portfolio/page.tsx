@@ -44,6 +44,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import Image from "next/image";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { FileIcon } from "@/components/file-icon";
+import { intervalToDuration } from "date-fns";
 
 
 export default function PortfolioPage() {
@@ -265,6 +266,25 @@ export default function PortfolioPage() {
         toast({ title: "Deletion Failed", description: e.message, variant: "destructive" });
     }
   };
+  
+  const calculateExpectedWorkHours = (user: User) => {
+    if (!user.defaultClockInTime || !user.defaultClockOutTime) return "-";
+    const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
+    const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
+
+    const clockInDate = new Date();
+    clockInDate.setHours(inHours, inMinutes, 0, 0);
+
+    const clockOutDate = new Date();
+    clockOutDate.setHours(outHours, outMinutes, 0, 0);
+
+    if (clockOutDate < clockInDate) { // Handles overnight shifts
+        clockOutDate.setDate(clockOutDate.getDate() + 1);
+    }
+    
+    const duration = intervalToDuration({ start: clockInDate, end: clockOutDate });
+    return `${duration.hours || 0}h ${duration.minutes || 0}m`;
+  };
 
 
   return (
@@ -296,8 +316,7 @@ export default function PortfolioPage() {
                   <TableHead>Employee</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Remuneration</TableHead>
-                  <TableHead>Default Clock In</TableHead>
-                  <TableHead>Default Clock Out</TableHead>
+                  <TableHead>Expected Work Hours</TableHead>
                   <TableHead>Query Count</TableHead>
                   <TableHead>Query Amount</TableHead>
                   <TableHead>Reward Count</TableHead>
@@ -325,8 +344,7 @@ export default function PortfolioPage() {
                       <TableCell>
                         {user.remuneration != null ? `${currency}${user.remuneration.toFixed(2)}` : 'N/A'}
                       </TableCell>
-                      <TableCell>{user.defaultClockInTime || 'N/A'}</TableCell>
-                      <TableCell>{user.defaultClockOutTime || 'N/A'}</TableCell>
+                      <TableCell>{calculateExpectedWorkHours(user)}</TableCell>
                       <TableCell>{userAggregates[user.id]?.queryCount || 0}</TableCell>
                       <TableCell>{currency}{(userAggregates[user.id]?.queryAmount || 0).toFixed(2)}</TableCell>
                       <TableCell>{userAggregates[user.id]?.rewardCount || 0}</TableCell>
@@ -340,7 +358,7 @@ export default function PortfolioPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-24 text-center">
+                    <TableCell colSpan={9} className="h-24 text-center">
                       No users found.
                     </TableCell>
                   </TableRow>
@@ -474,5 +492,3 @@ export default function PortfolioPage() {
     </div>
   );
 }
-
-    
