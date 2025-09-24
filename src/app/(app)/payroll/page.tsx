@@ -24,6 +24,7 @@ type PayrollData = {
     remunerationPerHour: number;
     expectedMonthlyHours: number;
     totalDurationHours: number;
+    overtimeHours: number;
     queryCount: number;
     queryAmount: number;
     rewardCount: number;
@@ -59,7 +60,7 @@ export default function PayrollPage() {
         return () => unsubscribe();
     }, [loggedInUser?.businessId, toast]);
 
-    const payrollData = useMemo(() => {
+    const payrollData = useMemo((): PayrollData[] => {
         const monthStart = startOfMonth(selectedMonth);
         const monthEnd = endOfMonth(selectedMonth);
         const daysInMonth = getDaysInMonth(selectedMonth);
@@ -70,16 +71,18 @@ export default function PayrollPage() {
             const userQueries = hrQueries.filter(q => q.assigneeId === user.id && isWithinInterval(new Date(q.createdAt), { start: monthStart, end: monthEnd }));
 
             const remunerationPerDay = (user.remuneration || 0) / daysInMonth;
-            const remunerationPerHour = remunerationPerDay / WORKING_HOURS_PER_DAY;
             
             const getExpectedWorkMinutes = (user: User): number => {
-                if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return 0;
+                if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return WORKING_HOURS_PER_DAY * 60;
                 const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
                 const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
                 let diff = (outHours * 60 + outMinutes) - (inHours * 60 + inMinutes);
-                if (diff < 0) diff += 24 * 60; // Handle overnight
-                return diff;
+                if (diff < 0) diff += 24 * 60;
+                return diff > 0 ? diff : WORKING_HOURS_PER_DAY * 60;
             };
+            
+            const expectedWorkMinutesPerDay = getExpectedWorkMinutes(user);
+            const remunerationPerHour = (user.remuneration || 0) / ((expectedWorkMinutesPerDay / 60) * daysInMonth);
 
             const calculateLateness = (user: User, clockInTime: string): number => {
                 if (!user?.defaultClockInTime) return 0;
@@ -101,33 +104,26 @@ export default function PayrollPage() {
                 return differenceInMilliseconds(end, start) / (1000 * 60 * 60);
             };
 
-            let totalLatenessHours = 0;
-            let totalDurationHours = 0;
-
-            userTimeRecords.forEach(record => {
-                totalDurationHours += calculateDuration(record.clockInTime, record.clockOutTime);
-                totalLatenessHours += calculateLateness(user, record.clockInTime);
-            });
+            const totalLatenessHours = userTimeRecords.reduce((acc, record) => acc + calculateLateness(user, record.clockInTime), 0);
+            const totalDurationHours = userTimeRecords.reduce((acc, record) => acc + calculateDuration(record.clockInTime, record.clockOutTime), 0);
             
             const queryAmount = userQueries.reduce((acc, q) => acc + (q.amount || 0), 0);
             const rewardAmount = userRewards.reduce((acc, r) => acc + (r.amount || 0), 0);
             
-            const expectedWorkMinutes = getExpectedWorkMinutes(user);
-            const expectedMonthlyHours = (expectedWorkMinutes / 60) * daysInMonth;
+            const expectedMonthlyHours = (expectedWorkMinutesPerDay / 60) * daysInMonth;
 
             const overtimeHours = Math.max(0, totalDurationHours - expectedMonthlyHours);
             const overtimePay = overtimeHours * remunerationPerHour;
             
-            const latenessDeduction = totalLatenessHours * remunerationPerHour;
-
-            const netSalary = (user.remuneration || 0) + rewardAmount + overtimePay - queryAmount - latenessDeduction;
+            const netSalary = (user.remuneration || 0) + rewardAmount + overtimePay - queryAmount;
 
             return {
                 user,
                 remunerationPerDay,
-                remunerationPerHour,
+                remunerationPerHour: isFinite(remunerationPerHour) ? remunerationPerHour : 0,
                 expectedMonthlyHours,
                 totalDurationHours,
+                overtimeHours,
                 queryCount: userQueries.length,
                 queryAmount,
                 rewardCount: userRewards.length,
@@ -147,11 +143,12 @@ export default function PayrollPage() {
             "Remuneration/Hour": `${currency}${p.remunerationPerHour.toFixed(2)}`,
             "Expected Hours": p.expectedMonthlyHours.toFixed(2),
             "Total Duration (H)": p.totalDurationHours.toFixed(2),
+            "Total Lateness (H)": p.totalLatenessHours.toFixed(2),
+            "Overtime (H)": p.overtimeHours.toFixed(2),
             "Query Count": p.queryCount,
             "Query Deductions": `${currency}${p.queryAmount.toFixed(2)}`,
             "Reward Count": p.rewardCount,
             "Reward Additions": `${currency}${p.rewardAmount.toFixed(2)}`,
-            "Total Lateness (H)": p.totalLatenessHours.toFixed(2),
             "Net Salary": `${currency}${p.netSalary.toFixed(2)}`,
         }));
 
@@ -218,6 +215,7 @@ export default function PayrollPage() {
                                     <TableHead>Expected Hours</TableHead>
                                     <TableHead>Sum of Duration Hours</TableHead>
                                     <TableHead>Lateness (H)</TableHead>
+                                    <TableHead>Overtime (H)</TableHead>
                                     <TableHead>Query Count</TableHead>
                                     <TableHead>Query Amt</TableHead>
                                     <TableHead>Reward Count</TableHead>
@@ -236,6 +234,7 @@ export default function PayrollPage() {
                                         <TableCell>{data.expectedMonthlyHours.toFixed(2)}</TableCell>
                                         <TableCell>{data.totalDurationHours.toFixed(2)}</TableCell>
                                         <TableCell className="text-destructive">{data.totalLatenessHours.toFixed(2)}</TableCell>
+                                        <TableCell className="text-green-600">{data.overtimeHours.toFixed(2)}</TableCell>
                                         <TableCell>{data.queryCount}</TableCell>
                                         <TableCell className="text-destructive">{currency}{data.queryAmount.toFixed(2)}</TableCell>
                                         <TableCell>{data.rewardCount}</TableCell>
@@ -250,5 +249,8 @@ export default function PayrollPage() {
             </Card>
         </div>
     );
+
+    
+}
 
     
