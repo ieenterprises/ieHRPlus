@@ -994,7 +994,7 @@ export default function MeetingPage() {
 
     return (
       <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
-        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
+        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal ? true : false} />
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -2122,6 +2122,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
