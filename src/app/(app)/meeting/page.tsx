@@ -947,6 +947,9 @@ export default function MeetingPage() {
 
         if (micRef.current) {
             micRef.current.srcObject = audioMediaStream;
+            if (participant.isLocal) {
+                micRef.current.muted = true;
+            }
             micRef.current.play().catch(e => { if (e.name !== 'AbortError') console.error("audio play error", e) });
         }
         if (webcamRef.current) {
@@ -2152,3 +2155,6 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
 
 
 
+
+
+    
