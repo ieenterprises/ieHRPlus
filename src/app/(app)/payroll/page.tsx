@@ -23,13 +23,12 @@ type PayrollData = {
     remunerationPerDay: number;
     remunerationPerHour: number;
     expectedMonthlyHours: number;
+    totalDurationHours: number;
     queryCount: number;
     queryAmount: number;
     rewardCount: number;
     rewardAmount: number;
     totalLatenessHours: number;
-    totalOvertimeHours: number;
-    actualOvertimeHours: number;
     netSalary: number;
 };
 
@@ -102,34 +101,24 @@ export default function PayrollPage() {
                 return differenceInMilliseconds(end, start) / (1000 * 60 * 60);
             };
 
-            const calculateExtraTime = (user: User, durationHours: number): number => {
-                if (!user) return 0;
-                const expectedMinutes = getExpectedWorkMinutes(user);
-                const expectedHours = expectedMinutes / 60;
-                const extraHours = durationHours - expectedHours;
-                return extraHours > 0 ? extraHours : 0;
-            };
-
             let totalLatenessHours = 0;
-            let totalExtraTimeHours = 0;
+            let totalDurationHours = 0;
 
             userTimeRecords.forEach(record => {
-                const durationHours = calculateDuration(record.clockInTime, record.clockOutTime);
+                totalDurationHours += calculateDuration(record.clockInTime, record.clockOutTime);
                 totalLatenessHours += calculateLateness(user, record.clockInTime);
-                totalExtraTimeHours += calculateExtraTime(user, durationHours);
             });
             
             const queryAmount = userQueries.reduce((acc, q) => acc + (q.amount || 0), 0);
             const rewardAmount = userRewards.reduce((acc, r) => acc + (r.amount || 0), 0);
             
-            const actualOvertimeHours = Math.max(0, totalExtraTimeHours - totalLatenessHours);
+            const expectedWorkMinutes = getExpectedWorkMinutes(user);
+            const expectedMonthlyHours = (expectedWorkMinutes / 60) * daysInMonth;
 
-            const overtimePay = actualOvertimeHours * remunerationPerHour;
+            const overtimeHours = Math.max(0, totalDurationHours - expectedMonthlyHours);
+            const overtimePay = overtimeHours * remunerationPerHour;
             
-            // Only deduct for lateness that isn't offset by overtime
-            const latenessDeduction = (totalLatenessHours > totalExtraTimeHours) 
-                ? (totalLatenessHours - totalExtraTimeHours) * remunerationPerHour
-                : 0;
+            const latenessDeduction = totalLatenessHours * remunerationPerHour;
 
             const netSalary = (user.remuneration || 0) + rewardAmount + overtimePay - queryAmount - latenessDeduction;
 
@@ -137,14 +126,13 @@ export default function PayrollPage() {
                 user,
                 remunerationPerDay,
                 remunerationPerHour,
-                expectedMonthlyHours: daysInMonth * WORKING_HOURS_PER_DAY,
+                expectedMonthlyHours,
+                totalDurationHours,
                 queryCount: userQueries.length,
                 queryAmount,
                 rewardCount: userRewards.length,
                 rewardAmount,
                 totalLatenessHours,
-                totalOvertimeHours: totalExtraTimeHours,
-                actualOvertimeHours,
                 netSalary
             };
         });
@@ -158,13 +146,12 @@ export default function PayrollPage() {
             "Remuneration/Day": `${currency}${p.remunerationPerDay.toFixed(2)}`,
             "Remuneration/Hour": `${currency}${p.remunerationPerHour.toFixed(2)}`,
             "Expected Hours": p.expectedMonthlyHours.toFixed(2),
+            "Total Duration (H)": p.totalDurationHours.toFixed(2),
             "Query Count": p.queryCount,
             "Query Deductions": `${currency}${p.queryAmount.toFixed(2)}`,
             "Reward Count": p.rewardCount,
             "Reward Additions": `${currency}${p.rewardAmount.toFixed(2)}`,
             "Total Lateness (H)": p.totalLatenessHours.toFixed(2),
-            "Total Extra Time (H)": p.totalOvertimeHours.toFixed(2),
-            "Overtime (H)": p.actualOvertimeHours.toFixed(2),
             "Net Salary": `${currency}${p.netSalary.toFixed(2)}`,
         }));
 
@@ -229,9 +216,8 @@ export default function PayrollPage() {
                                     <TableHead>Rate/Day</TableHead>
                                     <TableHead>Rate/Hour</TableHead>
                                     <TableHead>Expected Hours</TableHead>
+                                    <TableHead>Sum of Duration Hours</TableHead>
                                     <TableHead>Lateness (H)</TableHead>
-                                    <TableHead>Extra Time (H)</TableHead>
-                                    <TableHead>Overtime (H)</TableHead>
                                     <TableHead>Query Count</TableHead>
                                     <TableHead>Query Amt</TableHead>
                                     <TableHead>Reward Count</TableHead>
@@ -248,9 +234,8 @@ export default function PayrollPage() {
                                         <TableCell>{currency}{data.remunerationPerDay.toFixed(2)}</TableCell>
                                         <TableCell>{currency}{data.remunerationPerHour.toFixed(2)}</TableCell>
                                         <TableCell>{data.expectedMonthlyHours.toFixed(2)}</TableCell>
+                                        <TableCell>{data.totalDurationHours.toFixed(2)}</TableCell>
                                         <TableCell className="text-destructive">{data.totalLatenessHours.toFixed(2)}</TableCell>
-                                        <TableCell className="text-green-600">{data.totalOvertimeHours.toFixed(2)}</TableCell>
-                                        <TableCell className="text-green-600 font-medium">{data.actualOvertimeHours.toFixed(2)}</TableCell>
                                         <TableCell>{data.queryCount}</TableCell>
                                         <TableCell className="text-destructive">{currency}{data.queryAmount.toFixed(2)}</TableCell>
                                         <TableCell>{data.rewardCount}</TableCell>
