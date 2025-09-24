@@ -44,7 +44,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import Image from "next/image";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { FileIcon } from "@/components/file-icon";
-import { intervalToDuration } from "date-fns";
+import { intervalToDuration, getDaysInMonth, format } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 
 
@@ -291,6 +291,26 @@ export default function PortfolioPage() {
     return `${duration.hours || 0}h ${duration.minutes || 0}m`;
   };
 
+  const workingDaysInMonth = useMemo(() => {
+    if (!editingUser?.workingDays || editingUser.workingDays.length === 0) {
+        return 0;
+    }
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const daysInMonth = getDaysInMonth(today);
+    
+    let count = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+        const currentDate = new Date(year, month, day);
+        const dayName = format(currentDate, 'EEEE'); // e.g., "Monday"
+        if (editingUser.workingDays.includes(dayName)) {
+            count++;
+        }
+    }
+    return count;
+  }, [editingUser]);
+
 
   return (
     <div className="space-y-8">
@@ -418,6 +438,7 @@ export default function PortfolioPage() {
                                             <Input id="remuneration" name="remuneration" type="number" step="0.01" defaultValue={editingUser.remuneration} className="w-32" />
                                         </div>
                                     </div>
+                                    <p><strong>Working Days This Month:</strong> {workingDaysInMonth}</p>
                                      <div className="grid grid-cols-2 gap-4 pt-2">
                                         <div className="space-y-2">
                                             <Label htmlFor="defaultClockInTime">Default Clock In</Label>
@@ -512,3 +533,4 @@ export default function PortfolioPage() {
     </div>
   );
 }
+
