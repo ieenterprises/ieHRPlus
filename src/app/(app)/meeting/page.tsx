@@ -214,7 +214,6 @@ export default function MeetingPage() {
         name: loggedInUser?.name || 'Guest',
         micEnabled: true,
         webcamEnabled: true,
-        // Add audio processing constraints here
         micPrebuiltOptions: {
             echoCancellation: true,
             noiseSuppression: true,
@@ -947,9 +946,6 @@ export default function MeetingPage() {
 
         if (micRef.current) {
             micRef.current.srcObject = audioMediaStream;
-            if (participant.isLocal) {
-                micRef.current.muted = true;
-            }
             micRef.current.play().catch(e => { if (e.name !== 'AbortError') console.error("audio play error", e) });
         }
         if (webcamRef.current) {
