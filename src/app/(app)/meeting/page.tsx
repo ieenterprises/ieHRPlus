@@ -214,6 +214,12 @@ export default function MeetingPage() {
         name: loggedInUser?.name || 'Guest',
         micEnabled: true,
         webcamEnabled: true,
+        // Add audio processing constraints here
+        micPrebuiltOptions: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+        },
     });
     
     setMeeting(newMeeting); // Set meeting object to state
@@ -2129,6 +2135,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
     
 
       
+
 
 
 
