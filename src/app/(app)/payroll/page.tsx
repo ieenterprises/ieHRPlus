@@ -73,6 +73,15 @@ export default function PayrollPage() {
             const remunerationPerDay = (user.remuneration || 0) / daysInMonth;
             const remunerationPerHour = remunerationPerDay / WORKING_HOURS_PER_DAY;
             
+            const getExpectedWorkMinutes = (user: User): number => {
+                if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return 0;
+                const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
+                const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
+                let diff = (outHours * 60 + outMinutes) - (inHours * 60 + inMinutes);
+                if (diff < 0) diff += 24 * 60; // Handle overnight
+                return diff;
+            };
+
             const calculateLateness = (user: User, clockInTime: string): number => {
                 if (!user?.defaultClockInTime) return 0;
                 const actualClockIn = new Date(clockInTime);
@@ -85,28 +94,42 @@ export default function PayrollPage() {
                 return 0;
             };
 
-            const calculateOvertime = (user: User, clockOutTime: string | null): number => {
-                if (!user?.defaultClockOutTime || !clockOutTime) return 0;
-                const actualClockOut = new Date(clockOutTime);
-                const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
-                const defaultClockOut = new Date(actualClockOut);
-                defaultClockOut.setHours(hours, minutes, 0, 0);
-                if (actualClockOut > defaultClockOut) {
-                    return differenceInMilliseconds(actualClockOut, defaultClockOut) / (1000 * 60 * 60);
-                }
-                return 0;
+            const calculateDuration = (startTime: string, endTime: string | null): number => {
+                if (!endTime) return 0;
+                const start = new Date(startTime);
+                const end = new Date(endTime);
+                if (end < start) return 0;
+                return differenceInMilliseconds(end, start) / (1000 * 60 * 60);
             };
 
-            const totalLatenessHours = userTimeRecords.reduce((acc, tr) => acc + calculateLateness(user, tr.clockInTime), 0);
-            const totalOvertimeHours = userTimeRecords.reduce((acc, tr) => acc + calculateOvertime(user, tr.clockOutTime), 0);
+            const calculateExtraTime = (user: User, durationHours: number): number => {
+                if (!user) return 0;
+                const expectedMinutes = getExpectedWorkMinutes(user);
+                const expectedHours = expectedMinutes / 60;
+                const extraHours = durationHours - expectedHours;
+                return extraHours > 0 ? extraHours : 0;
+            };
+
+            let totalLatenessHours = 0;
+            let totalExtraTimeHours = 0;
+
+            userTimeRecords.forEach(record => {
+                const durationHours = calculateDuration(record.clockInTime, record.clockOutTime);
+                totalLatenessHours += calculateLateness(user, record.clockInTime);
+                totalExtraTimeHours += calculateExtraTime(user, durationHours);
+            });
             
             const queryAmount = userQueries.reduce((acc, q) => acc + (q.amount || 0), 0);
             const rewardAmount = userRewards.reduce((acc, r) => acc + (r.amount || 0), 0);
             
-            const actualOvertimeHours = Math.max(0, totalOvertimeHours - totalLatenessHours);
+            const actualOvertimeHours = Math.max(0, totalExtraTimeHours - totalLatenessHours);
 
             const overtimePay = actualOvertimeHours * remunerationPerHour;
-            const latenessDeduction = (totalLatenessHours > totalOvertimeHours ? totalLatenessHours - totalOvertimeHours : 0) * remunerationPerHour;
+            
+            // Only deduct for lateness that isn't offset by overtime
+            const latenessDeduction = (totalLatenessHours > totalExtraTimeHours) 
+                ? (totalLatenessHours - totalExtraTimeHours) * remunerationPerHour
+                : 0;
 
             const netSalary = (user.remuneration || 0) + rewardAmount + overtimePay - queryAmount - latenessDeduction;
 
@@ -120,7 +143,7 @@ export default function PayrollPage() {
                 rewardCount: userRewards.length,
                 rewardAmount,
                 totalLatenessHours,
-                totalOvertimeHours,
+                totalOvertimeHours: totalExtraTimeHours,
                 actualOvertimeHours,
                 netSalary
             };
@@ -141,7 +164,7 @@ export default function PayrollPage() {
             "Reward Additions": `${currency}${p.rewardAmount.toFixed(2)}`,
             "Total Lateness (H)": p.totalLatenessHours.toFixed(2),
             "Total Extra Time (H)": p.totalOvertimeHours.toFixed(2),
-            "Payable Overtime (H)": p.actualOvertimeHours.toFixed(2),
+            "Overtime (H)": p.actualOvertimeHours.toFixed(2),
             "Net Salary": `${currency}${p.netSalary.toFixed(2)}`,
         }));
 

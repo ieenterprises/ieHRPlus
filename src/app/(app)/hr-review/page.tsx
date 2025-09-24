@@ -155,7 +155,6 @@ export default function HrReviewPage() {
                 "Duration": formatMinutes(durationMinutes),
                 "Lateness": formatMinutes(latenessMinutes),
                 "Extra Time": formatMinutes(extraTimeMinutes),
-                "Overtime": formatMinutes(Math.max(0, extraTimeMinutes - latenessMinutes)),
             }
         }
         return baseData;
@@ -320,7 +319,7 @@ export default function HrReviewPage() {
   const formatMinutes = (minutes: number) => {
     if (minutes < 0) minutes = 0;
     const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
+    const m = Math.round(minutes % 60);
     return `${h}h ${m}m`;
   };
 
@@ -328,10 +327,9 @@ export default function HrReviewPage() {
     if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return 0;
     const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
     const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
-    const totalInMinutes = inHours * 60 + inMinutes;
-    const totalOutMinutes = outHours * 60 + outMinutes;
-    const diff = totalOutMinutes - totalInMinutes;
-    return diff > 0 ? diff : diff + 24 * 60; // Handle overnight
+    let diff = (outHours * 60 + outMinutes) - (inHours * 60 + inMinutes);
+    if (diff < 0) diff += 24 * 60; // Handle overnight
+    return diff;
   };
 
   const calculateDuration = (startTime: string, endTime: string | null, returnAs: 'string' | 'minutes' = 'string'): number | string => {
@@ -342,7 +340,7 @@ export default function HrReviewPage() {
       if (end < start) return returnAs === 'minutes' ? 0 : "0h 0m";
 
       const diffMs = end.getTime() - start.getTime();
-      const durationMinutes = Math.round(diffMs / 60000);
+      const durationMinutes = Math.floor(diffMs / 60000);
       
       return returnAs === 'minutes' ? durationMinutes : formatMinutes(durationMinutes);
   };
@@ -373,11 +371,6 @@ export default function HrReviewPage() {
     const expectedMinutes = getExpectedWorkMinutes(user);
     const extraMinutes = durationInMinutes - expectedMinutes;
     return extraMinutes > 0 ? extraMinutes : 0;
-  };
-
-  const calculatePayableOvertime = (latenessMinutes: number, extraTimeMinutes: number): string => {
-      const netMinutes = Math.max(0, extraTimeMinutes - latenessMinutes);
-      return formatMinutes(netMinutes);
   };
 
   const DatePicker = () => (
@@ -634,7 +627,6 @@ export default function HrReviewPage() {
                   <TableHead>Expected Duration</TableHead>
                   <TableHead>Lateness</TableHead>
                   <TableHead>Extra Time</TableHead>
-                  <TableHead>Overtime</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
                    {isSeniorStaff && <TableHead className="text-right">Actions</TableHead>}
@@ -643,7 +635,7 @@ export default function HrReviewPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 12 : 11} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 11 : 10} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
@@ -652,7 +644,6 @@ export default function HrReviewPage() {
                     const durationMinutes = calculateDuration(record.clockInTime, record.clockOutTime, 'minutes') as number;
                     const latenessMinutes = calculateLateness(record.user, record.clockInTime, 'minutes') as number;
                     const extraTimeMinutes = calculateExtraTime(record.user, durationMinutes);
-                    const payableOvertime = calculatePayableOvertime(latenessMinutes, extraTimeMinutes);
 
                     return (
                         <TableRow key={record.id} data-state={selectedRecordIds.includes(record.id) && "selected"}>
@@ -678,7 +669,6 @@ export default function HrReviewPage() {
                         <TableCell>{calculateExpectedDuration(record.user)}</TableCell>
                         <TableCell>{formatMinutes(latenessMinutes)}</TableCell>
                         <TableCell>{formatMinutes(extraTimeMinutes)}</TableCell>
-                        <TableCell>{payableOvertime}</TableCell>
                         <TableCell>
                             {record.videoUrl ? (
                                 <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
@@ -705,7 +695,7 @@ export default function HrReviewPage() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 12 : 11} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 11 : 10} className="h-24 text-center">
                       No historical records found for the selected date range.
                     </TableCell>
                   </TableRow>
