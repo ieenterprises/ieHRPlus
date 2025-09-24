@@ -11,7 +11,7 @@ import { Calendar as CalendarIcon, Download } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format, startOfMonth, endOfMonth, getDaysInMonth, isWithinInterval, differenceInMilliseconds, intervalToDuration } from 'date-fns';
+import { format, startOfMonth, endOfMonth, getDaysInMonth, isWithinInterval, differenceInMilliseconds } from 'date-fns';
 import type { User, TimeRecord, HRQuery, Reward } from '@/lib/types';
 import Papa from "papaparse";
 import { useToast } from '@/hooks/use-toast';
@@ -24,12 +24,13 @@ type PayrollData = {
     remunerationPerHour: number;
     expectedMonthlyHours: number;
     totalDurationHours: number;
+    totalLatenessHours: number;
     overtimeHours: number;
+    salaryAmount: number;
     queryCount: number;
     queryAmount: number;
     rewardCount: number;
     rewardAmount: number;
-    totalLatenessHours: number;
     netSalary: number;
 };
 
@@ -78,14 +79,12 @@ export default function PayrollPage() {
                 if (diff < 0) diff += 24 * 60;
                 return diff > 0 ? diff : WORKING_HOURS_PER_DAY * 60;
             };
-            
+
             const expectedWorkMinutesPerDay = getExpectedWorkMinutes(user);
             const expectedWorkHoursPerDay = expectedWorkMinutesPerDay / 60;
             const expectedMonthlyHours = expectedWorkHoursPerDay * daysInMonth;
             
-            const remunerationPerHour = expectedMonthlyHours > 0 
-                ? (user.remuneration || 0) / expectedMonthlyHours
-                : (user.remuneration || 0) / (WORKING_HOURS_PER_DAY * daysInMonth);
+            const remunerationPerHour = (user.remuneration || 0) / (WORKING_HOURS_PER_DAY * daysInMonth);
 
             const remunerationPerDay = remunerationPerHour * expectedWorkHoursPerDay;
 
@@ -122,7 +121,8 @@ export default function PayrollPage() {
             
             const queryAmount = userQueries.reduce((acc, q) => acc + (q.amount || 0), 0);
             const rewardAmount = userRewards.reduce((acc, r) => acc + (r.amount || 0), 0);
-
+            
+            const salaryAmount = remunerationPerHour * totalDurationHours;
             const overtimePay = overtimeHours * remunerationPerHour;
             
             const netSalary = (user.remuneration || 0) + rewardAmount + overtimePay - queryAmount;
@@ -133,12 +133,13 @@ export default function PayrollPage() {
                 remunerationPerHour: isFinite(remunerationPerHour) ? remunerationPerHour : 0,
                 expectedMonthlyHours,
                 totalDurationHours,
+                totalLatenessHours,
                 overtimeHours,
+                salaryAmount,
                 queryCount: userQueries.length,
                 queryAmount,
                 rewardCount: userRewards.length,
                 rewardAmount,
-                totalLatenessHours,
                 netSalary
             };
         });
@@ -148,13 +149,14 @@ export default function PayrollPage() {
         const dataToExport = payrollData.map(p => ({
             "Employee": p.user.name,
             "Department": p.user.departmentName || 'N/A',
-            "Monthly Remuneration": `${currency}${p.user.remuneration?.toFixed(2)}`,
-            "Remuneration/Day": `${currency}${p.remunerationPerDay.toFixed(2)}`,
-            "Remuneration/Hour": `${currency}${p.remunerationPerHour.toFixed(2)}`,
+            "Base Salary": `${currency}${p.user.remuneration?.toFixed(2)}`,
+            "Rate/Day": `${currency}${p.remunerationPerDay.toFixed(2)}`,
+            "Rate/Hour": `${currency}${p.remunerationPerHour.toFixed(2)}`,
             "Expected Hours": p.expectedMonthlyHours.toFixed(2),
             "Sum of Duration (H)": p.totalDurationHours.toFixed(2),
             "Sum of Lateness (H)": p.totalLatenessHours.toFixed(2),
             "Sum of Overtime (H)": p.overtimeHours.toFixed(2),
+            "Salary Amount": `${currency}${p.salaryAmount.toFixed(2)}`,
             "Query Count": p.queryCount,
             "Query Deductions": `${currency}${p.queryAmount.toFixed(2)}`,
             "Reward Count": p.rewardCount,
@@ -226,6 +228,7 @@ export default function PayrollPage() {
                                     <TableHead>Sum of Duration Hours</TableHead>
                                     <TableHead>Lateness (H)</TableHead>
                                     <TableHead>Overtime (H)</TableHead>
+                                    <TableHead>Salary Amount</TableHead>
                                     <TableHead>Query Count</TableHead>
                                     <TableHead>Query Amt</TableHead>
                                     <TableHead>Reward Count</TableHead>
@@ -245,6 +248,7 @@ export default function PayrollPage() {
                                         <TableCell>{data.totalDurationHours.toFixed(2)}</TableCell>
                                         <TableCell className="text-destructive">{data.totalLatenessHours.toFixed(2)}</TableCell>
                                         <TableCell className="text-green-600">{data.overtimeHours.toFixed(2)}</TableCell>
+                                        <TableCell>{currency}{data.salaryAmount.toFixed(2)}</TableCell>
                                         <TableCell>{data.queryCount}</TableCell>
                                         <TableCell className="text-destructive">{currency}{data.queryAmount.toFixed(2)}</TableCell>
                                         <TableCell>{data.rewardCount}</TableCell>
@@ -259,8 +263,4 @@ export default function PayrollPage() {
             </Card>
         </div>
     );
-
-    
-
-    
-
+}
