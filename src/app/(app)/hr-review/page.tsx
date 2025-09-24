@@ -377,7 +377,7 @@ export default function HrReviewPage() {
     const defaultClockOut = new Date(actualClockOut);
     defaultClockOut.setHours(hours, minutes, 0, 0);
 
-    const overtimeMilliseconds = actualClockOut > defaultClockOut 
+    const overtimeMilliseconds = actualClockOut > defaultClockOut
         ? differenceInMilliseconds(actualClockOut, defaultClockOut)
         : 0;
 
@@ -913,5 +913,7 @@ export default function HrReviewPage() {
     </div>
   );
 }
+
+    
 
     
