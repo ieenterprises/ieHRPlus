@@ -45,8 +45,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { TimeRecord } from "@/lib/types";
-import { format, startOfDay, endOfDay, isWithinInterval, addDays, parseISO, intervalToDuration } from "date-fns";
+import { TimeRecord, User } from "@/lib/types";
+import { format, startOfDay, endOfDay, isWithinInterval, addDays, parseISO, intervalToDuration, differenceInMilliseconds } from "date-fns";
 import { Video, Download, Calendar as CalendarIcon, Trash2, Search, Edit, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
@@ -61,7 +61,7 @@ import type { DateRange } from "react-day-picker";
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
 export default function HrReviewPage() {
-  const { loggedInUser } = useSettings();
+  const { loggedInUser, users } = useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
@@ -127,17 +127,34 @@ export default function HrReviewPage() {
   }, [timeRecords, searchTerm]);
 
   const pendingRecords = filteredRecords.filter(r => r.status === 'pending');
-  const historicalRecords = filteredRecords.filter(r => r.status !== 'pending');
+  const historicalRecords = useMemo(() => {
+      const records = filteredRecords.filter(r => r.status !== 'pending');
+      return records.map(record => {
+          const user = users.find(u => u.id === record.userId);
+          return { ...record, user };
+      });
+  }, [filteredRecords, users]);
 
 
-  const handleExportCSV = (data: TimeRecord[], tableType: 'pending' | 'history') => {
-    const csvData = data.map(record => ({
-      "Employee": record.userName,
-      "Email": record.userEmail,
-      "Clock In Time": format(new Date(record.clockInTime), "MMM d, yyyy, h:mm a"),
-      "Clock Out Time": record.clockOutTime ? format(new Date(record.clockOutTime), "MMM d, yyyy, h:mm a") : "-",
-      "Status": record.status,
-    }));
+  const handleExportCSV = (data: any[], tableType: 'pending' | 'history') => {
+    const csvData = data.map(record => {
+        const baseData = {
+          "Employee": record.user?.name || record.userName,
+          "Email": record.user?.email || record.userEmail,
+          "Clock In Time": format(new Date(record.clockInTime), "MMM d, yyyy, h:mm a"),
+          "Clock Out Time": record.clockOutTime ? format(new Date(record.clockOutTime), "MMM d, yyyy, h:mm a") : "-",
+          "Status": record.status,
+        };
+        if (tableType === 'history') {
+            return {
+                ...baseData,
+                "Duration": calculateDuration(record.clockInTime, record.clockOutTime),
+                "Lateness": calculateLateness(record.user, record.clockInTime),
+                "Overtime": calculateOvertime(record.user, record.clockOutTime),
+            }
+        }
+        return baseData;
+    });
 
     const csv = Papa.unparse(csvData);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -304,6 +321,40 @@ export default function HrReviewPage() {
     const duration = intervalToDuration({ start, end });
     
     return `${duration.hours || 0}h ${duration.minutes || 0}m`;
+  };
+
+  const calculateLateness = (user: User | undefined, clockInTime: string) => {
+    if (!user?.defaultClockInTime) return "-";
+    
+    const actualClockIn = new Date(clockInTime);
+    const [hours, minutes] = user.defaultClockInTime.split(':').map(Number);
+    const defaultClockIn = new Date(actualClockIn);
+    defaultClockIn.setHours(hours, minutes, 0, 0);
+
+    if (actualClockIn > defaultClockIn) {
+      const diff = differenceInMilliseconds(actualClockIn, defaultClockIn);
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      return `${h}h ${m}m`;
+    }
+    return "0h 0m";
+  };
+
+  const calculateOvertime = (user: User | undefined, clockOutTime: string | null) => {
+    if (!user?.defaultClockOutTime || !clockOutTime) return "-";
+
+    const actualClockOut = new Date(clockOutTime);
+    const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
+    const defaultClockOut = new Date(actualClockOut);
+    defaultClockOut.setHours(hours, minutes, 0, 0);
+
+    if (actualClockOut > defaultClockOut) {
+      const diff = differenceInMilliseconds(actualClockOut, defaultClockOut);
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      return `${h}h ${m}m`;
+    }
+    return "0h 0m";
   };
 
   const DatePicker = () => (
@@ -554,10 +605,11 @@ export default function HrReviewPage() {
                       </TableHead>
                   )}
                   <TableHead>Employee</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Clock In Time</TableHead>
-                  <TableHead>Clock Out Time</TableHead>
+                  <TableHead>Clock In</TableHead>
+                  <TableHead>Clock Out</TableHead>
                   <TableHead>Duration</TableHead>
+                  <TableHead>Lateness</TableHead>
+                  <TableHead>Overtime</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
                    {isSeniorStaff && <TableHead className="text-right">Actions</TableHead>}
@@ -566,7 +618,7 @@ export default function HrReviewPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 9 : 8} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 10 : 9} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
@@ -583,16 +635,17 @@ export default function HrReviewPage() {
                           </TableCell>
                        )}
                       <TableCell className="font-medium">{record.userName}</TableCell>
-                      <TableCell>{record.userEmail}</TableCell>
                       <TableCell>
-                        {format(new Date(record.clockInTime), "MMM d, yyyy, h:mm a")}
+                        {format(new Date(record.clockInTime), "MMM d, h:mm a")}
                       </TableCell>
                       <TableCell>
                         {record.clockOutTime
-                          ? format(new Date(record.clockOutTime), "MMM d, yyyy, h:mm a")
+                          ? format(new Date(record.clockOutTime), "MMM d, h:mm a")
                           : "-"}
                       </TableCell>
                       <TableCell>{calculateDuration(record.clockInTime, record.clockOutTime)}</TableCell>
+                      <TableCell>{calculateLateness(record.user, record.clockInTime)}</TableCell>
+                      <TableCell>{calculateOvertime(record.user, record.clockOutTime)}</TableCell>
                       <TableCell>
                         {record.videoUrl ? (
                             <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
@@ -618,7 +671,7 @@ export default function HrReviewPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 9 : 8} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 10 : 9} className="h-24 text-center">
                       No historical records found for the selected date range.
                     </TableCell>
                   </TableRow>
@@ -693,7 +746,3 @@ export default function HrReviewPage() {
     </div>
   );
 }
-
-    
-
-    
