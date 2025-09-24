@@ -45,7 +45,10 @@ import Image from "next/image";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { FileIcon } from "@/components/file-icon";
 import { intervalToDuration } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
 
+
+const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function PortfolioPage() {
   const { users, currency, loggedInUser, hrQueries, rewards } = useSettings();
@@ -222,6 +225,7 @@ export default function PortfolioPage() {
     const newRemuneration = parseFloat(formData.get("remuneration") as string);
     const clockInTime = formData.get("defaultClockInTime") as string;
     const clockOutTime = formData.get("defaultClockOutTime") as string;
+    const workingDays = daysOfWeek.filter(day => formData.get(day));
     
     if (isNaN(newRemuneration)) {
         toast({ title: "Invalid Input", description: "Please enter a valid number for remuneration.", variant: "destructive" });
@@ -234,6 +238,7 @@ export default function PortfolioPage() {
             remuneration: newRemuneration,
             defaultClockInTime: clockInTime,
             defaultClockOutTime: clockOutTime,
+            workingDays: workingDays,
         };
 
         await updateDoc(doc(db, "users", editingUser.id), updateData);
@@ -421,6 +426,21 @@ export default function PortfolioPage() {
                                         <div className="space-y-2">
                                             <Label htmlFor="defaultClockOutTime">Default Clock Out</Label>
                                             <Input id="defaultClockOutTime" name="defaultClockOutTime" type="time" defaultValue={editingUser.defaultClockOutTime} />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 pt-2">
+                                        <Label className="font-bold">Working Days</Label>
+                                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                            {daysOfWeek.map(day => (
+                                                <div key={day} className="flex items-center space-x-2">
+                                                    <Checkbox
+                                                        id={`day-${day}`}
+                                                        name={day}
+                                                        defaultChecked={editingUser.workingDays?.includes(day)}
+                                                    />
+                                                    <Label htmlFor={`day-${day}`} className="text-sm font-normal">{day}</Label>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
