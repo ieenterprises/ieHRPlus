@@ -46,7 +46,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TimeRecord } from "@/lib/types";
-import { format, startOfDay, endOfDay, isWithinInterval, addDays, parseISO } from "date-fns";
+import { format, startOfDay, endOfDay, isWithinInterval, addDays, parseISO, intervalToDuration } from "date-fns";
 import { Video, Download, Calendar as CalendarIcon, Trash2, Search, Edit, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
@@ -293,6 +293,17 @@ export default function HrReviewPage() {
     setSelectedRecordIds(prev => 
         checked ? [...prev, id] : prev.filter(pId => pId !== id)
     );
+  };
+
+  const calculateDuration = (startTime: string, endTime: string | null) => {
+    if (!endTime) return "-";
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return "-";
+
+    const duration = intervalToDuration({ start, end });
+    
+    return `${duration.hours || 0}h ${duration.minutes || 0}m`;
   };
 
   const DatePicker = () => (
@@ -546,6 +557,7 @@ export default function HrReviewPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Clock In Time</TableHead>
                   <TableHead>Clock Out Time</TableHead>
+                  <TableHead>Duration</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
                    {isSeniorStaff && <TableHead className="text-right">Actions</TableHead>}
@@ -554,7 +566,7 @@ export default function HrReviewPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 8 : 7} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 9 : 8} className="h-24 text-center">
                       Loading records...
                     </TableCell>
                   </TableRow>
@@ -580,6 +592,7 @@ export default function HrReviewPage() {
                           ? format(new Date(record.clockOutTime), "MMM d, yyyy, h:mm a")
                           : "-"}
                       </TableCell>
+                      <TableCell>{calculateDuration(record.clockInTime, record.clockOutTime)}</TableCell>
                       <TableCell>
                         {record.videoUrl ? (
                             <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
@@ -605,7 +618,7 @@ export default function HrReviewPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={isSeniorStaff ? 8 : 7} className="h-24 text-center">
+                    <TableCell colSpan={isSeniorStaff ? 9 : 8} className="h-24 text-center">
                       No historical records found for the selected date range.
                     </TableCell>
                   </TableRow>
@@ -680,5 +693,7 @@ export default function HrReviewPage() {
     </div>
   );
 }
+
+    
 
     
