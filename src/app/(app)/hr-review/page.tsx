@@ -154,7 +154,7 @@ export default function HrReviewPage() {
                 ...baseData,
                 "Duration": formatMinutes(durationMinutes),
                 "Lateness": formatMinutes(latenessMinutes),
-                "Extra Time": formatMinutes(extraTimeMinutes),
+                "Overtime": formatMinutes(extraTimeMinutes),
             }
         }
         return baseData;
@@ -626,7 +626,7 @@ export default function HrReviewPage() {
                   <TableHead>Duration</TableHead>
                   <TableHead>Expected Duration</TableHead>
                   <TableHead>Lateness</TableHead>
-                  <TableHead>Extra Time</TableHead>
+                  <TableHead>Overtime</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
                    {isSeniorStaff && <TableHead className="text-right">Actions</TableHead>}
@@ -769,5 +769,7 @@ export default function HrReviewPage() {
 
     </div>
   );
+
+    
 
     
