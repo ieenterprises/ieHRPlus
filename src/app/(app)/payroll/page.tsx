@@ -187,8 +187,8 @@ export default function PayrollPage() {
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
-                            <CardTitle>Payroll for {format(selectedMonth, 'MMMM yyyy')}</CardTitle>
-                            <CardDescription>Select a month to view the corresponding payroll data.</CardDescription>
+                            <CardTitle>Payroll</CardTitle>
+                            <CardDescription>Calculate and review salaries for all employees.</CardDescription>
                         </div>
                         <div className="flex items-center gap-2 self-end">
                             <Popover>
@@ -269,5 +269,7 @@ export default function PayrollPage() {
 
     
 
+
+    
 
     
