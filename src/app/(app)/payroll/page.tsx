@@ -140,7 +140,7 @@ export default function PayrollPage() {
             "Reward Count": p.rewardCount,
             "Reward Additions": `${currency}${p.rewardAmount.toFixed(2)}`,
             "Total Lateness (H)": p.totalLatenessHours.toFixed(2),
-            "Total Overtime (H)": p.totalOvertimeHours.toFixed(2),
+            "Total Extra Time (H)": p.totalOvertimeHours.toFixed(2),
             "Payable Overtime (H)": p.actualOvertimeHours.toFixed(2),
             "Net Salary": `${currency}${p.netSalary.toFixed(2)}`,
         }));
@@ -207,8 +207,8 @@ export default function PayrollPage() {
                                     <TableHead>Rate/Hour</TableHead>
                                     <TableHead>Expected Hours</TableHead>
                                     <TableHead>Lateness (H)</TableHead>
+                                    <TableHead>Extra Time (H)</TableHead>
                                     <TableHead>Overtime (H)</TableHead>
-                                    <TableHead>Payable OT (H)</TableHead>
                                     <TableHead>Query Count</TableHead>
                                     <TableHead>Query Amt</TableHead>
                                     <TableHead>Reward Count</TableHead>
