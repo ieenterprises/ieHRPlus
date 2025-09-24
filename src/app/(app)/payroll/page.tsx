@@ -84,9 +84,8 @@ export default function PayrollPage() {
             const expectedWorkHoursPerDay = expectedWorkMinutesPerDay / 60;
             const expectedMonthlyHours = expectedWorkHoursPerDay * daysInMonth;
             
-            const remunerationPerHour = (user.remuneration || 0) / (WORKING_HOURS_PER_DAY * daysInMonth);
-
-            const remunerationPerDay = remunerationPerHour * expectedWorkHoursPerDay;
+            const remunerationPerDay = (user.remuneration || 0) / (user.monthlyWorkingDays || daysInMonth);
+            const remunerationPerHour = remunerationPerDay / (expectedWorkHoursPerDay || WORKING_HOURS_PER_DAY);
 
             const calculateLateness = (user: User, clockInTime: string): number => {
                 if (!user?.defaultClockInTime) return 0;
@@ -99,12 +98,17 @@ export default function PayrollPage() {
                 }
                 return 0;
             };
-
+            
             const calculateDuration = (startTime: string, endTime: string | null): number => {
                 if (!endTime) return 0;
                 const start = new Date(startTime);
                 const end = new Date(endTime);
-                if (end < start) return 0;
+                
+                if (end < start) {
+                    // This handles cases where a shift might be incorrectly recorded across midnight in a way that makes end < start
+                    return 0;
+                }
+                
                 const diffMs = end.getTime() - start.getTime();
                 return diffMs / (1000 * 60 * 60); // convert milliseconds to hours
             };
@@ -263,4 +267,5 @@ export default function PayrollPage() {
             </Card>
         </div>
     );
-}
+
+    
