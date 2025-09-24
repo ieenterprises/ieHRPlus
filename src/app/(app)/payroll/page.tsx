@@ -127,9 +127,8 @@ export default function PayrollPage() {
             const rewardAmount = userRewards.reduce((acc, r) => acc + (r.amount || 0), 0);
             
             const salaryAmount = remunerationPerHour * totalDurationHours;
-            const overtimePay = overtimeHours * remunerationPerHour;
             
-            const netSalary = (user.remuneration || 0) + rewardAmount + overtimePay - queryAmount;
+            const netSalary = salaryAmount - queryAmount + rewardAmount;
 
             return {
                 user,
@@ -267,5 +266,8 @@ export default function PayrollPage() {
             </Card>
         </div>
     );
+
+    
+
 
     
