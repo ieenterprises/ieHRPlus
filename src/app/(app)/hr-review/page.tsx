@@ -317,49 +317,49 @@ export default function HrReviewPage() {
     );
   };
 
+  const getExpectedWorkMillis = (user: User | undefined): number => {
+    if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return 0;
+    const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
+    const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
+
+    let totalMinutes = (outHours * 60 + outMinutes) - (inHours * 60 + inMinutes);
+    if (totalMinutes < 0) {
+        totalMinutes += 24 * 60; // Handles overnight shifts
+    }
+    return totalMinutes * 60 * 1000;
+  };
+
   const calculateDuration = (startTime: string, endTime: string | null, user: User | undefined) => {
       if (!endTime) return "-";
       const start = new Date(startTime);
-      let end = new Date(endTime);
+      const end = new Date(endTime);
       
-      if (user?.defaultClockOutTime) {
-          const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
-          const defaultClockOut = new Date(end);
-          defaultClockOut.setHours(hours, minutes, 0, 0);
+      if (end < start) return "0h 0m";
 
-          if (end > defaultClockOut) {
-              end = defaultClockOut;
-          }
-      }
-
-      if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return "0h 0m";
-
-      const duration = intervalToDuration({ start, end });
+      const totalWorkedMillis = end.getTime() - start.getTime();
+      const expectedMillis = getExpectedWorkMillis(user);
       
+      // Duration is the lesser of total worked time or expected time.
+      const durationMillis = (expectedMillis > 0) ? Math.min(totalWorkedMillis, expectedMillis) : totalWorkedMillis;
+
+      if (durationMillis <= 0) return "0h 0m";
+
+      const duration = intervalToDuration({ start: 0, end: durationMillis });
       return `${duration.hours || 0}h ${duration.minutes || 0}m`;
   };
 
   const calculateExpectedDuration = (user: User | undefined) => {
     if (!user?.defaultClockInTime || !user?.defaultClockOutTime) return "-";
-    const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
-    const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
     
-    const clockInDate = new Date();
-    clockInDate.setHours(inHours, inMinutes, 0, 0);
-
-    const clockOutDate = new Date();
-    clockOutDate.setHours(outHours, outMinutes, 0, 0);
-
-    if (clockOutDate < clockInDate) { // Handles overnight shifts
-        clockOutDate.setDate(clockOutDate.getDate() + 1);
-    }
+    const expectedMillis = getExpectedWorkMillis(user);
+    if (expectedMillis <= 0) return "0h 0m";
     
-    const duration = intervalToDuration({ start: clockInDate, end: clockOutDate });
+    const duration = intervalToDuration({ start: 0, end: expectedMillis });
     return `${duration.hours || 0}h ${duration.minutes || 0}m`;
   };
 
-  const calculateLateness = (user: User | undefined, clockInTime: string, formatAs: 'string' | 'minutes' = 'string'): number | string => {
-    if (!user?.defaultClockInTime) return formatAs === 'string' ? "-" : 0;
+  const calculateLateness = (user: User | undefined, clockInTime: string, formatAs: 'string' | 'minutes' = 'string'): number => {
+    if (!user?.defaultClockInTime) return 0;
     
     const actualClockIn = new Date(clockInTime);
     const [hours, minutes] = user.defaultClockInTime.split(':').map(Number);
@@ -368,34 +368,42 @@ export default function HrReviewPage() {
 
     if (actualClockIn > defaultClockIn) {
       const diffMs = differenceInMilliseconds(actualClockIn, defaultClockIn);
-      if (formatAs === 'minutes') {
-        return Math.floor(diffMs / 60000);
-      }
-      const h = Math.floor(diffMs / 3600000);
-      const m = Math.floor((diffMs % 3600000) / 60000);
-      return `${h}h ${m}m`;
+      return Math.floor(diffMs / 60000);
     }
-    return formatAs === 'string' ? "0h 0m" : 0;
+    return 0;
   };
 
-  const calculateExtraTime = (user: User | undefined, clockOutTime: string | null, formatAs: 'string' | 'minutes' = 'string'): number | string => {
-    if (!user?.defaultClockOutTime || !clockOutTime) return formatAs === 'string' ? "-" : 0;
+  const calculateExtraTime = (user: User | undefined, clockOutTime: string | null, formatAs: 'string' | 'minutes' = 'string'): number => {
+    if (!user?.defaultClockOutTime || !clockOutTime) return 0;
 
     const actualClockOut = new Date(clockOutTime);
     const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
     const defaultClockOut = new Date(actualClockOut);
     defaultClockOut.setHours(hours, minutes, 0, 0);
+    
+    // If shift is overnight, the default clock out is on the next day
+    if (user.defaultClockInTime && user.defaultClockOutTime) {
+      const [inH] = user.defaultClockInTime.split(':').map(Number);
+      const [outH] = user.defaultClockOutTime.split(':').map(Number);
+      if (outH < inH) {
+        // Find if actual clock out happened on the next day compared to clock in
+        if (startOfDay(actualClockOut) > startOfDay(new Date(user.clockInTime))) {
+            // Already next day
+        } else {
+            // Check if clock out time is past midnight from clock in day
+            if (actualClockOut.getHours() < inH) {
+                 defaultClockOut.setDate(defaultClockOut.getDate() + 1);
+            }
+        }
+      }
+    }
+
 
     if (actualClockOut > defaultClockOut) {
       const diffMs = differenceInMilliseconds(actualClockOut, defaultClockOut);
-       if (formatAs === 'minutes') {
-        return Math.floor(diffMs / 60000);
-      }
-      const h = Math.floor(diffMs / 3600000);
-      const m = Math.floor((diffMs % 3600000) / 60000);
-      return `${h}h ${m}m`;
+      return Math.floor(diffMs / 60000);
     }
-    return formatAs === 'string' ? "0h 0m" : 0;
+    return 0;
   };
 
   const calculatePayableOvertime = (latenessMinutes: number, extraTimeMinutes: number): string => {
@@ -676,8 +684,8 @@ export default function HrReviewPage() {
                   </TableRow>
                 ) : historicalRecords.length > 0 ? (
                   historicalRecords.map((record) => {
-                    const latenessMinutes = calculateLateness(record.user, record.clockInTime, 'minutes') as number;
-                    const extraTimeMinutes = calculateExtraTime(record.user, record.clockOutTime, 'minutes') as number;
+                    const latenessMinutes = calculateLateness(record.user, record.clockInTime);
+                    const extraTimeMinutes = calculateExtraTime(record.user, record.clockOutTime);
                     const payableOvertime = calculatePayableOvertime(latenessMinutes, extraTimeMinutes);
 
                     return (
