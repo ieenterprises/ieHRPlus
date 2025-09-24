@@ -152,7 +152,7 @@ export default function HrReviewPage() {
 
             return {
                 ...baseData,
-                "Duration": calculateDuration(record.clockInTime, record.clockOutTime),
+                "Duration": calculateDuration(record.clockInTime, record.clockOutTime, record.user),
                 "Lateness": `${Math.floor(latenessMinutes / 60)}h ${latenessMinutes % 60}m`,
                 "Extra Time": `${Math.floor(extraTimeMinutes / 60)}h ${extraTimeMinutes % 60}m`,
                 "Overtime": `${Math.floor(overtimeMinutes / 60)}h ${overtimeMinutes % 60}m`,
@@ -317,15 +317,26 @@ export default function HrReviewPage() {
     );
   };
 
-  const calculateDuration = (startTime: string, endTime: string | null) => {
-    if (!endTime) return "-";
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return "-";
+  const calculateDuration = (startTime: string, endTime: string | null, user: User | undefined) => {
+      if (!endTime) return "-";
+      const start = new Date(startTime);
+      let end = new Date(endTime);
+      
+      if (user?.defaultClockOutTime) {
+          const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
+          const defaultClockOut = new Date(end);
+          defaultClockOut.setHours(hours, minutes, 0, 0);
 
-    const duration = intervalToDuration({ start, end });
-    
-    return `${duration.hours || 0}h ${duration.minutes || 0}m`;
+          if (end > defaultClockOut) {
+              end = defaultClockOut;
+          }
+      }
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return "0h 0m";
+
+      const duration = intervalToDuration({ start, end });
+      
+      return `${duration.hours || 0}h ${duration.minutes || 0}m`;
   };
 
   const calculateExpectedDuration = (user: User | undefined) => {
@@ -393,7 +404,7 @@ export default function HrReviewPage() {
       
       const h = Math.floor(netMinutes / 60);
       const m = netMinutes % 60;
-      return `${h}h ${m}m`;
+      return `${h}h ${m}`;
   };
 
   const DatePicker = () => (
@@ -689,7 +700,7 @@ export default function HrReviewPage() {
                             ? format(new Date(record.clockOutTime), "MMM d, h:mm a")
                             : "-"}
                         </TableCell>
-                        <TableCell>{calculateDuration(record.clockInTime, record.clockOutTime)}</TableCell>
+                        <TableCell>{calculateDuration(record.clockInTime, record.clockOutTime, record.user)}</TableCell>
                         <TableCell>{calculateExpectedDuration(record.user)}</TableCell>
                         <TableCell>{`${Math.floor(latenessMinutes / 60)}h ${latenessMinutes % 60}m`}</TableCell>
                         <TableCell>{`${Math.floor(extraTimeMinutes / 60)}h ${extraTimeMinutes % 60}m`}</TableCell>
@@ -795,3 +806,5 @@ export default function HrReviewPage() {
     </div>
   );
 }
+
+    
