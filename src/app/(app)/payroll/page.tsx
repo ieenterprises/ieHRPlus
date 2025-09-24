@@ -62,7 +62,6 @@ export default function PayrollPage() {
     const payrollData = useMemo((): PayrollData[] => {
         const monthStart = startOfMonth(selectedMonth);
         const monthEnd = endOfMonth(selectedMonth);
-        const daysInMonth = getDaysInMonth(selectedMonth);
 
         return users.map(user => {
             const userTimeRecords = timeRecords.filter(tr => tr.userId === user.id && isWithinInterval(new Date(tr.clockInTime), { start: monthStart, end: monthEnd }));
@@ -112,17 +111,17 @@ export default function PayrollPage() {
             const calculateOvertimeForRecord = (record: TimeRecord, user: User): number => {
                 const clockInDate = new Date(record.clockInTime);
                 const dayOfWeek = daysOfWeek[getDay(clockInDate)];
-                const isScheduledWorkday = user.workingDays?.includes(dayOfWeek) ?? true; // Default to true if not specified
+                const isScheduledWorkday = user.workingDays?.includes(dayOfWeek) ?? true;
                 const durationHours = calculateDuration(record.clockInTime, record.clockOutTime);
                 
                 if (!isScheduledWorkday) {
-                    return durationHours; // Entire shift is overtime
+                    return durationHours;
                 }
                 
                 const expectedMinutes = getExpectedWorkMinutes(user);
                 const durationMinutes = durationHours * 60;
                 const overtime = Math.max(0, durationMinutes - expectedMinutes);
-                return overtime / 60; // return in hours
+                return overtime / 60;
             };
 
             const totalLatenessHours = userTimeRecords.reduce((acc, record) => acc + calculateLateness(user, record.clockInTime), 0);
