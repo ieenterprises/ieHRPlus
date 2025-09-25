@@ -452,7 +452,7 @@ export default function MeetingPage() {
         myGroupIds.forEach(groupId => {
             const qGroup = query(
                 collection(db, 'chatMessages'),
-                where('businessId', '==', loggedInUser.businessId),
+                where('businessId', '==', loggedInUser!.businessId),
                 where('groupId', '==', groupId)
             );
             const unsub = onSnapshot(qGroup, (snapshot) => {
@@ -1015,7 +1015,7 @@ export default function MeetingPage() {
     
     return (
       <div className={`relative aspect-video bg-muted rounded-lg overflow-hidden border-2 transition-all duration-300 ${isSpeaking ? 'border-primary shadow-lg shadow-primary/50' : 'border-transparent'}`}>
-        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline />}
+        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -2145,11 +2145,3 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
         </Dialog>
     );
 };
-
-    
-
-
-
-
-
-    
