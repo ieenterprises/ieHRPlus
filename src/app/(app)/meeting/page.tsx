@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff, Circle } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff, Circle, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FileManagerPickerDialog } from '@/components/file-manager-picker';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { uploadFile, getPublicUrl } from '@/lib/firebase-storage';
+import { VideoSDKNoiseSuppressor } from "@videosdk.live/videosdk-media-processor-web";
 
 
 type ChatMode = 'individual' | 'group';
@@ -125,6 +126,11 @@ export default function MeetingPage() {
   const [lastRecording, setLastRecording] = useState<{ file: File; url: string; meetingId: string; } | null>(null);
   const [isUploadingRecording, setIsUploadingRecording] = useState(false);
 
+  // Noise Suppression states
+  const [noiseSuppressor, setNoiseSuppressor] = useState<VideoSDKNoiseSuppressor | null>(null);
+  const [isNoiseSuppressionOn, setIsNoiseSuppressionOn] = useState(false);
+  const originalMicStream = useRef<MediaStream | null>(null);
+
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
@@ -187,7 +193,7 @@ export default function MeetingPage() {
       }
   };
 
-  const joinMeeting = (id: string, fromChat: boolean, isInitiator: boolean) => {
+  const joinMeeting = async (id: string, fromChat: boolean, isInitiator: boolean) => {
     if (!VIDEOSDK_TOKEN || VIDEOSDK_TOKEN === "Your_Token_Here" || !loggedInUser) {
         toast({
           variant: "destructive",
@@ -200,6 +206,19 @@ export default function MeetingPage() {
         toast({ variant: "destructive", title: "Meeting ID required" });
         return;
     }
+    
+    // Instantiate noise suppressor
+    const suppressor = new VideoSDKNoiseSuppressor();
+    setNoiseSuppressor(suppressor);
+    
+    // Capture original mic stream
+    try {
+        const stream = await window.VideoSDK.createMicrophoneAudioTrack({});
+        originalMicStream.current = stream;
+    } catch (e) {
+        console.error("Could not get microphone stream for noise suppression setup.", e);
+    }
+
 
     setIsHost(isInitiator);
     
@@ -209,6 +228,7 @@ export default function MeetingPage() {
         name: loggedInUser?.name || 'Guest',
         micEnabled: true,
         webcamEnabled: true,
+        customMicrophoneAudioTrack: originalMicStream.current, // Start with original stream
     });
     
     setMeeting(newMeeting); // Set meeting object to state
@@ -233,6 +253,10 @@ export default function MeetingPage() {
         setParticipants([]);
         setIsHost(false);
         setIsRecording(false);
+        setIsNoiseSuppressionOn(false);
+        originalMicStream.current = null;
+        noiseSuppressor?.destroy();
+        setNoiseSuppressor(null);
     });
 
     newMeeting.on("participant-joined", (participant: any) => {
@@ -254,7 +278,7 @@ export default function MeetingPage() {
   const handleCreateAndJoin = async (fromChat: boolean) => {
       const newMeetingId = await createMeeting();
       if (newMeetingId) {
-          joinMeeting(newMeetingId, fromChat, true);
+          await joinMeeting(newMeetingId, fromChat, true);
       }
   };
 
@@ -306,10 +330,42 @@ export default function MeetingPage() {
           gridSize: 3,
         },
         theme: "DARK",
-        webhookUrl: "", // Add your webhook URL here if you have one
       });
     }
   };
+
+    const toggleNoiseSuppression = async () => {
+        if (!meeting || !noiseSuppressor) return;
+
+        try {
+            if (isNoiseSuppressionOn) {
+                // Turn it OFF - switch back to original stream
+                if (originalMicStream.current) {
+                    await meeting.changeMic(originalMicStream.current);
+                    setIsNoiseSuppressionOn(false);
+                    toast({ title: "Noise Suppression Disabled" });
+                }
+            } else {
+                // Turn it ON - process the stream and switch
+                if (originalMicStream.current) {
+                    const processedStream = await noiseSuppressor.getNoiseSuppressedAudioStream(
+                        originalMicStream.current
+                    );
+                    await meeting.changeMic(processedStream);
+                    setIsNoiseSuppressionOn(true);
+                    toast({ title: "Noise Suppression Enabled" });
+                }
+            }
+        } catch (error) {
+            console.error("Failed to toggle noise suppression", error);
+            toast({
+                variant: "destructive",
+                title: "Noise Suppression Error",
+                description: "Could not change the audio source."
+            });
+        }
+    };
+
 
   const sendMeetingInvite = async (recipientId: string, id: string, fromChat: boolean) => {
       if (!loggedInUser || !recipientId || !id) return;
@@ -339,7 +395,7 @@ export default function MeetingPage() {
       
       const newMeetingId = await createMeeting();
       if (newMeetingId) {
-          joinMeeting(newMeetingId, true, true);
+          await joinMeeting(newMeetingId, true, true);
           await sendMeetingInvite(selectedChatUser.id, newMeetingId, true);
       }
   };
@@ -984,6 +1040,14 @@ export default function MeetingPage() {
                     aria-label={isWebCamOn ? 'Turn off video' : 'Turn on video'}
                 >
                     {isWebCamOn ? <Video /> : <VideoOff />}
+                </Button>
+                <Button 
+                    variant={isNoiseSuppressionOn ? 'default' : 'secondary'} 
+                    size="icon" 
+                    className="rounded-full h-12 w-12"
+                    onClick={toggleNoiseSuppression}
+                >
+                    <Sparkles />
                 </Button>
                  <Button 
                     variant={isScreenSharing ? 'default' : 'secondary'} 
