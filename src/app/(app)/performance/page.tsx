@@ -20,7 +20,8 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { DateRange } from "react-day-picker";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 
 type PerformanceData = {
     user: User;
@@ -34,6 +35,28 @@ type PerformanceData = {
     queryCount: number;
     queryAmount: number;
 };
+
+const barChartConfig = {
+    lateness: {
+        label: "Lateness (min)",
+        color: "hsl(var(--destructive))",
+    },
+    overtime: {
+        label: "Overtime (hrs)",
+        color: "hsl(var(--chart-2))",
+    },
+} satisfies ChartConfig;
+
+const pieChartConfig = {
+    onTime: {
+        label: "On-Time Days",
+        color: "hsl(var(--chart-2))",
+    },
+    late: {
+        label: "Late Days",
+        color: "hsl(var(--destructive))",
+    },
+} satisfies ChartConfig
 
 export default function PerformancePage() {
     const { users, rewards, hrQueries, currency, loggedInUser } = useSettings();
@@ -122,6 +145,36 @@ export default function PerformancePage() {
             };
         });
     }, [dateRange, selectedEmployeeId, users, timeRecords, rewards, hrQueries]);
+    
+    const barChartData = useMemo(() => {
+        return performanceData.map(p => ({
+            name: p.user.name.split(' ')[0],
+            lateness: p.totalLatenessMinutes,
+            overtime: parseFloat(p.overtimeHours.toFixed(2)),
+        }));
+    }, [performanceData]);
+    
+    const pieChartData = useMemo(() => {
+        if (performanceData.length === 0) return [];
+        
+        if (selectedEmployeeId !== 'all' && performanceData.length === 1) {
+            const data = performanceData[0];
+            return [
+                { name: 'On-Time Days', value: data.onTimeArrivals, fill: 'hsl(var(--chart-2))' },
+                { name: 'Late Days', value: data.daysLate, fill: 'hsl(var(--destructive))' },
+            ].filter(d => d.value > 0);
+        }
+        
+        // Aggregate for 'all'
+        const totalOnTime = performanceData.reduce((acc, p) => acc + p.onTimeArrivals, 0);
+        const totalLate = performanceData.reduce((acc, p) => acc + p.daysLate, 0);
+        
+        return [
+            { name: 'On-Time Days', value: totalOnTime, fill: 'hsl(var(--chart-2))' },
+            { name: 'Late Days', value: totalLate, fill: 'hsl(var(--destructive))' },
+        ].filter(d => d.value > 0);
+
+    }, [performanceData, selectedEmployeeId]);
 
     const handleExportCSV = () => {
         const dataToExport = performanceData.map(p => ({
@@ -159,11 +212,62 @@ export default function PerformancePage() {
         <div className="space-y-8">
             <PageHeader title="Performance Review" description="Review key performance indicators for all employees." />
 
+            <div className="grid gap-6 md:grid-cols-5">
+                <Card className="md:col-span-3">
+                    <CardHeader>
+                        <CardTitle>Performance Comparison</CardTitle>
+                        <CardDescription>Lateness vs. Overtime for the selected period.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ChartContainer config={barChartConfig} className="min-h-[200px] w-full">
+                            <BarChart data={barChartData} margin={{ top: 20, right: 20, bottom: 5, left: 0 }}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis
+                                    dataKey="name"
+                                    tickLine={false}
+                                    tickMargin={10}
+                                    axisLine={false}
+                                />
+                                <YAxis />
+                                <ChartTooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                                <Bar dataKey="lateness" fill="var(--color-lateness)" radius={4} />
+                                <Bar dataKey="overtime" fill="var(--color-overtime)" radius={4} />
+                            </BarChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
+                <Card className="md:col-span-2">
+                    <CardHeader>
+                        <CardTitle>Punctuality Breakdown</CardTitle>
+                        <CardDescription>
+                            {selectedEmployeeId === 'all'
+                                ? "On-time vs. late days for all employees."
+                                : `Punctuality for ${performanceData[0]?.user.name || 'employee'}.`
+                            }
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1 pb-0">
+                         <ChartContainer config={pieChartConfig} className="mx-auto aspect-square h-[250px]">
+                            <PieChart>
+                                <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+                                <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                    {pieChartData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                                    ))}
+                                </Pie>
+                                <Legend />
+                            </PieChart>
+                         </ChartContainer>
+                    </CardContent>
+                </Card>
+            </div>
+
             <Card>
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
-                            <CardTitle>Employee Performance</CardTitle>
+                            <CardTitle>Employee Performance Details</CardTitle>
                             <CardDescription>Analyze attendance, rewards, and deductions.</CardDescription>
                         </div>
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
@@ -268,4 +372,5 @@ export default function PerformancePage() {
             </Card>
         </div>
     );
-}
+
+    
