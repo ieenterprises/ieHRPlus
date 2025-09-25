@@ -125,7 +125,6 @@ export default function MeetingPage() {
   const [isRecordingDialogOpen, setIsRecordingDialogOpen] = useState(false);
   const [lastRecording, setLastRecording] = useState<{ file: File; url: string; meetingId: string; } | null>(null);
   const [isUploadingRecording, setIsUploadingRecording] = useState(false);
-  const [isSpeakerMuted, setIsSpeakerMuted] = useState(false);
 
   // Noise Suppression states
   const [noiseSuppressor, setNoiseSuppressor] = useState<VideoSDKNoiseSuppressor | null>(null);
@@ -212,15 +211,6 @@ export default function MeetingPage() {
     const suppressor = new VideoSDKNoiseSuppressor();
     setNoiseSuppressor(suppressor);
     
-    // Capture original mic stream
-    try {
-        const stream = await window.VideoSDK.createMicrophoneAudioTrack({});
-        originalMicStream.current = stream;
-    } catch (e) {
-        console.error("Could not get microphone stream for noise suppression setup.", e);
-    }
-
-
     setIsHost(isInitiator);
     
     window.VideoSDK.config(VIDEOSDK_TOKEN);
@@ -250,6 +240,10 @@ export default function MeetingPage() {
     });
 
      newMeeting.on("meeting-left", () => {
+        noiseSuppressor?.destroy();
+        originalMicStream.current?.getTracks().forEach(track => track.stop());
+        originalMicStream.current = null;
+        setNoiseSuppressor(null);
         setMeeting(null);
         setMeetingId(null);
         setChatMeetingId(null);
@@ -258,9 +252,6 @@ export default function MeetingPage() {
         setIsHost(false);
         setIsRecording(false);
         setIsNoiseSuppressionOn(false);
-        originalMicStream.current = null;
-        noiseSuppressor?.destroy();
-        setNoiseSuppressor(null);
     });
 
     newMeeting.on("participant-joined", (participant: any) => {
@@ -299,14 +290,23 @@ export default function MeetingPage() {
     }
   };
 
-  const toggleMic = () => {
+ const toggleMic = async () => {
+    if (!meeting) return;
+
     if (isMicOn) {
-      meeting?.muteMic();
+        meeting.muteMic();
+        setIsMicOn(false);
     } else {
-      meeting?.unmuteMic();
+        let stream;
+        if (isNoiseSuppressionOn && noiseSuppressor) {
+            stream = await noiseSuppressor.getNoiseSuppressedAudioStream();
+        } else {
+            stream = await window.VideoSDK.createMicrophoneAudioTrack({});
+        }
+        await meeting.changeMic(stream);
+        setIsMicOn(true);
     }
-    setIsMicOn(!isMicOn);
-  };
+};
 
   const toggleWebcam = () => {
     if (isWebCamOn) {
@@ -346,22 +346,22 @@ export default function MeetingPage() {
 
         try {
             if (isNoiseSuppressionOn) {
-                // Turn it OFF - switch back to original stream
-                if (originalMicStream.current) {
-                    await meeting.changeMic(originalMicStream.current);
-                    setIsNoiseSuppressionOn(false);
-                    toast({ title: "Noise Suppression Disabled" });
-                }
+                // Turn it OFF
+                const originalStream = await window.VideoSDK.createMicrophoneAudioTrack({});
+                await meeting.changeMic(originalStream);
+                setIsNoiseSuppressionOn(false);
+                toast({ title: "Noise Suppression Disabled" });
             } else {
-                // Turn it ON - process the stream and switch
-                if (originalMicStream.current) {
-                    const processedStream = await noiseSuppressor.getNoiseSuppressedAudioStream(
-                        originalMicStream.current
-                    );
-                    await meeting.changeMic(processedStream);
-                    setIsNoiseSuppressionOn(true);
-                    toast({ title: "Noise Suppression Enabled" });
+                // Turn it ON
+                if (!originalMicStream.current) {
+                    originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
                 }
+                const processedStream = await noiseSuppressor.getNoiseSuppressedAudioStream(
+                    originalMicStream.current
+                );
+                await meeting.changeMic(processedStream);
+                setIsNoiseSuppressionOn(true);
+                toast({ title: "Noise Suppression Enabled" });
             }
         } catch (error) {
             console.error("Failed to toggle noise suppression", error);
@@ -1000,15 +1000,9 @@ export default function MeetingPage() {
         };
     }, [participant]);
     
-    useEffect(() => {
-        if (micRef.current) {
-            micRef.current.muted = isSpeakerMuted;
-        }
-    }, [isSpeakerMuted]);
-
     return (
       <div className={`relative aspect-video bg-muted rounded-lg overflow-hidden border-2 transition-all duration-300 ${isSpeaking ? 'border-primary shadow-lg shadow-primary/50' : 'border-transparent'}`}>
-        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline />}
+        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline muted={false} />}
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -1080,15 +1074,6 @@ export default function MeetingPage() {
                         <p>{isNoiseSuppressionOn ? 'Disable' : 'Enable'} Noise Suppression</p>
                     </TooltipContent>
                 </Tooltip>
-                 <Button
-                    variant={!isSpeakerMuted ? 'secondary' : 'destructive'}
-                    size="icon"
-                    className="rounded-full h-12 w-12"
-                    onClick={() => setIsSpeakerMuted(prev => !prev)}
-                    aria-label={!isSpeakerMuted ? 'Mute Speaker' : 'Unmute Speaker'}
-                >
-                    {!isSpeakerMuted ? <Volume2 /> : <VolumeX />}
-                </Button>
                  <Button 
                     variant={isScreenSharing ? 'default' : 'secondary'} 
                     size="icon" 
@@ -2147,11 +2132,3 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
         </Dialog>
     );
 };
-
-    
-
-
-
-
-
-    
