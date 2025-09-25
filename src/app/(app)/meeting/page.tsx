@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff, Circle, Sparkles, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff, Circle, Sparkles, Volume2, VolumeX, Clapperboard, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -119,10 +119,15 @@ export default function MeetingPage() {
   const [isMicOn, setIsMicOn] = useState(true);
   const [isWebCamOn, setIsWebCamOn] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
+  const [isMeetingRecording, setIsMeetingRecording] = useState(false);
   const [isHost, setIsHost] = useState(false);
+  
+  // Screen Recording States
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const [isScreenRecording, setIsScreenRecording] = useState(false);
+  const [lastRecording, setLastRecording] = useState<{ file: File; url: string; } | null>(null);
   const [isRecordingDialogOpen, setIsRecordingDialogOpen] = useState(false);
-  const [lastRecording, setLastRecording] = useState<{ file: File; url: string; meetingId: string; } | null>(null);
   const [isUploadingRecording, setIsUploadingRecording] = useState(false);
 
 
@@ -236,7 +241,7 @@ export default function MeetingPage() {
         setInChatMeeting(false);
         setParticipants([]);
         setIsHost(false);
-        setIsRecording(false);
+        setIsMeetingRecording(false);
     });
 
     newMeeting.on("participant-joined", (participant: any) => {
@@ -251,10 +256,10 @@ export default function MeetingPage() {
     });
 
     newMeeting.on("recording-started", () => {
-        setIsRecording(true);
+        setIsMeetingRecording(true);
     });
     newMeeting.on("recording-stopped", () => {
-        setIsRecording(false);
+        setIsMeetingRecording(false);
     });
   };
   
@@ -304,8 +309,8 @@ export default function MeetingPage() {
       setIsScreenSharing(!isScreenSharing);
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
+  const toggleMeetingRecording = () => {
+    if (isMeetingRecording) {
       meeting.stopRecording();
     } else {
       meeting.startRecording({
@@ -318,6 +323,96 @@ export default function MeetingPage() {
       });
     }
   };
+
+  // Screen Recording Logic
+  const startScreenRecording = async () => {
+    try {
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        const combinedStream = new MediaStream([
+            ...displayStream.getVideoTracks(),
+            ...audioStream.getAudioTracks()
+        ]);
+
+        screenStreamRef.current = combinedStream;
+
+        const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+        const chunks: Blob[] = [];
+
+        recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                chunks.push(event.data);
+            }
+        };
+
+        recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const file = new File([blob], `Screen-Recording-${Date.now()}.webm`, { type: 'video/webm' });
+            
+            setLastRecording({ file, url });
+            setIsRecordingDialogOpen(true);
+
+            // Stop all tracks to end sharing indicators
+            screenStreamRef.current?.getTracks().forEach(track => track.stop());
+            screenStreamRef.current = null;
+        };
+
+        mediaRecorderRef.current = recorder;
+        recorder.start();
+        setIsScreenRecording(true);
+        toast({ title: 'Screen Recording Started', description: 'Sharing has begun. Click the button again to stop.' });
+
+    } catch (err) {
+        console.error("Error starting screen recording:", err);
+        toast({
+            variant: "destructive",
+            title: "Could Not Start Recording",
+            description: "You may have cancelled the request or an error occurred.",
+        });
+    }
+  };
+
+  const stopScreenRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setIsScreenRecording(false);
+  };
+
+  const toggleScreenRecording = () => {
+    if (isScreenRecording) {
+      stopScreenRecording();
+    } else {
+      startScreenRecording();
+    }
+  };
+
+  const handleUploadRecording = async () => {
+    if (!lastRecording || !loggedInUser?.businessId || !loggedInUser?.id) return;
+    setIsUploadingRecording(true);
+    try {
+      const folderPath = `Screen Recordings`;
+      await uploadFile(loggedInUser.businessId, loggedInUser.id, folderPath, lastRecording.file);
+      toast({ title: 'Upload Complete', description: 'Recording saved to your "Screen Recordings" folder.' });
+      setIsRecordingDialogOpen(false);
+      setLastRecording(null);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not save the recording.' });
+    } finally {
+      setIsUploadingRecording(false);
+    }
+  };
+
+  const handleDownloadRecording = () => {
+    if (!lastRecording) return;
+    const a = document.createElement('a');
+    a.href = lastRecording.url;
+    a.download = lastRecording.file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
 
 
   const sendMeetingInvite = async (recipientId: string, id: string, fromChat: boolean) => {
@@ -972,7 +1067,7 @@ export default function MeetingPage() {
         <div className="h-full flex flex-col">
             <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Meeting ID: {meetingId}</CardTitle>
-                {isRecording && (
+                {isMeetingRecording && (
                     <div className="flex items-center gap-2 text-red-500 animate-pulse">
                         <Circle className="h-3 w-3 fill-current" />
                         <span className="font-medium text-sm">REC</span>
@@ -1012,15 +1107,24 @@ export default function MeetingPage() {
                  >
                     {isScreenSharing ? <ScreenShareOff /> : <ScreenShare />}
                 </Button>
+                <Button
+                    variant={isScreenRecording ? 'destructive' : 'secondary'}
+                    size="icon"
+                    className="rounded-full h-12 w-12"
+                    onClick={toggleScreenRecording}
+                    aria-label={isScreenRecording ? 'Stop Screen Recording' : 'Start Screen Recording'}
+                >
+                    <Clapperboard className={`h-6 w-6 ${isScreenRecording ? 'fill-white' : ''}`} />
+                </Button>
                  {isHost && (
                     <Button
-                        variant={isRecording ? 'destructive' : 'secondary'}
+                        variant={isMeetingRecording ? 'destructive' : 'secondary'}
                         size="icon"
                         className="rounded-full h-12 w-12"
-                        onClick={toggleRecording}
-                        aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+                        onClick={toggleMeetingRecording}
+                        aria-label={isMeetingRecording ? 'Stop recording' : 'Start recording'}
                     >
-                        <Circle className={`h-6 w-6 ${isRecording ? 'fill-white' : 'fill-red-500'}`} />
+                        <Circle className={`h-6 w-6 ${isMeetingRecording ? 'fill-white' : 'fill-red-500'}`} />
                     </Button>
                 )}
                 <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsInviteDialogOpen(true)}>
@@ -1104,32 +1208,6 @@ export default function MeetingPage() {
     const handleSelectAllMails = () => {
         const currentMails = activeMailbox === "inbox" ? inboxMails : sentMails;
         setSelectedMailIds(currentMails.map(m => m.id));
-    };
-
-    const handleUploadRecording = async () => {
-      if (!lastRecording || !loggedInUser?.businessId) return;
-      setIsUploadingRecording(true);
-      try {
-        const folderPath = `meeting_recordings`;
-        await uploadFile(loggedInUser.businessId, loggedInUser.id, folderPath, lastRecording.file);
-        toast({ title: 'Upload Complete', description: 'Recording saved to your "Meeting Recordings" folder.' });
-        setIsRecordingDialogOpen(false);
-        setLastRecording(null);
-      } catch (error) {
-        toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not save the recording.' });
-      } finally {
-        setIsUploadingRecording(false);
-      }
-    };
-  
-    const handleDownloadRecording = () => {
-      if (!lastRecording) return;
-      const a = document.createElement('a');
-      a.href = lastRecording.url;
-      a.download = lastRecording.file.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
     };
 
     const myGroups = useMemo(() => groups.filter(g => g.members.some(m => m.id === loggedInUser?.id)), [groups, loggedInUser]);
@@ -1820,9 +1898,9 @@ export default function MeetingPage() {
      <Dialog open={isRecordingDialogOpen} onOpenChange={(open) => { if (!open) setLastRecording(null); setIsRecordingDialogOpen(open); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Recording Complete</DialogTitle>
+            <DialogTitle>Screen Recording Complete</DialogTitle>
             <DialogDescription>
-              Your meeting recording is ready. You can preview, download, or upload it to your File Manager.
+              Your screen recording is ready. You can preview, download, or upload it to your File Manager.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -1831,7 +1909,7 @@ export default function MeetingPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="secondary" onClick={handleDownloadRecording}>Download</Button>
+            <Button variant="secondary" onClick={handleDownloadRecording}><Download className="mr-2 h-4 w-4"/>Download</Button>
             <Button onClick={handleUploadRecording} disabled={isUploadingRecording}>
               {isUploadingRecording && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Upload to File Manager
@@ -2062,4 +2140,5 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
         </Dialog>
     );
 };
+
 
