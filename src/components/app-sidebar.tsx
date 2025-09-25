@@ -28,6 +28,7 @@ import {
   FileText,
   Mail,
   DollarSign,
+  TrendingUp,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
@@ -66,6 +67,7 @@ const navItems: NavItem[] = [
   { href: "/sessions", icon: Users, label: "Sessions" },
   { href: "/hr-review", icon: Briefcase, label: "HR Review", permission: "MANAGE_USERS" },
   { href: "/payroll", icon: DollarSign, label: "Payroll", permission: "MANAGE_USERS" },
+  { href: "/performance", icon: TrendingUp, label: "Performance", permission: "MANAGE_USERS" },
   { href: "/file-manager", icon: Folder, label: "File Manager" },
   { href: "/team", icon: Users, label: "Team", permission: "MANAGE_USERS", offlineDisabled: true },
   { href: "/portfolio", icon: FileText, label: "Portfolio", permission: "MANAGE_USERS", offlineDisabled: true },
