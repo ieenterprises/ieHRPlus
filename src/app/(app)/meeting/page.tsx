@@ -242,7 +242,11 @@ export default function MeetingPage() {
     newMeeting.join();
 
     newMeeting.on("meeting-joined", () => {
-        setParticipants(Array.from(newMeeting.participants.values()));
+        // Filter out the local participant from the list to prevent duplication
+        const remoteParticipants = Array.from(newMeeting.participants.values()).filter(
+            (p: any) => p.id !== newMeeting.localParticipant.id
+        );
+        setParticipants(remoteParticipants);
     });
 
      newMeeting.on("meeting-left", () => {
@@ -260,7 +264,10 @@ export default function MeetingPage() {
     });
 
     newMeeting.on("participant-joined", (participant: any) => {
-        setParticipants(prev => [...prev, participant]);
+        // Only add remote participants to the state
+        if (participant.id !== newMeeting.localParticipant.id) {
+            setParticipants(prev => [...prev, participant]);
+        }
     });
 
     newMeeting.on("participant-left", (participant: any) => {
@@ -995,14 +1002,13 @@ export default function MeetingPage() {
     
     useEffect(() => {
         if (micRef.current) {
-            micRef.current.muted = participant.isLocal || isSpeakerMuted;
+            micRef.current.muted = isSpeakerMuted;
         }
-    }, [isSpeakerMuted, participant.isLocal]);
-
+    }, [isSpeakerMuted]);
 
     return (
       <div className={`relative aspect-video bg-muted rounded-lg overflow-hidden border-2 transition-all duration-300 ${isSpeaking ? 'border-primary shadow-lg shadow-primary/50' : 'border-transparent'}`}>
-        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
+        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline />}
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -2146,3 +2152,6 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
 
 
 
+
+
+    
