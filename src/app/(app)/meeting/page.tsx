@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -183,7 +182,7 @@ export default function MeetingPage() {
       }
   };
 
-  const joinMeeting = (id: string, fromChat: boolean, isInitiator: boolean) => {
+  const joinMeeting = async (id: string, fromChat: boolean, isInitiator: boolean) => {
     if (!VIDEOSDK_TOKEN || VIDEOSDK_TOKEN === "Your_Token_Here" || !loggedInUser) {
         toast({
           variant: "destructive",
@@ -205,11 +204,6 @@ export default function MeetingPage() {
         name: loggedInUser?.name || 'Guest',
         micEnabled: true,
         webcamEnabled: true,
-        micPrebuiltOptions: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-        },
     });
     
     setMeeting(newMeeting); // Set meeting object to state
@@ -328,12 +322,11 @@ export default function MeetingPage() {
     }
   };
 
-
   const sendMeetingInvite = async (recipientId: string, id: string, fromChat: boolean) => {
       if (!loggedInUser || !recipientId || !id) return;
 
       const inviteLink = `/meeting?join=${id}${fromChat ? '&in-chat=true' : ''}`;
-      const inviteMessage = `${loggedInUser.name} is inviting you to a video call. &lt;a href="${inviteLink}" class="text-blue-500 underline"&gt;Join Now&lt;/a&gt;`;
+      const inviteMessage = `${loggedInUser.name} is inviting you to a video call. <a href="${inviteLink}" class="text-blue-500 underline">Join Now</a>`;
 
       const messageData: Omit<ChatMessage, 'id'> = {
           senderId: loggedInUser.id,
