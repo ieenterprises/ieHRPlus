@@ -32,7 +32,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { FileManagerPickerDialog } from '@/components/file-manager-picker';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { uploadFile, getPublicUrl } from '@/lib/firebase-storage';
-import { VideoSDKNoiseSuppressor } from "@videosdk.live/videosdk-media-processor-web";
 
 
 type ChatMode = 'individual' | 'group';
@@ -127,9 +126,7 @@ export default function MeetingPage() {
   const [isUploadingRecording, setIsUploadingRecording] = useState(false);
 
   // Noise Suppression states
-  const [noiseSuppressor, setNoiseSuppressor] = useState<VideoSDKNoiseSuppressor | null>(null);
   const [isNoiseSuppressionOn, setIsNoiseSuppressionOn] = useState(false);
-  const originalMicStream = useRef<MediaStream | null>(null);
 
 
   useEffect(() => {
@@ -236,12 +233,6 @@ export default function MeetingPage() {
     });
 
      newMeeting.on("meeting-left", () => {
-        if (noiseSuppressor) {
-          noiseSuppressor.destroy();
-        }
-        originalMicStream.current?.getTracks().forEach(track => track.stop());
-        originalMicStream.current = null;
-        setNoiseSuppressor(null);
         setMeeting(null);
         setMeetingId(null);
         setChatMeetingId(null);
@@ -288,30 +279,15 @@ export default function MeetingPage() {
     }
   };
 
-  const toggleMic = async () => {
+  const toggleMic = () => {
     if (!meeting) return;
     if (isMicOn) {
-        meeting.muteMic();
-        setIsMicOn(false);
+      meeting.muteMic();
     } else {
-        try {
-            let stream;
-            if (!originalMicStream.current) {
-                originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
-            }
-            if (isNoiseSuppressionOn && noiseSuppressor) {
-                stream = await noiseSuppressor.getNoiseSuppressedAudioStream(originalMicStream.current);
-            } else {
-                stream = originalMicStream.current;
-            }
-            await meeting.changeMic(stream);
-            setIsMicOn(true);
-        } catch (error) {
-            console.error("Error toggling mic:", error);
-            toast({ title: "Mic Error", description: "Could not re-enable microphone.", variant: "destructive" });
-        }
+      meeting.unmuteMic();
     }
-};
+    setIsMicOn(!isMicOn);
+  };
 
 
   const toggleWebcam = () => {
@@ -345,45 +321,6 @@ export default function MeetingPage() {
         theme: "DARK",
       });
     }
-  };
-
-  const toggleNoiseSuppression = async () => {
-      if (!meeting) return;
-
-      try {
-          if (isNoiseSuppressionOn) {
-              // Turn it OFF
-              if (noiseSuppressor) {
-                  noiseSuppressor.destroy();
-              }
-              setNoiseSuppressor(null);
-              if (originalMicStream.current) {
-                  await meeting.changeMic(originalMicStream.current);
-              }
-              setIsNoiseSuppressionOn(false);
-              toast({ title: "Noise Suppression Disabled" });
-          } else {
-              // Turn it ON
-              if (!originalMicStream.current) {
-                  originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
-              }
-              const newNoiseSuppressor = new VideoSDKNoiseSuppressor();
-              const processedStream = await newNoiseSuppressor.getNoiseSuppressedAudioStream(
-                  originalMicStream.current
-              );
-              await meeting.changeMic(processedStream);
-              setNoiseSuppressor(newNoiseSuppressor);
-              setIsNoiseSuppressionOn(true);
-              toast({ title: "Noise Suppression Enabled" });
-          }
-      } catch (error) {
-          console.error("Failed to toggle noise suppression", error);
-          toast({
-              variant: "destructive",
-              title: "Noise Suppression Error",
-              description: "Could not change the audio source."
-          });
-      }
   };
 
 
@@ -1072,21 +1009,6 @@ export default function MeetingPage() {
                 >
                     {isWebCamOn ? <Video /> : <VideoOff />}
                 </Button>
-                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                            variant={isNoiseSuppressionOn ? 'default' : 'secondary'}
-                            size="icon"
-                            className="rounded-full h-12 w-12"
-                            onClick={toggleNoiseSuppression}
-                        >
-                            <Sparkles className={`h-6 w-6 ${isNoiseSuppressionOn ? 'text-yellow-400' : ''}`} />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>{isNoiseSuppressionOn ? 'Disable' : 'Enable'} Noise Suppression</p>
-                    </TooltipContent>
-                </Tooltip>
                  <Button 
                     variant={isScreenSharing ? 'default' : 'secondary'} 
                     size="icon" 
