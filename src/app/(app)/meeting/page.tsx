@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff, Circle, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff, Circle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -125,11 +125,6 @@ export default function MeetingPage() {
   const [lastRecording, setLastRecording] = useState<{ file: File; url: string; meetingId: string; } | null>(null);
   const [isUploadingRecording, setIsUploadingRecording] = useState(false);
 
-  // Local screen recording refs
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
-  const screenStreamRef = useRef<MediaStream | null>(null);
-
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
@@ -247,6 +242,13 @@ export default function MeetingPage() {
     newMeeting.on("participant-left", (participant: any) => {
         setParticipants(prev => prev.filter(p => p.id !== participant.id));
     });
+
+    newMeeting.on("recording-started", () => {
+        setIsRecording(true);
+    });
+    newMeeting.on("recording-stopped", () => {
+        setIsRecording(false);
+    });
   };
   
   const handleCreateAndJoin = async (fromChat: boolean) => {
@@ -260,14 +262,6 @@ export default function MeetingPage() {
     if (!meeting) return;
 
     if (isHost) {
-        if (isRecording) {
-            toast({
-                title: "Recording in Progress",
-                description: "You must stop the recording before ending the meeting.",
-                variant: "destructive",
-            });
-            return;
-        }
         meeting.end(); // Ends meeting for all participants
     } else {
         meeting.leave(); // Leaves meeting for the current participant
@@ -300,80 +294,20 @@ export default function MeetingPage() {
       }
       setIsScreenSharing(!isScreenSharing);
   };
-  
-  const startLocalRecording = async () => {
-    try {
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        const combinedStream = new MediaStream([
-            ...displayStream.getTracks(),
-            ...audioStream.getAudioTracks()
-        ]);
-        screenStreamRef.current = combinedStream;
-
-        mediaRecorderRef.current = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
-        
-        mediaRecorderRef.current.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                recordedChunksRef.current.push(event.data);
-            }
-        };
-
-        mediaRecorderRef.current.onstop = () => {
-            const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
-            const currentMeetingId = meetingId || chatMeetingId || 'local_recording';
-            setLastRecording({
-                file: new File([blob], `recording_${currentMeetingId}.webm`, { type: 'video/webm' }),
-                url: URL.createObjectURL(blob),
-                meetingId: currentMeetingId,
-            });
-            setIsRecordingDialogOpen(true);
-            recordedChunksRef.current = [];
-            stopLocalRecordingStream();
-        };
-
-        mediaRecorderRef.current.start();
-        setIsRecording(true);
-        
-        displayStream.getVideoTracks()[0].onended = () => {
-             // Stop recording if user clicks "Stop sharing" in browser UI
-             if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                 stopLocalRecording();
-             }
-        };
-
-    } catch (err) {
-        console.error("Error starting screen recording:", err);
-        toast({
-            variant: "destructive",
-            title: "Screen Recording Failed",
-            description: "Could not start screen recording. Please ensure you have granted permissions."
-        });
-        stopLocalRecordingStream(); // Clean up if failed
-    }
-  };
-
-  const stopLocalRecordingStream = () => {
-    if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach(track => track.stop());
-        screenStreamRef.current = null;
-    }
-  };
-
-  const stopLocalRecording = () => {
-      if (mediaRecorderRef.current) {
-          mediaRecorderRef.current.stop();
-          setIsRecording(false);
-      }
-  };
-
 
   const toggleRecording = () => {
     if (isRecording) {
-      stopLocalRecording();
+      meeting.stopRecording();
     } else {
-      startLocalRecording();
+      meeting.startRecording({
+        layout: {
+          type: "SIDEBAR",
+          priority: "PIN",
+          gridSize: 3,
+        },
+        theme: "DARK",
+        webhookUrl: "", // Add your webhook URL here if you have one
+      });
     }
   };
 
@@ -1015,7 +949,6 @@ export default function MeetingPage() {
   };
   
   const MeetingUI = ({ meetingId, meetingInstance }: { meetingId: string, meetingInstance: any }) => {
-    const endButtonIsDisabled = isHost && isRecording;
     return (
         <div className="h-full flex flex-col">
             <CardHeader className="flex-row items-center justify-between">
@@ -1060,32 +993,25 @@ export default function MeetingPage() {
                  >
                     {isScreenSharing ? <ScreenShareOff /> : <ScreenShare />}
                 </Button>
-                <Button
-                    variant={isRecording ? 'destructive' : 'secondary'}
-                    size="icon"
-                    className="rounded-full h-12 w-12"
-                    onClick={toggleRecording}
-                    aria-label={isRecording ? 'Stop recording' : 'Start recording'}
-                >
-                    <Circle className={`h-6 w-6 ${isRecording ? 'fill-white' : 'fill-red-500'}`} />
-                </Button>
+                 {isHost && (
+                    <Button
+                        variant={isRecording ? 'destructive' : 'secondary'}
+                        size="icon"
+                        className="rounded-full h-12 w-12"
+                        onClick={toggleRecording}
+                        aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+                    >
+                        <Circle className={`h-6 w-6 ${isRecording ? 'fill-white' : 'fill-red-500'}`} />
+                    </Button>
+                )}
                 <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsInviteDialogOpen(true)}>
                     <UserPlus />
                 </Button>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <div className="ml-8">
-                             <Button variant="destructive" size="icon" className="rounded-full h-12 w-12" onClick={leaveOrEndMeeting} disabled={endButtonIsDisabled}>
-                                <PhoneOff />
-                            </Button>
-                        </div>
-                    </TooltipTrigger>
-                    {endButtonIsDisabled && (
-                        <TooltipContent>
-                            <p>Stop recording before ending the meeting.</p>
-                        </TooltipContent>
-                    )}
-                </Tooltip>
+                <div className="ml-8">
+                     <Button variant="destructive" size="icon" className="rounded-full h-12 w-12" onClick={leaveOrEndMeeting}>
+                        <PhoneOff />
+                    </Button>
+                </div>
             </CardFooter>
         </div>
     )
@@ -2117,3 +2043,5 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
         </Dialog>
     );
 };
+
+    
