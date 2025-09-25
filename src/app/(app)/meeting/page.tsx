@@ -903,7 +903,7 @@ export default function MeetingPage() {
     return filteredMessages.every(id => selectedMessages.includes(id.id));
   };
   
-  const ParticipantView = ({ participant, isSpeakerMuted }: { participant: any, isSpeakerMuted: boolean }) => {
+  const ParticipantView = ({ participant }: { participant: any }) => {
     const micRef = useRef<HTMLAudioElement>(null);
     const webcamRef = useRef<HTMLVideoElement>(null);
     const screenShareRef = useRef<HTMLVideoElement>(null);
@@ -924,8 +924,6 @@ export default function MeetingPage() {
 
         if (micRef.current) {
             micRef.current.srcObject = audioMediaStream;
-            // The user's own audio should always be muted on their client
-            micRef.current.muted = participant.isLocal;
             micRef.current.play().catch(e => { if (e.name !== 'AbortError') console.error("audio play error", e) });
         }
         
@@ -942,7 +940,7 @@ export default function MeetingPage() {
             if (stream.kind === 'audio') {
                 setMicOn(true);
                 audioStream = stream;
-                if (!participant.isLocal) audioMediaStream.addTrack(stream.track);
+                audioMediaStream.addTrack(stream.track);
             }
             if (stream.kind === 'video') {
                 setWebcamOn(true);
@@ -959,7 +957,7 @@ export default function MeetingPage() {
         const handleStreamDisabled = (stream: any) => {
             if (stream.kind === 'audio') {
                 setMicOn(false);
-                if (audioStream && !participant.isLocal) audioMediaStream.removeTrack(audioStream.track);
+                if (audioStream) audioMediaStream.removeTrack(audioStream.track);
                 audioStream = null;
             }
             if (stream.kind === 'video') {
@@ -974,8 +972,13 @@ export default function MeetingPage() {
             }
         };
 
-        const handleSpeakerChanged = ({ participantId }: { participantId: string }) => {
-            setIsSpeaking(participant.id === participantId);
+        const handleSpeakerChanged = (data: { participantId: string } | null) => {
+            if (data) {
+                const { participantId } = data;
+                setIsSpeaking(participant.id === participantId);
+            } else {
+                setIsSpeaking(false);
+            }
         };
         
         meeting?.on("speaker-changed", handleSpeakerChanged);
@@ -990,17 +993,15 @@ export default function MeetingPage() {
         };
     }, [participant]);
     
-    // Effect to control speaker muting based on the global state
     useEffect(() => {
-        if (micRef.current && !participant.isLocal) {
-            micRef.current.muted = isSpeakerMuted;
+        if (micRef.current) {
+            micRef.current.muted = participant.isLocal || isSpeakerMuted;
         }
     }, [isSpeakerMuted, participant.isLocal]);
 
 
     return (
       <div className={`relative aspect-video bg-muted rounded-lg overflow-hidden border-2 transition-all duration-300 ${isSpeaking ? 'border-primary shadow-lg shadow-primary/50' : 'border-transparent'}`}>
-        {/* The audio element is always rendered, but muted for the local user */}
         <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
@@ -1034,12 +1035,12 @@ export default function MeetingPage() {
                 )}
             </CardHeader>
             <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
-                {meetingInstance.localParticipant && <ParticipantView participant={meetingInstance.localParticipant} isSpeakerMuted={isSpeakerMuted} />}
+                {meetingInstance.localParticipant && <ParticipantView participant={meetingInstance.localParticipant} />}
                 {participants.map((participant: any) => (
-                    <ParticipantView key={participant.id} participant={participant} isSpeakerMuted={isSpeakerMuted} />
+                    <ParticipantView key={participant.id} participant={participant} />
                 ))}
             </CardContent>
-            <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
+            <CardFooter className="flex items-center justify-center gap-2 sm:gap-4 border-t pt-4">
                  <Button
                     variant={isMicOn ? 'secondary' : 'destructive'}
                     size="icon"
@@ -1058,7 +1059,22 @@ export default function MeetingPage() {
                 >
                     {isWebCamOn ? <Video /> : <VideoOff />}
                 </Button>
-                <Button
+                 <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant={isNoiseSuppressionOn ? 'default' : 'secondary'}
+                            size="icon"
+                            className="rounded-full h-12 w-12"
+                            onClick={toggleNoiseSuppression}
+                        >
+                            <Sparkles className={`h-6 w-6 ${isNoiseSuppressionOn ? 'text-yellow-400' : ''}`} />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>{isNoiseSuppressionOn ? 'Disable' : 'Enable'} Noise Suppression</p>
+                    </TooltipContent>
+                </Tooltip>
+                 <Button
                     variant={!isSpeakerMuted ? 'secondary' : 'destructive'}
                     size="icon"
                     className="rounded-full h-12 w-12"
@@ -1089,7 +1105,7 @@ export default function MeetingPage() {
                 <Button variant="secondary" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsInviteDialogOpen(true)}>
                     <UserPlus />
                 </Button>
-                <div className="ml-8">
+                <div className="ml-4 sm:ml-8">
                      <Button variant="destructive" size="icon" className="rounded-full h-12 w-12" onClick={leaveOrEndMeeting}>
                         <PhoneOff />
                     </Button>
@@ -2127,4 +2143,6 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
 };
 
     
+
+
 
