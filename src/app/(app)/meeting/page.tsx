@@ -925,9 +925,9 @@ export default function MeetingPage() {
             }
         };
 
-        const handleSpeakerChanged = ({ participantId }: { participantId: string } | null) => {
-            if (participantId) {
-                setIsSpeaking(participant.id === participantId);
+        const handleSpeakerChanged = (data: { participantId: string } | null) => {
+            if (data && data.participantId) {
+                setIsSpeaking(participant.id === data.participantId);
             } else {
                 setIsSpeaking(false);
             }
