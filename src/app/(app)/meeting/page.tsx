@@ -350,6 +350,7 @@ export default function MeetingPage() {
         try {
             if (isNoiseSuppressionOn) {
                 // Turn it OFF
+                await noiseSuppressor.stop();
                 const originalStream = await window.VideoSDK.createMicrophoneAudioTrack({});
                 await meeting.changeMic(originalStream);
                 setIsNoiseSuppressionOn(false);
@@ -359,6 +360,7 @@ export default function MeetingPage() {
                 if (!originalMicStream.current) {
                     originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
                 }
+                await noiseSuppressor.stop(); // Stop any previous processing
                 const processedStream = await noiseSuppressor.getNoiseSuppressedAudioStream(
                     originalMicStream.current
                 );
@@ -1005,7 +1007,7 @@ export default function MeetingPage() {
     
     return (
       <div className={`relative aspect-video bg-muted rounded-lg overflow-hidden border-2 transition-all duration-300 ${isSpeaking ? 'border-primary shadow-lg shadow-primary/50' : 'border-transparent'}`}>
-        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
+        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline />}
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
