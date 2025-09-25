@@ -207,10 +207,6 @@ export default function MeetingPage() {
         return;
     }
     
-    // Instantiate noise suppressor
-    const suppressor = new VideoSDKNoiseSuppressor();
-    setNoiseSuppressor(suppressor);
-    
     setIsHost(isInitiator);
     
     window.VideoSDK.config(VIDEOSDK_TOKEN);
@@ -292,24 +288,29 @@ export default function MeetingPage() {
 
  const toggleMic = async () => {
     if (!meeting) return;
-
     if (isMicOn) {
         meeting.muteMic();
         setIsMicOn(false);
     } else {
-        let stream;
-        if (isNoiseSuppressionOn && noiseSuppressor) {
-             if (!originalMicStream.current) {
-                originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
+        try {
+            let stream;
+            if (isNoiseSuppressionOn && noiseSuppressor) {
+                if (!originalMicStream.current) {
+                    originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
+                }
+                stream = await noiseSuppressor.getNoiseSuppressedAudioStream(originalMicStream.current);
+            } else {
+                stream = await window.VideoSDK.createMicrophoneAudioTrack({});
             }
-            stream = await noiseSuppressor.getNoiseSuppressedAudioStream(originalMicStream.current);
-        } else {
-            stream = await window.VideoSDK.createMicrophoneAudioTrack({});
+            await meeting.changeMic(stream);
+            setIsMicOn(true);
+        } catch (error) {
+            console.error("Error toggling mic:", error);
+            toast({ title: "Mic Error", description: "Could not re-enable microphone.", variant: "destructive" });
         }
-        await meeting.changeMic(stream);
-        setIsMicOn(true);
     }
 };
+
 
   const toggleWebcam = () => {
     if (isWebCamOn) {
@@ -345,26 +346,34 @@ export default function MeetingPage() {
   };
 
     const toggleNoiseSuppression = async () => {
-        if (!meeting || !noiseSuppressor) return;
-
+        if (!meeting) return;
+        
         try {
             if (isNoiseSuppressionOn) {
                 // Turn it OFF
-                await noiseSuppressor.stop();
+                if (noiseSuppressor) {
+                    await noiseSuppressor.destroy();
+                }
+                setNoiseSuppressor(null);
+                
                 const originalStream = await window.VideoSDK.createMicrophoneAudioTrack({});
+                originalMicStream.current = originalStream; // Update original stream ref
                 await meeting.changeMic(originalStream);
+
                 setIsNoiseSuppressionOn(false);
                 toast({ title: "Noise Suppression Disabled" });
             } else {
                 // Turn it ON
+                const newNoiseSuppressor = new VideoSDKNoiseSuppressor();
+                setNoiseSuppressor(newNoiseSuppressor);
+
                 if (!originalMicStream.current) {
                     originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
                 }
-                await noiseSuppressor.stop(); // Stop any previous processing
-                const processedStream = await noiseSuppressor.getNoiseSuppressedAudioStream(
-                    originalMicStream.current
-                );
+                
+                const processedStream = await newNoiseSuppressor.getNoiseSuppressedAudioStream(originalMicStream.current);
                 await meeting.changeMic(processedStream);
+
                 setIsNoiseSuppressionOn(true);
                 toast({ title: "Noise Suppression Enabled" });
             }
@@ -1007,7 +1016,7 @@ export default function MeetingPage() {
     
     return (
       <div className={`relative aspect-video bg-muted rounded-lg overflow-hidden border-2 transition-all duration-300 ${isSpeaking ? 'border-primary shadow-lg shadow-primary/50' : 'border-transparent'}`}>
-        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline />}
+        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline muted={false} />}
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -2139,3 +2148,4 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
 };
 
     
+
