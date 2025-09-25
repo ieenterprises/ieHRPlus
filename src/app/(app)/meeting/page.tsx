@@ -236,7 +236,9 @@ export default function MeetingPage() {
     });
 
      newMeeting.on("meeting-left", () => {
-        noiseSuppressor?.destroy();
+        if (noiseSuppressor) {
+          noiseSuppressor.destroy();
+        }
         originalMicStream.current?.getTracks().forEach(track => track.stop());
         originalMicStream.current = null;
         setNoiseSuppressor(null);
@@ -286,21 +288,19 @@ export default function MeetingPage() {
     }
   };
 
- const toggleMic = async () => {
+  const toggleMic = async () => {
     if (!meeting) return;
     if (isMicOn) {
         meeting.muteMic();
         setIsMicOn(false);
     } else {
         try {
-            let stream;
+            if (!originalMicStream.current) {
+                originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
+            }
+            let stream = originalMicStream.current;
             if (isNoiseSuppressionOn && noiseSuppressor) {
-                if (!originalMicStream.current) {
-                    originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
-                }
                 stream = await noiseSuppressor.getNoiseSuppressedAudioStream(originalMicStream.current);
-            } else {
-                stream = await window.VideoSDK.createMicrophoneAudioTrack({});
             }
             await meeting.changeMic(stream);
             setIsMicOn(true);
@@ -309,7 +309,7 @@ export default function MeetingPage() {
             toast({ title: "Mic Error", description: "Could not re-enable microphone.", variant: "destructive" });
         }
     }
-};
+  };
 
 
   const toggleWebcam = () => {
@@ -345,47 +345,48 @@ export default function MeetingPage() {
     }
   };
 
-    const toggleNoiseSuppression = async () => {
-        if (!meeting) return;
-        
-        try {
-            if (isNoiseSuppressionOn) {
-                // Turn it OFF
-                if (noiseSuppressor) {
-                    await noiseSuppressor.destroy();
-                }
-                setNoiseSuppressor(null);
-                
-                const originalStream = await window.VideoSDK.createMicrophoneAudioTrack({});
-                originalMicStream.current = originalStream; // Update original stream ref
-                await meeting.changeMic(originalStream);
+  const toggleNoiseSuppression = async () => {
+      if (!meeting) return;
+      
+      try {
+          if (isNoiseSuppressionOn) {
+              // Turn it OFF
+              if (noiseSuppressor) {
+                  noiseSuppressor.destroy(); // Correct cleanup
+              }
+              setNoiseSuppressor(null);
+              
+              if (!originalMicStream.current) {
+                  originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
+              }
+              await meeting.changeMic(originalMicStream.current);
 
-                setIsNoiseSuppressionOn(false);
-                toast({ title: "Noise Suppression Disabled" });
-            } else {
-                // Turn it ON
-                const newNoiseSuppressor = new VideoSDKNoiseSuppressor();
-                setNoiseSuppressor(newNoiseSuppressor);
-
-                if (!originalMicStream.current) {
-                    originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
-                }
-                
-                const processedStream = await newNoiseSuppressor.getNoiseSuppressedAudioStream(originalMicStream.current);
-                await meeting.changeMic(processedStream);
-
-                setIsNoiseSuppressionOn(true);
-                toast({ title: "Noise Suppression Enabled" });
-            }
-        } catch (error) {
-            console.error("Failed to toggle noise suppression", error);
-            toast({
-                variant: "destructive",
-                title: "Noise Suppression Error",
-                description: "Could not change the audio source."
-            });
-        }
-    };
+              setIsNoiseSuppressionOn(false);
+              toast({ title: "Noise Suppression Disabled" });
+          } else {
+              // Turn it ON
+              const newNoiseSuppressor = new VideoSDKNoiseSuppressor();
+              
+              if (!originalMicStream.current) {
+                  originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
+              }
+              
+              const processedStream = await newNoiseSuppressor.getNoiseSuppressedAudioStream(originalMicStream.current);
+              await meeting.changeMic(processedStream);
+              
+              setNoiseSuppressor(newNoiseSuppressor); // Store the new instance
+              setIsNoiseSuppressionOn(true);
+              toast({ title: "Noise Suppression Enabled" });
+          }
+      } catch (error) {
+          console.error("Failed to toggle noise suppression", error);
+          toast({
+              variant: "destructive",
+              title: "Noise Suppression Error",
+              description: "Could not change the audio source."
+          });
+      }
+  };
 
 
   const sendMeetingInvite = async (recipientId: string, id: string, fromChat: boolean) => {
@@ -1016,7 +1017,7 @@ export default function MeetingPage() {
     
     return (
       <div className={`relative aspect-video bg-muted rounded-lg overflow-hidden border-2 transition-all duration-300 ${isSpeaking ? 'border-primary shadow-lg shadow-primary/50' : 'border-transparent'}`}>
-        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline muted={false} />}
+        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -2148,4 +2149,6 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
 };
 
     
+
+
 
