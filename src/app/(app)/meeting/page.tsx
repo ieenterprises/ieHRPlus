@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -30,6 +31,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { FileManagerPickerDialog } from '@/components/file-manager-picker';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { uploadFile } from '@/lib/firebase-storage';
 
 
 type ChatMode = 'individual' | 'group';
@@ -119,6 +121,14 @@ export default function MeetingPage() {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isHost, setIsHost] = useState(false);
+  const [isRecordingDialogOpen, setIsRecordingDialogOpen] = useState(false);
+  const [lastRecording, setLastRecording] = useState<{ file: File; url: string; meetingId: string; } | null>(null);
+  const [isUploadingRecording, setIsUploadingRecording] = useState(false);
+
+  // Local screen recording refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const screenStreamRef = useRef<MediaStream | null>(null);
 
 
   useEffect(() => {
@@ -182,7 +192,7 @@ export default function MeetingPage() {
       }
   };
 
-  const joinMeeting = async (id: string, fromChat: boolean, isInitiator: boolean) => {
+  const joinMeeting = (id: string, fromChat: boolean, isInitiator: boolean) => {
     if (!VIDEOSDK_TOKEN || VIDEOSDK_TOKEN === "Your_Token_Here" || !loggedInUser) {
         toast({
           variant: "destructive",
@@ -237,18 +247,6 @@ export default function MeetingPage() {
     newMeeting.on("participant-left", (participant: any) => {
         setParticipants(prev => prev.filter(p => p.id !== participant.id));
     });
-    
-    newMeeting.on("recording-state-changed", (data: { status: string }) => {
-        const { status } = data;
-        if (status === "RECORDING_STARTING") {
-            setIsRecording(true);
-            toast({ title: "Recording Starting", description: "The meeting recording will begin shortly." });
-        } else if (status === "RECORDING_STOPPED") {
-            setIsRecording(false);
-            toast({ title: "Recording Stopped", description: "The meeting recording has been stopped." });
-        }
-    });
-
   };
   
   const handleCreateAndJoin = async (fromChat: boolean) => {
@@ -303,22 +301,79 @@ export default function MeetingPage() {
       setIsScreenSharing(!isScreenSharing);
   };
   
+  const startLocalRecording = async () => {
+    try {
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        const combinedStream = new MediaStream([
+            ...displayStream.getTracks(),
+            ...audioStream.getAudioTracks()
+        ]);
+        screenStreamRef.current = combinedStream;
+
+        mediaRecorderRef.current = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+        
+        mediaRecorderRef.current.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunksRef.current.push(event.data);
+            }
+        };
+
+        mediaRecorderRef.current.onstop = () => {
+            const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+            const currentMeetingId = meetingId || chatMeetingId || 'local_recording';
+            setLastRecording({
+                file: new File([blob], `recording_${currentMeetingId}.webm`, { type: 'video/webm' }),
+                url: URL.createObjectURL(blob),
+                meetingId: currentMeetingId,
+            });
+            setIsRecordingDialogOpen(true);
+            recordedChunksRef.current = [];
+            stopLocalRecordingStream();
+        };
+
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+        
+        displayStream.getVideoTracks()[0].onended = () => {
+             // Stop recording if user clicks "Stop sharing" in browser UI
+             if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                 stopLocalRecording();
+             }
+        };
+
+    } catch (err) {
+        console.error("Error starting screen recording:", err);
+        toast({
+            variant: "destructive",
+            title: "Screen Recording Failed",
+            description: "Could not start screen recording. Please ensure you have granted permissions."
+        });
+        stopLocalRecordingStream(); // Clean up if failed
+    }
+  };
+
+  const stopLocalRecordingStream = () => {
+    if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => track.stop());
+        screenStreamRef.current = null;
+    }
+  };
+
+  const stopLocalRecording = () => {
+      if (mediaRecorderRef.current) {
+          mediaRecorderRef.current.stop();
+          setIsRecording(false);
+      }
+  };
+
+
   const toggleRecording = () => {
     if (isRecording) {
-      meeting.stopRecording();
+      stopLocalRecording();
     } else {
-      const config = {
-          webhookUrl: "https://www.videosdk.live/callback",
-          awsDirPath: `/meeting-recordings/${meetingId || chatMeetingId}/`,
-          layout: {
-            type: "SIDEBAR",
-            priority: "PIN",
-            gridSize: 3,
-          },
-          theme: "DARK",
-          autostart: false,
-      };
-      meeting.startRecording(config);
+      startLocalRecording();
     }
   };
 
@@ -1106,6 +1161,32 @@ export default function MeetingPage() {
         setSelectedMailIds(currentMails.map(m => m.id));
     };
 
+    const handleUploadRecording = async () => {
+      if (!lastRecording || !loggedInUser?.businessId) return;
+      setIsUploadingRecording(true);
+      try {
+        const folderPath = 'meeting_recordings';
+        await uploadFile(loggedInUser.businessId, loggedInUser.id, folderPath, lastRecording.file);
+        toast({ title: 'Upload Complete', description: 'Recording saved to your "Meeting Recordings" folder.' });
+        setIsRecordingDialogOpen(false);
+        setLastRecording(null);
+      } catch (error) {
+        toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not save the recording.' });
+      } finally {
+        setIsUploadingRecording(false);
+      }
+    };
+  
+    const handleDownloadRecording = () => {
+      if (!lastRecording) return;
+      const a = document.createElement('a');
+      a.href = lastRecording.url;
+      a.download = lastRecording.file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+
     const myGroups = useMemo(() => groups.filter(g => g.members.some(m => m.id === loggedInUser?.id)), [groups, loggedInUser]);
 
   return (
@@ -1791,6 +1872,28 @@ export default function MeetingPage() {
         onSelect={(files) => setAttachments(prev => [...prev, ...files])}
         multiple
     />
+     <Dialog open={isRecordingDialogOpen} onOpenChange={(open) => { if (!open) setLastRecording(null); setIsRecordingDialogOpen(open); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Recording Complete</DialogTitle>
+            <DialogDescription>
+              Your meeting recording is ready. You can preview, download, or upload it to your File Manager.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {lastRecording?.url && (
+              <video src={lastRecording.url} controls className="w-full rounded-md" />
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={handleDownloadRecording}>Download</Button>
+            <Button onClick={handleUploadRecording} disabled={isUploadingRecording}>
+              {isUploadingRecording && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Upload to File Manager
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
