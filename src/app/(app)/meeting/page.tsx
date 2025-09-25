@@ -124,7 +124,6 @@ export default function MeetingPage() {
   const [isRecordingDialogOpen, setIsRecordingDialogOpen] = useState(false);
   const [lastRecording, setLastRecording] = useState<{ file: File; url: string; meetingId: string; } | null>(null);
   const [isUploadingRecording, setIsUploadingRecording] = useState(false);
-  const [isSpeakerMuted, setIsSpeakerMuted] = useState(false);
 
   // Local screen recording refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -914,7 +913,7 @@ export default function MeetingPage() {
     return filteredMessages.every(id => selectedMessages.includes(id.id));
   };
   
-  const ParticipantView = ({ participant, isSpeakerMuted }: { participant: any, isSpeakerMuted: boolean }) => {
+  const ParticipantView = ({ participant }: { participant: any }) => {
     const micRef = useRef<HTMLAudioElement>(null);
     const webcamRef = useRef<HTMLVideoElement>(null);
     const screenShareRef = useRef<HTMLVideoElement>(null);
@@ -993,15 +992,9 @@ export default function MeetingPage() {
         };
     }, [participant]);
 
-    useEffect(() => {
-        if (micRef.current) {
-            micRef.current.muted = isSpeakerMuted;
-        }
-    }, [isSpeakerMuted]);
-
     return (
       <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
-        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline muted={isSpeakerMuted} />}
+        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline />}
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -1035,9 +1028,9 @@ export default function MeetingPage() {
                 )}
             </CardHeader>
             <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
-                {meetingInstance.localParticipant && <ParticipantView participant={meetingInstance.localParticipant} isSpeakerMuted={isSpeakerMuted} />}
+                {meetingInstance.localParticipant && <ParticipantView participant={meetingInstance.localParticipant} />}
                 {participants.map((participant: any) => (
-                    <ParticipantView key={participant.id} participant={participant} isSpeakerMuted={isSpeakerMuted} />
+                    <ParticipantView key={participant.id} participant={participant} />
                 ))}
             </CardContent>
             <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
@@ -1066,15 +1059,6 @@ export default function MeetingPage() {
                     onClick={toggleScreenShare}
                  >
                     {isScreenSharing ? <ScreenShareOff /> : <ScreenShare />}
-                </Button>
-                <Button
-                    variant={!isSpeakerMuted ? 'secondary' : 'destructive'}
-                    size="icon"
-                    className="rounded-full h-12 w-12"
-                    onClick={() => setIsSpeakerMuted(!isSpeakerMuted)}
-                    aria-label={!isSpeakerMuted ? 'Mute speaker' : 'Unmute speaker'}
-                >
-                    {!isSpeakerMuted ? <Volume2 /> : <VolumeX />}
                 </Button>
                 <Button
                     variant={isRecording ? 'destructive' : 'secondary'}
@@ -2133,4 +2117,3 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
         </Dialog>
     );
 };
-
