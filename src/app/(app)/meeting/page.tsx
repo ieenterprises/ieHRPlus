@@ -295,12 +295,14 @@ export default function MeetingPage() {
         setIsMicOn(false);
     } else {
         try {
+            let stream;
             if (!originalMicStream.current) {
                 originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
             }
-            let stream = originalMicStream.current;
             if (isNoiseSuppressionOn && noiseSuppressor) {
                 stream = await noiseSuppressor.getNoiseSuppressedAudioStream(originalMicStream.current);
+            } else {
+                stream = originalMicStream.current;
             }
             await meeting.changeMic(stream);
             setIsMicOn(true);
@@ -309,7 +311,7 @@ export default function MeetingPage() {
             toast({ title: "Mic Error", description: "Could not re-enable microphone.", variant: "destructive" });
         }
     }
-  };
+};
 
 
   const toggleWebcam = () => {
@@ -347,34 +349,30 @@ export default function MeetingPage() {
 
   const toggleNoiseSuppression = async () => {
       if (!meeting) return;
-      
+
       try {
           if (isNoiseSuppressionOn) {
               // Turn it OFF
               if (noiseSuppressor) {
-                  noiseSuppressor.destroy(); // Correct cleanup
+                  noiseSuppressor.destroy();
               }
               setNoiseSuppressor(null);
-              
-              if (!originalMicStream.current) {
-                  originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
+              if (originalMicStream.current) {
+                  await meeting.changeMic(originalMicStream.current);
               }
-              await meeting.changeMic(originalMicStream.current);
-
               setIsNoiseSuppressionOn(false);
               toast({ title: "Noise Suppression Disabled" });
           } else {
               // Turn it ON
-              const newNoiseSuppressor = new VideoSDKNoiseSuppressor();
-              
               if (!originalMicStream.current) {
                   originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
               }
-              
-              const processedStream = await newNoiseSuppressor.getNoiseSuppressedAudioStream(originalMicStream.current);
+              const newNoiseSuppressor = new VideoSDKNoiseSuppressor();
+              const processedStream = await newNoiseSuppressor.getNoiseSuppressedAudioStream(
+                  originalMicStream.current
+              );
               await meeting.changeMic(processedStream);
-              
-              setNoiseSuppressor(newNoiseSuppressor); // Store the new instance
+              setNoiseSuppressor(newNoiseSuppressor);
               setIsNoiseSuppressionOn(true);
               toast({ title: "Noise Suppression Enabled" });
           }
@@ -1017,7 +1015,7 @@ export default function MeetingPage() {
     
     return (
       <div className={`relative aspect-video bg-muted rounded-lg overflow-hidden border-2 transition-all duration-300 ${isSpeaking ? 'border-primary shadow-lg shadow-primary/50' : 'border-transparent'}`}>
-        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
+        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline />}
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -1030,7 +1028,7 @@ export default function MeetingPage() {
           </div>
         )}
         <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded flex items-center gap-2">
-            {micOn ? <Mic className="h-3 w-3"/> : <MicOff className="h-3 w-3"/>}
+            {micOn && <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
             {participant.displayName}
         </div>
       </div>
@@ -2152,3 +2150,6 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
 
 
 
+
+
+    
