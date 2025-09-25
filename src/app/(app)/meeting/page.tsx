@@ -125,9 +125,6 @@ export default function MeetingPage() {
   const [lastRecording, setLastRecording] = useState<{ file: File; url: string; meetingId: string; } | null>(null);
   const [isUploadingRecording, setIsUploadingRecording] = useState(false);
 
-  // Noise Suppression states
-  const [isNoiseSuppressionOn, setIsNoiseSuppressionOn] = useState(false);
-
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
@@ -240,7 +237,6 @@ export default function MeetingPage() {
         setParticipants([]);
         setIsHost(false);
         setIsRecording(false);
-        setIsNoiseSuppressionOn(false);
     });
 
     newMeeting.on("participant-joined", (participant: any) => {
@@ -929,9 +925,8 @@ export default function MeetingPage() {
             }
         };
 
-        const handleSpeakerChanged = (data: { participantId: string } | null) => {
-            if (data) {
-                const { participantId } = data;
+        const handleSpeakerChanged = ({ participantId }: { participantId: string } | null) => {
+            if (participantId) {
                 setIsSpeaking(participant.id === participantId);
             } else {
                 setIsSpeaking(false);
@@ -1291,7 +1286,7 @@ export default function MeetingPage() {
                                           <Button variant="outline" size="icon" onClick={handleToggleSelectionMode}>
                                               <CheckSquare className="h-5 w-5" />
                                           </Button>
-                                          {activeChatMode === 'group' && selectedGroup?.creatorId === loggedInUser?.id && (
+                                          {activeChatMode === 'group' && selectedGroup?.members.some(m => m.id === loggedInUser?.id) && (
                                                 <AlertDialog>
                                                     <AlertDialogTrigger asChild>
                                                         <Button variant="destructive" size="icon" disabled={isDeletingGroup}>
@@ -2067,3 +2062,4 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
         </Dialog>
     );
 };
+
