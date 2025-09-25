@@ -392,7 +392,7 @@ export default function MeetingPage() {
       if (!loggedInUser || !recipientId || !id) return;
 
       const inviteLink = `/meeting?join=${id}${fromChat ? '&in-chat=true' : ''}`;
-      const inviteMessage = `${loggedInUser.name} is inviting you to a video call. <a href="${inviteLink}" class="text-blue-500 underline">Join Now</a>`;
+      const inviteMessage = `${loggedInUser.name} is inviting you to a video call. &lt;a href="${inviteLink}" class="text-blue-500 underline"&gt;Join Now&lt;/a&gt;`;
 
       const messageData: Omit<ChatMessage, 'id'> = {
           senderId: loggedInUser.id,
@@ -942,7 +942,6 @@ export default function MeetingPage() {
         const videoMediaStream = new MediaStream();
         const screenShareMediaStream = new MediaStream();
 
-
         if (micRef.current) {
             micRef.current.srcObject = audioMediaStream;
             micRef.current.play().catch(e => { if (e.name !== 'AbortError') console.error("audio play error", e) });
@@ -1407,7 +1406,7 @@ export default function MeetingPage() {
                                                 {msg.content && (
                                                     <div 
                                                         className={`rounded-lg px-3 py-2 break-words ${msg.senderId === loggedInUser?.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
-                                                        dangerouslySetInnerHTML={{ __html: msg.content.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ') }}
+                                                        dangerouslySetInnerHTML={{ __html: msg.content.replace(/&lt;a /g, '&lt;a target="_blank" rel="noopener noreferrer" ') }}
                                                     />
                                                 )}
                                                 {msg.attachments && msg.attachments.length > 0 && (
@@ -2128,33 +2127,3 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
         </Dialog>
     );
 };
-    
-
-    
-
-      
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
-
-
-
