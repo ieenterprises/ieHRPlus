@@ -299,7 +299,10 @@ export default function MeetingPage() {
     } else {
         let stream;
         if (isNoiseSuppressionOn && noiseSuppressor) {
-            stream = await noiseSuppressor.getNoiseSuppressedAudioStream();
+             if (!originalMicStream.current) {
+                originalMicStream.current = await window.VideoSDK.createMicrophoneAudioTrack({});
+            }
+            stream = await noiseSuppressor.getNoiseSuppressedAudioStream(originalMicStream.current);
         } else {
             stream = await window.VideoSDK.createMicrophoneAudioTrack({});
         }
@@ -1002,7 +1005,7 @@ export default function MeetingPage() {
     
     return (
       <div className={`relative aspect-video bg-muted rounded-lg overflow-hidden border-2 transition-all duration-300 ${isSpeaking ? 'border-primary shadow-lg shadow-primary/50' : 'border-transparent'}`}>
-        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline muted={false} />}
+        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -2132,3 +2135,5 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
         </Dialog>
     );
 };
+
+    
