@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff, Circle, Sparkles } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MessageSquare, Mail, Send, Search, Users, X, Trash2, Forward, MoreVertical, UserPlus, MessageCircleReply, CheckSquare, Paperclip, Loader2, Smile, Inbox, Reply, Upload, Folder, ScreenShareOff, Circle, Sparkles, Volume2, VolumeX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/hooks/use-settings';
 import { Input } from '@/components/ui/input';
@@ -125,6 +125,7 @@ export default function MeetingPage() {
   const [isRecordingDialogOpen, setIsRecordingDialogOpen] = useState(false);
   const [lastRecording, setLastRecording] = useState<{ file: File; url: string; meetingId: string; } | null>(null);
   const [isUploadingRecording, setIsUploadingRecording] = useState(false);
+  const [isSpeakerMuted, setIsSpeakerMuted] = useState(false);
 
   // Noise Suppression states
   const [noiseSuppressor, setNoiseSuppressor] = useState<VideoSDKNoiseSuppressor | null>(null);
@@ -228,7 +229,6 @@ export default function MeetingPage() {
         name: loggedInUser?.name || 'Guest',
         micEnabled: true,
         webcamEnabled: true,
-        customMicrophoneAudioTrack: originalMicStream.current, // Start with original stream
     });
     
     setMeeting(newMeeting); // Set meeting object to state
@@ -903,7 +903,7 @@ export default function MeetingPage() {
     return filteredMessages.every(id => selectedMessages.includes(id.id));
   };
   
-  const ParticipantView = ({ participant }: { participant: any }) => {
+  const ParticipantView = ({ participant, isSpeakerMuted }: { participant: any, isSpeakerMuted: boolean }) => {
     const micRef = useRef<HTMLAudioElement>(null);
     const webcamRef = useRef<HTMLVideoElement>(null);
     const screenShareRef = useRef<HTMLVideoElement>(null);
@@ -911,6 +911,7 @@ export default function MeetingPage() {
     const [micOn, setMicOn] = useState(false);
     const [webcamOn, setWebcamOn] = useState(false);
     const [screenShareOn, setScreenShareOn] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(false);
     
     useEffect(() => {
         let audioStream: MediaStream | null = null;
@@ -921,11 +922,13 @@ export default function MeetingPage() {
         const videoMediaStream = new MediaStream();
         const screenShareMediaStream = new MediaStream();
 
-
         if (micRef.current) {
             micRef.current.srcObject = audioMediaStream;
+            // The user's own audio should always be muted on their client
+            micRef.current.muted = participant.isLocal;
             micRef.current.play().catch(e => { if (e.name !== 'AbortError') console.error("audio play error", e) });
         }
+        
         if (webcamRef.current) {
             webcamRef.current.srcObject = videoMediaStream;
             webcamRef.current.play().catch(e => { if (e.name !== 'AbortError') console.error("video play error", e) });
@@ -970,21 +973,35 @@ export default function MeetingPage() {
                 screenShareStream = null;
             }
         };
-        
-        Array.from(participant.streams.values()).forEach((s: any) => handleStreamEnabled(s));
 
+        const handleSpeakerChanged = ({ participantId }: { participantId: string }) => {
+            setIsSpeaking(participant.id === participantId);
+        };
+        
+        meeting?.on("speaker-changed", handleSpeakerChanged);
+        Array.from(participant.streams.values()).forEach((s: any) => handleStreamEnabled(s));
         participant.on('stream-enabled', handleStreamEnabled);
         participant.on('stream-disabled', handleStreamDisabled);
         
         return () => {
+            meeting?.off("speaker-changed", handleSpeakerChanged);
             participant.off('stream-enabled', handleStreamEnabled);
             participant.off('stream-disabled', handleStreamDisabled);
         };
     }, [participant]);
+    
+    // Effect to control speaker muting based on the global state
+    useEffect(() => {
+        if (micRef.current && !participant.isLocal) {
+            micRef.current.muted = isSpeakerMuted;
+        }
+    }, [isSpeakerMuted, participant.isLocal]);
+
 
     return (
-      <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
-        {!participant.isLocal && <audio ref={micRef} autoPlay playsInline />}
+      <div className={`relative aspect-video bg-muted rounded-lg overflow-hidden border-2 transition-all duration-300 ${isSpeaking ? 'border-primary shadow-lg shadow-primary/50' : 'border-transparent'}`}>
+        {/* The audio element is always rendered, but muted for the local user */}
+        <audio ref={micRef} autoPlay playsInline muted={participant.isLocal} />
         <video ref={screenShareRef} autoPlay playsInline className={`h-full w-full object-contain ${screenShareOn ? 'block' : 'hidden'}`} />
         <video ref={webcamRef} autoPlay playsInline className={`h-full w-full object-cover ${!screenShareOn && webcamOn ? 'block' : 'hidden'}`} />
         
@@ -1017,9 +1034,9 @@ export default function MeetingPage() {
                 )}
             </CardHeader>
             <CardContent className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
-                {meetingInstance.localParticipant && <ParticipantView participant={meetingInstance.localParticipant} />}
+                {meetingInstance.localParticipant && <ParticipantView participant={meetingInstance.localParticipant} isSpeakerMuted={isSpeakerMuted} />}
                 {participants.map((participant: any) => (
-                    <ParticipantView key={participant.id} participant={participant} />
+                    <ParticipantView key={participant.id} participant={participant} isSpeakerMuted={isSpeakerMuted} />
                 ))}
             </CardContent>
             <CardFooter className="flex items-center justify-center gap-4 border-t pt-4">
@@ -1041,13 +1058,14 @@ export default function MeetingPage() {
                 >
                     {isWebCamOn ? <Video /> : <VideoOff />}
                 </Button>
-                <Button 
-                    variant={isNoiseSuppressionOn ? 'default' : 'secondary'} 
-                    size="icon" 
+                <Button
+                    variant={!isSpeakerMuted ? 'secondary' : 'destructive'}
+                    size="icon"
                     className="rounded-full h-12 w-12"
-                    onClick={toggleNoiseSuppression}
+                    onClick={() => setIsSpeakerMuted(prev => !prev)}
+                    aria-label={!isSpeakerMuted ? 'Mute Speaker' : 'Unmute Speaker'}
                 >
-                    <Sparkles />
+                    {!isSpeakerMuted ? <Volume2 /> : <VolumeX />}
                 </Button>
                  <Button 
                     variant={isScreenSharing ? 'default' : 'secondary'} 
@@ -2109,3 +2127,4 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail }: { is
 };
 
     
+
