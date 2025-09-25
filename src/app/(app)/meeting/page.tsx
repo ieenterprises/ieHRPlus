@@ -122,13 +122,6 @@ export default function MeetingPage() {
   const [isMeetingRecording, setIsMeetingRecording] = useState(false);
   const [isHost, setIsHost] = useState(false);
   
-  // Screen Recording States
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const screenStreamRef = useRef<MediaStream | null>(null);
-  const [isScreenRecording, setIsScreenRecording] = useState(false);
-  const [lastRecording, setLastRecording] = useState<{ file: File; url: string; } | null>(null);
-  const [isRecordingDialogOpen, setIsRecordingDialogOpen] = useState(false);
-  const [isUploadingRecording, setIsUploadingRecording] = useState(false);
 
 
   useEffect(() => {
@@ -325,95 +318,7 @@ export default function MeetingPage() {
   };
 
   // Screen Recording Logic
-  const startScreenRecording = async () => {
-    try {
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        const combinedStream = new MediaStream([
-            ...displayStream.getVideoTracks(),
-            ...audioStream.getAudioTracks()
-        ]);
-
-        screenStreamRef.current = combinedStream;
-
-        const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
-        const chunks: Blob[] = [];
-
-        recorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                chunks.push(event.data);
-            }
-        };
-
-        recorder.onstop = () => {
-            const blob = new Blob(chunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            const file = new File([blob], `Screen-Recording-${Date.now()}.webm`, { type: 'video/webm' });
-            
-            setLastRecording({ file, url });
-            setIsRecordingDialogOpen(true);
-
-            // Stop all tracks to end sharing indicators
-            screenStreamRef.current?.getTracks().forEach(track => track.stop());
-            screenStreamRef.current = null;
-        };
-
-        mediaRecorderRef.current = recorder;
-        recorder.start();
-        setIsScreenRecording(true);
-        toast({ title: 'Screen Recording Started', description: 'Sharing has begun. Click the button again to stop.' });
-
-    } catch (err) {
-        console.error("Error starting screen recording:", err);
-        toast({
-            variant: "destructive",
-            title: "Could Not Start Recording",
-            description: "You may have cancelled the request or an error occurred.",
-        });
-    }
-  };
-
-  const stopScreenRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setIsScreenRecording(false);
-  };
-
-  const toggleScreenRecording = () => {
-    if (isScreenRecording) {
-      stopScreenRecording();
-    } else {
-      startScreenRecording();
-    }
-  };
-
-  const handleUploadRecording = async () => {
-    if (!lastRecording || !loggedInUser?.businessId || !loggedInUser?.id) return;
-    setIsUploadingRecording(true);
-    try {
-      const folderPath = `Screen Recordings`;
-      await uploadFile(loggedInUser.businessId, loggedInUser.id, folderPath, lastRecording.file);
-      toast({ title: 'Upload Complete', description: 'Recording saved to your "Screen Recordings" folder.' });
-      setIsRecordingDialogOpen(false);
-      setLastRecording(null);
-    } catch (error) {
-      toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not save the recording.' });
-    } finally {
-      setIsUploadingRecording(false);
-    }
-  };
-
-  const handleDownloadRecording = () => {
-    if (!lastRecording) return;
-    const a = document.createElement('a');
-    a.href = lastRecording.url;
-    a.download = lastRecording.file.name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-
+  
 
   const sendMeetingInvite = async (recipientId: string, id: string, fromChat: boolean) => {
       if (!loggedInUser || !recipientId || !id) return;
@@ -1020,9 +925,9 @@ export default function MeetingPage() {
             }
         };
 
-        const handleSpeakerChanged = (data: { participantId: string } | null) => {
-            if (data && data.participantId) {
-                setIsSpeaking(participant.id === data.participantId);
+        const handleSpeakerChanged = ({ participantId }: { participantId: string } | null) => {
+            if (participantId) {
+                setIsSpeaking(participant.id === participantId);
             } else {
                 setIsSpeaking(false);
             }
@@ -1106,15 +1011,6 @@ export default function MeetingPage() {
                     onClick={toggleScreenShare}
                  >
                     {isScreenSharing ? <ScreenShareOff /> : <ScreenShare />}
-                </Button>
-                <Button
-                    variant={isScreenRecording ? 'destructive' : 'secondary'}
-                    size="icon"
-                    className="rounded-full h-12 w-12"
-                    onClick={toggleScreenRecording}
-                    aria-label={isScreenRecording ? 'Stop Screen Recording' : 'Start Screen Recording'}
-                >
-                    <Clapperboard className={`h-6 w-6 ${isScreenRecording ? 'fill-white' : ''}`} />
                 </Button>
                  {isHost && (
                     <Button
@@ -1895,28 +1791,7 @@ export default function MeetingPage() {
         onSelect={(files) => setAttachments(prev => [...prev, ...files])}
         multiple
     />
-     <Dialog open={isRecordingDialogOpen} onOpenChange={(open) => { if (!open) setLastRecording(null); setIsRecordingDialogOpen(open); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Screen Recording Complete</DialogTitle>
-            <DialogDescription>
-              Your screen recording is ready. You can preview, download, or upload it to your File Manager.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            {lastRecording?.url && (
-              <video src={lastRecording.url} controls className="w-full rounded-md" />
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="secondary" onClick={handleDownloadRecording}><Download className="mr-2 h-4 w-4"/>Download</Button>
-            <Button onClick={handleUploadRecording} disabled={isUploadingRecording}>
-              {isUploadingRecording && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Upload to File Manager
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+     
     </div>
   );
 }
