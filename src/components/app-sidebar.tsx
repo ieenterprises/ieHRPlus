@@ -150,11 +150,12 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarMenu>
           {visibleNavItems.map((item) => {
+            const isActive = pathname === item.href;
             const isDisabled = item.offlineDisabled && !isOnline;
             const button = (
               <SidebarMenuButton
                 asChild
-                isActive={pathname === item.href}
+                isActive={isActive}
                 tooltip={item.label}
                 disabled={isDisabled}
               >
