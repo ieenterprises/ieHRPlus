@@ -49,7 +49,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { TimeRecord, User } from "@/lib/types";
 import { format, formatDistanceToNow, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Loader2, Calendar as CalendarIcon, Download, Trash2, Search } from "lucide-react";
+import { Eye, EyeOff, Loader2, Calendar as CalendarIcon, Download, Trash2, Search, LogOut as LogOutIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -171,6 +171,29 @@ export default function SessionsPage() {
         setIsVerifying(false);
     }
   };
+  
+  const handleClockOut = async (session: ActiveSession) => {
+    if (!session || !session.id) return;
+
+    try {
+        const sessionRef = doc(db, 'timeRecords', session.id);
+        await updateDoc(sessionRef, {
+            status: 'Clocked Out',
+            clockOutTime: new Date().toISOString()
+        });
+        toast({
+            title: "User Clocked Out",
+            description: `${session.user?.name || 'The user'} has been clocked out successfully.`
+        });
+    } catch (error: any) {
+        toast({
+            title: "Clock Out Failed",
+            description: error.message,
+            variant: "destructive"
+        });
+    }
+  };
+
 
   const handleCloseDialog = () => {
     setSelectedSession(null);
@@ -382,10 +405,33 @@ export default function SessionsPage() {
                       <TableCell>
                         {session.clockOutTime 
                             ? format(new Date(session.clockOutTime), "MMM d, h:mm a")
-                            : "-"
+                            : <Badge variant="secondary">Active</Badge>
                         }
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-2">
+                        {isSeniorStaff && session.status !== 'Clocked Out' && (
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="sm" disabled={session.userId === loggedInUser?.id}>
+                                        <LogOutIcon className="mr-2 h-4 w-4" /> Clock Out
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This will manually clock out {session.user?.name}. This action cannot be undone.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleClockOut(session)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                            Confirm Clock Out
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        )}
                         <Button 
                             variant="outline" 
                             size="sm" 
