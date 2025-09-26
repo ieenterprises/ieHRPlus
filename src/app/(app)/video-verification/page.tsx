@@ -127,7 +127,7 @@ export default function VideoVerificationPage() {
       const videoFile = new File([recordedVideo], fileName, { type: "video/webm" });
       
       // 1. Upload the file using the existing function
-      await uploadFile(loggedInUser.businessId, loggedInUser.id, videoFolder, videoFile);
+      await uploadFile(loggedInUser.businessId, loggedInUser.id, videoFolder, videoFile, loggedInUser.id);
 
       // 2. Get the public URL of the uploaded file
       const fullPath = [loggedInUser.businessId, 'user_files', loggedInUser.id, videoFolder, fileName].join('/');
