@@ -294,12 +294,13 @@ export default function DashboardPage() {
 
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (event.target.files && loggedInUser?.businessId) {
+      if (event.target.files && loggedInUser?.businessId && loggedInUser?.id) {
           const fileList = Array.from(event.target.files);
           const uploadPromises = fileList.map(async (file) => {
-                const folder = `request_attachments/${loggedInUser.id}`;
-                await uploadFile(loggedInUser.businessId!, folder, file, () => {});
-                const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
+                const folder = `request_attachments`;
+                await uploadFile(loggedInUser.businessId!, loggedInUser.id!, folder, file, () => {});
+                const fullPath = [loggedInUser.businessId, 'user_files', loggedInUser.id, folder, file.name].join('/');
+                const url = await getPublicUrl(loggedInUser.businessId!, fullPath);
                 return { name: file.name, url };
           });
           const newAttachments = await Promise.all(uploadPromises);
@@ -312,12 +313,13 @@ export default function DashboardPage() {
     };
 
   const handleResponseFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (event.target.files && loggedInUser?.businessId) {
+      if (event.target.files && loggedInUser?.businessId && loggedInUser?.id) {
           const fileList = Array.from(event.target.files);
           const uploadPromises = fileList.map(async (file) => {
-              const folder = `hr_query_responses/${loggedInUser.id}`;
-              await uploadFile(loggedInUser.businessId!, folder, file, () => {});
-              const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${file.name}`);
+              const folder = `hr_query_responses`;
+              await uploadFile(loggedInUser.businessId!, loggedInUser.id!, folder, file, () => {});
+              const fullPath = [loggedInUser.businessId, 'user_files', loggedInUser.id, folder, file.name].join('/');
+              const url = await getPublicUrl(loggedInUser.businessId!, fullPath);
               return { name: file.name, url };
           });
           const newAttachments = await Promise.all(uploadPromises);
@@ -1043,7 +1045,7 @@ export default function DashboardPage() {
                 {respondingQuery.attachments && respondingQuery.attachments.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Attachments from Requester</Label>
-                    <AttachmentPreviewer attachments={respondingQuery.attachments} />
+                    <AttachmentPreviewer attachments={respondingQuery.attachments} onRemove={undefined} />
                   </div>
                 )}
                 <div className="grid items-start gap-4">
@@ -1073,7 +1075,7 @@ export default function DashboardPage() {
                 {respondingQuery.status === 'Responded' && respondingQuery.responseAttachments && respondingQuery.responseAttachments.length > 0 && (
                     <div className="space-y-2">
                         <Label className="text-muted-foreground">Your Submitted Attachments</Label>
-                        <AttachmentPreviewer attachments={respondingQuery.responseAttachments} />
+                        <AttachmentPreviewer attachments={respondingQuery.responseAttachments} onRemove={undefined} />
                     </div>
                 )}
               </div>
@@ -1116,7 +1118,7 @@ export default function DashboardPage() {
                 {viewingReward.attachments && viewingReward.attachments.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Attachments</Label>
-                    <AttachmentPreviewer attachments={viewingReward.attachments} />
+                    <AttachmentPreviewer attachments={viewingReward.attachments} onRemove={undefined} />
                   </div>
                 )}
               </div>
