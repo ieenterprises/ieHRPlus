@@ -28,7 +28,7 @@ export default function RootLayout({
       <body className={cn("font-body antialiased", inter.variable)}>
         {children}
         <Toaster />
-        <script src="https://sdk.videosdk.live/js-sdk/0.1.6/videosdk.js"></script>
+        <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
       </body>
     </html>
   );

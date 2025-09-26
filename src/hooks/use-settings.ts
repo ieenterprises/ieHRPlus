@@ -5,7 +5,7 @@
 import { createContext, useContext, useState, ReactNode, createElement, useEffect, useCallback, useRef } from 'react';
 import { collection, onSnapshot, doc, getDoc, writeBatch, where, query, getDocs, addDoc, updateDoc, deleteDoc, setDoc, limit, orderBy } from "firebase/firestore";
 import type { AnyPermission } from '@/lib/permissions';
-import type { User, BranchType, PosDeviceType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode, OfflineAction, TimeRecord, UserRequest, HRQuery, Reward, Department, Group } from '@/lib/types';
+import type { User, BranchType, PosDeviceType, Role, PrinterType, ReceiptSettings, Tax, Sale, Debt, Reservation, Category, Product, OpenTicket, VoidedLog, UserRole, SaleItem, Shift, AccessCode, OfflineAction, TimeRecord, UserRequest, HRQuery, Reward, Department, Group, ChatMessage, InternalMail } from '@/lib/types';
 import { fileManagementPermissions, teamManagementPermissions, settingsPermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
@@ -51,6 +51,8 @@ type SettingsContextType = {
     hrQueries: HRQuery[];
     rewards: Reward[];
     groups: Group[];
+    unreadChatCount: number;
+    unreadMailCount: number;
     
     // Data setters (now write to DB)
     setFeatureSettings: (value: React.SetStateAction<FeatureSettings>) => void;
@@ -126,16 +128,19 @@ type SettingsContextType = {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 const useLocalStorage = <T,>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
-    const [value, setValue] = useState<T>(() => {
-        if (typeof window === 'undefined') return defaultValue;
+    const [value, setValue] = useState<T>(defaultValue);
+
+    useEffect(() => {
+        // This effect runs only on the client
         try {
             const item = window.localStorage.getItem(key);
-            return item ? JSON.parse(item) : defaultValue;
+            if (item) {
+                setValue(JSON.parse(item));
+            }
         } catch (error) {
-            console.error(`Error parsing localStorage key "${key}":`, error);
-            return defaultValue;
+            console.error(`Error reading localStorage key "${key}":`, error);
         }
-    });
+    }, [key]);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -173,6 +178,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [groups, setGroupsState] = useState<Group[]>([]);
     const [currency, setCurrencyState] = useState<string>('$');
     const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
+    const [unreadChatCount, setUnreadChatCount] = useState(0);
+    const [unreadMailCount, setUnreadMailCount] = useState(0);
     
     const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
@@ -294,6 +301,29 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         });
                         subscriptions.push(unsubscribe);
                     });
+
+                    // Specific listener for unread chat messages
+                    const chatQuery = query(
+                        collection(db, 'chatMessages'),
+                        where('businessId', '==', businessId),
+                        where('receiverId', '==', user.uid),
+                        where('isRead', '==', false)
+                    );
+                    const chatUnsub = onSnapshot(chatQuery, (snapshot) => {
+                        const uniqueSenders = new Set(snapshot.docs.map(doc => doc.data().senderId));
+                        setUnreadChatCount(uniqueSenders.size);
+                    });
+                    subscriptions.push(chatUnsub);
+
+                     // Specific listener for unread mail messages
+                    const mailQuery = query(collection(db, 'internal_mails'), where('businessId', '==', businessId));
+                    const mailUnsub = onSnapshot(mailQuery, (snapshot) => {
+                      const allMails = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InternalMail));
+                      const inboxMails = allMails.filter(m => m.toRecipients.some(r => r.id === user.uid) || m.ccRecipients.some(r => r.id === user.uid));
+                      const unread = inboxMails.filter(m => !m.readBy || !m.readBy[user.uid]).length;
+                      setUnreadMailCount(unread);
+                    });
+                    subscriptions.push(mailUnsub);
 
                     const settingsDocRef = doc(db, 'settings', businessId);
                     const settingsUnsub = onSnapshot(settingsDocRef, (doc) => {
@@ -665,7 +695,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         deleteProduct,
         deleteVoidedLog,
         restoreVoidedLog,
-        setDepartments
+        setDepartments,
+        unreadChatCount,
+        unreadMailCount,
     };
 
     return createElement(SettingsContext.Provider, { value }, children);
@@ -680,6 +712,7 @@ export function useSettings() {
 }
 
     
+
 
 
 
