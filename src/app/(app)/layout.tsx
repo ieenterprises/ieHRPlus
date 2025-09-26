@@ -26,7 +26,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
   }, [loggedInUser, loadingUser, router, isMounted]);
 
   // Special pages that don't need the main layout
-  if (pathname === '/pdf-viewer' || pathname === '/video-verification') {
+  if (pathname === '/pdf-viewer' || pathname === '/video-verification' || pathname === '/verify-prompt') {
     return <>{children}</>;
   }
 

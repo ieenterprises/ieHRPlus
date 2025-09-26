@@ -121,10 +121,10 @@ export default function SignInPage() {
 
       toast({
           title: "Signed In Successfully",
-          description: `Proceeding to video verification.`,
+          description: `Please proceed to video verification.`,
       });
       
-      router.push("/video-verification");
+      router.push("/verify-prompt");
 
     } catch (error: any) {
       setIsLoading(false);
