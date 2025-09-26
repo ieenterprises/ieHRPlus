@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Search, Send, Video, Paperclip, MoreVertical, X, CheckSquare, Trash2, Loader2, Users, MessageCircleReply, Forward, Smile, Folder, Upload, MessageSquare } from 'lucide-react';
+import { Search, Send, Paperclip, MoreVertical, X, CheckSquare, Trash2, Loader2, Users, MessageCircleReply, Forward, Smile, Folder, Upload, MessageSquare } from 'lucide-react';
 import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -327,7 +327,7 @@ export function ChatClient() {
                                     </AlertDialog>
                                 </>) : (<>
                                     <Button variant="outline" size="icon" onClick={() => setIsSelectionMode(true)}><CheckSquare className="h-5 w-5" /></Button>
-                                    {activeChatMode === 'group' && selectedGroup?.creatorId === loggedInUser?.id && (<AlertDialog>
+                                    {activeChatMode === 'group' && selectedGroup?.members.some(m => m.id === loggedInUser?.id) && (<AlertDialog>
                                         <AlertDialogTrigger asChild><Button variant="destructive" size="icon" disabled={isDeletingGroup}>{isDeletingGroup ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4" />}</Button></AlertDialogTrigger>
                                         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Group?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the group and all its messages.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteGroup} className="bg-destructive hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
                                     </AlertDialog>)}
@@ -386,5 +386,3 @@ export function ChatClient() {
         </Card>
     );
 }
-
-    
