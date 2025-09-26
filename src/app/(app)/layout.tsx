@@ -12,25 +12,27 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
   const { loggedInUser, loadingUser } = useSettings();
   const router = useRouter();
   const pathname = usePathname();
-  const [isClient, setIsClient] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    setIsClient(true);
+    setIsMounted(true);
   }, []);
 
   useEffect(() => {
-    // If we're on the client, not loading, and there's no user, redirect to sign-in.
-    if (isClient && !loadingUser && !loggedInUser) {
+    // Redirect logic should only run on the client after mount
+    if (isMounted && !loadingUser && !loggedInUser) {
       router.push("/sign-in");
     }
-  }, [loggedInUser, loadingUser, router, isClient]);
-  
-  // Conditionally render layout for pdf-viewer or video-verification
+  }, [loggedInUser, loadingUser, router, isMounted]);
+
+  // Special pages that don't need the main layout
   if (pathname === '/pdf-viewer' || pathname === '/video-verification') {
     return <>{children}</>;
   }
 
-  if (loadingUser || !isClient) {
+  // Always show a loading indicator on the server and initial client render
+  // before the component has mounted.
+  if (!isMounted || loadingUser) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <p>Loading...</p>
@@ -38,10 +40,12 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // After mounting, if there's no user, we can return null while the redirect happens.
   if (!loggedInUser) {
-    return null; // or a redirect component
+    return null;
   }
   
+  // After mounting and if the user is logged in, render the full layout.
   return (
     <SidebarProvider>
       <AppSidebar />
