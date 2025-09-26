@@ -97,9 +97,9 @@ export default function SignInPage() {
       if (sessionForTodayExists) {
           toast({
               title: "Welcome Back!",
-              description: "You already have an active session for today.",
+              description: "You already have an active session for today. Proceed to verification.",
           });
-          router.push("/dashboard");
+          router.push("/verify-prompt");
           return; // Stop execution to prevent new clock-in
       }
       // --- End of Logic ---
