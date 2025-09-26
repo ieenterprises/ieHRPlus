@@ -159,7 +159,7 @@ export function MailClient() {
                 </CardHeader>
                 <ScrollArea className="flex-1 p-6">
                     {viewingMail.forwardedFrom && (<div className="text-xs text-muted-foreground border-l-2 pl-2 mb-4"><p>---------- Forwarded message ---------</p><p>From: {viewingMail.forwardedFrom.senderName}</p><p>Date: {viewingMail.forwardedFrom.date}</p></div>)}
-                    <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap">{viewingMail.body}</div>
+                    <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: viewingMail.body.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ') }} />
                     {viewingMail.attachments && viewingMail.attachments.length > 0 && (<div className="mt-6"><h4 className="font-semibold mb-2">Attachments</h4><AttachmentPreviewer attachments={viewingMail.attachments} /></div>)}
                 </ScrollArea>
                 <CardFooter className="border-t pt-4"><Button onClick={() => handleOpenCompose({ replyTo: viewingMail })}><Reply className="mr-2 h-4 w-4" /> Reply</Button></CardFooter>
@@ -301,3 +301,5 @@ const RecipientInput = ({ label, recipients, onToggle, allUsers, search, onSearc
         </Popover>
     </div>
 );
+
+    
