@@ -139,24 +139,22 @@ export function HRQueryTable() {
     }
 
     try {
-        // Upload any newly selected local files
-        const newAttachments = await Promise.all(
-            (attachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
-                const tempFolder = `hr_query_attachments/${loggedInUser.id}`;
-                await uploadFile(loggedInUser.businessId!, tempFolder, attachment.file, () => {});
-                const url = await getPublicUrl(loggedInUser.businessId!, `${tempFolder}/${attachment.file.name}`);
-                
-                const personalDocsFolder = `documents`;
-                await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, attachment.file, () => {});
-                return { name: attachment.name, url };
-            })
-        );
-        
-        const finalAttachments = [
-            ...attachments.filter(a => !(a as any).source),
-            ...newAttachments
-        ];
+        // Handle attachments from both file manager (already has URL) and local upload
+        const attachmentPromises = attachments.map(async (attachment) => {
+            if ((attachment as any).source === 'local') {
+                const file = (attachment as any).file as File;
+                const personalDocsFolder = 'documents';
+                // Upload to the assignee's personal document folder
+                await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, file);
+                // Get the public URL for the newly uploaded file
+                const url = await getPublicUrl(loggedInUser.businessId!, `${loggedInUser.businessId}/user_files/${assigneeUser.id}/${personalDocsFolder}/${file.name}`);
+                return { name: file.name, url };
+            }
+            // If from file manager, it already has the correct name and url
+            return attachment;
+        });
 
+        const finalAttachments = await Promise.all(attachmentPromises);
 
         const newQuery: Omit<HRQuery, 'id'> & { amount?: number } = {
             requesterId: loggedInUser.id,
@@ -509,3 +507,5 @@ export function HRQueryTable() {
     </>
   );
 }
+
+    

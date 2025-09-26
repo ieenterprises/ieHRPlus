@@ -139,23 +139,18 @@ export function RewardTable() {
     }
 
     try {
-         // Upload any newly selected local files
-        const newAttachments = await Promise.all(
-            (attachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
-                const tempFolder = `reward_attachments/${loggedInUser.id}`;
-                await uploadFile(loggedInUser.businessId!, tempFolder, attachment.file, () => {});
-                const url = await getPublicUrl(loggedInUser.businessId!, `${tempFolder}/${attachment.file.name}`);
+        const attachmentPromises = attachments.map(async (attachment) => {
+            if ((attachment as any).source === 'local') {
+                const file = (attachment as any).file as File;
+                const personalDocsFolder = 'documents';
+                await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, file);
+                const url = await getPublicUrl(loggedInUser.businessId!, `${loggedInUser.businessId}/user_files/${assigneeUser.id}/${personalDocsFolder}/${file.name}`);
+                return { name: file.name, url };
+            }
+            return attachment;
+        });
 
-                const personalDocsFolder = `documents`;
-                await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, attachment.file, () => {});
-                return { name: attachment.name, url };
-            })
-        );
-        
-        const finalAttachments = [
-            ...attachments.filter(a => !(a as any).source),
-            ...newAttachments
-        ];
+        const finalAttachments = await Promise.all(attachmentPromises);
 
         const newReward: Omit<Reward, 'id'> & { amount?: number } = {
             proposerId: loggedInUser.id,
@@ -488,3 +483,5 @@ export function RewardTable() {
     </>
   );
 }
+
+    
