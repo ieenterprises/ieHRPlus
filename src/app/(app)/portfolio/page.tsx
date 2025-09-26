@@ -50,6 +50,25 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+const calculateExpectedWorkHours = (user: User) => {
+    if (!user.defaultClockInTime || !user.defaultClockOutTime) return "-";
+    const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
+    const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
+
+    const clockInDate = new Date();
+    clockInDate.setHours(inHours, inMinutes, 0, 0);
+
+    const clockOutDate = new Date();
+    clockOutDate.setHours(outHours, outMinutes, 0, 0);
+
+    if (clockOutDate < clockInDate) { // Handles overnight shifts
+        clockOutDate.setDate(clockOutDate.getDate() + 1);
+    }
+    
+    const duration = intervalToDuration({ start: clockInDate, end: clockOutDate });
+    return `${duration.hours || 0}h ${duration.minutes || 0}m`;
+  };
+
 export default function PortfolioPage() {
   const { users, currency, loggedInUser, hrQueries, rewards } = useSettings();
   const [searchTerm, setSearchTerm] = useState("");
@@ -277,26 +296,6 @@ export default function PortfolioPage() {
         toast({ title: "Deletion Failed", description: e.message, variant: "destructive" });
     }
   };
-  
-  const calculateExpectedWorkHours = (user: User) => {
-    if (!user.defaultClockInTime || !user.defaultClockOutTime) return "-";
-    const [inHours, inMinutes] = user.defaultClockInTime.split(':').map(Number);
-    const [outHours, outMinutes] = user.defaultClockOutTime.split(':').map(Number);
-
-    const clockInDate = new Date();
-    clockInDate.setHours(inHours, inMinutes, 0, 0);
-
-    const clockOutDate = new Date();
-    clockOutDate.setHours(outHours, outMinutes, 0, 0);
-
-    if (clockOutDate < clockInDate) { // Handles overnight shifts
-        clockOutDate.setDate(clockOutDate.getDate() + 1);
-    }
-    
-    const duration = intervalToDuration({ start: clockInDate, end: clockOutDate });
-    return `${duration.hours || 0}h ${duration.minutes || 0}m`;
-  };
-
 
   return (
     <div className="space-y-8">
@@ -388,128 +387,132 @@ export default function PortfolioPage() {
 
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && handleCloseDialog()}>
           <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-            <DialogHeader>
-                <DialogTitle>Portfolio: {editingUser?.name}</DialogTitle>
-                <DialogDescription>View and manage this employee's details and documents.</DialogDescription>
-            </DialogHeader>
-            {editingUser && (
+              {editingUser && (
               <form onSubmit={handleSaveChanges} className="flex-1 min-h-0 flex flex-col">
-                <div className="grid md:grid-cols-2 gap-8 py-4 flex-1 min-h-0">
-                    {/* Left Column: Details & Photo */}
-                    <div className="space-y-6">
-                        <Card>
-                            <CardHeader><CardTitle>Profile Details</CardTitle></CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="relative w-24 h-24">
-                                        <Image src={editingUser.avatar_url || 'https://placehold.co/100x100.png'} alt={editingUser.name} fill className="rounded-full object-cover" data-ai-hint="person portrait" />
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <Label htmlFor="photo-upload" className={
-                                            `inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 cursor-pointer ${isPhotoUploading ? 'bg-secondary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`
-                                        }>
-                                            {isPhotoUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UploadCloud className="mr-2 h-4 w-4" />}
-                                            Upload Photo
-                                        </Label>
-                                        <Input id="photo-upload" type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={isPhotoUploading}/>
-                                        {editingUser.avatar_url && (
-                                            <Button variant="destructive" size="sm" type="button" onClick={handleDeletePhoto} disabled={isPhotoUploading}>
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                Delete Photo
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="text-sm space-y-2">
-                                    <p><strong>Role:</strong> {editingUser.role}</p>
-                                    <p><strong>Department:</strong> {editingUser.departmentName || 'N/A'}</p>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="remuneration" className="font-bold">Remuneration</Label>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-muted-foreground">{currency}</span>
-                                            <Input id="remuneration" name="remuneration" type="number" step="0.01" defaultValue={editingUser.remuneration} className="w-32" />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="monthlyWorkingDays" className="font-bold">Monthly Working Days</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Input id="monthlyWorkingDays" name="monthlyWorkingDays" type="number" step="1" defaultValue={editingUser.monthlyWorkingDays} className="w-32" />
-                                            <span className="text-muted-foreground">days</span>
-                                        </div>
-                                    </div>
-                                     <div className="grid grid-cols-2 gap-4 pt-2">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="defaultClockInTime">Default Clock In</Label>
-                                            <Input id="defaultClockInTime" name="defaultClockInTime" type="time" defaultValue={editingUser.defaultClockInTime} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="defaultClockOutTime">Default Clock Out</Label>
-                                            <Input id="defaultClockOutTime" name="defaultClockOutTime" type="time" defaultValue={editingUser.defaultClockOutTime} />
-                                        </div>
-                                    </div>
-                                    
-                                </div>
-                            </CardContent>
-                        </Card>
+                <DialogHeader className="flex-row items-center justify-between">
+                    <div>
+                        <DialogTitle>Portfolio: {editingUser?.name}</DialogTitle>
+                        <DialogDescription>View and manage this employee's details and documents.</DialogDescription>
                     </div>
+                    <div className="flex items-center gap-2">
+                         <Button variant="outline" type="button" onClick={handleCloseDialog}>Close</Button>
+                        <Button type="submit" disabled={isSaving}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save Changes
+                        </Button>
+                    </div>
+                </DialogHeader>
+                <ScrollArea className="flex-1 -mx-6 px-6 py-4">
+                    <div className="grid md:grid-cols-2 gap-8">
+                        {/* Left Column: Details & Photo */}
+                        <div className="space-y-6">
+                            <Card>
+                                <CardHeader><CardTitle>Profile Details</CardTitle></CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="relative w-24 h-24">
+                                            <Image src={editingUser.avatar_url || 'https://placehold.co/100x100.png'} alt={editingUser.name} fill className="rounded-full object-cover" data-ai-hint="person portrait" />
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <Label htmlFor="photo-upload" className={
+                                                `inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 cursor-pointer ${isPhotoUploading ? 'bg-secondary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`
+                                            }>
+                                                {isPhotoUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UploadCloud className="mr-2 h-4 w-4" />}
+                                                Upload Photo
+                                            </Label>
+                                            <Input id="photo-upload" type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={isPhotoUploading}/>
+                                            {editingUser.avatar_url && (
+                                                <Button variant="destructive" size="sm" type="button" onClick={handleDeletePhoto} disabled={isPhotoUploading}>
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    Delete Photo
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="text-sm space-y-2">
+                                        <p><strong>Role:</strong> {editingUser.role}</p>
+                                        <p><strong>Department:</strong> {editingUser.departmentName || 'N/A'}</p>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="remuneration" className="font-bold">Remuneration</Label>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-muted-foreground">{currency}</span>
+                                                <Input id="remuneration" name="remuneration" type="number" step="0.01" defaultValue={editingUser.remuneration} className="w-32" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="monthlyWorkingDays" className="font-bold">Monthly Working Days</Label>
+                                            <div className="flex items-center gap-2">
+                                                <Input id="monthlyWorkingDays" name="monthlyWorkingDays" type="number" step="1" defaultValue={editingUser.monthlyWorkingDays} className="w-32" />
+                                                <span className="text-muted-foreground">days</span>
+                                            </div>
+                                        </div>
+                                         <div className="grid grid-cols-2 gap-4 pt-2">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="defaultClockInTime">Default Clock In</Label>
+                                                <Input id="defaultClockInTime" name="defaultClockInTime" type="time" defaultValue={editingUser.defaultClockInTime} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="defaultClockOutTime">Default Clock Out</Label>
+                                                <Input id="defaultClockOutTime" name="defaultClockOutTime" type="time" defaultValue={editingUser.defaultClockOutTime} />
+                                            </div>
+                                        </div>
+                                        
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
 
-                    {/* Right Column: Documents */}
-                    <div className="space-y-6 flex flex-col">
-                       <Card className="flex-1 flex flex-col">
-                           <CardHeader>
-                               <div className="flex items-center justify-between">
-                                 <CardTitle>Personal Documents</CardTitle>
-                                 <Button asChild variant="outline" size="sm" disabled={isDocumentUploading}>
-                                     <Label htmlFor="doc-upload" className="cursor-pointer">
-                                        {isDocumentUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UploadCloud className="mr-2 h-4 w-4" />}
-                                        Upload
-                                     </Label>
-                                 </Button>
-                                 <Input id="doc-upload" type="file" className="hidden" onChange={handleDocumentUpload} disabled={isDocumentUploading} />
-                               </div>
-                           </CardHeader>
-                           <CardContent className="flex-1 min-h-0 flex flex-col gap-4">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        placeholder="Search documents..."
-                                        className="pl-9"
-                                        value={documentSearchTerm}
-                                        onChange={(e) => setDocumentSearchTerm(e.target.value)}
-                                    />
-                                </div>
-                                <ScrollArea className="flex-1 -mx-6 px-6">
-                                    {filteredDocuments.length > 0 ? (
-                                        <div className="space-y-2">
-                                            {filteredDocuments.map((file, index) => (
-                                                <div key={index} className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-accent/50">
-                                                    <a href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline flex-1 truncate">
-                                                        <FileIcon item={{ type: 'file', name: file.name, metadata: { size: 0, updated: '', timeCreated: '' } }} className="h-4 w-4 flex-shrink-0" />
-                                                        <span className="truncate">{file.name}</span>
-                                                    </a>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteDocument(file)}>
-                                                        <Trash2 className="h-4 w-4 text-destructive"/>
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center justify-center h-full text-center text-muted-foreground text-sm">
-                                            <p>{documentSearchTerm ? 'No documents match your search.' : 'No documents uploaded for this employee.'}</p>
-                                        </div>
-                                    )}
-                                </ScrollArea>
-                           </CardContent>
-                       </Card>
+                        {/* Right Column: Documents */}
+                        <div className="space-y-6 flex flex-col">
+                           <Card className="flex-1 flex flex-col">
+                               <CardHeader>
+                                   <div className="flex items-center justify-between">
+                                     <CardTitle>Personal Documents</CardTitle>
+                                     <Button asChild variant="outline" size="sm" disabled={isDocumentUploading}>
+                                         <Label htmlFor="doc-upload" className="cursor-pointer">
+                                            {isDocumentUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UploadCloud className="mr-2 h-4 w-4" />}
+                                            Upload
+                                         </Label>
+                                     </Button>
+                                     <Input id="doc-upload" type="file" className="hidden" onChange={handleDocumentUpload} disabled={isDocumentUploading} />
+                                   </div>
+                               </CardHeader>
+                               <CardContent className="flex-1 min-h-0 flex flex-col gap-4">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Search documents..."
+                                            className="pl-9"
+                                            value={documentSearchTerm}
+                                            onChange={(e) => setDocumentSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                    <ScrollArea className="flex-1 -mx-6 px-6">
+                                        {filteredDocuments.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {filteredDocuments.map((file, index) => (
+                                                    <div key={index} className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-accent/50">
+                                                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline flex-1 truncate">
+                                                            <FileIcon item={{ type: 'file', name: file.name, metadata: { size: 0, updated: '', timeCreated: '' } }} className="h-4 w-4 flex-shrink-0" />
+                                                            <span className="truncate">{file.name}</span>
+                                                        </a>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteDocument(file)}>
+                                                            <Trash2 className="h-4 w-4 text-destructive"/>
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-center h-full text-center text-muted-foreground text-sm">
+                                                <p>{documentSearchTerm ? 'No documents match your search.' : 'No documents uploaded for this employee.'}</p>
+                                            </div>
+                                        )}
+                                    </ScrollArea>
+                               </CardContent>
+                           </Card>
+                        </div>
                     </div>
-                </div>
-                 <DialogFooter>
-                    <Button variant="outline" type="button" onClick={handleCloseDialog}>Close</Button>
-                    <Button type="submit" disabled={isSaving}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Save Changes
-                    </Button>
-                </DialogFooter>
+                </ScrollArea>
               </form>
             )}
           </DialogContent>
@@ -517,4 +520,6 @@ export default function PortfolioPage() {
     </div>
   );
 }
+
+
 
