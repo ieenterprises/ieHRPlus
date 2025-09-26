@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Search, Send, Video, Paperclip, MoreVertical, X, CheckSquare, Trash2, Loader2, Users, MessageCircleReply, Forward, Smile, Folder, Upload } from 'lucide-react';
+import { Search, Send, Video, Paperclip, MoreVertical, X, CheckSquare, Trash2, Loader2, Users, MessageCircleReply, Forward, Smile, Folder, Upload, MessageSquare } from 'lucide-react';
 import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -387,3 +387,5 @@ export function ChatClient() {
         </Card>
     );
 }
+
+    
