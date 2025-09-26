@@ -7,7 +7,7 @@ import { useSettings } from '@/hooks/use-settings';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { VideoOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { collection, addDoc, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ChatMessage } from '@/lib/types';
 
