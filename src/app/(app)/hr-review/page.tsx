@@ -62,7 +62,7 @@ const seniorRoles = ["Owner", "Administrator", "Manager"];
 const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function HrReviewPage() {
-  const { loggedInUser, users } = useSettings();
+  const { loggedInUser, users, timeRecords: allTimeRecords } = useSettings();
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
@@ -79,40 +79,26 @@ export default function HrReviewPage() {
 
   const isSeniorStaff = useMemo(() => loggedInUser && seniorRoles.includes(loggedInUser.role), [loggedInUser]);
 
-  useEffect(() => {
+ useEffect(() => {
     if (!loggedInUser?.businessId) {
-      setLoading(false);
-      return;
+        setLoading(false);
+        return;
     }
-
-    const q = query(
-      collection(db, "timeRecords"),
-      where("businessId", "==", loggedInUser.businessId)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
-      
-      const start = dateRange?.from ? startOfDay(dateRange.from) : startOfDay(new Date());
-      const end = dateRange?.to ? endOfDay(dateRange.to) : endOfDay(new Date());
-      
-      const filteredRecords = allRecords.filter(record => {
-        const clockInDate = new Date(record.clockInTime);
-        return isWithinInterval(clockInDate, { start, end });
-      });
-
-      filteredRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
-      
-      setTimeRecords(filteredRecords);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching time records:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch time records. ' + error.message });
-      setLoading(false);
+    
+    const start = dateRange?.from ? startOfDay(dateRange.from) : startOfDay(new Date());
+    const end = dateRange?.to ? endOfDay(dateRange.to) : endOfDay(new Date());
+    
+    const filteredRecords = allTimeRecords.filter(record => {
+      const clockInDate = new Date(record.clockInTime);
+      return isWithinInterval(clockInDate, { start, end });
     });
 
-    return () => unsubscribe();
-  }, [loggedInUser?.businessId, dateRange, toast]);
+    filteredRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+    
+    setTimeRecords(filteredRecords);
+    setLoading(false);
+
+  }, [loggedInUser?.businessId, dateRange, toast, allTimeRecords]);
   
   useEffect(() => {
       setSelectedRecordIds([]);
@@ -913,5 +899,3 @@ export default function HrReviewPage() {
     </div>
   );
 }
-
-    

@@ -51,6 +51,7 @@ type SettingsContextType = {
     hrQueries: HRQuery[];
     rewards: Reward[];
     groups: Group[];
+    timeRecords: TimeRecord[];
     unreadChatCount: number;
     unreadMailCount: number;
     
@@ -176,6 +177,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [hrQueries, setHrQueriesState] = useState<HRQuery[]>([]);
     const [rewards, setRewardsState] = useState<Reward[]>([]);
     const [groups, setGroupsState] = useState<Group[]>([]);
+    const [timeRecords, setTimeRecordsState] = useState<TimeRecord[]>([]);
     const [currency, setCurrencyState] = useState<string>('$');
     const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
     const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -264,9 +266,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             if (user) {
                 const userProfile = await fetchAndSetUser(user.uid);
                 if (userProfile && userProfile.businessId) {
-                    const { businessId } = userProfile;
+                    const { businessId, role } = userProfile;
+                    const isSenior = ['Owner', 'Administrator', 'Manager'].includes(role);
 
-                    const collections = {
+                    const collectionsToFetch = {
                         users: setUsersState,
                         roles: setRolesState,
                         departments: setDepartmentsState,
@@ -291,7 +294,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         groups: setGroupsState,
                     };
 
-                    Object.entries(collections).forEach(([name, setter]) => {
+                    Object.entries(collectionsToFetch).forEach(([name, setter]) => {
                         const q = query(collection(db, name), where("businessId", "==", businessId));
                         const unsubscribe = onSnapshot(q, (snapshot) => {
                             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -301,6 +304,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         });
                         subscriptions.push(unsubscribe);
                     });
+
+                    // Conditional query for timeRecords
+                    let timeRecordsQuery;
+                    if (isSenior) {
+                        timeRecordsQuery = query(collection(db, "timeRecords"), where("businessId", "==", businessId));
+                    } else {
+                        timeRecordsQuery = query(collection(db, "timeRecords"), where("businessId", "==", businessId), where("userId", "==", user.uid));
+                    }
+                    const timeRecordsUnsub = onSnapshot(timeRecordsQuery, (snapshot) => {
+                        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as TimeRecord }));
+                        setTimeRecordsState(data);
+                    }, (error) => console.error(`Error fetching timeRecords:`, error));
+                    subscriptions.push(timeRecordsUnsub);
+
 
                     // Specific listener for unread chat messages
                     const chatQuery = query(
@@ -340,7 +357,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 setLoggedInUser(null);
                 setLoadingUser(false);
                 // Clear all data on logout
-                const collections = [setUsersState, setRolesState, setDepartmentsState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setBranches, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes, setUserRequestsState, setHrQueriesState, setRewardsState, setGroupsState];
+                const collections = [setUsersState, setRolesState, setDepartmentsState, setCategoriesState, setProductsState, setCustomersState, setSalesState, setReservationsState, setOpenTicketsState, setVoidedLogsState, setDebtsState, setBranches, setPosDevices, setPrintersState, setTaxesState, setPaymentTypesState, setShiftsState, setAccessCodes, setUserRequestsState, setHrQueriesState, setRewardsState, setGroupsState, setTimeRecordsState];
                 collections.forEach(setter => setter([]));
             }
         });
@@ -674,6 +691,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         hrQueries,
         rewards,
         groups,
+        timeRecords,
         accessCodes,
         generateAccessCode,
         validateAndUseAccessCode,
@@ -710,18 +728,3 @@ export function useSettings() {
     }
     return context;
 }
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-

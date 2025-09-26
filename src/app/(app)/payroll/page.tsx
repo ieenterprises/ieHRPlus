@@ -35,7 +35,7 @@ type PayrollData = {
 };
 
 export default function PayrollPage() {
-    const { users, rewards, hrQueries, currency, loggedInUser } = useSettings();
+    const { users, rewards, hrQueries, currency, loggedInUser, timeRecords: allTimeRecords } = useSettings();
     const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
     const [selectedMonth, setSelectedMonth] = useState<Date>(startOfMonth(new Date()));
     const { toast } = useToast();
@@ -43,21 +43,13 @@ export default function PayrollPage() {
     useEffect(() => {
         if (!loggedInUser?.businessId) return;
 
-        const q = query(
-          collection(db, "timeRecords"),
-          where("businessId", "==", loggedInUser.businessId)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
-            setTimeRecords(allRecords);
-        }, (error) => {
-            console.error("Error fetching time records for payroll:", error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch time records.' });
-        });
-
-        return () => unsubscribe();
-    }, [loggedInUser?.businessId, toast]);
+        const monthStart = startOfMonth(selectedMonth);
+        const monthEnd = endOfMonth(selectedMonth);
+        
+        const filteredRecords = allTimeRecords.filter(tr => isWithinInterval(new Date(tr.clockInTime), { start: monthStart, end: monthEnd }));
+        setTimeRecords(filteredRecords);
+        
+    }, [loggedInUser?.businessId, toast, selectedMonth, allTimeRecords]);
 
     const payrollData = useMemo((): PayrollData[] => {
         const monthStart = startOfMonth(selectedMonth);
@@ -65,7 +57,7 @@ export default function PayrollPage() {
         const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
         return users.map(user => {
-            const userTimeRecords = timeRecords.filter(tr => tr.userId === user.id && isWithinInterval(new Date(tr.clockInTime), { start: monthStart, end: monthEnd }));
+            const userTimeRecords = timeRecords.filter(tr => tr.userId === user.id);
             const userRewards = rewards.filter(r => r.assigneeId === user.id && isWithinInterval(new Date(r.createdAt), { start: monthStart, end: monthEnd }));
             const userQueries = hrQueries.filter(q => q.assigneeId === user.id && isWithinInterval(new Date(q.createdAt), { start: monthStart, end: monthEnd }));
             
@@ -277,8 +269,3 @@ export default function PayrollPage() {
         </div>
     );
 }
-
-
-    
-
-    

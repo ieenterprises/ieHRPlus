@@ -65,7 +65,7 @@ type ActiveSession = TimeRecord & {
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
 export default function SessionsPage() {
-  const { loggedInUser, users, logout } = useSettings();
+  const { loggedInUser, users, logout, timeRecords: allTimeRecords } = useSettings();
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<ActiveSession | null>(null);
@@ -91,40 +91,26 @@ export default function SessionsPage() {
     
     setLoading(true);
     
-    const q = query(
-      collection(db, "timeRecords"),
-      where("businessId", "==", loggedInUser.businessId)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeRecord));
-
-      const start = dateRange?.from ? startOfDay(dateRange.from) : startOfDay(new Date());
-      const end = dateRange?.to ? endOfDay(dateRange.to) : endOfDay(new Date());
-      
-      const filteredRecords = allRecords.filter(record => {
-        const clockInDate = new Date(record.clockInTime);
-        return isWithinInterval(clockInDate, { start, end });
-      });
-
-      filteredRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
-      
-      const populatedSessions: ActiveSession[] = filteredRecords
-        .map(record => ({
-          ...record,
-          user: users.find(u => u.id === record.userId),
-        }))
-        .filter(session => session.user);
-
-      setSessions(populatedSessions);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching sessions:", error);
-      setLoading(false);
+    const start = dateRange?.from ? startOfDay(dateRange.from) : startOfDay(new Date());
+    const end = dateRange?.to ? endOfDay(dateRange.to) : endOfDay(new Date());
+    
+    const filteredRecords = allTimeRecords.filter(record => {
+      const clockInDate = new Date(record.clockInTime);
+      return isWithinInterval(clockInDate, { start, end });
     });
 
-    return () => unsubscribe();
-  }, [loggedInUser?.businessId, dateRange, users]);
+    filteredRecords.sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
+    
+    const populatedSessions: ActiveSession[] = filteredRecords
+      .map(record => ({
+        ...record,
+        user: users.find(u => u.id === record.userId),
+      }))
+      .filter(session => session.user);
+
+    setSessions(populatedSessions);
+    setLoading(false);
+  }, [loggedInUser?.businessId, dateRange, users, allTimeRecords]);
 
   useEffect(() => {
       setSelectedRecordIds([]);
@@ -496,5 +482,3 @@ export default function SessionsPage() {
     </div>
   );
 }
-
-    
