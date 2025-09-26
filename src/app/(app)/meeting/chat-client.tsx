@@ -331,7 +331,6 @@ export function ChatClient() {
                                         <AlertDialogTrigger asChild><Button variant="destructive" size="icon" disabled={isDeletingGroup}>{isDeletingGroup ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4" />}</Button></AlertDialogTrigger>
                                         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Group?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the group and all its messages.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteGroup} className="bg-destructive hover:bg-destructive/90">Confirm Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
                                     </AlertDialog>)}
-                                    {activeChatMode === 'individual' && (<Button variant="outline" size="icon" onClick={() => window.open(`/meeting?tab=video&roomID=${Math.floor(Math.random() * 10000)}`, '_blank')}><Video className="h-5 w-5"/></Button>)}
                                 </>)}
                             </div>
                         </CardHeader>
