@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { ChatClient } from './chat-client';
 import { MailClient } from './mail-client';
 import { MeetingClient } from './meeting-client';
+import { cn } from '@/lib/utils';
 
 function MeetingPageContent() {
     const searchParams = useSearchParams();
@@ -24,9 +25,6 @@ function MeetingPageContent() {
             setActiveTab(tab);
         }
     }, [searchParams]);
-
-    // This forces a re-render of the MeetingClient when the tab becomes active
-    const isVideoTabActive = activeTab === 'video';
 
     return (
         <div className="space-y-8">
@@ -49,9 +47,9 @@ function MeetingPageContent() {
                 </TabsList>
                 
                 <TabsContent value="video">
-                    <Card className="h-[70vh]">
+                     <Card className="h-[70vh]">
                         <CardContent className="p-0 h-full">
-                           {isVideoTabActive && <MeetingClient />}
+                           <MeetingClient />
                         </CardContent>
                     </Card>
                 </TabsContent>
