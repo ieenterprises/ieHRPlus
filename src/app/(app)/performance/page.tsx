@@ -20,7 +20,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { DateRange } from "react-day-picker";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, StackedBarChart, AreaChart, Area } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Area, AreaChart } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 
 type PerformanceData = {
@@ -160,12 +160,15 @@ export default function PerformancePage() {
     const aggregatedStats = useMemo(() => {
         const totalWorkDays = performanceData.reduce((acc, p) => acc + p.totalWorkDays, 0);
         const totalOnTime = performanceData.reduce((acc, p) => acc + p.onTimeArrivals, 0);
+        const totalLate = performanceData.reduce((acc, p) => acc + p.daysLate, 0);
         const totalOvertime = performanceData.reduce((acc, p) => acc + p.overtimeHours, 0);
         const totalRewards = performanceData.reduce((acc, p) => acc + p.rewardAmount, 0);
         const totalDeductions = performanceData.reduce((acc, p) => acc + p.queryAmount, 0);
         
         return {
             totalWorkDays,
+            totalOnTime,
+            totalLate,
             punctualityScore: totalWorkDays > 0 ? (totalOnTime / totalWorkDays) * 100 : 0,
             totalOvertime: totalOvertime,
             netFinancialImpact: totalRewards - totalDeductions,
@@ -195,6 +198,13 @@ export default function PerformancePage() {
             deductions: p.queryAmount,
         }));
     }, [performanceData]);
+
+    const punctualityPieChartData = useMemo(() => {
+        return [
+            { name: 'On-Time', value: aggregatedStats.totalOnTime, fill: 'hsl(var(--chart-2))' },
+            { name: 'Late', value: aggregatedStats.totalLate, fill: 'hsl(var(--destructive))' },
+        ];
+    }, [aggregatedStats]);
 
     const handleExportCSV = () => {
         const dataToExport = performanceData.map(p => ({
@@ -333,10 +343,72 @@ export default function PerformancePage() {
             </div>
             
             <div className="grid gap-6 md:grid-cols-2">
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Lateness vs. Overtime</CardTitle>
+                        <CardDescription>Comparing late minutes to overtime hours.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                       <ChartContainer config={barChartConfig} className="min-h-[250px] w-full">
+                            <BarChart data={barChartData} >
+                                <CartesianGrid vertical={false} />
+                                <XAxis
+                                    dataKey="name"
+                                    tickLine={false}
+                                    tickMargin={10}
+                                    axisLine={false}
+                                />
+                                <YAxis yAxisId="left" orientation="left" stroke="hsl(var(--destructive))" />
+                                <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--chart-2))" />
+                                <ChartTooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                                <Bar yAxisId="left" dataKey="lateness" fill="var(--color-lateness)" radius={4} />
+                                <Bar yAxisId="right" dataKey="overtime" fill="var(--color-overtime)" radius={4} />
+                            </BarChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardHeader>
+                        <CardTitle>Overall Punctuality</CardTitle>
+                        <CardDescription>Aggregated on-time vs. late arrivals.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-center">
+                         <ChartContainer config={{}} className="min-h-[250px] w-full max-w-sm">
+                            <PieChart>
+                                <ChartTooltip content={<ChartTooltipContent nameKey="value" />} />
+                                <Pie
+                                    data={punctualityPieChartData}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    cx="50%"
+                                    cy="50%"
+                                    outerRadius={100}
+                                    labelLine={false}
+                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                                        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                        const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
+                                        const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
+                                        return (
+                                            <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central">
+                                                {`${(percent * 100).toFixed(0)}%`}
+                                            </text>
+                                        );
+                                    }}
+                                >
+                                     {punctualityPieChartData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                                    ))}
+                                </Pie>
+                                <Legend />
+                            </PieChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader>
                         <CardTitle>Attendance Breakdown</CardTitle>
-                        <CardDescription>On-time vs. late days for the selected period.</CardDescription>
+                        <CardDescription>On-time vs. late days for each employee.</CardDescription>
                     </CardHeader>
                     <CardContent>
                        <ChartContainer config={attendanceChartConfig} className="min-h-[250px] w-full">
@@ -439,3 +511,5 @@ export default function PerformancePage() {
         </div>
     );
 }
+
+    
