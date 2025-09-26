@@ -372,5 +372,3 @@ export default function PerformancePage() {
             </Card>
         </div>
     );
-
-    
