@@ -54,37 +54,39 @@ export function MeetingClient() {
                   joinButton: "Join",
               },
               onJoinRoom: async () => {
-                  if (!loggedInUser) return;
-                  const otherUsers = users.filter(u => u.id !== loggedInUser.id);
-                  if (otherUsers.length === 0) return;
-                  
-                  try {
-                      const batch = writeBatch(db);
-                      otherUsers.forEach(user => {
-                          const messageData: Omit<ChatMessage, 'id'> = {
-                              senderId: loggedInUser.id,
-                              receiverId: user.id,
-                              content: `A video meeting has been started by ${loggedInUser.name}. Click to join: <a href="${meetingLink}" target="_blank">${meetingLink}</a>`,
-                              timestamp: new Date().toISOString(),
-                              isRead: false,
-                              businessId: loggedInUser.businessId,
-                          };
-                          const messageRef = doc(collection(db, 'chatMessages'));
-                          batch.set(messageRef, messageData);
-                      });
+                  // Only send notification if the user is the one creating the room
+                  if (!roomIDFromUrl && loggedInUser) {
+                      const otherUsers = users.filter(u => u.id !== loggedInUser.id);
+                      if (otherUsers.length === 0) return;
+                      
+                      try {
+                          const batch = writeBatch(db);
+                          otherUsers.forEach(user => {
+                              const messageData: Omit<ChatMessage, 'id'> = {
+                                  senderId: loggedInUser.id,
+                                  receiverId: user.id,
+                                  content: `A new video meeting has been started. You can join using the link below:\n\n<a href="${meetingLink}" target="_blank">${meetingLink}</a>`,
+                                  timestamp: new Date().toISOString(),
+                                  isRead: false,
+                                  businessId: loggedInUser.businessId,
+                              };
+                              const messageRef = doc(collection(db, 'chatMessages'));
+                              batch.set(messageRef, messageData);
+                          });
 
-                      await batch.commit();
+                          await batch.commit();
 
-                      toast({
-                          title: "Meeting Notification Sent",
-                          description: "All users have been notified via chat about this meeting.",
-                      });
-                  } catch (error) {
-                      toast({
-                          title: "Notification Error",
-                          description: "Could not notify users about the meeting.",
-                          variant: "destructive"
-                      });
+                          toast({
+                              title: "Meeting Notification Sent",
+                              description: "All users have been notified via chat about this meeting.",
+                          });
+                      } catch (error) {
+                          toast({
+                              title: "Notification Error",
+                              description: "Could not notify users about the meeting.",
+                              variant: "destructive"
+                          });
+                      }
                   }
               },
               sharedLinks: [{
