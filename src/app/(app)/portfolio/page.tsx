@@ -45,7 +45,6 @@ import Image from "next/image";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { FileIcon } from "@/components/file-icon";
 import { intervalToDuration, getDaysInMonth, format } from "date-fns";
-import { Checkbox } from "@/components/ui/checkbox";
 
 
 const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -171,7 +170,7 @@ export default function PortfolioPage() {
       const folder = `profile_pictures`;
       const fileName = `${editingUser.id}_${Date.now()}.${file.name.split('.').pop()}`;
       
-      await uploadFile(loggedInUser.businessId, editingUser.id, folder, new File([file], fileName));
+      await uploadFile(loggedInUser.businessId, editingUser.id, folder, new File([file], fileName), loggedInUser.id);
       const publicUrl = await getPublicUrl(loggedInUser.businessId, [loggedInUser.businessId, 'user_files', editingUser.id, folder, fileName].join('/'));
 
       await updateDoc(doc(db, "users", editingUser.id), { avatar_url: publicUrl });
@@ -225,7 +224,7 @@ export default function PortfolioPage() {
 
     setIsDocumentUploading(true);
     try {
-      await uploadFile(loggedInUser.businessId, editingUser.id, 'documents', file);
+      await uploadFile(loggedInUser.businessId, editingUser.id, 'documents', file, loggedInUser.id);
       toast({ title: "Document Uploaded", description: `${file.name} has been added to the employee's portfolio.` });
       await fetchUserFiles(editingUser); // Refresh file list
 
@@ -285,7 +284,7 @@ export default function PortfolioPage() {
     const fileItemToDelete: FileItem = {
         name: file.name,
         type: 'file',
-        metadata: { size: 0, updated: '', timeCreated: '' } // Dummy metadata
+        metadata: { size: 0, updated: '', timeCreated: '', customMetadata: {} } // Dummy metadata
     };
 
     try {
@@ -389,7 +388,7 @@ export default function PortfolioPage() {
           <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
               {editingUser && (
               <form onSubmit={handleSaveChanges} className="flex-1 min-h-0 flex flex-col">
-                <DialogHeader className="flex-row items-center justify-between">
+                <DialogHeader className="flex-row items-center justify-between pr-6 pt-6 pl-6 pb-4 border-b">
                     <div>
                         <DialogTitle>Portfolio: {editingUser?.name}</DialogTitle>
                         <DialogDescription>View and manage this employee's details and documents.</DialogDescription>
@@ -402,7 +401,7 @@ export default function PortfolioPage() {
                         </Button>
                     </div>
                 </DialogHeader>
-                <ScrollArea className="flex-1 -mx-6 px-6 py-4">
+                <ScrollArea className="flex-1 p-6">
                     <div className="grid md:grid-cols-2 gap-8">
                         {/* Left Column: Details & Photo */}
                         <div className="space-y-6">
@@ -464,7 +463,7 @@ export default function PortfolioPage() {
 
                         {/* Right Column: Documents */}
                         <div className="space-y-6 flex flex-col">
-                           <Card className="flex-1 flex flex-col">
+                           <Card className="flex-1 flex flex-col min-h-0">
                                <CardHeader>
                                    <div className="flex items-center justify-between">
                                      <CardTitle>Personal Documents</CardTitle>
@@ -493,7 +492,7 @@ export default function PortfolioPage() {
                                                 {filteredDocuments.map((file, index) => (
                                                     <div key={index} className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-accent/50">
                                                         <a href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline flex-1 truncate">
-                                                            <FileIcon item={{ type: 'file', name: file.name, metadata: { size: 0, updated: '', timeCreated: '' } }} className="h-4 w-4 flex-shrink-0" />
+                                                            <FileIcon item={{ type: 'file', name: file.name, metadata: { size: 0, updated: '', timeCreated: '', customMetadata: {} } }} className="h-4 w-4 flex-shrink-0" />
                                                             <span className="truncate">{file.name}</span>
                                                         </a>
                                                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteDocument(file)}>
@@ -520,7 +519,3 @@ export default function PortfolioPage() {
     </div>
   );
 }
-
-
-
-

@@ -49,6 +49,7 @@ export async function listItems(businessId: string, userId: string, path: string
                     contentType: 'inode/directory',
                     updated: new Date().toISOString(),
                     timeCreated: new Date().toISOString(),
+                    customMetadata: {}
                 }
             } as FileItem;
         });

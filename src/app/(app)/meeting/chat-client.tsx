@@ -200,7 +200,7 @@ export function ChatClient() {
     };
     
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (event.target.files) {
+      if (event.target.files && loggedInUser) {
           const newFiles = Array.from(event.target.files).map(file => ({ name: file.name, url: URL.createObjectURL(file), source: 'local', file: file }));
           setAttachments(prev => [...prev, ...newFiles as any]);
       }

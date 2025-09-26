@@ -208,7 +208,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail, users 
     };
     
     const handleFileChangeForMail = (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files) {
+        if (event.target.files && loggedInUser) {
             const newFiles = Array.from(event.target.files).map(file => ({ name: file.name, url: URL.createObjectURL(file), source: 'local', file: file }));
             setMailAttachments(prev => [...prev, ...newFiles as any]);
         }
