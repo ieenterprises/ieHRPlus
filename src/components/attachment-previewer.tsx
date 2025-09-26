@@ -11,28 +11,26 @@ import { FileIcon } from '@/components/file-icon';
 interface Attachment {
     name: string;
     url: string;
+    contentType?: string;
 }
 
-const PreviewContent = ({ fileUrl, fileName }: { fileUrl: string, fileName: string }) => {
-    const fileType = fileName.split('.').pop()?.toLowerCase() || '';
-    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType);
-    const isVideo = ['mp4', 'webm', 'ogg'].includes(fileType);
-    const isAudio = ['mp3', 'wav'].includes(fileType);
-    const isPdf = fileType === 'pdf';
-    const isOfficeDoc = ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'].includes(fileType);
+const PreviewContent = ({ fileUrl, fileType }: { fileUrl: string, fileType: string }) => {
+    const isOfficeDocOrPdf = fileType.includes('officedocument') ||
+                           fileType.includes('msword') ||
+                           fileType.includes('mspowerpoint') ||
+                           fileType.includes('msexcel') ||
+                           fileType === 'application/pdf';
 
-    if (isImage) {
+    if (fileType.startsWith('image/')) {
         return <img src={fileUrl} alt="File preview" className="max-w-full max-h-[80vh] mx-auto" />;
     }
-    if (isVideo) {
+    if (fileType.startsWith('video/')) {
         return <video controls src={fileUrl} className="w-full max-h-[80vh]" />;
     }
-    if (isAudio) {
+    if (fileType.startsWith('audio/')) {
         return <audio controls src={fileUrl} className="w-full" />;
     }
-    
-    // For public files, we can use the Google Docs Viewer.
-    if (isPdf || isOfficeDoc) {
+    if (isOfficeDocOrPdf) {
         const googleDocsUrl = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
         return <iframe src={googleDocsUrl} className="w-full h-full border-0" title="Document Preview" />;
     }
@@ -41,7 +39,7 @@ const PreviewContent = ({ fileUrl, fileName }: { fileUrl: string, fileName: stri
         <div className="flex flex-col items-center justify-center h-full text-center p-8">
             <FileIconLucide className="h-16 w-16 text-muted-foreground mb-4" />
             <p className="text-lg font-semibold mb-4">Preview not available</p>
-            <p className="text-muted-foreground mb-6">This file type cannot be previewed directly.</p>
+            <p className="text-muted-foreground mb-6">This file type cannot be previewed directly in the browser.</p>
             <Button asChild>
                 <a href={fileUrl} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="mr-2 h-4 w-4" /> Open in New Tab
@@ -63,6 +61,22 @@ export function AttachmentPreviewer({ attachments }: { attachments: Attachment[]
         a.click();
         document.body.removeChild(a);
     };
+    
+    // A helper to guess content type from file extension if it's missing
+    const getContentTypeFromName = (name: string): string => {
+        const extension = name.split('.').pop()?.toLowerCase() || '';
+        const types: Record<string, string> = {
+            'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp',
+            'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'video/ogg',
+            'mp3': 'audio/mpeg', 'wav': 'audio/wav',
+            'pdf': 'application/pdf',
+            'doc': 'application/msword', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'ppt': 'application/vnd.ms-powerpoint', 'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'xls': 'application/vnd.ms-excel', 'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        };
+        return types[extension] || 'application/octet-stream';
+    };
+
 
     return (
         <>
@@ -87,7 +101,10 @@ export function AttachmentPreviewer({ attachments }: { attachments: Attachment[]
                                 <DialogTitle className="truncate">{previewFile.name}</DialogTitle>
                             </DialogHeader>
                             <div className="mt-4 flex-1 overflow-auto bg-secondary/30 rounded-md">
-                                <PreviewContent fileUrl={previewFile.url} fileName={previewFile.name} />
+                                <PreviewContent 
+                                    fileUrl={previewFile.url} 
+                                    fileType={previewFile.contentType || getContentTypeFromName(previewFile.name)} 
+                                />
                             </div>
                             <DialogFooter className="mt-4 flex-shrink-0">
                                 <Button onClick={() => handleDownload(previewFile.url, previewFile.name)}>
