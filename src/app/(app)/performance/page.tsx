@@ -346,7 +346,7 @@ export default function PerformancePage() {
                  <Card>
                     <CardHeader>
                         <CardTitle>Lateness vs. Overtime</CardTitle>
-                        <CardDescription>Comparing late minutes to overtime hours.</CardDescription>
+                        <CardDescription>This can help identify interesting patterns, such as whether employees who are frequently late also tend to work overtime.</CardDescription>
                     </CardHeader>
                     <CardContent>
                        <ChartContainer config={barChartConfig} className="min-h-[250px] w-full">
@@ -371,7 +371,7 @@ export default function PerformancePage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Overall Punctuality</CardTitle>
-                        <CardDescription>Aggregated on-time vs. late arrivals.</CardDescription>
+                        <CardDescription>A high-level view of the ratio of on-time to late arrivals for the selected employees and date range.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex items-center justify-center">
                          <ChartContainer config={{}} className="min-h-[250px] w-full max-w-sm">
@@ -408,7 +408,7 @@ export default function PerformancePage() {
                  <Card>
                     <CardHeader>
                         <CardTitle>Attendance Breakdown</CardTitle>
-                        <CardDescription>On-time vs. late days for each employee.</CardDescription>
+                        <CardDescription>Compare the proportion of on-time versus late days for each individual employee in the selected period.</CardDescription>
                     </CardHeader>
                     <CardContent>
                        <ChartContainer config={attendanceChartConfig} className="min-h-[250px] w-full">
@@ -426,7 +426,7 @@ export default function PerformancePage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Financial Impact</CardTitle>
-                        <CardDescription>Rewards vs. Deductions for each employee.</CardDescription>
+                        <CardDescription>Visualize the monetary value of rewards given versus deductions made for each employee.</CardDescription>
                     </CardHeader>
                     <CardContent>
                          <ChartContainer config={financialChartConfig} className="min-h-[250px] w-full">
