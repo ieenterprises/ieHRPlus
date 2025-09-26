@@ -426,7 +426,7 @@ export default function PerformancePage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Financial Impact</CardTitle>
-                        <CardDescription>Visualize the monetary value of rewards given versus deductions made for each employee.</CardDescription>
+                        <CardDescription>Visualize the monetary value of rewards given versus deductions vis-à-vis queries for each employee.</CardDescription>
                     </CardHeader>
                     <CardContent>
                          <ChartContainer config={financialChartConfig} className="min-h-[250px] w-full">
@@ -511,5 +511,7 @@ export default function PerformancePage() {
         </div>
     );
 }
+
+    
 
     
