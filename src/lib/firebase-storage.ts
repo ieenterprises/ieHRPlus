@@ -139,13 +139,7 @@ export async function renameItem(businessId: string, userId: string, item: FileI
     const fromPath = [businessId, 'user_files', userId, currentPath, item.name].filter(Boolean).join('/');
     const toPath = [businessId, 'user_files', userId, currentPath, newName].filter(Boolean).join('/');
 
-    if (item.type === 'folder') {
-        // Move folder contents
-        await moveItem(businessId, userId, fromPath, toPath, true);
-    } else {
-        // Move a single file
-        await moveItem(businessId, userId, fromPath, toPath, false);
-    }
+    await moveItem(businessId, userId, fromPath, toPath, item.type === 'folder');
 }
 
 
