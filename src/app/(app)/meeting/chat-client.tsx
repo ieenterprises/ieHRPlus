@@ -205,6 +205,10 @@ export function ChatClient() {
       }
     };
     
+    const handleRemoveAttachment = (attachmentToRemove: Attachment) => {
+        setAttachments(prev => prev.filter(att => att.url !== attachmentToRemove.url));
+    };
+
     const handleEmojiSelect = (emoji: string) => {
       if (chatInputRef.current) {
           const { selectionStart, value } = chatInputRef.current;
@@ -354,7 +358,7 @@ export function ChatClient() {
                          </div><div ref={messagesEndRef} /></ScrollArea>
                         <CardFooter className="pt-4 border-t flex flex-col items-start gap-2">
                             {replyingToMessage && (<div className="w-full relative rounded-md bg-muted p-2 pr-8 text-sm"><p className="font-semibold text-primary">Replying to {users.find(u => u.id === replyingToMessage.senderId)?.name}</p><p className="text-muted-foreground truncate">{replyingToMessage.content}</p><Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => setReplyingToMessage(null)}><X className="h-4 w-4" /></Button></div>)}
-                            {attachments.length > 0 && (<div className="w-full space-y-2"><p className="text-sm font-medium">Attachments:</p><AttachmentPreviewer attachments={attachments} /></div>)}
+                            {attachments.length > 0 && (<div className="w-full space-y-2"><p className="text-sm font-medium">Attachments:</p><AttachmentPreviewer attachments={attachments} onRemove={handleRemoveAttachment} /></div>)}
                             <form onSubmit={handleSendMessage} className="flex w-full items-center gap-2">
                                 <div className="relative flex-1"><Input ref={chatInputRef} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." disabled={isSending} className="pr-10" /><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"><Smile className="h-5 w-5" /></Button></PopoverTrigger><PopoverContent className="w-auto p-2"><div className="grid grid-cols-8 gap-1">{EMOJIS.map(emoji => (<Button key={emoji} variant="ghost" size="icon" className="text-xl" onClick={() => handleEmojiSelect(emoji)}>{emoji}</Button>))}</div></PopoverContent></Popover></div>
                                 <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon"><Paperclip className="h-5 w-5" /></Button></PopoverTrigger><PopoverContent className="w-auto p-0"><div className="flex flex-col"><Label htmlFor="chat-attachments" className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-t-md"><Upload className="h-4 w-4" /> Upload from Computer</Label><Input id="chat-attachments" type="file" multiple className="hidden" onChange={handleFileChange} /><button type="button" onClick={() => setIsFilePickerOpen(true)} className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-b-md text-sm"><Folder className="h-4 w-4" /> Choose from File Manager</button></div></PopoverContent></Popover>

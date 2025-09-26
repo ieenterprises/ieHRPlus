@@ -139,18 +139,14 @@ export function HRQueryTable() {
     }
 
     try {
-        // Handle attachments from both file manager (already has URL) and local upload
         const attachmentPromises = attachments.map(async (attachment) => {
             if ((attachment as any).source === 'local') {
                 const file = (attachment as any).file as File;
                 const personalDocsFolder = 'documents';
-                // Upload to the assignee's personal document folder
                 await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, file);
-                // Get the public URL for the newly uploaded file
-                const url = await getPublicUrl(loggedInUser.businessId!, `${loggedInUser.businessId}/user_files/${assigneeUser.id}/${personalDocsFolder}/${file.name}`);
+                const url = await getPublicUrl(loggedInUser.businessId!, [loggedInUser.businessId, 'user_files', assigneeUser.id, personalDocsFolder, file.name].join('/'));
                 return { name: file.name, url };
             }
-            // If from file manager, it already has the correct name and url
             return attachment;
         });
 
@@ -197,6 +193,10 @@ export function HRQueryTable() {
       }
   };
   
+    const handleRemoveAttachment = (attachmentToRemove: Attachment) => {
+        setAttachments(prev => prev.filter(att => att.url !== attachmentToRemove.url));
+    };
+
   const getStatusBadgeVariant = (status: HRQuery['status']) => {
     switch (status) {
       case 'Sent': return 'secondary';
@@ -366,7 +366,7 @@ export function HRQueryTable() {
                                                 </div>
                                             </PopoverContent>
                                         </Popover>
-                                        {attachments.length > 0 && <AttachmentPreviewer attachments={attachments} />}
+                                        {attachments.length > 0 && <AttachmentPreviewer attachments={attachments} onRemove={handleRemoveAttachment} />}
                                     </div>
                                 </div>
                             </div>
@@ -507,5 +507,3 @@ export function HRQueryTable() {
     </>
   );
 }
-
-    

@@ -306,6 +306,10 @@ export default function DashboardPage() {
           setAttachments(prev => [...prev, ...newAttachments]);
       }
   };
+  
+    const handleRemoveAttachment = (attachmentToRemove: Attachment) => {
+        setAttachments(prev => prev.filter(att => att.url !== attachmentToRemove.url));
+    };
 
   const handleResponseFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       if (event.target.files && loggedInUser?.businessId) {
@@ -320,6 +324,10 @@ export default function DashboardPage() {
           setResponseAttachments(prev => [...prev, ...newAttachments]);
       }
   };
+  
+    const handleRemoveResponseAttachment = (attachmentToRemove: Attachment) => {
+        setResponseAttachments(prev => prev.filter(att => att.url !== attachmentToRemove.url));
+    };
   
   const getStatusBadgeVariant = (status: UserRequest['status'] | HRQuery['status'] | Reward['status']) => {
     switch (status) {
@@ -933,7 +941,7 @@ export default function DashboardPage() {
                                                 </div>
                                             </PopoverContent>
                                         </Popover>
-                                        {attachments.length > 0 && <AttachmentPreviewer attachments={attachments} />}
+                                        {attachments.length > 0 && <AttachmentPreviewer attachments={attachments} onRemove={handleRemoveAttachment} />}
                                     </div>
                                 </div>
                             </div>
@@ -1060,7 +1068,7 @@ export default function DashboardPage() {
                             </div>
                         </PopoverContent>
                     </Popover>
-                    {responseAttachments.length > 0 && <AttachmentPreviewer attachments={responseAttachments} />}
+                    {responseAttachments.length > 0 && <AttachmentPreviewer attachments={responseAttachments} onRemove={handleRemoveResponseAttachment} />}
                 </div>
                 {respondingQuery.status === 'Responded' && respondingQuery.responseAttachments && respondingQuery.responseAttachments.length > 0 && (
                     <div className="space-y-2">

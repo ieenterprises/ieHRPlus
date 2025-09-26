@@ -144,7 +144,7 @@ export function RewardTable() {
                 const file = (attachment as any).file as File;
                 const personalDocsFolder = 'documents';
                 await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, file);
-                const url = await getPublicUrl(loggedInUser.businessId!, `${loggedInUser.businessId}/user_files/${assigneeUser.id}/${personalDocsFolder}/${file.name}`);
+                const url = await getPublicUrl(loggedInUser.businessId!, [loggedInUser.businessId, 'user_files', assigneeUser.id, personalDocsFolder, file.name].join('/'));
                 return { name: file.name, url };
             }
             return attachment;
@@ -191,6 +191,10 @@ export function RewardTable() {
           }));
           setAttachments(prev => [...prev, ...newFiles as any]);
       }
+  };
+  
+  const handleRemoveAttachment = (attachmentToRemove: Attachment) => {
+    setAttachments(prev => prev.filter(att => att.url !== attachmentToRemove.url));
   };
   
   const getStatusBadgeVariant = (status: Reward['status']) => {
@@ -361,7 +365,7 @@ export function RewardTable() {
                                                 </div>
                                             </PopoverContent>
                                         </Popover>
-                                        {attachments.length > 0 && <AttachmentPreviewer attachments={attachments} />}
+                                        {attachments.length > 0 && <AttachmentPreviewer attachments={attachments} onRemove={handleRemoveAttachment} />}
                                     </div>
                                 </div>
                             </div>
@@ -483,5 +487,3 @@ export function RewardTable() {
     </>
   );
 }
-
-    

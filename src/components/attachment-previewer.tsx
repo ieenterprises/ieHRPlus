@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { FileIcon as FileIconLucide } from 'lucide-react';
+import { FileIcon as FileIconLucide, X } from 'lucide-react';
 import { Download, ExternalLink } from 'lucide-react';
 import { FileIcon } from '@/components/file-icon';
 
@@ -50,7 +50,7 @@ const PreviewContent = ({ fileUrl, fileType }: { fileUrl: string, fileType: stri
 };
 
 
-export function AttachmentPreviewer({ attachments }: { attachments: Attachment[] }) {
+export function AttachmentPreviewer({ attachments, onRemove }: { attachments: Attachment[], onRemove?: (attachment: Attachment) => void }) {
     const [previewFile, setPreviewFile] = useState<Attachment | null>(null);
 
     const handleDownload = (url: string, name: string) => {
@@ -62,7 +62,6 @@ export function AttachmentPreviewer({ attachments }: { attachments: Attachment[]
         document.body.removeChild(a);
     };
     
-    // A helper to guess content type from file extension if it's missing
     const getContentTypeFromName = (name: string): string => {
         const extension = name.split('.').pop()?.toLowerCase() || '';
         const types: Record<string, string> = {
@@ -82,14 +81,21 @@ export function AttachmentPreviewer({ attachments }: { attachments: Attachment[]
         <>
             <div className="space-y-2 rounded-md border p-2">
                 {attachments.map((file, index) => (
-                    <button
-                        key={index}
-                        onClick={() => setPreviewFile(file)}
-                        className="w-full flex items-center gap-2 text-sm text-primary hover:underline text-left"
-                    >
-                        <FileIcon item={{ type: 'file', name: file.name, metadata: { size: 0, updated: '', timeCreated: '' } }} className="h-4 w-4 flex-shrink-0" />
-                        <span className="truncate">{file.name}</span>
-                    </button>
+                    <div key={index} className="flex items-center justify-between gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setPreviewFile(file)}
+                            className="flex items-center gap-2 text-sm text-primary hover:underline text-left flex-1 truncate"
+                        >
+                            <FileIcon item={{ type: 'file', name: file.name, metadata: { size: 0, updated: '', timeCreated: '' } }} className="h-4 w-4 flex-shrink-0" />
+                            <span className="truncate">{file.name}</span>
+                        </button>
+                        {onRemove && (
+                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => onRemove(file)}>
+                                <X className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </div>
                 ))}
             </div>
 

@@ -213,6 +213,10 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail, users 
             setMailAttachments(prev => [...prev, ...newFiles as any]);
         }
     };
+    
+    const handleRemoveMailAttachment = (attachmentToRemove: Attachment) => {
+        setMailAttachments(prev => prev.filter(att => att.url !== attachmentToRemove.url));
+    };
 
     const handleSendMail = async () => {
         if (!loggedInUser || toRecipients.length === 0 || !subject.trim() || !body.trim()) {
@@ -263,7 +267,7 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail, users 
                     <div className="grid grid-cols-[80px_1fr] items-center gap-4"><Label htmlFor="subject" className="text-right">Subject:</Label><Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
                 </div>
                 <Textarea placeholder="Write your message here..." className="flex-1" value={body} onChange={(e) => setBody(e.target.value)} />
-                {mailAttachments.length > 0 && (<div className="space-y-2 pt-4"><p className="text-sm font-medium">Attachments:</p><AttachmentPreviewer attachments={mailAttachments} /></div>)}
+                {mailAttachments.length > 0 && (<div className="space-y-2 pt-4"><p className="text-sm font-medium">Attachments:</p><AttachmentPreviewer attachments={mailAttachments} onRemove={handleRemoveMailAttachment} /></div>)}
                 <DialogFooter>
                     <Popover><PopoverTrigger asChild><Button variant="ghost"><Paperclip className="mr-2 h-4 w-4" /> Attach File</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><div className="flex flex-col"><Label htmlFor="mail-attachments" className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-t-md"><Upload className="h-4 w-4" /> Upload</Label><Input id="mail-attachments" type="file" multiple className="hidden" onChange={handleFileChangeForMail} /><button type="button" onClick={() => setIsMailFilePickerOpen(true)} className="flex items-center gap-2 p-2 hover:bg-accent cursor-pointer rounded-b-md text-sm"><Folder className="h-4 w-4" /> File Manager</button></div></PopoverContent></Popover>
                     <div className="flex-1" />
@@ -296,5 +300,3 @@ const RecipientInput = ({ label, recipients, onToggle, allUsers, search, onSearc
         </Popover>
     </div>
 );
-
-    
