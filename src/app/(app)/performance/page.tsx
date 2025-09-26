@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, Download, User as UserIcon } from 'lucide-react';
+import { Calendar as CalendarIcon, Download, User as UserIcon, TrendingUp, DollarSign, Clock, CheckCircle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,7 +20,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { DateRange } from "react-day-picker";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, StackedBarChart, AreaChart, Area } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 
 type PerformanceData = {
@@ -47,16 +47,27 @@ const barChartConfig = {
     },
 } satisfies ChartConfig;
 
-const pieChartConfig = {
+const attendanceChartConfig = {
     onTime: {
-        label: "On-Time Days",
+        label: "On-Time",
         color: "hsl(var(--chart-2))",
     },
     late: {
-        label: "Late Days",
+        label: "Late",
         color: "hsl(var(--destructive))",
     },
-} satisfies ChartConfig
+} satisfies ChartConfig;
+
+const financialChartConfig = {
+    rewards: {
+        label: "Rewards",
+        color: "hsl(var(--chart-2))",
+    },
+    deductions: {
+        label: "Deductions",
+        color: "hsl(var(--destructive))",
+    },
+} satisfies ChartConfig;
 
 export default function PerformancePage() {
     const { users, rewards, hrQueries, currency, loggedInUser } = useSettings();
@@ -141,11 +152,26 @@ export default function PerformancePage() {
                 rewardCount: userRewards.length,
                 rewardAmount: userRewards.reduce((acc, r) => acc + (r.amount || 0), 0),
                 queryCount: userQueries.length,
-                queryAmount: userQueries.reduce((acc, q) => acc + (q.amount || 0), 0),
+                queryAmount: userQueries.reduce((acc, q) => q.amount || 0, 0),
             };
         });
     }, [dateRange, selectedEmployeeId, users, timeRecords, rewards, hrQueries]);
     
+    const aggregatedStats = useMemo(() => {
+        const totalWorkDays = performanceData.reduce((acc, p) => acc + p.totalWorkDays, 0);
+        const totalOnTime = performanceData.reduce((acc, p) => acc + p.onTimeArrivals, 0);
+        const totalOvertime = performanceData.reduce((acc, p) => acc + p.overtimeHours, 0);
+        const totalRewards = performanceData.reduce((acc, p) => acc + p.rewardAmount, 0);
+        const totalDeductions = performanceData.reduce((acc, p) => acc + p.queryAmount, 0);
+        
+        return {
+            totalWorkDays,
+            punctualityScore: totalWorkDays > 0 ? (totalOnTime / totalWorkDays) * 100 : 0,
+            totalOvertime: totalOvertime,
+            netFinancialImpact: totalRewards - totalDeductions,
+        };
+    }, [performanceData]);
+
     const barChartData = useMemo(() => {
         return performanceData.map(p => ({
             name: p.user.name.split(' ')[0],
@@ -154,27 +180,21 @@ export default function PerformancePage() {
         }));
     }, [performanceData]);
     
-    const pieChartData = useMemo(() => {
-        if (performanceData.length === 0) return [];
-        
-        if (selectedEmployeeId !== 'all' && performanceData.length === 1) {
-            const data = performanceData[0];
-            return [
-                { name: 'On-Time Days', value: data.onTimeArrivals, fill: 'hsl(var(--chart-2))' },
-                { name: 'Late Days', value: data.daysLate, fill: 'hsl(var(--destructive))' },
-            ].filter(d => d.value > 0);
-        }
-        
-        // Aggregate for 'all'
-        const totalOnTime = performanceData.reduce((acc, p) => acc + p.onTimeArrivals, 0);
-        const totalLate = performanceData.reduce((acc, p) => acc + p.daysLate, 0);
-        
-        return [
-            { name: 'On-Time Days', value: totalOnTime, fill: 'hsl(var(--chart-2))' },
-            { name: 'Late Days', value: totalLate, fill: 'hsl(var(--destructive))' },
-        ].filter(d => d.value > 0);
-
-    }, [performanceData, selectedEmployeeId]);
+    const attendanceChartData = useMemo(() => {
+        return performanceData.map(p => ({
+            name: p.user.name.split(' ')[0],
+            onTime: p.onTimeArrivals,
+            late: p.daysLate,
+        }));
+    }, [performanceData]);
+    
+    const financialChartData = useMemo(() => {
+        return performanceData.map(p => ({
+            name: p.user.name.split(' ')[0],
+            rewards: p.rewardAmount,
+            deductions: p.queryAmount,
+        }));
+    }, [performanceData]);
 
     const handleExportCSV = () => {
         const dataToExport = performanceData.map(p => ({
@@ -210,65 +230,14 @@ export default function PerformancePage() {
 
     return (
         <div className="space-y-8">
-            <PageHeader title="Performance Review" description="Review key performance indicators for all employees." />
-
-            <div className="grid gap-6 md:grid-cols-5">
-                <Card className="md:col-span-3">
-                    <CardHeader>
-                        <CardTitle>Performance Comparison</CardTitle>
-                        <CardDescription>Lateness vs. Overtime for the selected period.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ChartContainer config={barChartConfig} className="min-h-[200px] w-full">
-                            <BarChart data={barChartData} margin={{ top: 20, right: 20, bottom: 5, left: 0 }}>
-                                <CartesianGrid vertical={false} />
-                                <XAxis
-                                    dataKey="name"
-                                    tickLine={false}
-                                    tickMargin={10}
-                                    axisLine={false}
-                                />
-                                <YAxis />
-                                <ChartTooltip content={<ChartTooltipContent />} />
-                                <Legend />
-                                <Bar dataKey="lateness" fill="var(--color-lateness)" radius={4} />
-                                <Bar dataKey="overtime" fill="var(--color-overtime)" radius={4} />
-                            </BarChart>
-                        </ChartContainer>
-                    </CardContent>
-                </Card>
-                <Card className="md:col-span-2">
-                    <CardHeader>
-                        <CardTitle>Punctuality Breakdown</CardTitle>
-                        <CardDescription>
-                            {selectedEmployeeId === 'all'
-                                ? "On-time vs. late days for all employees."
-                                : `Punctuality for ${performanceData[0]?.user.name || 'employee'}.`
-                            }
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-1 pb-0">
-                         <ChartContainer config={pieChartConfig} className="mx-auto aspect-square h-[250px]">
-                            <PieChart>
-                                <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
-                                <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                    {pieChartData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                                    ))}
-                                </Pie>
-                                <Legend />
-                            </PieChart>
-                         </ChartContainer>
-                    </CardContent>
-                </Card>
-            </div>
+            <PageHeader title="Performance Dashboard" description="Analyze key performance indicators for all employees." />
 
             <Card>
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
-                            <CardTitle>Employee Performance Details</CardTitle>
-                            <CardDescription>Analyze attendance, rewards, and deductions.</CardDescription>
+                            <CardTitle>Filters</CardTitle>
+                            <CardDescription>Select an employee and date range to analyze performance.</CardDescription>
                         </div>
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                             <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
@@ -315,6 +284,103 @@ export default function PerformancePage() {
                             </Button>
                         </div>
                     </div>
+                </CardHeader>
+            </Card>
+
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Work Days</CardTitle>
+                        <UserIcon className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{aggregatedStats.totalWorkDays}</div>
+                        <p className="text-xs text-muted-foreground">in selected period</p>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Punctuality Score</CardTitle>
+                        <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{aggregatedStats.punctualityScore.toFixed(1)}%</div>
+                        <p className="text-xs text-muted-foreground">On-time arrivals</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Overtime</CardTitle>
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{aggregatedStats.totalOvertime.toFixed(2)} hrs</div>
+                        <p className="text-xs text-muted-foreground">Accumulated across selections</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Net Financial Impact</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className={`text-2xl font-bold ${aggregatedStats.netFinancialImpact >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                            {currency}{aggregatedStats.netFinancialImpact.toFixed(2)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Rewards minus deductions</p>
+                    </CardContent>
+                </Card>
+            </div>
+            
+            <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Attendance Breakdown</CardTitle>
+                        <CardDescription>On-time vs. late days for the selected period.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                       <ChartContainer config={attendanceChartConfig} className="min-h-[250px] w-full">
+                            <BarChart data={attendanceChartData} layout="vertical" stackOffset="expand">
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} />
+                                <ChartTooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                                <Bar dataKey="onTime" fill="var(--color-onTime)" stackId="a" />
+                                <Bar dataKey="late" fill="var(--color-late)" stackId="a" />
+                            </BarChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Financial Impact</CardTitle>
+                        <CardDescription>Rewards vs. Deductions for each employee.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                         <ChartContainer config={financialChartConfig} className="min-h-[250px] w-full">
+                            <BarChart data={financialChartData}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis
+                                    dataKey="name"
+                                    tickLine={false}
+                                    tickMargin={10}
+                                    axisLine={false}
+                                />
+                                <YAxis />
+                                <ChartTooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                                <Bar dataKey="rewards" fill="var(--color-rewards)" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="deductions" fill="var(--color-deductions)" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Employee Performance Details</CardTitle>
+                    <CardDescription>Detailed data table for attendance, rewards, and deductions.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="overflow-x-auto">
