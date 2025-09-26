@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useSettings } from '@/hooks/use-settings';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { VideoOff } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 // Reference to the global ZegoUIKitPrebuilt object from the script
 declare global {
@@ -16,10 +17,11 @@ declare global {
 
 export function MeetingClient() {
   const meetingContainerRef = useRef<HTMLDivElement>(null);
-  const { loggedInUser } = useSettings();
+  const { loggedInUser, users, addInternalMail } = useSettings();
   const searchParams = useSearchParams();
   const roomIDFromUrl = searchParams.get('roomID');
   const [permissionError, setPermissionError] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     // Ensure this code runs only on the client and the Zego library is available
@@ -39,6 +41,8 @@ export function MeetingClient() {
       
       zp = window.ZegoUIKitPrebuilt.create(kitToken);
 
+      const meetingLink = window.location.protocol + '//' + window.location.host + window.location.pathname + '?tab=video&roomID=' + roomID;
+
       try {
           // Join the room
           await zp.joinRoom({
@@ -46,9 +50,33 @@ export function MeetingClient() {
                prejoinViewConfig: {
                   joinButton: "Join",
               },
+              onJoinRoom: async () => {
+                  if (!loggedInUser) return;
+                  const otherUsers = users.filter(u => u.id !== loggedInUser.id);
+                  if (otherUsers.length === 0) return;
+                  
+                  try {
+                      await addInternalMail({
+                          toRecipients: otherUsers.map(u => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })),
+                          ccRecipients: [],
+                          subject: `Meeting Started by ${loggedInUser.name}`,
+                          body: `A new video meeting has been started. You can join using the link below:\n\n<a href="${meetingLink}" target="_blank">${meetingLink}</a>`,
+                      });
+                      toast({
+                          title: "Meeting Notification Sent",
+                          description: "All users have been notified about this meeting.",
+                      });
+                  } catch (error) {
+                      toast({
+                          title: "Notification Error",
+                          description: "Could not notify users about the meeting.",
+                          variant: "destructive"
+                      });
+                  }
+              },
               sharedLinks: [{
                   name: 'Personal link',
-                  url: window.location.protocol + '//' + window.location.host  + window.location.pathname + '?roomID=' + roomID,
+                  url: meetingLink,
               }],
               scenario: {
                   mode: window.ZegoUIKitPrebuilt.VideoConference,
@@ -81,7 +109,7 @@ export function MeetingClient() {
         zp.destroy();
       }
     };
-  }, [loggedInUser, roomIDFromUrl]);
+  }, [loggedInUser, roomIDFromUrl, users, addInternalMail, toast]);
 
   return (
     <>
