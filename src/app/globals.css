@@ -79,3 +79,9 @@ body {
     @apply bg-card;
   }
 }
+
+/* Custom style for ZegoCloud join button */
+#root .join-button {
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+}

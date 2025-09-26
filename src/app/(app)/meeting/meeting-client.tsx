@@ -40,6 +40,9 @@ export function MeetingClient() {
       // Join the room
       zp.joinRoom({
           container: meetingContainerRef.current!,
+          prejoinViewConfig: {
+              joinButton: "Join",
+          },
           sharedLinks: [{
               name: 'Personal link',
               url: window.location.protocol + '//' + window.location.host  + window.location.pathname + '?roomID=' + roomID,
