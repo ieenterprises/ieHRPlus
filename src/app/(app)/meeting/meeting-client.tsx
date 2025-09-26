@@ -7,6 +7,9 @@ import { useSettings } from '@/hooks/use-settings';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { VideoOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { collection, addDoc, writeBatch } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import type { ChatMessage } from '@/lib/types';
 
 // Reference to the global ZegoUIKitPrebuilt object from the script
 declare global {
@@ -17,7 +20,7 @@ declare global {
 
 export function MeetingClient() {
   const meetingContainerRef = useRef<HTMLDivElement>(null);
-  const { loggedInUser, users, addInternalMail } = useSettings();
+  const { loggedInUser, users } = useSettings();
   const searchParams = useSearchParams();
   const roomIDFromUrl = searchParams.get('roomID');
   const [permissionError, setPermissionError] = useState(false);
@@ -56,15 +59,25 @@ export function MeetingClient() {
                   if (otherUsers.length === 0) return;
                   
                   try {
-                      await addInternalMail({
-                          toRecipients: otherUsers.map(u => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })),
-                          ccRecipients: [],
-                          subject: `Meeting Started by ${loggedInUser.name}`,
-                          body: `A new video meeting has been started. You can join using the link below:\n\n<a href="${meetingLink}" target="_blank">${meetingLink}</a>`,
+                      const batch = writeBatch(db);
+                      otherUsers.forEach(user => {
+                          const messageData: Omit<ChatMessage, 'id'> = {
+                              senderId: loggedInUser.id,
+                              receiverId: user.id,
+                              content: `A video meeting has been started by ${loggedInUser.name}. Click to join: <a href="${meetingLink}" target="_blank">${meetingLink}</a>`,
+                              timestamp: new Date().toISOString(),
+                              isRead: false,
+                              businessId: loggedInUser.businessId,
+                          };
+                          const messageRef = doc(collection(db, 'chatMessages'));
+                          batch.set(messageRef, messageData);
                       });
+
+                      await batch.commit();
+
                       toast({
                           title: "Meeting Notification Sent",
-                          description: "All users have been notified about this meeting.",
+                          description: "All users have been notified via chat about this meeting.",
                       });
                   } catch (error) {
                       toast({
@@ -109,7 +122,7 @@ export function MeetingClient() {
         zp.destroy();
       }
     };
-  }, [loggedInUser, roomIDFromUrl, users, addInternalMail, toast]);
+  }, [loggedInUser, roomIDFromUrl, users, toast]);
 
   return (
     <>

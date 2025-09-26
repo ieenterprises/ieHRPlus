@@ -79,7 +79,6 @@ type SettingsContextType = {
     addDepartment: (department: Omit<Department, 'id' | 'businessId'>) => Promise<void>;
     updateDepartment: (id: string, department: Partial<Department>) => Promise<void>;
     deleteDepartment: (id: string) => Promise<void>;
-    addInternalMail: (mail: Omit<InternalMail, 'id' | 'senderId' | 'senderName' | 'timestamp' | 'readBy' | 'businessId' | 'threadId'>) => Promise<void>;
     
     // Auth and session state
     loggedInUser: User | null;
@@ -512,20 +511,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const updateDepartment = updateDocFactory('departments');
     const deleteDepartment = deleteDocFactory('departments');
 
-     const addInternalMail = async (mail: Omit<InternalMail, 'id' | 'senderId' | 'senderName' | 'timestamp' | 'readBy' | 'businessId' | 'threadId'>) => {
-        if (!loggedInUser) throw new Error("User not logged in");
-        
-        const mailData: Omit<InternalMail, 'id'> = {
-            ...mail,
-            senderId: loggedInUser.id,
-            senderName: loggedInUser.name,
-            timestamp: new Date().toISOString(),
-            readBy: { [loggedInUser.id]: true },
-            businessId: loggedInUser.businessId,
-            threadId: Math.random().toString(36).substring(2),
-        };
-        await addDoc(collection(db, 'internal_mails'), mailData);
-    };
 
     const createBatchSetter = <T extends {id?: string}>(collectionName: string, localSetter: React.Dispatch<React.SetStateAction<T[]>>) => 
         async (value: React.SetStateAction<T[]>) => {
@@ -712,7 +697,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         generateAccessCode,
         validateAndUseAccessCode,
         updateUserTempAccess,
-        addInternalMail,
         loggedInUser,
         loadingUser,
         logout,
