@@ -3,13 +3,13 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useSettings } from '@/hooks/use-settings';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Search, Send, MoreVertical, CheckSquare, Trash2, Loader2, Inbox, Reply, Forward, Paperclip, Upload, Folder } from 'lucide-react';
-import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -24,6 +24,8 @@ import type { User, InternalMail, Attachment } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format, formatDistanceToNow } from 'date-fns';
 import { getPublicUrl, uploadFile } from '@/lib/firebase-storage';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 
 type MailboxView = "inbox" | "sent";
 
@@ -294,3 +296,5 @@ const RecipientInput = ({ label, recipients, onToggle, allUsers, search, onSearc
         </Popover>
     </div>
 );
+
+    
