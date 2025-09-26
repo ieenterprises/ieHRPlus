@@ -120,7 +120,7 @@ export function HRQueryTable() {
 
   const handleQuerySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!loggedInUser?.businessId) return;
+    if (!loggedInUser?.businessId || !loggedInUser.id) return;
 
     setIsSubmitting(true);
     
@@ -139,15 +139,17 @@ export function HRQueryTable() {
     }
 
     try {
-        const attachmentPromises = attachments.map(async (attachment) => {
-            if ((attachment as any).source === 'local') {
-                const file = (attachment as any).file as File;
+        const attachmentPromises = (attachments as any).map(async (attachment: any) => {
+            if (attachment.source === 'local') {
+                const file = attachment.file as File;
                 const personalDocsFolder = 'documents';
-                await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, file);
+                // Pass assigneeUser.id as the target user
+                await uploadFile(loggedInUser.businessId!, assigneeUser.id, personalDocsFolder, file, loggedInUser.id!);
                 const url = await getPublicUrl(loggedInUser.businessId!, [loggedInUser.businessId, 'user_files', assigneeUser.id, personalDocsFolder, file.name].join('/'));
                 return { name: file.name, url };
             }
-            return attachment;
+            // For files from file manager, URL is already correct
+            return { name: attachment.name, url: attachment.url };
         });
 
         const finalAttachments = await Promise.all(attachmentPromises);
@@ -180,6 +182,7 @@ export function HRQueryTable() {
         setIsSubmitting(false);
     }
   };
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       if (event.target.files) {

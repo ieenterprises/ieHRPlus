@@ -1,4 +1,5 @@
 
+
 import { getStorage, ref, listAll, uploadBytesResumable, getDownloadURL, deleteObject, getMetadata, updateMetadata, UploadTask } from "firebase/storage";
 import { app } from "./firebase";
 import { FileItem } from "./types";
@@ -34,22 +35,18 @@ export async function listItems(businessId: string, userId: string, path: string
                     contentType: metadata.contentType,
                     updated: metadata.updated,
                     timeCreated: metadata.timeCreated,
+                    customMetadata: metadata.customMetadata || {} // Ensure customMetadata is not undefined
                 }
             } as FileItem;
         });
 
         const folderPromises = res.prefixes.map(async (folderRef) => {
-            // Folders are just prefixes, we can't reliably get metadata for them
-            // like we do for files. We'll construct a synthetic metadata object.
-            // A more robust solution might involve storing folder metadata in Firestore
-            // if more properties are needed in the future.
             return {
                 name: folderRef.name,
                 type: 'folder',
                  metadata: {
                     size: 0,
                     contentType: 'inode/directory',
-                    // We can't get updated/created time for a prefix, so use a placeholder
                     updated: new Date().toISOString(),
                     timeCreated: new Date().toISOString(),
                 }
@@ -62,8 +59,6 @@ export async function listItems(businessId: string, userId: string, path: string
 
     } catch (error) {
         console.error("Error listing files:", error);
-        // Firebase returns an error if the folder doesn't exist, which is fine.
-        // We just return an empty array.
         return [];
     }
 }
@@ -75,18 +70,26 @@ export async function createFolder(businessId: string, userId: string, path: str
     await uploadBytesResumable(folderRef, new Blob(['']));
 }
 
-// 3. Upload a file
+// 3. Upload a file - NOW ACCEPTS creatorId
 export function uploadFile(
     businessId: string,
-    userId: string,
+    targetUserId: string,
     path: string,
     file: File,
-    onProgress?: (progress: number) => void
+    creatorId: string,
+    onProgress?: (progress: number) => void,
 ): Promise<void> {
     return new Promise((resolve, reject) => {
-        const fullPath = [businessId, 'user_files', userId, path, file.name].filter(Boolean).join('/');
+        const fullPath = [businessId, 'user_files', targetUserId, path, file.name].filter(Boolean).join('/');
         const storageRef = ref(storage, fullPath);
-        const uploadTask: UploadTask = uploadBytesResumable(storageRef, file);
+
+        const metadata = {
+            customMetadata: {
+                creatorId: creatorId // Store the ID of the user performing the upload
+            }
+        };
+
+        const uploadTask: UploadTask = uploadBytesResumable(storageRef, file, metadata);
 
         uploadTask.on('state_changed',
             (snapshot) => {
@@ -106,6 +109,7 @@ export function uploadFile(
     });
 }
 
+
 // 4. Delete an item (file or folder)
 export async function deleteItem(businessId: string, userId: string, item: FileItem, currentPath: string) {
     const itemPath = [businessId, 'user_files', userId, currentPath, item.name].filter(Boolean).join('/');
@@ -114,9 +118,8 @@ export async function deleteItem(businessId: string, userId: string, item: FileI
     if (item.type === 'folder') {
         const allItemsInFolder = await listAllRecursive(itemRef);
         const deletePromises = allItemsInFolder.map(fileRef => deleteObject(fileRef));
-        // Also delete the placeholder if it exists (for empty folders)
         const placeholderRef = ref(storage, `${itemPath}/.emptyFolderPlaceholder`);
-        deletePromises.push(deleteObject(placeholderRef).catch(() => {})); // Ignore error if it doesn't exist
+        deletePromises.push(deleteObject(placeholderRef).catch(() => {}));
         
         await Promise.all(deletePromises);
     } else {
@@ -124,29 +127,33 @@ export async function deleteItem(businessId: string, userId: string, item: FileI
     }
 }
 
-// Helper to copy a single file
+// Helper to copy a single file, preserving metadata
 async function copyFile(fromRef: any, toRef: any) {
     const downloadUrl = await getDownloadURL(fromRef);
-    // Fetch the file as a blob
+    const metadata = await getMetadata(fromRef);
+
     const response = await fetch(downloadUrl);
     const blob = await response.blob();
-    // Upload the blob to the new location
-    await uploadBytesResumable(toRef, blob);
+    
+    const newMetadata = {
+        contentType: metadata.contentType,
+        customMetadata: metadata.customMetadata,
+    };
+    
+    await uploadBytesResumable(toRef, blob, newMetadata);
 }
 
 // 5. Rename an item
 export async function renameItem(businessId: string, userId: string, item: FileItem, newName: string, currentPath: string) {
     const fromPath = [businessId, 'user_files', userId, currentPath, item.name].filter(Boolean).join('/');
     const toPath = [businessId, 'user_files', userId, currentPath, newName].filter(Boolean).join('/');
-
+    
     await moveItem(businessId, userId, fromPath, toPath, item.type === 'folder');
 }
 
 
 // 6. Get public URL for a file
 export async function getPublicUrl(businessId: string, path: string): Promise<string> {
-    // This function remains unchanged as it's used for general access via URL, 
-    // assuming the calling function constructs the full, correct path.
     const fileRef = ref(storage, path);
     return getDownloadURL(fileRef);
 }
@@ -162,12 +169,11 @@ export async function moveItem(businessId: string, userId: string, fromPath: str
         await deleteObject(fromRef);
     } else {
         const allFiles = await listAllRecursive(fromRef);
-        // Also handle the placeholder for potentially empty folders
         const placeholderRef = ref(storage, `${fromPath}/.emptyFolderPlaceholder`);
         try {
             await getMetadata(placeholderRef);
             allFiles.push(placeholderRef);
-        } catch(e) { /* placeholder doesn't exist, that's fine */ }
+        } catch(e) {}
 
 
         for (const fileRef of allFiles) {
@@ -189,15 +195,14 @@ export async function copyItem(businessId: string, userId: string, fromPath: str
         await copyFile(fromRef, toRef);
     } else {
         const allFiles = await listAllRecursive(fromRef);
-         // Also handle the placeholder for potentially empty folders
         const placeholderRef = ref(storage, `${fromPath}/.emptyFolderPlaceholder`);
         try {
             await getMetadata(placeholderRef);
             allFiles.push(placeholderRef);
-        } catch(e) { /* placeholder doesn't exist */ }
+        } catch(e) {}
 
         for (const fileRef of allFiles) {
-            const relativePath = fileRef.fullPath.substring(fromRef.fullPath.length);
+            const relativePath = fileRef.fullPath.substring(fromPath.fullPath.length);
             const newPath = `${toPath}${relativePath}`;
             const newFileRef = ref(storage, newPath);
             await copyFile(fileRef, newFileRef);

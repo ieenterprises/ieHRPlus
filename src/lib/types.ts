@@ -1,5 +1,6 @@
 
 
+
 import type { AnyPermission } from "./permissions";
 
 export type Attachment = {
@@ -166,8 +167,10 @@ export interface FileItem {
     contentType?: string | undefined;
     updated: string;
     timeCreated: string;
+    customMetadata?: { [key: string]: string }; // Added to hold creatorId
   };
 }
+
 
 export type BranchProduct = {
   id: string;

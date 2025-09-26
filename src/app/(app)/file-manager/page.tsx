@@ -20,6 +20,8 @@ import { FileIcon } from '@/components/file-icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSettings } from '@/hooks/use-settings';
 
+const seniorRoles = ["Owner", "Administrator", "Manager"];
+
 const PreviewContent = ({ fileUrl, fileType }: { fileUrl: string, fileType: string }) => {
     const isOfficeDocOrPdf = fileType.includes('officedocument') ||
                            fileType.includes('msword') ||
@@ -75,6 +77,16 @@ export default function FileManagerPage() {
     const businessId = loggedInUser?.businessId;
     const userId = loggedInUser?.id;
 
+    const isSeniorStaff = useMemo(() => loggedInUser && seniorRoles.includes(loggedInUser.role), [loggedInUser]);
+
+    const canDelete = (item: FileItem) => {
+        if (isSeniorStaff) return true;
+        if (item.type === 'folder') return true; // For now, allow deleting folders they created. A more robust solution needs folder metadata.
+        const creatorId = item.metadata?.customMetadata?.creatorId;
+        return !creatorId || creatorId === loggedInUser?.id;
+    };
+
+
     const fetchItems = useCallback(async () => {
         if (!businessId || !userId) return;
         setIsLoading(true);
@@ -116,9 +128,10 @@ export default function FileManagerPage() {
         try {
             await uploadFile(
                 businessId,
-                userId,
+                userId, // targetUserId is the logged in user
                 path,
                 uploadFileObj,
+                userId, // creatorId is the logged in user
                 (progress) => setUploadProgress(progress)
             );
             toast({ title: 'File uploaded', description: `Successfully uploaded "${uploadFileObj.name}".` });
@@ -269,14 +282,16 @@ export default function FileManagerPage() {
                                                     <DropdownMenuContent>
                                                         {item.type === 'file' && <DropdownMenuItem onSelect={() => handlePreview(item)}><ExternalLink className="mr-2 h-4 w-4" /> Preview</DropdownMenuItem>}
                                                         {item.type === 'file' && <DropdownMenuItem onSelect={() => handleDownload(item)}><Download className="mr-2 h-4 w-4" /> Download</DropdownMenuItem>}
-                                                        <DropdownMenuSeparator />
-                                                        <AlertDialog>
-                                                            <AlertDialogTrigger asChild><DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive hover:!text-destructive focus:!text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem></AlertDialogTrigger>
-                                                            <AlertDialogContent>
-                                                                <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete "{item.name}".</AlertDialogDescription></AlertDialogHeader>
-                                                                <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(item)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter>
-                                                            </AlertDialogContent>
-                                                        </AlertDialog>
+                                                        {canDelete(item) && <DropdownMenuSeparator />}
+                                                        {canDelete(item) &&
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger asChild><DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive hover:!text-destructive focus:!text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem></AlertDialogTrigger>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete "{item.name}".</AlertDialogDescription></AlertDialogHeader>
+                                                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(item)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                        }
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>

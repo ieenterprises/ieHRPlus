@@ -172,7 +172,8 @@ export function ChatClient() {
             const uploadedAttachments = await Promise.all(
                 (attachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
                     const folder = `chat_attachments`;
-                    await uploadFile(loggedInUser!.businessId!, loggedInUser!.id, folder, attachment.file);
+                    // The creatorId is always the logged in user.
+                    await uploadFile(loggedInUser!.businessId!, loggedInUser.id, folder, attachment.file, loggedInUser.id);
                     const fullPath = [loggedInUser.businessId, 'user_files', loggedInUser.id, folder, attachment.file.name].join('/');
                     const url = await getPublicUrl(loggedInUser!.businessId!, fullPath);
                     return { name: attachment.name, url };

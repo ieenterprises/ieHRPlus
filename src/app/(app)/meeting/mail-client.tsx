@@ -227,9 +227,10 @@ const ComposeMailDialog = ({ isOpen, onClose, replyingTo, forwardingMail, users 
         try {
             const uploadedAttachments = await Promise.all(
                 (mailAttachments.filter(a => (a as any).source === 'local') as (Attachment & {file: File})[]).map(async (attachment) => {
-                    const folder = `mail_attachments/${loggedInUser.id}`;
-                    await uploadFile(loggedInUser.businessId!, folder, attachment.file);
-                    const url = await getPublicUrl(loggedInUser.businessId!, `${folder}/${attachment.file.name}`);
+                    const folder = `mail_attachments`;
+                    // Upload to sender's own folder
+                    await uploadFile(loggedInUser.businessId!, loggedInUser.id, folder, attachment.file, loggedInUser.id);
+                    const url = await getPublicUrl(loggedInUser.businessId!, [loggedInUser.businessId, 'user_files', loggedInUser.id, folder, attachment.file.name].join('/'));
                     return { name: attachment.name, url };
                 })
             );

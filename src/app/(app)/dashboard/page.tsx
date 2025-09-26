@@ -298,7 +298,7 @@ export default function DashboardPage() {
           const fileList = Array.from(event.target.files);
           const uploadPromises = fileList.map(async (file) => {
                 const folder = `request_attachments`;
-                await uploadFile(loggedInUser.businessId!, loggedInUser.id!, folder, file, () => {});
+                await uploadFile(loggedInUser.businessId!, loggedInUser.id!, folder, file, loggedInUser.id!);
                 const fullPath = [loggedInUser.businessId, 'user_files', loggedInUser.id, folder, file.name].join('/');
                 const url = await getPublicUrl(loggedInUser.businessId!, fullPath);
                 return { name: file.name, url };
@@ -313,12 +313,13 @@ export default function DashboardPage() {
     };
 
   const handleResponseFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (event.target.files && loggedInUser?.businessId && loggedInUser?.id) {
+      if (event.target.files && loggedInUser?.businessId && loggedInUser?.id && respondingQuery) {
           const fileList = Array.from(event.target.files);
           const uploadPromises = fileList.map(async (file) => {
               const folder = `hr_query_responses`;
-              await uploadFile(loggedInUser.businessId!, loggedInUser.id!, folder, file, () => {});
-              const fullPath = [loggedInUser.businessId, 'user_files', loggedInUser.id, folder, file.name].join('/');
+              // Upload to the query requester's folder
+              await uploadFile(loggedInUser.businessId!, respondingQuery.requesterId, folder, file, loggedInUser.id!);
+              const fullPath = [loggedInUser.businessId, 'user_files', respondingQuery.requesterId, folder, file.name].join('/');
               const url = await getPublicUrl(loggedInUser.businessId!, fullPath);
               return { name: file.name, url };
           });
