@@ -15,16 +15,10 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { FileItem } from '@/lib/types';
 import { formatBytes } from '@/lib/utils';
-import { listItems, createFolder, uploadFile, deleteItem, renameItem, getPublicUrl, moveItem, copyItem } from '@/lib/firebase-storage';
+import { listItems, createFolder, uploadFile, deleteItem, getPublicUrl } from '@/lib/firebase-storage';
 import { FileIcon } from '@/components/file-icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSettings } from '@/hooks/use-settings';
-
-type ClipboardData = {
-  item: FileItem;
-  sourcePath: string;
-  operation: 'copy' | 'move';
-};
 
 const PreviewContent = ({ fileUrl, fileType }: { fileUrl: string, fileType: string }) => {
     const isOfficeDocOrPdf = fileType.includes('officedocument') ||
@@ -69,13 +63,11 @@ export default function FileManagerPage() {
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
 
-    const [renameData, setRenameData] = useState<{ item: FileItem; newName: string } | null>(null);
     const [createFolderName, setCreateFolderName] = useState('');
     const [uploadFileObj, setUploadFileObj] = useState<File | null>(null);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
     const [dialogOpen, setDialogOpen] = useState<{ create?: boolean; upload?: boolean; preview?: boolean; }>({});
-    const [clipboard, setClipboard] = useState<ClipboardData | null>(null);
     const [previewFile, setPreviewFile] = useState<{ item: FileItem; url: string } | null>(null);
 
     const { toast } = useToast();
@@ -151,24 +143,6 @@ export default function FileManagerPage() {
         }
     };
 
-    const handleRename = async () => {
-        if (!renameData || !businessId || !userId) return;
-        const { item, newName } = renameData;
-        if (!newName || newName === item.name) {
-            setRenameData(null);
-            return;
-        }
-
-        try {
-            await renameItem(businessId, userId, item, newName, path);
-            toast({ title: 'Item renamed', description: `Successfully renamed "${item.name}" to "${newName}".` });
-            setRenameData(null);
-            fetchItems();
-        } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Error renaming item', description: err.message });
-        }
-    };
-
     const handleItemClick = async (item: FileItem) => {
         if (item.type === 'folder') {
             setPath(`${path ? path + '/' : ''}${item.name}`);
@@ -202,38 +176,6 @@ export default function FileManagerPage() {
             document.body.removeChild(a);
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Error downloading file', description: err.message });
-        }
-    };
-
-    const handleSetClipboard = (item: FileItem, operation: 'copy' | 'move') => {
-        setClipboard({ item, operation, sourcePath: path });
-        toast({ title: `${operation === 'copy' ? 'Copied' : 'Selected'} to clipboard`, description: `"${item.name}" is ready to be pasted.` });
-    };
-
-    const handlePaste = async () => {
-        if (!clipboard || !businessId || !userId) return;
-        const { item, operation, sourcePath } = clipboard;
-
-        const fromPath = [businessId, 'user_files', userId, sourcePath, item.name].filter(Boolean).join('/');
-        const toPath = [businessId, 'user_files', userId, path, item.name].filter(Boolean).join('/');
-
-        if (fromPath === toPath && operation === 'move') {
-            toast({ variant: 'destructive', title: 'Cannot move item', description: 'Source and destination are the same.' });
-            return;
-        }
-
-        try {
-            if (operation === 'copy') {
-                await copyItem(businessId, userId, fromPath, toPath, item.type === 'folder');
-                toast({ title: 'Item copied', description: `Successfully copied "${item.name}" to the current folder.` });
-            } else if (operation === 'move') {
-                await moveItem(businessId, userId, fromPath, toPath, item.type === 'folder');
-                toast({ title: 'Item moved', description: `Successfully moved "${item.name}" to the current folder.` });
-            }
-            setClipboard(null);
-            fetchItems();
-        } catch (err: any) {
-            toast({ variant: 'destructive', title: `Error ${operation === 'copy' ? 'copying' : 'moving'} item`, description: err.message });
         }
     };
 
@@ -275,7 +217,6 @@ export default function FileManagerPage() {
                             />
                         </div>
                         <div className="flex gap-2">
-                            {clipboard && <Button onClick={handlePaste} disabled={showLoading}><ClipboardPaste className="mr-2 h-4 w-4" /> Paste</Button>}
                             <Button variant="outline" onClick={() => setDialogOpen({ ...dialogOpen, create: true })} disabled={showLoading}><FolderPlus className="mr-2 h-4 w-4" /> New Folder</Button>
                             <Button onClick={() => setDialogOpen({ ...dialogOpen, upload: true })} disabled={showLoading}><UploadCloud className="mr-2 h-4 w-4" /> Upload File</Button>
                         </div>
@@ -327,9 +268,6 @@ export default function FileManagerPage() {
                                                     <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                     <DropdownMenuContent>
                                                         {item.type === 'file' && <DropdownMenuItem onSelect={() => handlePreview(item)}><ExternalLink className="mr-2 h-4 w-4" /> Preview</DropdownMenuItem>}
-                                                        <DropdownMenuItem onSelect={() => handleSetClipboard(item, 'copy')}><Copy className="mr-2 h-4 w-4" /> Copy</DropdownMenuItem>
-                                                        <DropdownMenuItem onSelect={() => handleSetClipboard(item, 'move')}><Move className="mr-2 h-4 w-4" /> Move</DropdownMenuItem>
-                                                        <DropdownMenuItem onSelect={() => setRenameData({ item, newName: item.name })}><Edit className="mr-2 h-4 w-4" /> Rename</DropdownMenuItem>
                                                         {item.type === 'file' && <DropdownMenuItem onSelect={() => handleDownload(item)}><Download className="mr-2 h-4 w-4" /> Download</DropdownMenuItem>}
                                                         <DropdownMenuSeparator />
                                                         <AlertDialog>
@@ -379,14 +317,6 @@ export default function FileManagerPage() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!renameData} onOpenChange={(open) => !open && setRenameData(null)}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Rename Item</DialogTitle></DialogHeader>
-                    <div className="grid gap-4 py-4"><Input value={renameData?.newName || ''} onChange={(e) => renameData && setRenameData({ ...renameData, newName: e.target.value })} placeholder="New name" onKeyDown={(e) => e.key === 'Enter' && handleRename()} /></div>
-                    <DialogFooter><Button variant="outline" onClick={() => setRenameData(null)}>Cancel</Button><Button onClick={handleRename}>Rename</Button></DialogFooter>
-                </DialogContent>
-            </Dialog>
-
             <Dialog open={dialogOpen.preview} onOpenChange={(open) => { if (!open) { setPreviewFile(null); } setDialogOpen({ ...dialogOpen, preview: open }); }}>
                 <DialogContent className="max-w-4xl w-full h-[90vh] flex flex-col">
                     {previewFile && (
@@ -404,3 +334,5 @@ export default function FileManagerPage() {
         </div>
     );
 }
+
+    
