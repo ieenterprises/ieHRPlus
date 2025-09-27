@@ -11,7 +11,7 @@ import { Calendar as CalendarIcon, Download } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format, startOfMonth, endOfMonth, isWithinInterval, differenceInMilliseconds, getDay, startOfDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isWithinInterval, differenceInMilliseconds, getDay, startOfDay, endOfDay } from 'date-fns';
 import type { User, TimeRecord, HRQuery, Reward } from '@/lib/types';
 import Papa from "papaparse";
 import { useToast } from '@/hooks/use-toast';
@@ -44,7 +44,7 @@ export default function PayrollPage() {
 
     const payrollData = useMemo((): PayrollData[] => {
         const rangeStart = dateRange?.from ? startOfDay(dateRange.from) : startOfMonth(new Date());
-        const rangeEnd = dateRange?.to ? endOfMonth(dateRange.to) : endOfMonth(new Date());
+        const rangeEnd = dateRange?.to ? endOfDay(dateRange.to) : endOfMonth(new Date());
         const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
         return users.map(user => {
@@ -236,7 +236,7 @@ export default function PayrollPage() {
                                       />
                                 </PopoverContent>
                             </Popover>
-                             <Button onClick={handleExportCSV} variant="outline">
+                             <Button onClick={handleExportCSV} variant="outline" className="w-full sm:w-auto">
                                 <Download className="mr-2 h-4 w-4" />
                                 Export CSV
                             </Button>
