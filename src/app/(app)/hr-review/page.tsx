@@ -438,6 +438,33 @@ export default function HrReviewPage() {
 
     return result.filter(s => s.totalOvertimeMinutes > 0);
   }, [users, timeRecords]);
+  
+  const durationSummary = useMemo(() => {
+    const summary = new Map<string, { user: User; totalDurationMs: number }>();
+    users.forEach(user => {
+        summary.set(user.id, { user, totalDurationMs: 0 });
+    });
+    timeRecords.forEach(record => {
+        if (record.clockOutTime) {
+            const user = users.find(u => u.id === record.userId);
+            if (user) {
+                const durationMs = new Date(record.clockOutTime).getTime() - new Date(record.clockInTime).getTime();
+                if (durationMs > 0) {
+                    const userSummary = summary.get(user.id);
+                    if (userSummary) {
+                        userSummary.totalDurationMs += durationMs;
+                    }
+                }
+            }
+        }
+    });
+    const result = Array.from(summary.values()).map(s => ({
+        user: s.user,
+        totalDurationMinutes: Math.floor(s.totalDurationMs / 60000)
+    }));
+    return result.filter(s => s.totalDurationMinutes > 0);
+  }, [users, timeRecords]);
+
 
   const DatePicker = () => (
      <Popover>
@@ -631,7 +658,7 @@ export default function HrReviewPage() {
           </CardContent>
       </Card>
       
-      <div className="grid md:grid-cols-2 gap-8">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
         <Card>
             <CardHeader>
                 <CardTitle>Lateness Summary</CardTitle>
@@ -686,6 +713,36 @@ export default function HrReviewPage() {
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={2} className="h-24 text-center">No overtime recorded for this period.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+         <Card>
+            <CardHeader>
+                <CardTitle>Duration Summary</CardTitle>
+                <CardDescription>Total work duration per employee for the selected period.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Employee</TableHead>
+                            <TableHead className="text-right">Total Duration</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {durationSummary.length > 0 ? (
+                            durationSummary.map(({ user, totalDurationMinutes }) => (
+                                <TableRow key={user.id}>
+                                    <TableCell className="font-medium">{user.name}</TableCell>
+                                    <TableCell className="text-right">{formatMinutes(totalDurationMinutes)}</TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={2} className="h-24 text-center">No completed work sessions recorded.</TableCell>
                             </TableRow>
                         )}
                     </TableBody>
