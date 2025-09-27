@@ -192,12 +192,12 @@ export default function PayrollPage() {
                             <CardTitle>Payroll</CardTitle>
                             <CardDescription>Review salaries for all employees.</CardDescription>
                         </div>
-                        <div className="flex items-center gap-2 self-end">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 self-end">
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant={"outline"}
-                                        className={cn("w-[280px] justify-start text-left font-normal")}
+                                        className={cn("w-full sm:w-[280px] justify-start text-left font-normal")}
                                     >
                                         <CalendarIcon className="mr-2 h-4 w-4" />
                                         {format(selectedMonth, 'MMMM yyyy')}

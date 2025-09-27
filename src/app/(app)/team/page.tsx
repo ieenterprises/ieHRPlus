@@ -475,7 +475,7 @@ export default function TeamPage() {
                             <CardTitle>Users</CardTitle>
                             <CardDescription>A list of all users in your system.</CardDescription>
                         </div>
-                        <div className="flex items-center gap-2 self-end">
+                        <div className="flex items-center gap-2 self-end sm:self-center">
                             <Button onClick={handleExport} variant="outline" size="sm">
                                 <Download className="mr-2 h-4 w-4" /> Export
                             </Button>
@@ -542,7 +542,7 @@ export default function TeamPage() {
                             <CardTitle>Roles</CardTitle>
                             <CardDescription>Define roles and their permissions for your team.</CardDescription>
                         </div>
-                        <Button onClick={() => handleOpenRoleDialog(null)} size="sm" className="self-end"><PlusCircle className="mr-2 h-4 w-4" />Add Role</Button>
+                        <Button onClick={() => handleOpenRoleDialog(null)} size="sm" className="self-end sm:self-center"><PlusCircle className="mr-2 h-4 w-4" />Add Role</Button>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -591,7 +591,7 @@ export default function TeamPage() {
                             <CardTitle>Departments</CardTitle>
                             <CardDescription>Manage your company's departments.</CardDescription>
                         </div>
-                        <Button onClick={() => handleOpenDepartmentDialog(null)} size="sm" className="self-end"><PlusCircle className="mr-2 h-4 w-4" />Add Department</Button>
+                        <Button onClick={() => handleOpenDepartmentDialog(null)} size="sm" className="self-end sm:self-center"><PlusCircle className="mr-2 h-4 w-4" />Add Department</Button>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -724,5 +724,3 @@ export default function TeamPage() {
     </div>
   );
 }
-
-    

@@ -121,7 +121,7 @@ export default function DashboardPage() {
     // Filter and sort rewards
     const filteredRewards = allRewards.filter(r => {
         const rewardDate = new Date(r.createdAt);
-        const withinRange = rewardDateRange?.from && rewardDateRange.to
+        const withinRange = rewardDateRange?.from && rewardDateRange.to 
             ? isWithinInterval(rewardDate, { start: startOfDay(rewardDateRange.from), end: endOfDay(rewardDateRange.to) })
             : true;
         return r.assigneeId === loggedInUser.id && withinRange;
@@ -411,7 +411,7 @@ export default function DashboardPage() {
             id="date"
             variant={"outline"}
             className={cn(
-              "w-[300px] justify-start text-left font-normal",
+              "w-full sm:w-[300px] justify-start text-left font-normal",
               !dateRange && "text-muted-foreground"
             )}
           >
@@ -619,7 +619,7 @@ export default function DashboardPage() {
                       These are requests for information sent to you by HR or management.
                   </CardDescription>
               </div>
-              <div className="flex w-full sm:w-auto items-center gap-2">
+              <div className="flex w-full flex-wrap sm:w-auto items-center gap-2">
                   <DatePicker dateRange={queryDateRange} setDateRange={setQueryDateRange} />
                   <div className="relative flex-1 sm:flex-initial">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -652,6 +652,7 @@ export default function DashboardPage() {
               </div>
           </CardHeader>
           <CardContent>
+            <div className="overflow-x-auto">
               <Table>
                   <TableHeader>
                       <TableRow>
@@ -708,6 +709,7 @@ export default function DashboardPage() {
                       )}
                   </TableBody>
               </Table>
+              </div>
           </CardContent>
       </Card>
       
@@ -722,7 +724,7 @@ export default function DashboardPage() {
                       A log of all rewards and recognitions you have received.
                   </CardDescription>
               </div>
-              <div className="flex w-full sm:w-auto items-center gap-2">
+              <div className="flex w-full flex-wrap sm:w-auto items-center gap-2">
                   <DatePicker dateRange={rewardDateRange} setDateRange={setRewardDateRange} />
                   <div className="relative flex-1 sm:flex-initial">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -755,6 +757,7 @@ export default function DashboardPage() {
               </div>
           </CardHeader>
           <CardContent>
+            <div className="overflow-x-auto">
               <Table>
                   <TableHeader>
                       <TableRow>
@@ -811,6 +814,7 @@ export default function DashboardPage() {
                       )}
                   </TableBody>
               </Table>
+              </div>
           </CardContent>
       </Card>
 
@@ -820,7 +824,7 @@ export default function DashboardPage() {
                 <CardTitle>My Requests</CardTitle>
                 <CardDescription>Submit and track requests for leave, salary, and more.</CardDescription>
             </div>
-             <div className="flex w-full sm:w-auto items-center gap-2 self-start sm:self-center">
+             <div className="flex w-full flex-wrap sm:w-auto items-center gap-2 self-start sm:self-center">
                 <DatePicker dateRange={requestDateRange} setDateRange={setRequestDateRange} />
                 <div className="relative flex-1 sm:flex-initial">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
