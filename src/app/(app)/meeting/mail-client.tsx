@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Search, Send, MoreVertical, CheckSquare, Trash2, Loader2, Inbox, Reply, Forward, Paperclip, Upload, Folder } from 'lucide-react';
+import { Search, Send, MoreVertical, CheckSquare, Trash2, Loader2, Inbox, Reply, Forward, Paperclip, Upload, Folder, ArrowLeft } from 'lucide-react';
 import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -26,6 +26,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { getPublicUrl, uploadFile } from '@/lib/firebase-storage';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 type MailboxView = "inbox" | "sent";
 
@@ -90,8 +91,12 @@ export function MailClient() {
     };
     
     return (
-      <Card className="h-[70vh] flex">
-        <div className="w-1/3 max-w-sm border-r flex flex-col">
+      <Card className="h-[70vh] flex overflow-hidden relative">
+        <div className={cn(
+            "w-full md:w-1/3 md:max-w-sm border-r flex flex-col transition-transform duration-300 ease-in-out",
+            "md:translate-x-0",
+            viewingMail ? "-translate-x-full" : "translate-x-0"
+        )}>
             <CardHeader>
                 <div className="flex items-center justify-between">
                     <CardTitle>Mailing</CardTitle>
@@ -147,11 +152,21 @@ export function MailClient() {
                 </ScrollArea>
             </Tabs>
         </div>
-        <div className="w-2/3 flex flex-col">
+        <div className={cn(
+            "w-full md:w-2/3 flex flex-col absolute md:static inset-0 transition-transform duration-300 ease-in-out",
+            viewingMail ? "translate-x-0" : "translate-x-full",
+            "md:translate-x-0"
+        )}>
             {viewingMail ? (
               <div className="flex flex-col h-full">
                 <CardHeader className="border-b">
-                  <div className="flex items-center justify-between"><CardTitle className="truncate">{viewingMail.subject}</CardTitle><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onClick={() => handleOpenCompose({ replyTo: viewingMail })}><Reply className="mr-2 h-4 w-4" /> Reply</DropdownMenuItem><DropdownMenuItem onClick={() => handleOpenCompose({ forward: viewingMail })}><Forward className="mr-2 h-4 w-4" /> Forward</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 truncate">
+                      <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setViewingMail(null)}><ArrowLeft className="h-5 w-5" /></Button>
+                      <CardTitle className="truncate">{viewingMail.subject}</CardTitle>
+                    </div>
+                    <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onClick={() => handleOpenCompose({ replyTo: viewingMail })}><Reply className="mr-2 h-4 w-4" /> Reply</DropdownMenuItem><DropdownMenuItem onClick={() => handleOpenCompose({ forward: viewingMail })}><Forward className="mr-2 h-4 w-4" /> Forward</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+                  </div>
                   <div className="text-sm text-muted-foreground mt-2">
                     <div className="flex items-center gap-2"><Avatar className="h-8 w-8"><AvatarImage src={users.find(u=>u.id === viewingMail.senderId)?.avatar_url || ''} /><AvatarFallback>{viewingMail.senderName.charAt(0)}</AvatarFallback></Avatar><div><p className="font-semibold">{viewingMail.senderName}</p><p>To: {viewingMail.toRecipients.map(r => r.name).join(', ')}</p>{viewingMail.ccRecipients.length > 0 && <p className="text-xs text-muted-foreground">CC: {viewingMail.ccRecipients.map(r => r.name).join(', ')}</p>}</div></div>
                   </div>
@@ -164,7 +179,7 @@ export function MailClient() {
                 </ScrollArea>
                 <CardFooter className="border-t pt-4"><Button onClick={() => handleOpenCompose({ replyTo: viewingMail })}><Reply className="mr-2 h-4 w-4" /> Reply</Button></CardFooter>
               </div>
-            ) : (<div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground"><Inbox className="h-16 w-16 mb-4" /><h3 className="text-lg font-semibold">Select an item to read</h3><p className="max-w-xs">Nothing is selected.</p></div>)}
+            ) : (<div className="hidden md:flex flex-1 flex-col items-center justify-center text-center text-muted-foreground"><Inbox className="h-16 w-16 mb-4" /><h3 className="text-lg font-semibold">Select an item to read</h3><p className="max-w-xs">Nothing is selected.</p></div>)}
         </div>
         <ComposeMailDialog isOpen={isComposeOpen} onClose={() => setIsComposeOpen(false)} replyingTo={replyingTo} forwardingMail={forwardingMail} users={otherUsers} />
       </Card>
@@ -301,5 +316,3 @@ const RecipientInput = ({ label, recipients, onToggle, allUsers, search, onSearc
         </Popover>
     </div>
 );
-
-    

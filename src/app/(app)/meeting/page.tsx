@@ -34,7 +34,7 @@ function MeetingPageContent() {
             />
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
                     <TabsTrigger value="video">
                         <Video className="mr-2 h-4 w-4" /> Video Meeting
                     </TabsTrigger>

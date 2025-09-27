@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Search, Send, Paperclip, MoreVertical, X, CheckSquare, Trash2, Loader2, Users, MessageCircleReply, Forward, Smile, Folder, Upload, MessageSquare } from 'lucide-react';
+import { Search, Send, Paperclip, MoreVertical, X, CheckSquare, Trash2, Loader2, Users, MessageCircleReply, Forward, Smile, Folder, Upload, MessageSquare, ArrowLeft } from 'lucide-react';
 import { Dialog, DialogHeader, DialogFooter, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -23,6 +23,7 @@ import type { User, ChatMessage, Group, Attachment } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { getPublicUrl, uploadFile } from '@/lib/firebase-storage';
+import { cn } from '@/lib/utils';
 
 type ChatMode = 'individual' | 'group';
 
@@ -60,6 +61,8 @@ export function ChatClient() {
     const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
     const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
     const [isDeletingGroup, setIsDeletingGroup] = useState(false);
+
+    const isChatSelected = !!selectedChatUser || !!selectedGroup;
 
     const filteredUsers = useMemo(() => {
       if (!userSearch) return users.filter(u => u.id !== loggedInUser?.id);
@@ -307,8 +310,12 @@ export function ChatClient() {
     };
     
     return (
-        <Card className="h-[70vh] flex">
-           <div className="w-1/3 border-r flex flex-col">
+        <Card className={cn("h-[70vh] flex overflow-hidden relative")}>
+           <div className={cn(
+                "w-full md:w-1/3 border-r flex flex-col transition-transform duration-300 ease-in-out",
+                "md:translate-x-0",
+                isChatSelected ? "-translate-x-full" : "translate-x-0"
+           )}>
               <CardHeader>
                   <div className="flex items-center justify-between"><CardTitle>Conversations</CardTitle><Button variant="ghost" size="icon" onClick={() => setIsGroupChatDialogOpen(true)}><Users className="h-5 w-5" /></Button></div>
                   <div className="relative mt-2"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search users or groups..." className="pl-9" value={userSearch} onChange={(e) => setUserSearch(e.target.value)} /></div>
@@ -318,13 +325,22 @@ export function ChatClient() {
                   {filteredUsers.map(user => (<button key={user.id} className={`w-full text-left p-3 hover:bg-accent ${selectedChatUser?.id === user.id && activeChatMode === 'individual' ? 'bg-accent' : ''}`} onClick={() => handleSelectIndividualChat(user)}><div className="flex items-center gap-3"><Avatar><AvatarImage src={user.avatar_url || ''} alt={user.name} data-ai-hint="person portrait" /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><div className="flex-1"><p className="font-semibold">{user.name}</p><p className="text-xs text-muted-foreground">{user.role}</p></div>{unreadSenders.has(user.id) && (<div className="h-2.5 w-2.5 rounded-full bg-primary" />)}</div></button>))}
               </ScrollArea>
            </div>
-           <div className="w-2/3 flex flex-col">
-                {selectedChatUser || selectedGroup ? (
+           <div className={cn(
+                "w-full md:w-2/3 flex flex-col transition-transform duration-300 ease-in-out absolute md:static inset-0",
+                isChatSelected ? "translate-x-0" : "translate-x-full",
+                "md:translate-x-0"
+            )}>
+                {isChatSelected ? (
                     <>
                         <CardHeader className="border-b flex-row items-center justify-between">
-                            <ChatHeaderContent />
                             <div className="flex items-center gap-2">
-                                <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search chat..." className="pl-9 h-9 w-48" value={chatSearch} onChange={(e) => setChatSearch(e.target.value)} /></div>
+                                <Button variant="ghost" size="icon" className="md:hidden" onClick={() => { setSelectedChatUser(null); setSelectedGroup(null); }}>
+                                    <ArrowLeft className="h-5 w-5" />
+                                </Button>
+                                <ChatHeaderContent />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="relative hidden sm:block"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search chat..." className="pl-9 h-9 w-48" value={chatSearch} onChange={(e) => setChatSearch(e.target.value)} /></div>
                                 {isSelectionMode ? (<>
                                     <Button variant="ghost" onClick={() => {setIsSelectionMode(false); setSelectedMessages([]);}}>Cancel</Button>
                                     <AlertDialog>
@@ -367,7 +383,7 @@ export function ChatClient() {
                             </form>
                         </CardFooter>
                     </>
-                ) : (<div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground"><MessageSquare className="h-16 w-16 mb-4" /><h3 className="text-lg font-semibold">Select a conversation</h3><p className="max-w-xs">Choose a user or a group to start chatting.</p></div>)}
+                ) : (<div className="hidden md:flex flex-1 flex-col items-center justify-center text-center text-muted-foreground"><MessageSquare className="h-16 w-16 mb-4" /><h3 className="text-lg font-semibold">Select a conversation</h3><p className="max-w-xs">Choose a user or a group to start chatting.</p></div>)}
            </div>
 
             <Dialog open={!!forwardingMessage} onOpenChange={(open) => !open && setForwardingMessage(null)}>
