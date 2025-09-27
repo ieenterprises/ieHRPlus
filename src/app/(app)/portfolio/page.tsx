@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/card";
 import { type User, type FileItem } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, UploadCloud, Edit, Loader2, Trash2 } from "lucide-react";
+import { Search, UploadCloud, Edit, Loader2, Trash2, Check, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -68,8 +68,13 @@ const calculateExpectedWorkHours = (user: User) => {
     return `${duration.hours || 0}h ${duration.minutes || 0}m`;
   };
 
+type EditingCell = {
+  userId: string;
+  field: 'monthlyWorkingDays' | 'defaultClockInTime' | 'defaultClockOutTime';
+};
+
 export default function PortfolioPage() {
-  const { users, currency, loggedInUser, hrQueries, rewards } = useSettings();
+  const { users, currency, loggedInUser, hrQueries, rewards, setUsers: setGlobalUsers } = useSettings();
   const [searchTerm, setSearchTerm] = useState("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
@@ -77,6 +82,8 @@ export default function PortfolioPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [userFiles, setUserFiles] = useState<{name: string, url: string}[]>([]);
   const [documentSearchTerm, setDocumentSearchTerm] = useState("");
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const [inlineEditValue, setInlineEditValue] = useState<string>("");
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -296,6 +303,71 @@ export default function PortfolioPage() {
     }
   };
 
+  const handleCellClick = (user: User, field: EditingCell['field']) => {
+    setEditingCell({ userId: user.id, field });
+    setInlineEditValue(String(user[field] || (field === 'monthlyWorkingDays' ? '0' : '')));
+  };
+
+  const handleInlineSave = async () => {
+    if (!editingCell) return;
+    const { userId, field } = editingCell;
+
+    const userRef = doc(db, "users", userId);
+    let valueToSave: string | number = inlineEditValue;
+
+    if (field === 'monthlyWorkingDays') {
+      valueToSave = parseInt(inlineEditValue, 10);
+      if (isNaN(valueToSave)) {
+        toast({ title: "Invalid Input", description: "Please enter a valid number for working days.", variant: "destructive" });
+        setEditingCell(null);
+        return;
+      }
+    }
+
+    try {
+      await updateDoc(userRef, { [field]: valueToSave });
+      
+      // Update global state
+      setGlobalUsers(prevUsers => prevUsers.map(u => 
+        u.id === userId ? { ...u, [field]: valueToSave } : u
+      ));
+      
+      toast({ title: "Update Successful", description: `Updated ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}.` });
+    } catch (error: any) {
+      toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setEditingCell(null);
+      setInlineEditValue("");
+    }
+  };
+
+  const renderEditableCell = (user: User, field: EditingCell['field'], type: 'number' | 'time' = 'number') => {
+    if (editingCell?.userId === user.id && editingCell?.field === field) {
+      return (
+        <div className="flex items-center gap-1">
+          <Input
+            type={type}
+            value={inlineEditValue}
+            onChange={(e) => setInlineEditValue(e.target.value)}
+            onBlur={handleInlineSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleInlineSave();
+              if (e.key === 'Escape') setEditingCell(null);
+            }}
+            autoFocus
+            className="h-8"
+          />
+        </div>
+      );
+    }
+    return (
+      <div onClick={() => handleCellClick(user, field)} className="cursor-pointer min-h-8 flex items-center">
+        {user[field] || 'N/A'}
+      </div>
+    );
+  };
+
+
   return (
     <div className="space-y-8">
       <PageHeader title="Employee Portfolios" description="View and manage detailed portfolios for each team member." />
@@ -356,9 +428,9 @@ export default function PortfolioPage() {
                       <TableCell>
                         {user.remuneration != null ? `${currency}${user.remuneration.toFixed(2)}` : 'N/A'}
                       </TableCell>
-                       <TableCell>{user.monthlyWorkingDays || 'N/A'}</TableCell>
-                       <TableCell>{user.defaultClockInTime || 'N/A'}</TableCell>
-                       <TableCell>{user.defaultClockOutTime || 'N/A'}</TableCell>
+                       <TableCell>{renderEditableCell(user, 'monthlyWorkingDays', 'number')}</TableCell>
+                       <TableCell>{renderEditableCell(user, 'defaultClockInTime', 'time')}</TableCell>
+                       <TableCell>{renderEditableCell(user, 'defaultClockOutTime', 'time')}</TableCell>
                       <TableCell>{calculateExpectedWorkHours(user)}</TableCell>
                       <TableCell>{userAggregates[user.id]?.queryCount || 0}</TableCell>
                       <TableCell>{currency}{(userAggregates[user.id]?.queryAmount || 0).toFixed(2)}</TableCell>
@@ -366,7 +438,7 @@ export default function PortfolioPage() {
                       <TableCell>{currency}{(userAggregates[user.id]?.rewardAmount || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" onClick={() => handleOpenDialog(user)}>
-                          <Edit className="mr-2 h-4 w-4" /> Open
+                          <Edit className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Open</span>
                         </Button>
                       </TableCell>
                     </TableRow>
