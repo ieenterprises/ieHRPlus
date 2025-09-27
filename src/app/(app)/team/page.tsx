@@ -23,7 +23,7 @@ import {
 import { type User, type Role, type Department } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Folder, Download, Eye, EyeOff, Search, Settings, Users as UsersIcon, Building } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Edit, Trash2, ShieldCheck, Folder, Download, Eye, EyeOff, Search, Settings, Users as UsersIcon, Building, Save } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -477,9 +477,11 @@ export default function TeamPage() {
                         </div>
                         <div className="flex items-center gap-2 self-end sm:self-center">
                             <Button onClick={handleExport} variant="outline" size="sm">
-                                <Download className="mr-2 h-4 w-4" /> Export
+                                <Download className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Export</span>
                             </Button>
-                            <Button onClick={() => handleOpenUserDialog(null)} size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add User</Button>
+                            <Button onClick={() => handleOpenUserDialog(null)} size="sm">
+                                <PlusCircle className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Add User</span>
+                            </Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -542,7 +544,9 @@ export default function TeamPage() {
                             <CardTitle>Roles</CardTitle>
                             <CardDescription>Define roles and their permissions for your team.</CardDescription>
                         </div>
-                        <Button onClick={() => handleOpenRoleDialog(null)} size="sm" className="self-end sm:self-center"><PlusCircle className="mr-2 h-4 w-4" />Add Role</Button>
+                        <Button onClick={() => handleOpenRoleDialog(null)} size="sm" className="self-end sm:self-center">
+                            <PlusCircle className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Add Role</span>
+                        </Button>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -591,7 +595,9 @@ export default function TeamPage() {
                             <CardTitle>Departments</CardTitle>
                             <CardDescription>Manage your company's departments.</CardDescription>
                         </div>
-                        <Button onClick={() => handleOpenDepartmentDialog(null)} size="sm" className="self-end sm:self-center"><PlusCircle className="mr-2 h-4 w-4" />Add Department</Button>
+                        <Button onClick={() => handleOpenDepartmentDialog(null)} size="sm" className="self-end sm:self-center">
+                            <PlusCircle className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Add Department</span>
+                        </Button>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -672,7 +678,11 @@ export default function TeamPage() {
                   </div>
                   <p className="text-sm text-muted-foreground pt-2">Permissions are inherited from the assigned role. To change permissions, please edit the role.</p>
               </div>
-              <DialogFooter className="pt-4"><Button type="submit">Save Changes</Button></DialogFooter>
+              <DialogFooter className="pt-4">
+                <Button type="submit">
+                    <Save className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Save Changes</span>
+                </Button>
+              </DialogFooter>
             </form>
           </DialogContent>
       </Dialog>
@@ -696,7 +706,11 @@ export default function TeamPage() {
                       }, isRoleNameLocked)}
                   </div>
               </div>
-              <DialogFooter className="pt-4"><Button type="submit">Save Changes</Button></DialogFooter>
+              <DialogFooter className="pt-4">
+                <Button type="submit">
+                    <Save className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Save Changes</span>
+                </Button>
+              </DialogFooter>
             </form>
           </DialogContent>
       </Dialog>
@@ -716,7 +730,9 @@ export default function TeamPage() {
                   </div>
               </div>
               <DialogFooter>
-                <Button type="submit">Save</Button>
+                <Button type="submit">
+                    <Save className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Save</span>
+                </Button>
               </DialogFooter>
             </form>
         </DialogContent>

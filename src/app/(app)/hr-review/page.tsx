@@ -47,7 +47,7 @@ import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, writeB
 import { db } from "@/lib/firebase";
 import { TimeRecord, User } from "@/lib/types";
 import { format, startOfDay, endOfDay, isWithinInterval, addDays, parseISO, intervalToDuration, differenceInMilliseconds, getDay } from "date-fns";
-import { Video, Download, Calendar as CalendarIcon, Trash2, Search, Edit, Loader2 } from "lucide-react";
+import { Video, Download, Calendar as CalendarIcon, Trash2, Search, Edit, Loader2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -509,8 +509,8 @@ export default function HrReviewPage() {
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete ({selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length})
+                                <Trash2 className="mr-0 sm:mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">Delete ({selectedRecordIds.filter(id => pendingRecords.some(r => r.id === id)).length})</span>
                             </Button>
                         </AlertDialogTrigger>
                          <AlertDialogContent>
@@ -520,8 +520,8 @@ export default function HrReviewPage() {
                     </AlertDialog>
                 )}
                 <Button variant="outline" size="sm" onClick={() => handleExportCSV(pendingRecords, 'pending')} disabled={pendingRecords.length === 0}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Export
+                    <Download className="mr-0 sm:mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Export</span>
                 </Button>
             </div>
           )}
@@ -573,7 +573,7 @@ export default function HrReviewPage() {
                        <TableCell>
                         {record.videoUrl ? (
                           <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
-                              <Video className="mr-2 h-4 w-4" /> View Video
+                              <Video className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">View</span>
                           </Button>
                         ) : (
                           "No Video"
@@ -586,10 +586,10 @@ export default function HrReviewPage() {
                       </TableCell>
                       {isSeniorStaff && (
                         <TableCell className="text-right space-x-2">
-                            <Button size="sm" variant="outline" onClick={() => setEditingRecord(record)}><Edit className="h-4 w-4" /></Button>
+                            <Button size="icon" variant="outline" onClick={() => setEditingRecord(record)}><Edit className="h-4 w-4" /></Button>
                             <Button size="sm" onClick={() => handleStatusUpdate(record.id, 'Clocked In')} disabled={!record.videoUrl}>Approve</Button>
                             <Button size="sm" variant="destructive" onClick={() => handleStatusUpdate(record.id, 'rejected')}>Reject</Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleDelete(record)}>Delete</Button>
+                            <Button size="icon" variant="ghost" onClick={() => handleDelete(record)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                         </TableCell>
                       )}
                     </TableRow>
@@ -718,8 +718,8 @@ export default function HrReviewPage() {
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete ({selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length})
+                                <Trash2 className="mr-0 sm:mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">Delete ({selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length})</span>
                             </Button>
                         </AlertDialogTrigger>
                          <AlertDialogContent>
@@ -729,8 +729,8 @@ export default function HrReviewPage() {
                     </AlertDialog>
                 )}
                 <Button variant="outline" size="sm" onClick={() => handleExportCSV(historicalRecords, 'history')} disabled={historicalRecords.length === 0}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Export
+                    <Download className="mr-0 sm:mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Export</span>
                 </Button>
             </div>
           )}
@@ -801,7 +801,7 @@ export default function HrReviewPage() {
                         <TableCell>
                             {record.videoUrl ? (
                                 <Button variant="outline" size="sm" onClick={() => handlePreview(record.videoUrl!)}>
-                                    <Video className="mr-2 h-4 w-4" /> View
+                                    <Video className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">View</span>
                                 </Button>
                             ) : (
                                 "N/A"
@@ -814,7 +814,7 @@ export default function HrReviewPage() {
                         </TableCell>
                         {isSeniorStaff && (
                             <TableCell className="text-right">
-                            <Button size="sm" variant="outline" onClick={() => setEditingRecord(record)}>
+                            <Button size="icon" variant="outline" onClick={() => setEditingRecord(record)}>
                                 <Edit className="h-4 w-4" />
                             </Button>
                             </TableCell>
@@ -889,7 +889,8 @@ export default function HrReviewPage() {
                     <Button type="button" variant="ghost" onClick={() => setEditingRecord(null)}>Cancel</Button>
                     <Button type="submit" disabled={isUpdating}>
                         {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Save Changes
+                        <Save className="mr-0 sm:mr-2 h-4 w-4" />
+                        <span className="hidden sm:inline">Save Changes</span>
                     </Button>
                 </DialogFooter>
             </form>

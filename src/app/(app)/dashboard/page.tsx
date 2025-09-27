@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useSettings } from "@/hooks/use-settings";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift, Download, Search, MessageSquare, Trash2, Folder, Upload } from "lucide-react";
+import { User, Clock, CalendarCheck2, LogIn, PlusCircle, AlertCircle, File as FileIcon, Loader2, Calendar as CalendarIcon, HelpCircle, Gift, Download, Search, MessageSquare, Trash2, Folder, Upload, Save, X, ExternalLink } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -451,7 +451,7 @@ export default function DashboardPage() {
             description="This is your personal dashboard."
         />
         <Button onClick={handleSwitchUser}>
-            <LogIn className="mr-2 h-4 w-4" /> Switch User
+            <LogIn className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Switch User</span>
         </Button>
       </div>
       
@@ -484,7 +484,7 @@ export default function DashboardPage() {
                                 <TableCell>{req.forwardedByName || 'Direct'}</TableCell>
                                 <TableCell className="text-right">
                                     <Button asChild size="sm">
-                                        <Link href="/hr-review">Review Request</Link>
+                                        <Link href="/hr-review">Review</Link>
                                     </Button>
                                 </TableCell>
                             </TableRow>
@@ -634,8 +634,8 @@ export default function DashboardPage() {
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete ({selectedQueryIds.length})
+                                <Trash2 className="mr-0 sm:mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">Delete ({selectedQueryIds.length})</span>
                             </Button>
                         </AlertDialogTrigger>
                          <AlertDialogContent>
@@ -646,7 +646,7 @@ export default function DashboardPage() {
                 )}
                   {isSeniorStaff && (
                     <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyQueries, 'my_queries')}>
-                        <Download className="mr-2 h-4 w-4" /> Export
+                        <Download className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Export</span>
                     </Button>
                   )}
               </div>
@@ -697,7 +697,7 @@ export default function DashboardPage() {
                                   </TableCell>
                                   <TableCell className="text-right">
                                       <Button size="sm" onClick={() => openQueryDialog(query)}>
-                                        {query.status === 'Responded' ? 'Preview' : 'View & Respond'}
+                                        {query.status === 'Responded' ? 'Preview' : 'Respond'}
                                       </Button>
                                   </TableCell>
                               </TableRow>
@@ -739,8 +739,8 @@ export default function DashboardPage() {
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete ({selectedRewardIds.length})
+                                <Trash2 className="mr-0 sm:mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">Delete ({selectedRewardIds.length})</span>
                             </Button>
                         </AlertDialogTrigger>
                          <AlertDialogContent>
@@ -751,7 +751,7 @@ export default function DashboardPage() {
                 )}
                   {isSeniorStaff && (
                     <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRewards, 'my_rewards')}>
-                        <Download className="mr-2 h-4 w-4" /> Export
+                        <Download className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Export</span>
                     </Button>
                   )}
               </div>
@@ -839,8 +839,8 @@ export default function DashboardPage() {
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete ({selectedRequestIds.length})
+                                <Trash2 className="mr-0 sm:mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">Delete ({selectedRequestIds.length})</span>
                             </Button>
                         </AlertDialogTrigger>
                          <AlertDialogContent>
@@ -851,12 +851,12 @@ export default function DashboardPage() {
                 )}
                 {isSeniorStaff && (
                   <Button variant="outline" size="sm" onClick={() => handleExportCSV(filteredMyRequests, 'my_requests')}>
-                      <Download className="mr-2 h-4 w-4" /> Export
+                      <Download className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Export</span>
                   </Button>
                 )}
                 <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button size="sm"><PlusCircle className="mr-2 h-4 w-4" /> New</Button>
+                        <Button size="sm"><PlusCircle className="mr-0 sm:mr-2 h-4 w-4" /><span className="hidden sm:inline">New</span></Button>
                     </DialogTrigger>
                     <DialogContent>
                         <form onSubmit={handleRequestSubmit}>
@@ -934,7 +934,10 @@ export default function DashboardPage() {
                                     <div className="col-span-3">
                                         <Popover>
                                             <PopoverTrigger asChild>
-                                                <Button type="button" variant="outline">Attach Files...</Button>
+                                                <Button type="button" variant="outline">
+                                                  <Upload className="mr-0 sm:mr-2 h-4 w-4" />
+                                                  <span className="hidden sm:inline">Attach Files...</span>
+                                                </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-auto p-0">
                                                 <div className="flex flex-col">
@@ -955,7 +958,7 @@ export default function DashboardPage() {
                             <DialogFooter>
                                 <Button type="submit" disabled={isSubmitting}>
                                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Submit Request
+                                    <Save className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Submit Request</span>
                                 </Button>
                             </DialogFooter>
                         </form>
@@ -1061,7 +1064,10 @@ export default function DashboardPage() {
                   <Label className="pt-2">Add Attachments</Label>
                    <Popover>
                         <PopoverTrigger asChild>
-                            <Button type="button" variant="outline" disabled={respondingQuery.status === 'Responded'}>Attach Files...</Button>
+                            <Button type="button" variant="outline" disabled={respondingQuery.status === 'Responded'}>
+                              <Upload className="mr-0 sm:mr-2 h-4 w-4" />
+                              <span className="hidden sm:inline">Attach Files...</span>
+                            </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0">
                             <div className="flex flex-col">
@@ -1088,10 +1094,14 @@ export default function DashboardPage() {
                 {respondingQuery.status !== 'Responded' && (
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Submit Response
+                    <Save className="mr-0 sm:mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Submit Response</span>
                   </Button>
                 )}
-                <Button type="button" variant="ghost" onClick={closeQueryDialog}>Close</Button>
+                <Button type="button" variant="ghost" onClick={closeQueryDialog}>
+                  <X className="mr-0 sm:mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Close</span>
+                </Button>
               </DialogFooter>
             </form>
           )}
@@ -1128,7 +1138,10 @@ export default function DashboardPage() {
                 )}
               </div>
               <DialogFooter>
-                <Button type="button" variant="ghost" onClick={closeRewardDialog}>Close</Button>
+                <Button type="button" variant="ghost" onClick={closeRewardDialog}>
+                  <X className="mr-0 sm:mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Close</span>
+                </Button>
               </DialogFooter>
             </>
           )}

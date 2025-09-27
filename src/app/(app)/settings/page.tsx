@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Users, Percent, Store, PlusCircle, MoreHorizontal, Edit, Trash2, CreditCard, KeyRound, RefreshCw, Loader2, DollarSign } from "lucide-react";
+import { Users, Percent, Store, PlusCircle, MoreHorizontal, Edit, Trash2, CreditCard, KeyRound, RefreshCw, Loader2, DollarSign, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -221,7 +221,7 @@ export default function SettingsPage() {
                             <CardDescription>Manage your physical branch locations.</CardDescription>
                         </div>
                         <Button onClick={() => handleOpenBranchDialog(null)}>
-                            <PlusCircle className="mr-2 h-4 w-4"/> Add Branch
+                            <PlusCircle className="mr-0 sm:mr-2 h-4 w-4"/> <span className="hidden sm:inline">Add Branch</span>
                         </Button>
                     </CardHeader>
                     <CardContent>
@@ -273,7 +273,7 @@ export default function SettingsPage() {
                                 <CardDescription>Manage taxes applied to sales or transactions.</CardDescription>
                             </div>
                             <Button onClick={() => handleOpenTaxDialog(null)}>
-                                <PlusCircle className="mr-2 h-4 w-4"/> Add Tax
+                                <PlusCircle className="mr-0 sm:mr-2 h-4 w-4"/> <span className="hidden sm:inline">Add Tax</span>
                             </Button>
                         </CardHeader>
                         <CardContent>
@@ -350,7 +350,7 @@ export default function SettingsPage() {
                         <CardDescription>Manage the payment methods available for transactions.</CardDescription>
                         </div>
                         <Button onClick={() => handleOpenPaymentTypeDialog(null)}>
-                        <PlusCircle className="mr-2 h-4" /> Add Payment Type
+                            <PlusCircle className="mr-0 sm:mr-2 h-4" /> <span className="hidden sm:inline">Add Payment Type</span>
                         </Button>
                     </CardHeader>
                     <CardContent>
@@ -424,7 +424,11 @@ export default function SettingsPage() {
                         <Input id="address" name="address" defaultValue={editingBranch?.address} required />
                     </div>
                 </div>
-                <DialogFooter><Button type="submit">Save</Button></DialogFooter>
+                <DialogFooter>
+                    <Button type="submit">
+                        <Save className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Save</span>
+                    </Button>
+                </DialogFooter>
             </form>
         </DialogContent>
       </Dialog>
@@ -459,7 +463,11 @@ export default function SettingsPage() {
                         <Label htmlFor="is_default">Set as default tax</Label>
                     </div>
                 </div>
-                <DialogFooter><Button type="submit">Save</Button></DialogFooter>
+                <DialogFooter>
+                    <Button type="submit">
+                        <Save className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Save</span>
+                    </Button>
+                </DialogFooter>
             </form>
         </DialogContent>
       </Dialog>
@@ -488,7 +496,11 @@ export default function SettingsPage() {
                 </Select>
               </div>
             </div>
-            <DialogFooter><Button type="submit">Save</Button></DialogFooter>
+            <DialogFooter>
+                <Button type="submit">
+                    <Save className="mr-0 sm:mr-2 h-4 w-4" /> <span className="hidden sm:inline">Save</span>
+                </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
