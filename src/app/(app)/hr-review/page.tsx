@@ -379,12 +379,15 @@ export default function HrReviewPage() {
 
   const latenessSummary = useMemo(() => {
     const summary = new Map<string, { user: User; totalLatenessMs: number }>();
+    const relevantUsers = historyEmployeeId === 'all' ? users : users.filter(u => u.id === historyEmployeeId);
     
-    users.forEach(user => {
+    relevantUsers.forEach(user => {
         summary.set(user.id, { user, totalLatenessMs: 0 });
     });
 
     timeRecords.forEach(record => {
+        if (historyEmployeeId !== 'all' && record.userId !== historyEmployeeId) return;
+
         const user = users.find(u => u.id === record.userId);
         if (user && user.defaultClockInTime) {
             const actualClockIn = new Date(record.clockInTime);
@@ -409,16 +412,18 @@ export default function HrReviewPage() {
 
     return result.filter(s => s.totalLatenessMinutes > 0);
 
-  }, [users, timeRecords]);
+  }, [users, timeRecords, historyEmployeeId]);
   
   const overtimeSummary = useMemo(() => {
     const summary = new Map<string, { user: User; totalOvertimeMs: number }>();
+    const relevantUsers = historyEmployeeId === 'all' ? users : users.filter(u => u.id === historyEmployeeId);
 
-    users.forEach(user => {
+    relevantUsers.forEach(user => {
         summary.set(user.id, { user, totalOvertimeMs: 0 });
     });
     
     timeRecords.forEach(record => {
+      if (historyEmployeeId !== 'all' && record.userId !== historyEmployeeId) return;
       const user = users.find(u => u.id === record.userId);
       if (user && user.defaultClockOutTime && record.clockOutTime) {
         const actualClockOut = new Date(record.clockOutTime);
@@ -442,14 +447,18 @@ export default function HrReviewPage() {
     }));
 
     return result.filter(s => s.totalOvertimeMinutes > 0);
-  }, [users, timeRecords]);
+  }, [users, timeRecords, historyEmployeeId]);
   
   const durationSummary = useMemo(() => {
     const summary = new Map<string, { user: User; totalDurationMs: number }>();
-    users.forEach(user => {
+    const relevantUsers = historyEmployeeId === 'all' ? users : users.filter(u => u.id === historyEmployeeId);
+    
+    relevantUsers.forEach(user => {
         summary.set(user.id, { user, totalDurationMs: 0 });
     });
+
     timeRecords.forEach(record => {
+        if (historyEmployeeId !== 'all' && record.userId !== historyEmployeeId) return;
         if (record.clockOutTime) {
             const user = users.find(u => u.id === record.userId);
             if (user) {
@@ -468,7 +477,7 @@ export default function HrReviewPage() {
         totalDurationMinutes: Math.floor(s.totalDurationMs / 60000)
     }));
     return result.filter(s => s.totalDurationMinutes > 0);
-  }, [users, timeRecords]);
+  }, [users, timeRecords, historyEmployeeId]);
 
 
   const DatePicker = () => (
