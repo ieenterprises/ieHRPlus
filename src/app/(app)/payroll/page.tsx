@@ -11,12 +11,11 @@ import { Calendar as CalendarIcon, Download } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format, startOfMonth, endOfMonth, getDaysInMonth, isWithinInterval, differenceInMilliseconds, getDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isWithinInterval, differenceInMilliseconds, getDay, startOfDay } from 'date-fns';
 import type { User, TimeRecord, HRQuery, Reward } from '@/lib/types';
 import Papa from "papaparse";
 import { useToast } from '@/hooks/use-toast';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import type { DateRange } from "react-day-picker";
 
 type PayrollData = {
     user: User;
@@ -36,30 +35,22 @@ type PayrollData = {
 
 export default function PayrollPage() {
     const { users, rewards, hrQueries, currency, loggedInUser, timeRecords: allTimeRecords } = useSettings();
-    const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
-    const [selectedMonth, setSelectedMonth] = useState<Date>(startOfMonth(new Date()));
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({
+        from: startOfMonth(new Date()),
+        to: endOfMonth(new Date()),
+    });
     const { toast } = useToast();
 
-    useEffect(() => {
-        if (!loggedInUser?.businessId) return;
-
-        const monthStart = startOfMonth(selectedMonth);
-        const monthEnd = endOfMonth(selectedMonth);
-        
-        const filteredRecords = allTimeRecords.filter(tr => isWithinInterval(new Date(tr.clockInTime), { start: monthStart, end: monthEnd }));
-        setTimeRecords(filteredRecords);
-        
-    }, [loggedInUser?.businessId, toast, selectedMonth, allTimeRecords]);
 
     const payrollData = useMemo((): PayrollData[] => {
-        const monthStart = startOfMonth(selectedMonth);
-        const monthEnd = endOfMonth(selectedMonth);
+        const rangeStart = dateRange?.from ? startOfDay(dateRange.from) : startOfMonth(new Date());
+        const rangeEnd = dateRange?.to ? endOfMonth(dateRange.to) : endOfMonth(new Date());
         const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
         return users.map(user => {
-            const userTimeRecords = timeRecords.filter(tr => tr.userId === user.id);
-            const userRewards = rewards.filter(r => r.assigneeId === user.id && isWithinInterval(new Date(r.createdAt), { start: monthStart, end: monthEnd }));
-            const userQueries = hrQueries.filter(q => q.assigneeId === user.id && isWithinInterval(new Date(q.createdAt), { start: monthStart, end: monthEnd }));
+            const userTimeRecords = allTimeRecords.filter(tr => tr.userId === user.id && isWithinInterval(new Date(tr.clockInTime), { start: rangeStart, end: rangeEnd }));
+            const userRewards = rewards.filter(r => r.assigneeId === user.id && isWithinInterval(new Date(r.createdAt), { start: rangeStart, end: rangeEnd }));
+            const userQueries = hrQueries.filter(q => q.assigneeId === user.id && isWithinInterval(new Date(q.createdAt), { start: rangeStart, end: rangeEnd }));
             
             const getExpectedWorkMinutes = (user: User): number => {
                 if (!user.defaultClockInTime || !user.defaultClockOutTime) return 0;
@@ -90,6 +81,10 @@ export default function PayrollPage() {
             const totalLatenessMilliseconds = userTimeRecords.reduce((acc, record) => {
               if (!user?.defaultClockInTime) return acc;
               const actualClockIn = new Date(record.clockInTime);
+              const dayOfWeek = daysOfWeek[getDay(actualClockIn)];
+
+              if (!user.workingDays?.includes(dayOfWeek)) return acc;
+
               const [hours, minutes] = user.defaultClockInTime.split(':').map(Number);
               const defaultClockIn = new Date(actualClockIn);
               defaultClockIn.setHours(hours, minutes, 0, 0);
@@ -103,14 +98,27 @@ export default function PayrollPage() {
             const totalLatenessHours = totalLatenessMilliseconds / (1000 * 60 * 60);
 
             const overtimeMs = userTimeRecords.reduce((total, record) => {
-                if (!record.clockOutTime || !user.defaultClockOutTime) return total;
-                const actualClockOut = new Date(record.clockOutTime);
-                const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
-                const defaultClockOut = new Date(actualClockOut);
-                defaultClockOut.setHours(hours, minutes, 0, 0);
+                const clockInDate = new Date(record.clockInTime);
+                const dayOfWeek = daysOfWeek[getDay(clockInDate)];
 
-                if (actualClockOut > defaultClockOut) {
-                    return total + differenceInMilliseconds(actualClockOut, defaultClockOut);
+                if (!record.clockOutTime) return total;
+                const durationMs = new Date(record.clockOutTime).getTime() - clockInDate.getTime();
+
+                // If worked on a non-working day, all duration is overtime
+                if (!user.workingDays?.includes(dayOfWeek)) {
+                    return total + durationMs;
+                }
+
+                // If worked beyond default clock-out on a working day
+                if (user.defaultClockOutTime) {
+                    const actualClockOut = new Date(record.clockOutTime);
+                    const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
+                    const defaultClockOut = new Date(actualClockOut);
+                    defaultClockOut.setHours(hours, minutes, 0, 0);
+
+                    if (actualClockOut > defaultClockOut) {
+                       return total + differenceInMilliseconds(actualClockOut, defaultClockOut);
+                    }
                 }
                 return total;
             }, 0);
@@ -140,7 +148,7 @@ export default function PayrollPage() {
                 netSalary
             };
         });
-    }, [selectedMonth, users, timeRecords, rewards, hrQueries]);
+    }, [dateRange, users, allTimeRecords, rewards, hrQueries]);
 
     const formatHoursAndMinutes = (totalHours: number) => {
         const hours = Math.floor(totalHours);
@@ -171,8 +179,9 @@ export default function PayrollPage() {
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
+        const datePart = dateRange?.from ? `${format(dateRange.from, 'yyyy-MM-dd')}_to_${dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : 'today'}` : format(new Date(), 'yyyy-MM');
         link.setAttribute("href", url);
-        link.setAttribute("download", `payroll_${format(selectedMonth, 'yyyy-MM')}.csv`);
+        link.setAttribute("download", `payroll_${datePart}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -194,20 +203,37 @@ export default function PayrollPage() {
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Button
+                                        id="date"
                                         variant={"outline"}
-                                        className={cn("w-full sm:w-[280px] justify-start text-left font-normal")}
-                                    >
+                                        className={cn(
+                                          "w-full sm:w-[300px] justify-start text-left font-normal",
+                                          !dateRange && "text-muted-foreground"
+                                        )}
+                                      >
                                         <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {format(selectedMonth, 'MMMM yyyy')}
-                                    </Button>
+                                        {dateRange?.from ? (
+                                          dateRange.to ? (
+                                            <>
+                                              {format(dateRange.from, "LLL dd, y")} -{" "}
+                                              {format(dateRange.to, "LLL dd, y")}
+                                            </>
+                                          ) : (
+                                            format(dateRange.from, "LLL dd, y")
+                                          )
+                                        ) : (
+                                          <span>Pick a date range</span>
+                                        )}
+                                      </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                        mode="single"
-                                        selected={selectedMonth}
-                                        onSelect={(date) => date && setSelectedMonth(startOfMonth(date))}
+                                <PopoverContent className="w-auto p-0" align="start">
+                                      <Calendar
                                         initialFocus
-                                    />
+                                        mode="range"
+                                        defaultMonth={dateRange?.from}
+                                        selected={dateRange}
+                                        onSelect={setDateRange}
+                                        numberOfMonths={2}
+                                      />
                                 </PopoverContent>
                             </Popover>
                              <Button onClick={handleExportCSV} variant="outline">
