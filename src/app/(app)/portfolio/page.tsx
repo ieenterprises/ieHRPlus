@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,6 +46,7 @@ import Image from "next/image";
 import { getStorage, ref, deleteObject } from "firebase/storage";
 import { FileIcon } from "@/components/file-icon";
 import { intervalToDuration, getDaysInMonth, format } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
 
 
 const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -82,6 +84,7 @@ export default function PortfolioPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [userFiles, setUserFiles] = useState<{name: string, url: string}[]>([]);
   const [documentSearchTerm, setDocumentSearchTerm] = useState("");
+  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [inlineEditValue, setInlineEditValue] = useState<string>("");
   const { toast } = useToast();
@@ -161,6 +164,7 @@ export default function PortfolioPage() {
     setEditingUser(null);
     setUserFiles([]);
     setDocumentSearchTerm("");
+    setSelectedDocuments([]);
   };
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -284,24 +288,24 @@ export default function PortfolioPage() {
     }
   };
 
-  const handleDeleteDocument = async (file: {name: string, url: string}) => {
-    if (!editingUser || !loggedInUser?.businessId) return;
-    
-    // The FileItem type is needed for the deleteItem function
-    const fileItemToDelete: FileItem = {
-        name: file.name,
-        type: 'file',
-        metadata: { size: 0, updated: '', timeCreated: '', customMetadata: {} } // Dummy metadata
+    const handleDeleteSelectedDocuments = async () => {
+        if (!editingUser || !loggedInUser?.businessId || selectedDocuments.length === 0) return;
+
+        const deletePromises = selectedDocuments.map(docName => {
+            const fileItem: FileItem = { name: docName, type: 'file', metadata: { size: 0, updated: '', timeCreated: '' } };
+            return deleteItem(loggedInUser.businessId, editingUser.id, fileItem, 'documents');
+        });
+
+        try {
+            await Promise.all(deletePromises);
+            toast({ title: "Documents Deleted" });
+            await fetchUserFiles(editingUser); // Refresh file list
+            setSelectedDocuments([]); // Clear selection
+        } catch (e: any) {
+            toast({ title: "Deletion Failed", description: e.message, variant: "destructive" });
+        }
     };
 
-    try {
-        await deleteItem(loggedInUser.businessId, editingUser.id, fileItemToDelete, 'documents');
-        toast({ title: "Document Deleted" });
-        await fetchUserFiles(editingUser); // Refresh file list
-    } catch(e: any) {
-        toast({ title: "Deletion Failed", description: e.message, variant: "destructive" });
-    }
-  };
 
   const handleCellClick = (user: User, field: EditingCell['field']) => {
     setEditingCell({ userId: user.id, field });
@@ -536,18 +540,39 @@ export default function PortfolioPage() {
                         {/* Right Column: Documents */}
                         <div className="space-y-6 flex flex-col">
                            <Card className="flex-1 flex flex-col min-h-0">
-                               <CardHeader>
-                                   <div className="flex items-center justify-between">
-                                     <CardTitle>Personal Documents</CardTitle>
-                                     <Button asChild variant="outline" size="sm" disabled={isDocumentUploading}>
-                                         <Label htmlFor="doc-upload" className="cursor-pointer">
-                                            {isDocumentUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UploadCloud className="mr-2 h-4 w-4" />}
-                                            Upload
-                                         </Label>
-                                     </Button>
-                                     <Input id="doc-upload" type="file" className="hidden" onChange={handleDocumentUpload} disabled={isDocumentUploading} />
-                                   </div>
-                               </CardHeader>
+                                <CardHeader>
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle>Personal Documents</CardTitle>
+                                        <div className="flex items-center gap-2">
+                                            {selectedDocuments.length > 0 && (
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="destructive" size="sm">
+                                                            <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedDocuments.length})
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                            <AlertDialogDescription>This will permanently delete the selected documents. This action cannot be undone.</AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={handleDeleteSelectedDocuments} className="bg-destructive hover:bg-destructive/90">Confirm Delete</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            )}
+                                            <Button asChild variant="outline" size="sm" disabled={isDocumentUploading}>
+                                                <Label htmlFor="doc-upload" className="cursor-pointer">
+                                                    {isDocumentUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UploadCloud className="mr-2 h-4 w-4" />}
+                                                    Upload
+                                                </Label>
+                                            </Button>
+                                            <Input id="doc-upload" type="file" className="hidden" onChange={handleDocumentUpload} disabled={isDocumentUploading} />
+                                        </div>
+                                    </div>
+                                </CardHeader>
                                <CardContent className="flex-1 min-h-0 flex flex-col gap-4">
                                     <div className="relative">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -563,13 +588,21 @@ export default function PortfolioPage() {
                                             <div className="space-y-2">
                                                 {filteredDocuments.map((file, index) => (
                                                     <div key={index} className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-accent/50">
-                                                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline flex-1 truncate">
-                                                            <FileIcon item={{ type: 'file', name: file.name, metadata: { size: 0, updated: '', timeCreated: '', customMetadata: {} } }} className="h-4 w-4 flex-shrink-0" />
-                                                            <span className="truncate">{file.name}</span>
-                                                        </a>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteDocument(file)}>
-                                                            <Trash2 className="h-4 w-4 text-destructive"/>
-                                                        </Button>
+                                                        <div className="flex items-center gap-3 flex-1 truncate">
+                                                            <Checkbox
+                                                                id={`doc-${index}`}
+                                                                checked={selectedDocuments.includes(file.name)}
+                                                                onCheckedChange={(checked) => {
+                                                                    setSelectedDocuments(prev => 
+                                                                        checked ? [...prev, file.name] : prev.filter(name => name !== file.name)
+                                                                    );
+                                                                }}
+                                                            />
+                                                            <a href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline flex-1 truncate">
+                                                                <FileIcon item={{ type: 'file', name: file.name, metadata: { size: 0, updated: '', timeCreated: '' } }} className="h-4 w-4 flex-shrink-0" />
+                                                                <span className="truncate">{file.name}</span>
+                                                            </a>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
