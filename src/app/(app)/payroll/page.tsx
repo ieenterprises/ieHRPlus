@@ -103,18 +103,16 @@ export default function PayrollPage() {
             const totalLatenessHours = totalLatenessMilliseconds / (1000 * 60 * 60);
 
             const overtimeMs = userTimeRecords.reduce((total, record) => {
-                const clockInDate = new Date(record.clockInTime);
-                const dayOfWeekName = daysOfWeek[getDay(clockInDate)];
-                const isWorkday = user.workingDays?.includes(dayOfWeekName) ?? true;
-                const durationMs = calculateDuration(record.clockInTime, record.clockOutTime);
+                if (!record.clockOutTime || !user.defaultClockOutTime) return total;
+                const actualClockOut = new Date(record.clockOutTime);
+                const [hours, minutes] = user.defaultClockOutTime.split(':').map(Number);
+                const defaultClockOut = new Date(actualClockOut);
+                defaultClockOut.setHours(hours, minutes, 0, 0);
 
-                if (!isWorkday) {
-                    return total + durationMs; // Entire shift is overtime
+                if (actualClockOut > defaultClockOut) {
+                    return total + differenceInMilliseconds(actualClockOut, defaultClockOut);
                 }
-
-                const expectedMs = expectedDailyMinutes * 60 * 1000;
-                const overtime = Math.max(0, durationMs - expectedMs);
-                return total + overtime;
+                return total;
             }, 0);
 
             const overtimeHours = overtimeMs / (1000 * 60 * 60);
