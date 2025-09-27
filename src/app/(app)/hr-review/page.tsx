@@ -57,6 +57,7 @@ import Papa from "papaparse";
 import { HRQueryTable } from "./query-table";
 import { RewardTable } from "./reward-table";
 import type { DateRange } from "react-day-picker";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -74,6 +75,7 @@ export default function HrReviewPage() {
   });
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [historyEmployeeId, setHistoryEmployeeId] = useState<string>('all');
   const { toast } = useToast();
   const storage = getStorage();
 
@@ -115,12 +117,15 @@ export default function HrReviewPage() {
 
   const pendingRecords = filteredRecords.filter(r => r.status === 'pending');
   const historicalRecords = useMemo(() => {
-      const records = filteredRecords.filter(r => r.status !== 'pending');
+      const records = filteredRecords.filter(r => 
+        r.status !== 'pending' &&
+        (historyEmployeeId === 'all' || r.userId === historyEmployeeId)
+      );
       return records.map(record => {
           const user = users.find(u => u.id === record.userId);
           return { ...record, user };
       });
-  }, [filteredRecords, users]);
+  }, [filteredRecords, users, historyEmployeeId]);
 
 
   const handleExportCSV = (data: any[], tableType: 'pending' | 'history') => {
@@ -770,6 +775,17 @@ export default function HrReviewPage() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
+                <Select value={historyEmployeeId} onValueChange={setHistoryEmployeeId}>
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                        <SelectValue placeholder="Select Employee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Employees</SelectItem>
+                        {users.map(user => (
+                            <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <DatePicker />
                 {selectedRecordIds.filter(id => historicalRecords.some(r => r.id === id)).length > 0 && (
                     <AlertDialog>
