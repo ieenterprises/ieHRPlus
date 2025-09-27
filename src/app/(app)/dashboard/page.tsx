@@ -15,12 +15,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { type UserRequest, type HRQuery, type Reward, type Attachment } from "@/lib/types";
+import { type UserRequest, type HRQuery, type Reward, type Attachment, type TimeRecord } from "@/lib/types";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, updateDoc, doc, query, where, onSnapshot, writeBatch } from "firebase/firestore";
 import { uploadFile, getPublicUrl } from "@/lib/firebase-storage";
 import { useToast } from "@/hooks/use-toast";
-import { format, startOfDay, endOfDay, isWithinInterval } from "date-fns";
+import { format, formatDistanceToNow, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -37,7 +37,7 @@ import { FileManagerPickerDialog } from "@/components/file-manager-picker";
 const seniorRoles = ["Owner", "Administrator", "Manager"];
 
 export default function DashboardPage() {
-  const { loggedInUser, users, logout, userRequests: allUserRequests, hrQueries: allHrQueries, rewards: allRewards, currency } = useSettings();
+  const { loggedInUser, users, logout, userRequests: allUserRequests, hrQueries: allHrQueries, rewards: allRewards, currency, timeRecords: allTimeRecords } = useSettings();
   const [myRequests, setMyRequests] = useState<UserRequest[]>([]);
   const [assignedRequests, setAssignedRequests] = useState<UserRequest[]>([]);
   const [myQueries, setMyQueries] = useState<HRQuery[]>([]);
@@ -81,6 +81,34 @@ export default function DashboardPage() {
   const isSeniorStaff = useMemo(() => loggedInUser && seniorRoles.includes(loggedInUser.role), [loggedInUser]);
 
   const seniorStaffList = useMemo(() => users.filter(u => seniorRoles.includes(u.role)), [users]);
+
+  const recentActivity = useMemo(() => {
+    if (!loggedInUser?.id || allTimeRecords.length === 0) return null;
+
+    const userRecords = allTimeRecords
+      .filter(record => record.userId === loggedInUser.id)
+      .sort((a, b) => {
+        const timeA = a.clockOutTime ? new Date(a.clockOutTime) : new Date(a.clockInTime);
+        const timeB = b.clockOutTime ? new Date(b.clockOutTime) : new Date(b.clockInTime);
+        return timeB.getTime() - timeA.getTime();
+      });
+
+    if (userRecords.length === 0) return null;
+
+    const latestRecord = userRecords[0];
+
+    if (latestRecord.status === 'Clocked Out' && latestRecord.clockOutTime) {
+      return {
+        status: 'Clocked Out',
+        time: latestRecord.clockOutTime,
+      };
+    }
+    
+    return {
+      status: 'Clocked In',
+      time: latestRecord.clockInTime,
+    };
+  }, [allTimeRecords, loggedInUser?.id]);
   
   useEffect(() => {
     const timer = setInterval(() => {
@@ -586,10 +614,19 @@ export default function DashboardPage() {
                     <Clock className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">...</div>
-                    <p className="text-xs text-muted-foreground">
-                        Your latest clock-ins and actions.
-                    </p>
+                    {recentActivity ? (
+                        <>
+                            <div className="text-2xl font-bold">{recentActivity.status}</div>
+                            <p className="text-xs text-muted-foreground">
+                                {format(new Date(recentActivity.time), 'Pp')} ({formatDistanceToNow(new Date(recentActivity.time), { addSuffix: true })})
+                            </p>
+                        </>
+                    ) : (
+                         <>
+                            <div className="text-2xl font-bold">No Activity</div>
+                            <p className="text-xs text-muted-foreground">No recent clock-in or clock-out events found.</p>
+                        </>
+                    )}
                 </CardContent>
             </Card>
             <Card>
